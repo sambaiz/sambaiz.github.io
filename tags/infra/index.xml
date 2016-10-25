@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/infra/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-10-18 22:37:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>PackerでAMIを作る</title>
+          <link>http://sambaiz.net/article/24/</link>
+          <pubDate>Tue, 18 Oct 2016 22:37:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/24/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://www.packer.io/&#34;&gt;https://www.packer.io/&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;いろんなプラットフォームのイメージを作ることができるツール。
+これでfluentdのログサーバーのAMIを作る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install packer # mac
+$ packer -v
+0.10.1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;設定ファイルはこんな感じ。&lt;code&gt;variables&lt;/code&gt;の値は&lt;code&gt;{{user ... }}&lt;/code&gt;のところで使われる。
+&lt;code&gt;builders&lt;/code&gt;に作るイメージの情報を書いて、&lt;code&gt;provisioners&lt;/code&gt;で環境を作る。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;provisioners&lt;/code&gt;にはchefやansibleなども指定できるが、
+継ぎ足し継ぎ足しで秘伝のタレ化したAMIも最初は、&lt;/p&gt;
+
+&lt;p&gt;「コマンドいくつか実行するだけなのでとりあえず手作業で作った、後でなんとかする」&lt;/p&gt;
+
+&lt;p&gt;なんてものもあったりして、
+そういうものは無理にchefなどで始めず、手軽にshellでpacker buildするといいと思う。
+手作業よりも楽だし、ソースが別にあるので使われていないAMIを消すのも簡単だ。&lt;/p&gt;
+
+&lt;p&gt;fileではpermissionがないところに置くことができないので、一旦置いてshellで移動する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;variables&amp;quot;: {
+    &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot;
+  },
+  &amp;quot;builders&amp;quot;: [{
+    &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;,
+    &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;,
+    &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;,
+    &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
+    &amp;quot;source_ami&amp;quot;: &amp;quot;ami-1a15c77b&amp;quot;,
+    &amp;quot;instance_type&amp;quot;: &amp;quot;t2.small&amp;quot;,
+    &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;,
+    &amp;quot;ami_name&amp;quot;: &amp;quot;fluentd-logserver {{timestamp}}&amp;quot;
+  }],
+  &amp;quot;provisioners&amp;quot;: [{
+    &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;,
+    &amp;quot;source&amp;quot;: &amp;quot;td-agent.conf&amp;quot;,
+    &amp;quot;destination&amp;quot;: &amp;quot;/home/ec2-user/td-agent.conf&amp;quot;
+  },
+  {
+    &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;,
+    &amp;quot;inline&amp;quot;: [
+      &amp;quot;curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh&amp;quot;,
+      &amp;quot;sudo mv /home/ec2-user/td-agent.conf /etc/td-agent/td-agent.conf&amp;quot;,
+      &amp;quot;sudo /etc/init.d/td-agent restart&amp;quot;
+    ]
+  }]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ packer validate fluentd-logserver.json
+Template validated successfully.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;buildのとき&lt;code&gt;-var&lt;/code&gt;でvariablesを渡すことができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ packer build \
+    -var &#39;aws_access_key=YOUR ACCESS KEY&#39; \
+    -var &#39;aws_secret_key=YOUR SECRET KEY&#39; \
+    fluentd-logserver.json
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行すると実際にインスタンスを立ち上げ、AMIを作成し始める。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

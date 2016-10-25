@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/react/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-07-10 03:08:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>webpack環境でredux&amp;react-routerのページをサーバーサイドレンダリングする</title>
+          <link>http://sambaiz.net/article/5/</link>
+          <pubDate>Sun, 10 Jul 2016 03:08:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/5/</guid>
+          <description>&lt;p&gt;このページをGoogleのSearch Consoleからクローラーがちゃんと見ているか確認してみたら、
+なぜか真っ白のページが表示されていた・・・。とりあえずサーバーサイドレンダリングしてみることにした。
+コードは&lt;a href=&#34;https://github.com/sambaiz/sambaiz.net/tree/v0.23&#34;&gt;github&lt;/a&gt;に上げてある。&lt;/p&gt;
+
+&lt;p&gt;サーバーサイドとはいえ、css-loaderでcss moduleを使っているのでwebpackを使う必要があった。
+まず、そのままのwebpackの設定で作ったものをserver.jsから呼ぶとエラーが出た。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;***/sambaiz-net/web/public/bundle.js:20933
+	module.exports = self.fetch.bind(self);
+ReferenceError: self is not defined
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そこで、targetをnodeにしたサーバーサイド用にwebpackの設定を作成し、実行してみたところ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;module.exports = {
+	entry: &#39;./js/server.js&#39;,
+	target: &#39;node&#39;,
+	output: {
+		path: path.join(__dirname, &#39;dist&#39;),
+		filename: &#39;server.js&#39;,
+		publicPath: &#39;/&#39;
+	},
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今度はこんなエラーが出たので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ERROR in ./~/iconv-lite/encodings/tables/gb18030-ranges.json
+Module parse failed: ***/sambaiz-net/web/node_modules/iconv-lite/encodings/tables/gb18030-ranges.json Unexpected token (1:9)
+You may need an appropriate loader to handle this file type.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;loadersに下の設定を追加した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{ test: /\.json$/, loader: &amp;quot;json-loader&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;webpackには成功したが、serverを起動すると今度は以下のようなエラーが出た。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;return /msie [6-9]\b/.test(window.navigator.userAgent.toLowerCase());
+ReferenceError: window is not defined
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;style-loaderのコードだったので、
+まず、フロント側のwebpackで
+&lt;a href=&#34;https://github.com/webpack/extract-text-webpack-plugin&#34;&gt;extract-text-webpack-plugin&lt;/a&gt;を使ってcssを別に出力することにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var ExtractTextPlugin = require(&#39;extract-text-webpack-plugin&#39;);
+...
+{
+  test: /\.css$/,
+  loader:  ExtractTextPlugin.extract(&#39;style&#39;, &#39;css?modules&#39;, &#39;postcss&#39;),
+  include: __dirname
+},
+...
+plugins: [
+    new ExtractTextPlugin(&amp;quot;styles.css&amp;quot;)
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして、サーバー側のwebpackでは&lt;a href=&#34;https://github.com/kriasoft/isomorphic-style-loader&#34;&gt;isomorphic-style-loader&lt;/a&gt;でなんとか動かして、
+フロント側で出力したcssと対応するようにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;loaders: [&#39;isomorphic-style&#39;, &#39;css?modules&#39;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これでようやくwebpackまわりの問題は解決できたので、react-routerの方のコードを書いていく。&lt;/p&gt;
+
+&lt;p&gt;reduxに関しては&lt;a href=&#34;http://redux.js.org/docs/recipes/ServerRendering.html&#34;&gt;ドキュメント&lt;/a&gt;通りに
+描画した後のstoreをこんな感じでフロントに渡す。
+そのほかに、同じ処理をサーバーとフロントで二度行わないようにするための値を追加する必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;window.__INITIAL_STATE__ = ${JSON.stringify(state)}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;react-routerも以下のようにmatchとRouterContextを組み合わせるだけだ。
+ただし、APIリクエスト等の非同期処理が含まれているので、レンダリングが完了したかどうか判断しなくてはならない。
+そのため、storeの状態をsubscribeしてレンダリングの終了判定を都度チェックしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;function render(req, res, isFinishLoading, title, description, fullUrl) {
+
+  match({ routes, location: req.url }, (error, redirectLocation, renderProps) =&amp;gt; {
+
+    let store = createStore();
+
+    if (error) {
+      res.status(500).send(error.message)
+    } else if (redirectLocation) {
+      res.redirect(302, redirectLocation.pathname + redirectLocation.search)
+    } else if (renderProps) {
+
+      const _render = () =&amp;gt;
+        renderToString(&amp;lt;Provider store={store}&amp;gt;
+          &amp;lt;RouterContext {...renderProps} /&amp;gt;
+        &amp;lt;/Provider&amp;gt;)
+
+      let unscribe = store.subscribe(() =&amp;gt; {
+        if(isFinishLoading(store.getState()) === true){
+          res.status(200).send(
+            page(_render(), store.getState(), title, description, fullUrl)
+          )
+          unscribe();
+        }
+      })
+
+      _render();
+
+    } else {
+      res.status(404).send(&#39;Not found&#39;)
+    }
+  })
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Reactで作ったページにTwitterCardsとOGPのメタデータを埋める</title>
+          <link>http://sambaiz.net/article/2/</link>
+          <pubDate>Sat, 02 Jul 2016 13:23:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/2/</guid>
+          <description>&lt;p&gt;せっかくページを作ったので、SNSにシェアするときに見栄えをよくしようと思った。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://d2wgaf7ubdj1mv.cloudfront.net/2_ogp.jpg&#34; alt=&#34;Facebookの例&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Twitter CardsやOGPのmetaタグを埋めるとTwitterやFacebookにURLを貼ったときに上のように表示されるようになる(上はFacebookの例)。そこで、&lt;a href=&#34;https://github.com/nfl/react-helmet&#34;&gt;react-helmet&lt;/a&gt;でこんな感じで動的に埋め込んだんだけど読んでくれない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;Helmet title={&#39;sambaiz.net&#39;}
+        meta={[
+            {&amp;quot;name&amp;quot;: &amp;quot;twitter:card&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;summary&amp;quot;},
+            {&amp;quot;name&amp;quot;: &amp;quot;twitter:site&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;@sambaiz&amp;quot;},
+            {&amp;quot;name&amp;quot;: &amp;quot;twitter:title&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;sambaiz.net&amp;quot;},
+            {&amp;quot;name&amp;quot;: &amp;quot;twitter:description&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;僕のホームページ&amp;quot;},
+            {&amp;quot;property&amp;quot;: &amp;quot;og:title&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;sambaiz.net&amp;quot;},
+            {&amp;quot;property&amp;quot;: &amp;quot;og:type&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;blog&amp;quot;},
+            {&amp;quot;property&amp;quot;: &amp;quot;og:image&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;http://d2wgaf7ubdj1mv.cloudfront.net/my.jpg&amp;quot;},
+            {&amp;quot;property&amp;quot;: &amp;quot;og:url&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;http://sambaiz.net&amp;quot;}
+        ]}
+/&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Googleのクローラーのように&lt;a href=&#34;https://webmasters.googleblog.com/2014/05/understanding-web-pages-better.html&#34;&gt;Javascriptを解釈してくれる&lt;/a&gt;
+と思ってた。残念。&lt;/p&gt;
+
+&lt;p&gt;しょうがないのでここだけサーバーサイドレンダリングすることにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;
+
+import express from &#39;express&#39;
+import path from &#39;path&#39;
+import compression from &#39;compression&#39;
+
+require(&#39;isomorphic-fetch&#39;);
+
+var app = express()
+
+app.use(compression())
+
+// serve our static stuff
+app.use(express.static(path.join(__dirname, &#39;..&#39;, &#39;..&#39;, &#39;public&#39;)))
+
+app.get(&#39;/&#39;, function (req, res) {
+  res.status(200).send(page(&#39;http://sambaiz.net&#39;, &#39;sambaiz.net&#39;, &#39;僕のホームページ&#39;));
+})
+
+app.get(&#39;/article/:articleId&#39;, function (req, res) {
+  fetch(`https://zx9h12n6jb.execute-api.ap-northeast-1.amazonaws.com/api/articles/${req.params.articleId}`).then(function(response){
+    if (response.status == 404) {
+      res.status(404).send(&#39;not found&#39;)
+    }else if(response.status != 200){
+      res.status(response.status).send(`API error ${response.status}`)
+    }else{
+      return response.json();
+    }
+  }).then(function(json) {
+    if(json){
+      res.status(200).send(page(`http://sambaiz.net${req.url}`, json.title, &#39;書いた&#39;));
+    }
+  })
+})
+
+function page(fullUrl, title, description)  {
+  return `
+    &amp;lt;!doctype html&amp;gt;
+    &amp;lt;html&amp;gt;
+      &amp;lt;head&amp;gt;
+        &amp;lt;title&amp;gt;${title}&amp;lt;/title&amp;gt;
+        &amp;lt;meta charset=&amp;quot;utf-8&amp;quot;&amp;gt;
+        &amp;lt;link rel=&amp;quot;stylesheet&amp;quot; href=&amp;quot;//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css&amp;quot;&amp;gt;
+        &amp;lt;meta name=&amp;quot;twitter:card&amp;quot; content=&amp;quot;summary&amp;quot;&amp;gt;
+        &amp;lt;meta name=&amp;quot;twitter:site&amp;quot; content=&amp;quot;@sambaiz&amp;quot;&amp;gt;
+        &amp;lt;meta name=&amp;quot;twitter:title&amp;quot; content=&amp;quot;${title}&amp;quot;&amp;gt;
+        &amp;lt;meta name=&amp;quot;twitter:description&amp;quot; content=&amp;quot;${description}&amp;quot;&amp;gt;
+        &amp;lt;meta property=&amp;quot;og:title&amp;quot; content=&amp;quot;${title}&amp;quot;&amp;gt;
+        &amp;lt;meta property=&amp;quot;og:type&amp;quot; content=&amp;quot;blog&amp;quot;&amp;gt;
+        &amp;lt;meta property=&amp;quot;og:image&amp;quot; content=&amp;quot;http://d2wgaf7ubdj1mv.cloudfront.net/my.jpg&amp;quot;&amp;gt;
+        &amp;lt;meta property=&amp;quot;og:url&amp;quot; content=&amp;quot;${fullUrl}&amp;quot;&amp;gt;
+      &amp;lt;/head&amp;gt;
+      &amp;lt;body&amp;gt;
+        &amp;lt;div id=&amp;quot;app&amp;quot;&amp;gt;&amp;lt;/div&amp;gt;
+        &amp;lt;script src=&amp;quot;/bundle.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+      &amp;lt;/body&amp;gt;
+    &amp;lt;/html&amp;gt;
+    `
+}
+
+var PORT = process.env.PORT || 8080
+
+app.listen(PORT, function() {
+  console.log(&#39;Production Express server running at localhost:&#39; + PORT)
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんと読まれているかは以下のページで確認できる。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://cards-dev.twitter.com/validator&#34;&gt;Card validator&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://developers.facebook.com/tools/debug/&#34;&gt;Sharing Debugger&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;が、&lt;a href=&#34;http://sambaiz.net/article/5&#34;&gt;結局全部サーバーサイドレンダリングすることになった。&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

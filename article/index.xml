@@ -1,0 +1,4864 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/article/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-10-25 20:29:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>gcloudのアカウント切り替えとkubectlのcontext変更</title>
+          <link>http://sambaiz.net/article/28/</link>
+          <pubDate>Tue, 25 Oct 2016 20:29:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/28/</guid>
+          <description>
+
+&lt;p&gt;いつも迷うのでまとめた。&lt;/p&gt;
+
+&lt;h2 id=&#34;gcloudのアカウント一覧と切り替え&#34;&gt;gcloudのアカウント一覧と切り替え&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud auth list
+$ gcloud config set account `ACCOUNT`
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;kubectlのcontext変更&#34;&gt;kubectlのcontext変更&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl config current-context
+$ kubectl config view # contexts
+$ kubectl config use-context minikube
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>UnityでAndroidのBLEを使うネイティブプラグインを作る</title>
+          <link>http://sambaiz.net/article/27/</link>
+          <pubDate>Sun, 23 Oct 2016 20:39:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/27/</guid>
+          <description>
+
+&lt;p&gt;UnityからBLEを使うためのネイティブプラグインを作る。&lt;/p&gt;
+
+&lt;h2 id=&#34;android側&#34;&gt;Android側&lt;/h2&gt;
+
+&lt;p&gt;まず、Activityなしのプロジェクトを作って、New ModuleからAndroid Libraryを選択。
+これらのパッケージ名がUnityで使うものと被らないようにする。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;/Applications/Unity/PlaybackEngines/AndroidPlayer/Variations/mono/Release/Classes/classes.jar&lt;/code&gt;
+をModuleの方のlibsに置く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import com.unity3d.player.UnityPlayer;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このjarは元々のやつとかぶってしまうので除外(build.gradleに追加)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;android.libraryVariants.all { variant -&amp;gt;
+    variant.outputs.each { output -&amp;gt;
+        output.packageLibrary.exclude(&#39;libs/classes.jar&#39;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Activiyは&lt;code&gt;UnityPlayer.currentActivity&lt;/code&gt;で取得でき、
+Unity側のメソッドを呼ぶのも
+&lt;code&gt;UnityPlayer.UnitySendMessage(mGameObjName, mCallBackName, new String(characteristic.getValue()));&lt;/code&gt;
+のようにできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public class BLE {
+
+    private final static String TAG = BLE.class.getSimpleName();
+    private static final int REQUEST_ENABLE_BT = 1;
+    private static final int MY_PERMISSION_RESPONSE = 2;
+
+    private static final String PERIPHERAL_LOCAL_NAME = &amp;quot;my-ble&amp;quot;;
+    private static final UUID PERIPHERAL_SERIVCE_UUID = UUID.fromString(&amp;quot;BF9CB85F-620C-4A67-BDD2-1A64213F74CA&amp;quot;);
+    private static final UUID PERIPHERAL_CHARACTERISTIC_UUID = UUID.fromString(&amp;quot;5F83E23F-BCA1-42B3-B6F2-EA82BE46A93D&amp;quot;);
+    private static final UUID CLIENT_CHARACTERISTIC_CONFIG = UUID.fromString(&amp;quot;00002902-0000-1000-8000-00805f9b34fb&amp;quot;);
+
+    private String mGameObjName;
+    private String mCallBackName;
+
+    private BluetoothAdapter mBluetoothAdapter;
+    private BluetoothGatt mBluetoothGatt;
+    private BluetoothGattCharacteristic mCharacteristic;
+    private Handler mHandler;
+
+    // Stops scanning after 30 seconds.
+    private static final long SCAN_PERIOD = 30000;
+
+    public BLE(String gameObjName, String callBackName) {
+
+        this.mGameObjName = gameObjName;
+        this.mCallBackName = callBackName;
+
+        mHandler = new Handler();
+
+        if (!UnityPlayer.currentActivity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            Toast.makeText(UnityPlayer.currentActivity, &amp;quot;BLEをサポートしていません&amp;quot;, Toast.LENGTH_SHORT).show();
+            UnityPlayer.currentActivity.finish();
+            return;
+        }
+
+        final BluetoothManager bluetoothManager =
+                (BluetoothManager) UnityPlayer.currentActivity.getSystemService(Context.BLUETOOTH_SERVICE);
+        mBluetoothAdapter = bluetoothManager.getAdapter();
+
+        if (mBluetoothAdapter == null) {
+            Toast.makeText(UnityPlayer.currentActivity, &amp;quot;Bluetoothをサポートしていません&amp;quot;, Toast.LENGTH_SHORT).show();
+            UnityPlayer.currentActivity.finish();
+            return;
+        }
+
+        onActive();
+    }
+
+    public void onActive() {
+        Log.d(TAG, &amp;quot;onActive&amp;quot;);
+        if (!mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            UnityPlayer.currentActivity.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+
+        scanLeDevice(true);
+    }
+
+    public void onPause() {
+        Log.d(TAG, &amp;quot;onPause&amp;quot;);
+        scanLeDevice(false);
+
+        if(mCharacteristic != null){
+            mBluetoothGatt.setCharacteristicNotification(
+                    mCharacteristic,
+                    false
+            );
+        }
+
+        if(mBluetoothGatt != null) {
+            mBluetoothGatt.close();
+            mBluetoothGatt = null;
+        }
+    }
+
+    private void scanLeDevice(final boolean enable) {
+        if (enable) {
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                }
+            }, SCAN_PERIOD);
+
+            mBluetoothAdapter.startLeScan(mLeScanCallback);
+        } else {
+            mBluetoothAdapter.stopLeScan(mLeScanCallback);
+        }
+    }
+
+    private BluetoothAdapter.LeScanCallback mLeScanCallback =
+            new BluetoothAdapter.LeScanCallback() {
+
+                @Override
+                public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
+                    if(PERIPHERAL_LOCAL_NAME.equals(device.getName())){
+                        scanLeDevice(false);
+                        connect(device);
+                    }
+                }
+            };
+
+    private boolean connect(BluetoothDevice device) {
+        if (mBluetoothAdapter == null) {
+            Log.w(TAG, &amp;quot;BluetoothAdapter not initialized or unspecified address.&amp;quot;);
+            return false;
+        }
+
+        // Previously connected device.  Try to reconnect.
+        if (mBluetoothGatt != null) {
+            Log.d(TAG, &amp;quot;Trying to use an existing mBluetoothGatt for connection.&amp;quot;);
+            if (mBluetoothGatt.connect()) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        mBluetoothGatt = device.connectGatt(UnityPlayer.currentActivity, false, mGattCallback);
+        Log.d(TAG, &amp;quot;Trying to create a new connection.&amp;quot;);
+        return true;
+    }
+
+
+    private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+        @Override
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+
+                scanLeDevice(false);
+                Log.i(TAG, &amp;quot;Connected to GATT server.&amp;quot;);
+                gatt.discoverServices();
+
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                Log.i(TAG, &amp;quot;Disconnected from GATT server.&amp;quot;);
+            } else{
+                Log.i(TAG, &amp;quot;onConnectionStateChange:&amp;quot; + newState);
+            }
+        }
+
+        @Override
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                mCharacteristic = gatt.getService(PERIPHERAL_SERIVCE_UUID).
+                        getCharacteristic(PERIPHERAL_CHARACTERISTIC_UUID);
+
+                gatt.setCharacteristicNotification(
+                        mCharacteristic,
+                        true
+                );
+                BluetoothGattDescriptor descriptor = mCharacteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG);
+                descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                mBluetoothGatt.writeDescriptor(descriptor);
+            } else {
+                Log.w(TAG, &amp;quot;onServicesDiscovered received: &amp;quot; + status);
+            }
+        }
+
+        @Override
+        public void onCharacteristicChanged(BluetoothGatt gatt,
+                                            BluetoothGattCharacteristic characteristic) {
+            UnityPlayer.UnitySendMessage(mGameObjName, mCallBackName, new String(characteristic.getValue()));
+        }
+    };
+
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Manifestに追加した分。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;uses-feature android:name=&amp;quot;android.hardware.bluetooth_le&amp;quot; android:required=&amp;quot;true&amp;quot;/&amp;gt;
+
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.BLUETOOTH&amp;quot; /&amp;gt;
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.BLUETOOTH_ADMIN&amp;quot; /&amp;gt;
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.ACCESS_COARSE_LOCATION&amp;quot;/&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;できたらaarを生成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ./gradlew assembleRelease
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;build/outputs/aar/*-release.aar&lt;/code&gt;をUnityの&lt;code&gt;Assets/Plugins/Android/libs&lt;/code&gt;に置く。&lt;/p&gt;
+
+&lt;p&gt;あと、依存aarはこの中に含まれないようなのでそれもまとめてコピーする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;task copyLibs(type: Copy) {
+    from configurations.compile
+    into &#39;build/outputs/aar&#39;
+    exclude { details -&amp;gt; details.file.name.endsWith(&amp;quot;.jar&amp;quot;) }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Manifetstのmergeに失敗したのでSDKVersionを合わせる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;compileSdkVersion 22
+
+defaultConfig {
+    minSdkVersion 19
+    targetSdkVersion 22
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;unity側&#34;&gt;Unity側&lt;/h2&gt;
+
+&lt;p&gt;こんな感じでインスタンスを作り、
+&lt;a href=&#34;https://docs.unity3d.com/ja/current/ScriptReference/AndroidJavaObject.Call.html&#34;&gt;メソッドを呼べる&lt;/a&gt;。
+ただし、unity editor上では&lt;code&gt;Init&#39;d AndroidJavaClass with null ptr!&lt;/code&gt;のエラーが出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;plugin = new AndroidJavaObject(&amp;quot;net.sambaiz.unity_ble.BLE&amp;quot;, this.gameObject.name, &amp;quot;received&amp;quot;);
+
+void received(string message){
+	Debug.Log (&amp;quot;BLE:&amp;quot; + message);
+}
+
+void OnApplicationPause (bool pauseStatus)
+{
+	if (pauseStatus) {
+		plugin.Call (&amp;quot;onPause&amp;quot;);
+	} else {
+		plugin.Call (&amp;quot;onActive&amp;quot;);
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>iOS端末をBLEのPeripheralにする</title>
+          <link>http://sambaiz.net/article/26/</link>
+          <pubDate>Sun, 23 Oct 2016 01:29:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/26/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://developer.apple.com/jp/documentation/CoreBluetoothPG.pdf&#34;&gt;CoreBluetoothプログラミングガイド&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;流れ&#34;&gt;流れ&lt;/h2&gt;
+
+&lt;p&gt;まず、CoreBluetooth.frameworkを追加する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import CoreBluetooth
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CBPeripheralManagerを生成。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;stateが変化したらdelegateメソッドが呼ばれるので&lt;code&gt;.poweredOn&lt;/code&gt;であることを確認できれば
+Managerの準備は完了。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager){        
+    switch (peripheral.state){
+    case .poweredOn:
+        print(&amp;quot;PeripheralManager state is ok&amp;quot;)
+        ready = true
+
+    default:
+        print(&amp;quot;PeripheralManager state is ng:&amp;quot;, peripheral.state)
+        ready = false
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicを作成。&lt;code&gt;CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify)&lt;/code&gt;で、
+Centralが読みにくることも、通知を受け取ることもできるようにし、&lt;code&gt;CBAttributePermissions.readable&lt;/code&gt;でreadのみ許可する。
+このvalueをnilにしておかないと、キャッシュされあとで変更できなくなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;characteristic = CBMutableCharacteristic(
+    type: CHARACTERISTIC_UUID,
+    properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+    value:nil,
+    permissions:CBAttributePermissions.readable)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このCharacteristicのServiceを作成し、Managerに登録する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;let service = CBMutableService(type: SERVICE_UUID, primary: true)
+service.characteristics = [characteristic]
+peripheralManager!.add(service)
+ready = true         
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?){
+    if(error != nil){
+        print(&amp;quot;Add Service error:&amp;quot;, error)
+    }else{
+        print(&amp;quot;Add Service ok&amp;quot;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ServiceをAdvertiseする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheral.startAdvertising([
+    CBAdvertisementDataLocalNameKey: LOCAL_NAME,
+    CBAdvertisementDataServiceUUIDsKey: [SERVICE_UUID]
+    ])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?){
+    if(error != nil){
+        print(&amp;quot;Start Advertising error:&amp;quot;, error)
+    }else{
+        print(&amp;quot;Start Advertising ok&amp;quot;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;通知要求してきたCentralに向けて通知する。&lt;code&gt;onSubscribedCentrals: nil&lt;/code&gt;で全てのCentralに送る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheralManager!.updateValue(d, for: characteristic, onSubscribedCentrals: nil)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;読みにきたときのdelegateメソッド。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest){
+    if (request.characteristic.uuid.isEqual(self.characteristic.uuid)) {
+        if let value = self.characteristic.value{
+            if (request.offset &amp;gt; value.count) {
+                peripheral.respond(to: request, withResult: CBATTError.invalidOffset)
+                print(&amp;quot;Read fail: invalid offset&amp;quot;)
+                return;
+            }
+        }
+
+        request.value = self.characteristic.value?.subdata(
+            in: Range(uncheckedBounds: (request.offset, (self.characteristic.value?.count)! - request.offset))
+        )
+        peripheral.respond(to: request, withResult: CBATTError.success)
+        print(&amp;quot;Read success&amp;quot;)
+    }else{
+        print(&amp;quot;Read fail: wrong characteristic uuid:&amp;quot;, request.characteristic.uuid)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;全体&#34;&gt;全体&lt;/h2&gt;
+
+&lt;p&gt;エラーハンドリングは適当だけど、とりあえず動くものができた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import CoreBluetooth
+
+class BLEPeripheral : NSObject, CBPeripheralManagerDelegate {
+
+    let CHARACTERISTIC_ROTATION_X_UUID = CBUUID(string:&amp;quot;5F83E23F-BCA1-42B3-B6F2-EA82BE46A93D&amp;quot;)
+    let CHARACTERISTIC_ROTATION_Y_UUID = CBUUID(string:&amp;quot;61B21612-86E7-4EDA-8F26-9FD9FB66739D&amp;quot;)
+    let CHARACTERISTIC_ROTATION_Z_UUID = CBUUID(string:&amp;quot;2481735C-0E12-4428-9E13-B7D987404802&amp;quot;)
+    let SERVICE_UUID = CBUUID(string:&amp;quot;BF9CB85F-620C-4A67-BDD2-1A64213F74CA&amp;quot;)
+    let LOCAL_NAME = &amp;quot;clock&amp;quot;
+
+    private var peripheralManager : CBPeripheralManager?
+    private var characteristicX: CBMutableCharacteristic
+    private var characteristicY: CBMutableCharacteristic
+    private var characteristicZ: CBMutableCharacteristic
+    private var ready = false
+
+    public override init(){
+        characteristicX = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_X_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        characteristicY = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_Y_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        characteristicZ = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_Z_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        super.init()
+
+        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+    }
+
+    public func updateRotationX(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicX.value = d
+                peripheralManager!.updateValue(d, for: characteristicX, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+    public func updateRotationY(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicX.value = d
+                peripheralManager!.updateValue(d, for: characteristicY, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+    public func updateRotationZ(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicZ.value = d
+                peripheralManager!.updateValue(d, for: characteristicZ, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+
+    /*
+     CBPeripheralManagerDelegate
+    */
+
+    public func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager){        
+        switch (peripheral.state){
+        case .poweredOn:
+            print(&amp;quot;PeripheralManager state is ok&amp;quot;)
+
+            let service = CBMutableService(type: SERVICE_UUID, primary: true)
+            service.characteristics = [characteristicX, characteristicY, characteristicZ]
+            peripheralManager!.add(service)
+            ready = true
+
+        default:
+            print(&amp;quot;PeripheralManager state is ng:&amp;quot;, peripheral.state)
+            ready = false
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?){
+        if(error != nil){
+            print(&amp;quot;Add Service error:&amp;quot;, error)
+        }else{
+            print(&amp;quot;Add Service ok&amp;quot;)
+            peripheral.startAdvertising([
+                CBAdvertisementDataLocalNameKey: LOCAL_NAME,
+                CBAdvertisementDataServiceUUIDsKey: [SERVICE_UUID]
+                ])
+        }
+    }
+
+    public func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?){
+        if(error != nil){
+            print(&amp;quot;Start Advertising error:&amp;quot;, error)
+        }else{
+            print(&amp;quot;Start Advertising ok&amp;quot;)
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest){
+        if (request.characteristic.uuid.isEqual(characteristicX.uuid)) {
+            if let value = characteristicX.value{
+                if (request.offset &amp;gt; value.count) {
+                    peripheral.respond(to: request, withResult: CBATTError.invalidOffset)
+                    print(&amp;quot;Read fail: invalid offset&amp;quot;)
+                    return;
+                }
+            }
+
+            request.value = characteristicX.value?.subdata(
+                in: Range(uncheckedBounds: (request.offset, (characteristicX.value?.count)! - request.offset))
+            )
+            peripheral.respond(to: request, withResult: CBATTError.success)
+            print(&amp;quot;Read success&amp;quot;)
+        }else{
+            print(&amp;quot;Read fail: wrong characteristic uuid:&amp;quot;, request.characteristic.uuid)
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic){
+        print(&amp;quot;Subscribe to&amp;quot;, characteristic.uuid)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;現在の時間を1秒ごとに更新して通知がくることを確認した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(self.update), userInfo: nil, repeats: true)
+timer!.fire()
+
+public func update(){
+    let now = String(format: &amp;quot;%.0f&amp;quot;, arguments: [Date().timeIntervalSince1970])
+    peripheral.updateCharacteristic(now.data(using: String.Encoding.utf8))
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>android-BluetoothLeGattを読む</title>
+          <link>http://sambaiz.net/article/25/</link>
+          <pubDate>Fri, 21 Oct 2016 14:10:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/25/</guid>
+          <description>
+
+&lt;p&gt;BLEのサンプルコード。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/googlesamples/android-BluetoothLeGatt&#34;&gt;https://github.com/googlesamples/android-BluetoothLeGatt&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;devicescanactivity&#34;&gt;DeviceScanActivity&lt;/h2&gt;
+
+&lt;p&gt;BLEをサポートしているかチェックする。
+&lt;a href=&#34;http://sambaiz.net/article/23&#34;&gt;BluetoothChat&lt;/a&gt;ではBluetoothAdapterを取得するのに
+&lt;code&gt;BluetoothAdapter.getDefaultAdapter()&lt;/code&gt;のようにしていたが、
+BLEをサポートしているような新しいバージョンでは、BluetoothManagerの&lt;code&gt;getAdapter()&lt;/code&gt;を使うらしい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    getActionBar().setTitle(R.string.title_devices);
+    mHandler = new Handler();
+
+    // Use this check to determine whether BLE is supported on the device.  Then you can
+    // selectively disable BLE-related features.
+    if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+        Toast.makeText(this, R.string.ble_not_supported, Toast.LENGTH_SHORT).show();
+        finish();
+    }
+
+    // Initializes a Bluetooth adapter.  For API level 18 and above, get a reference to
+    // BluetoothAdapter through BluetoothManager.
+    final BluetoothManager bluetoothManager =
+            (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+    mBluetoothAdapter = bluetoothManager.getAdapter();
+
+    // Checks if Bluetooth is supported on the device.
+    if (mBluetoothAdapter == null) {
+        Toast.makeText(this, R.string.error_bluetooth_not_supported, Toast.LENGTH_SHORT).show();
+        finish();
+        return;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BluetoothChatと同様にBluetoothを有効にさせるのと、scanの開始。
+&lt;code&gt;mBluetoothAdapter.startLeScan(mLeScanCallback)&lt;/code&gt;で
+見つかったらcallbackの&lt;code&gt;onLeScan&lt;/code&gt;が呼ばれるのでデバイスリストに追加していく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onResume() {
+    super.onResume();
+
+    // Ensures Bluetooth is enabled on the device.  If Bluetooth is not currently enabled,
+    // fire an intent to display a dialog asking the user to grant permission to enable it.
+    if (!mBluetoothAdapter.isEnabled()) {
+        if (!mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+    }
+
+    // Initializes list view adapter.
+    mLeDeviceListAdapter = new LeDeviceListAdapter();
+    setListAdapter(mLeDeviceListAdapter);
+    scanLeDevice(true);
+}
+
+private void scanLeDevice(final boolean enable) {
+    if (enable) {
+        // Stops scanning after a pre-defined scan period.
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mScanning = false;
+                mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                invalidateOptionsMenu();
+            }
+        }, SCAN_PERIOD);
+
+        mScanning = true;
+        mBluetoothAdapter.startLeScan(mLeScanCallback);
+    } else {
+        mScanning = false;
+        mBluetoothAdapter.stopLeScan(mLeScanCallback);
+    }
+    invalidateOptionsMenu();
+}
+
+private BluetoothAdapter.LeScanCallback mLeScanCallback =
+            new BluetoothAdapter.LeScanCallback() {
+    @Override
+    public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mLeDeviceListAdapter.addDevice(device);
+                mLeDeviceListAdapter.notifyDataSetChanged();
+            }
+        });
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pause時はscanを止め、Listをクリアする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onPause() {
+    super.onPause();
+    scanLeDevice(false);
+    mLeDeviceListAdapter.clear();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;リストが選択されたら、scanを止め、そのデバイスの情報を渡してDeviceControlActivityを始める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onListItemClick(ListView l, View v, int position, long id) {
+    final BluetoothDevice device = mLeDeviceListAdapter.getDevice(position);
+    if (device == null) return;
+    final Intent intent = new Intent(this, DeviceControlActivity.class);
+    intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_NAME, device.getName());
+    intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_ADDRESS, device.getAddress());
+    if (mScanning) {
+        mBluetoothAdapter.stopLeScan(mLeScanCallback);
+        mScanning = false;
+    }
+    startActivity(intent);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;devicecontrolactivity&#34;&gt;DeviceControlActivity&lt;/h2&gt;
+
+&lt;p&gt;bindServiceでBluetoothLeServiceにServiceConnectionをバインドする。
+Serviceと接続したらServiceConnectionの&lt;code&gt;onServiceConnected&lt;/code&gt;が呼ばれるので、
+LocalBinderの&lt;code&gt;getService&lt;/code&gt;で取得し、初期化して対象のデバイスにconnectする。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.android.com/guide/components/services.html?hl=ja&#34;&gt;Service&lt;/a&gt;は、
+開始したコンポーネントや、ユーザーの操作に関係なく、バックグラウンドで動く。
+サーバー/クライアントでいうサーバーで、複数のクライアントが同時にバインドでき、
+その場合バインドしているクライアントが存在しなくなったら破棄される。
+ホストプロセスのメインスレッドで実行される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.gatt_services_characteristics);
+
+    final Intent intent = getIntent();
+    mDeviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME);
+    mDeviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS);
+
+    // Sets up UI references.
+    ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
+    mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
+    mGattServicesList.setOnChildClickListener(servicesListClickListner);
+    mConnectionState = (TextView) findViewById(R.id.connection_state);
+    mDataField = (TextView) findViewById(R.id.data_value);
+
+    getActionBar().setTitle(mDeviceName);
+    getActionBar().setDisplayHomeAsUpEnabled(true);
+    Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
+    bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
+}
+
+private final ServiceConnection mServiceConnection = new ServiceConnection() {
+
+    @Override
+    public void onServiceConnected(ComponentName componentName, IBinder service) {
+        mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
+        if (!mBluetoothLeService.initialize()) {
+            Log.e(TAG, &amp;quot;Unable to initialize Bluetooth&amp;quot;);
+            finish();
+        }
+        // Automatically connects to the device upon successful start-up initialization.
+        mBluetoothLeService.connect(mDeviceAddress);
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName componentName) {
+        mBluetoothLeService = null;
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BroadcastReceiverを登録して、対象デバイスに繋ぎに行く。
+GATTのService(AndroidのServiceとは違うもの)やCharacteristicが見つかったら表示する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.bluetooth.com/specifications/gatt&#34;&gt;GATT(Generic Attribute Profile)&lt;/a&gt;
+というのは、BLEで通信するときに使う階層化されたデータ構造の定義。
+ProfileにはいくつかのServiceが含まれ、ServiceにはいくつかのCharacteristic、または他のServiceが含まれる。
+Characteristicというのが値。ServiceやCharacteristicはUUIDで識別することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onResume() {
+    super.onResume();
+    registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
+    if (mBluetoothLeService != null) {
+        final boolean result = mBluetoothLeService.connect(mDeviceAddress);
+        Log.d(TAG, &amp;quot;Connect request result=&amp;quot; + result);
+    }
+}
+
+private final BroadcastReceiver mGattUpdateReceiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        final String action = intent.getAction();
+        if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
+            mConnected = true;
+            updateConnectionState(R.string.connected);
+            invalidateOptionsMenu();
+        } else if (BluetoothLeService.ACTION_GATT_DISCONNECTED.equals(action)) {
+            mConnected = false;
+            updateConnectionState(R.string.disconnected);
+            invalidateOptionsMenu();
+            clearUI();
+        } else if (BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
+            // Show all the supported services and characteristics on the user interface.
+            displayGattServices(mBluetoothLeService.getSupportedGattServices());
+        } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
+            displayData(intent.getStringExtra(BluetoothLeService.EXTRA_DATA));
+        }
+    }
+};
+
+private static IntentFilter makeGattUpdateIntentFilter() {
+    final IntentFilter intentFilter = new IntentFilter();
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
+    intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
+    return intentFilter;
+}
+
+private void displayGattServices(List&amp;lt;BluetoothGattService&amp;gt; gattServices) {
+    if (gattServices == null) return;
+    String uuid = null;
+    String unknownServiceString = getResources().getString(R.string.unknown_service);
+    String unknownCharaString = getResources().getString(R.string.unknown_characteristic);
+    ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt; gattServiceData = new ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;();
+    ArrayList&amp;lt;ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;&amp;gt; gattCharacteristicData
+            = new ArrayList&amp;lt;ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;&amp;gt;();
+    mGattCharacteristics = new ArrayList&amp;lt;ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt;&amp;gt;();
+
+    // Loops through available GATT Services.
+    for (BluetoothGattService gattService : gattServices) {
+        HashMap&amp;lt;String, String&amp;gt; currentServiceData = new HashMap&amp;lt;String, String&amp;gt;();
+        uuid = gattService.getUuid().toString();
+        currentServiceData.put(
+                LIST_NAME, SampleGattAttributes.lookup(uuid, unknownServiceString));
+        currentServiceData.put(LIST_UUID, uuid);
+        gattServiceData.add(currentServiceData);
+
+        ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt; gattCharacteristicGroupData =
+                new ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;();
+        List&amp;lt;BluetoothGattCharacteristic&amp;gt; gattCharacteristics =
+                gattService.getCharacteristics();
+        ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt; charas =
+                new ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt;();
+
+        // Loops through available Characteristics.
+        for (BluetoothGattCharacteristic gattCharacteristic : gattCharacteristics) {
+            charas.add(gattCharacteristic);
+            HashMap&amp;lt;String, String&amp;gt; currentCharaData = new HashMap&amp;lt;String, String&amp;gt;();
+            uuid = gattCharacteristic.getUuid().toString();
+            currentCharaData.put(
+                    LIST_NAME, SampleGattAttributes.lookup(uuid, unknownCharaString));
+            currentCharaData.put(LIST_UUID, uuid);
+            gattCharacteristicGroupData.add(currentCharaData);
+        }
+        mGattCharacteristics.add(charas);
+        gattCharacteristicData.add(gattCharacteristicGroupData);
+    }
+
+    SimpleExpandableListAdapter gattServiceAdapter = new SimpleExpandableListAdapter(
+            this,
+            gattServiceData,
+            android.R.layout.simple_expandable_list_item_2,
+            new String[] {LIST_NAME, LIST_UUID},
+            new int[] { android.R.id.text1, android.R.id.text2 },
+            gattCharacteristicData,
+            android.R.layout.simple_expandable_list_item_2,
+            new String[] {LIST_NAME, LIST_UUID},
+            new int[] { android.R.id.text1, android.R.id.text2 }
+    );
+    mGattServicesList.setAdapter(gattServiceAdapter);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;BluetoothGattCharacteristic.PROPERTY_READ&lt;/code&gt;と
+&lt;code&gt;BluetoothGattCharacteristic.PROPERTY_NOTIFY&lt;/code&gt;は
+それぞれCharacteristicが読めることと、値が変化したときにPeripheralから通知が受けられることを表している。&lt;/p&gt;
+
+&lt;p&gt;PeripheralというのはiBeaconのように、Advertising(見つかるようにする)し、接続される方。
+それに対して接続する方をCentralという。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private final ExpandableListView.OnChildClickListener servicesListClickListner =
+  new ExpandableListView.OnChildClickListener() {
+      @Override
+      public boolean onChildClick(ExpandableListView parent, View v, int groupPosition,
+                                  int childPosition, long id) {
+          if (mGattCharacteristics != null) {
+              final BluetoothGattCharacteristic characteristic =
+                      mGattCharacteristics.get(groupPosition).get(childPosition);
+              final int charaProp = characteristic.getProperties();
+              if ((charaProp | BluetoothGattCharacteristic.PROPERTY_READ) &amp;gt; 0) {
+                  // If there is an active notification on a characteristic, clear
+                  // it first so it doesn&#39;t update the data field on the user interface.
+                  if (mNotifyCharacteristic != null) {
+                      mBluetoothLeService.setCharacteristicNotification(
+                              mNotifyCharacteristic, false);
+                      mNotifyCharacteristic = null;
+                  }
+                  mBluetoothLeService.readCharacteristic(characteristic);
+              }
+              if ((charaProp | BluetoothGattCharacteristic.PROPERTY_NOTIFY) &amp;gt; 0) {
+                  mNotifyCharacteristic = characteristic;
+                  mBluetoothLeService.setCharacteristicNotification(
+                          characteristic, true);
+              }
+              return true;
+          }
+          return false;
+      }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BroadcastReceiverを外すのと、サービスのバインドをやめる処理。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onPause() {
+    super.onPause();
+    unregisterReceiver(mGattUpdateReceiver);
+}
+
+@Override
+protected void onDestroy() {
+    super.onDestroy();
+    unbindService(mServiceConnection);
+    mBluetoothLeService = null;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bluetoothleservice&#34;&gt;BluetoothLeService&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.android.com/reference/android/os/Binder.html&#34;&gt;Binder&lt;/a&gt;というのは
+プロセス間通信(IPC; Inter-Process Communication)するためのもの。&lt;/p&gt;
+
+&lt;p&gt;全てのクライアントのバインドが外れると&lt;code&gt;onUnbind&lt;/code&gt;が呼ばれるので、close処理をする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public class LocalBinder extends Binder {
+    BluetoothLeService getService() {
+        return BluetoothLeService.this;
+    }
+}
+
+@Override
+public IBinder onBind(Intent intent) {
+    return mBinder;
+}
+
+@Override
+public boolean onUnbind(Intent intent) {
+    // After using a given device, you should make sure that BluetoothGatt.close() is called
+    // such that resources are cleaned up properly.  In this particular example, close() is
+    // invoked when the UI is disconnected from the Service.
+    close();
+    return super.onUnbind(intent);
+}
+
+private final IBinder mBinder = new LocalBinder();
+
+public void close() {
+    if (mBluetoothGatt == null) {
+        return;
+    }
+    mBluetoothGatt.close();
+    mBluetoothGatt = null;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;初期化処理。BluetoothAdapterを取得する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public boolean initialize() {
+    // For API level 18 and above, get a reference to BluetoothAdapter through
+    // BluetoothManager.
+    if (mBluetoothManager == null) {
+        mBluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        if (mBluetoothManager == null) {
+            Log.e(TAG, &amp;quot;Unable to initialize BluetoothManager.&amp;quot;);
+            return false;
+        }
+    }
+
+    mBluetoothAdapter = mBluetoothManager.getAdapter();
+    if (mBluetoothAdapter == null) {
+        Log.e(TAG, &amp;quot;Unable to obtain a BluetoothAdapter.&amp;quot;);
+        return false;
+    }
+
+    return true;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;既に接続したことがあれば、そのBluetoothGattで再接続し、そうでなければ&lt;code&gt;connectGatt&lt;/code&gt;する。
+callbackでは必要に応じてIntentをブロードキャストする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public boolean connect(final String address) {
+    if (mBluetoothAdapter == null || address == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized or unspecified address.&amp;quot;);
+        return false;
+    }
+
+    // Previously connected device.  Try to reconnect.
+    if (mBluetoothDeviceAddress != null &amp;amp;&amp;amp; address.equals(mBluetoothDeviceAddress)
+            &amp;amp;&amp;amp; mBluetoothGatt != null) {
+        Log.d(TAG, &amp;quot;Trying to use an existing mBluetoothGatt for connection.&amp;quot;);
+        if (mBluetoothGatt.connect()) {
+            mConnectionState = STATE_CONNECTING;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+    if (device == null) {
+        Log.w(TAG, &amp;quot;Device not found.  Unable to connect.&amp;quot;);
+        return false;
+    }
+    // We want to directly connect to the device, so we are setting the autoConnect
+    // parameter to false.
+    mBluetoothGatt = device.connectGatt(this, false, mGattCallback);
+    Log.d(TAG, &amp;quot;Trying to create a new connection.&amp;quot;);
+    mBluetoothDeviceAddress = address;
+    mConnectionState = STATE_CONNECTING;
+    return true;
+}
+
+private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+    @Override
+    public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+        String intentAction;
+        if (newState == BluetoothProfile.STATE_CONNECTED) {
+            intentAction = ACTION_GATT_CONNECTED;
+            mConnectionState = STATE_CONNECTED;
+            broadcastUpdate(intentAction);
+            Log.i(TAG, &amp;quot;Connected to GATT server.&amp;quot;);
+            // Attempts to discover services after successful connection.
+            Log.i(TAG, &amp;quot;Attempting to start service discovery:&amp;quot; +
+                    mBluetoothGatt.discoverServices());
+
+        } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+            intentAction = ACTION_GATT_DISCONNECTED;
+            mConnectionState = STATE_DISCONNECTED;
+            Log.i(TAG, &amp;quot;Disconnected from GATT server.&amp;quot;);
+            broadcastUpdate(intentAction);
+        }
+    }
+
+    @Override
+    public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED);
+        } else {
+            Log.w(TAG, &amp;quot;onServicesDiscovered received: &amp;quot; + status);
+        }
+    }
+
+    @Override
+    public void onCharacteristicRead(BluetoothGatt gatt,
+                                     BluetoothGattCharacteristic characteristic,
+                                     int status) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
+        }
+    }
+
+    @Override
+    public void onCharacteristicChanged(BluetoothGatt gatt,
+                                        BluetoothGattCharacteristic characteristic) {
+        broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;private void broadcastUpdate(final String action) {
+    final Intent intent = new Intent(action);
+    sendBroadcast(intent);
+}
+
+private void broadcastUpdate(final String action,
+                             final BluetoothGattCharacteristic characteristic) {
+    final Intent intent = new Intent(action);
+
+    // This is special handling for the Heart Rate Measurement profile.  Data parsing is
+    // carried out as per profile specifications:
+    // http://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.heart_rate_measurement.xml
+    if (UUID_HEART_RATE_MEASUREMENT.equals(characteristic.getUuid())) {
+        int flag = characteristic.getProperties();
+        int format = -1;
+        if ((flag &amp;amp; 0x01) != 0) {
+            format = BluetoothGattCharacteristic.FORMAT_UINT16;
+            Log.d(TAG, &amp;quot;Heart rate format UINT16.&amp;quot;);
+        } else {
+            format = BluetoothGattCharacteristic.FORMAT_UINT8;
+            Log.d(TAG, &amp;quot;Heart rate format UINT8.&amp;quot;);
+        }
+        final int heartRate = characteristic.getIntValue(format, 1);
+        Log.d(TAG, String.format(&amp;quot;Received heart rate: %d&amp;quot;, heartRate));
+        intent.putExtra(EXTRA_DATA, String.valueOf(heartRate));
+    } else {
+        // For all other profiles, writes the data formatted in HEX.
+        final byte[] data = characteristic.getValue();
+        if (data != null &amp;amp;&amp;amp; data.length &amp;gt; 0) {
+            final StringBuilder stringBuilder = new StringBuilder(data.length);
+            for(byte byteChar : data)
+                stringBuilder.append(String.format(&amp;quot;%02X &amp;quot;, byteChar));
+            intent.putExtra(EXTRA_DATA, new String(data) + &amp;quot;\n&amp;quot; + stringBuilder.toString());
+        }
+    }
+    sendBroadcast(intent);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;切断する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void disconnect() {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.disconnect();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicを読む。結果は&lt;code&gt;BluetoothGattCallback#onCharacteristicRead&lt;/code&gt;で受け取る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void readCharacteristic(BluetoothGattCharacteristic characteristic) {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.readCharacteristic(characteristic);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicの通知を設定。Descriptorというのは、Characteristicの値を説明するもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void setCharacteristicNotification(BluetoothGattCharacteristic characteristic,
+                                          boolean enabled) {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.setCharacteristicNotification(characteristic, enabled);
+
+    // This is specific to Heart Rate Measurement.
+    if (UUID_HEART_RATE_MEASUREMENT.equals(characteristic.getUuid())) {
+        BluetoothGattDescriptor descriptor = characteristic.getDescriptor(
+                UUID.fromString(SampleGattAttributes.CLIENT_CHARACTERISTIC_CONFIG));
+        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+        mBluetoothGatt.writeDescriptor(descriptor);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GATTのサービスのリストを返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public List&amp;lt;BluetoothGattService&amp;gt; getSupportedGattServices() {
+    if (mBluetoothGatt == null) return null;
+
+    return mBluetoothGatt.getServices();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;android-6-0以降の端末で動かす&#34;&gt;Android 6.0以降の端末で動かす&lt;/h2&gt;
+
+&lt;p&gt;Android6.0以降ではscanに位置情報のパーミッションが必要になったため、手を入れる必要がある。
+&lt;a href=&#34;https://github.com/googlesamples/android-BluetoothLeGatt/pull/20&#34;&gt;プルリク&lt;/a&gt;は出てるのでそのうち入るかも。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;uses-permission android:name=&amp;quot;android.permission.ACCESS_COARSE_LOCATION&amp;quot;/&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SDK Versionが23以上だったら、さらにリクエストする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        != PackageManager.PERMISSION_GRANTED) {
+    Log.w(&amp;quot;BleActivity&amp;quot;, &amp;quot;Location access not granted!&amp;quot;);
+    ActivityCompat.requestPermissions(this,
+            new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
+            MY_PERMISSION_RESPONSE);
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>PackerでAMIを作る</title>
+          <link>http://sambaiz.net/article/24/</link>
+          <pubDate>Tue, 18 Oct 2016 22:37:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/24/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://www.packer.io/&#34;&gt;https://www.packer.io/&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;いろんなプラットフォームのイメージを作ることができるツール。
+これでfluentdのログサーバーのAMIを作る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install packer # mac
+$ packer -v
+0.10.1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;設定ファイルはこんな感じ。&lt;code&gt;variables&lt;/code&gt;の値は&lt;code&gt;{{user ... }}&lt;/code&gt;のところで使われる。
+&lt;code&gt;builders&lt;/code&gt;に作るイメージの情報を書いて、&lt;code&gt;provisioners&lt;/code&gt;で環境を作る。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;provisioners&lt;/code&gt;にはchefやansibleなども指定できるが、
+継ぎ足し継ぎ足しで秘伝のタレ化したAMIも最初は、&lt;/p&gt;
+
+&lt;p&gt;「コマンドいくつか実行するだけなのでとりあえず手作業で作った、後でなんとかする」&lt;/p&gt;
+
+&lt;p&gt;なんてものもあったりして、
+そういうものは無理にchefなどで始めず、手軽にshellでpacker buildするといいと思う。
+手作業よりも楽だし、ソースが別にあるので使われていないAMIを消すのも簡単だ。&lt;/p&gt;
+
+&lt;p&gt;fileではpermissionがないところに置くことができないので、一旦置いてshellで移動する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;variables&amp;quot;: {
+    &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot;
+  },
+  &amp;quot;builders&amp;quot;: [{
+    &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;,
+    &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;,
+    &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;,
+    &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
+    &amp;quot;source_ami&amp;quot;: &amp;quot;ami-1a15c77b&amp;quot;,
+    &amp;quot;instance_type&amp;quot;: &amp;quot;t2.small&amp;quot;,
+    &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;,
+    &amp;quot;ami_name&amp;quot;: &amp;quot;fluentd-logserver {{timestamp}}&amp;quot;
+  }],
+  &amp;quot;provisioners&amp;quot;: [{
+    &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;,
+    &amp;quot;source&amp;quot;: &amp;quot;td-agent.conf&amp;quot;,
+    &amp;quot;destination&amp;quot;: &amp;quot;/home/ec2-user/td-agent.conf&amp;quot;
+  },
+  {
+    &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;,
+    &amp;quot;inline&amp;quot;: [
+      &amp;quot;curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh&amp;quot;,
+      &amp;quot;sudo mv /home/ec2-user/td-agent.conf /etc/td-agent/td-agent.conf&amp;quot;,
+      &amp;quot;sudo /etc/init.d/td-agent restart&amp;quot;
+    ]
+  }]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ packer validate fluentd-logserver.json
+Template validated successfully.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;buildのとき&lt;code&gt;-var&lt;/code&gt;でvariablesを渡すことができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ packer build \
+    -var &#39;aws_access_key=YOUR ACCESS KEY&#39; \
+    -var &#39;aws_secret_key=YOUR SECRET KEY&#39; \
+    fluentd-logserver.json
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行すると実際にインスタンスを立ち上げ、AMIを作成し始める。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>android-bluetoothChatを読む</title>
+          <link>http://sambaiz.net/article/23/</link>
+          <pubDate>Sat, 15 Oct 2016 14:00:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/23/</guid>
+          <description>
+
+&lt;p&gt;Classic Bluetoothのサンプルコード。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/googlesamples/android-BluetoothChat&#34;&gt;https://github.com/googlesamples/android-BluetoothChat&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;mainactivity&#34;&gt;MainActivity&lt;/h2&gt;
+
+&lt;p&gt;まず、MainActivity。&lt;/p&gt;
+
+&lt;p&gt;Fragmentのcommitや、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
+
+    if (savedInstanceState == null) {
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        BluetoothChatFragment fragment = new BluetoothChatFragment();
+        transaction.replace(R.id.sample_content_fragment, fragment);
+        transaction.commit();
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;オプションメニューの設定をしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// 最初だけ呼ばれる
+@Override
+public boolean onCreateOptionsMenu(Menu menu) {
+    getMenuInflater().inflate(R.menu.main, menu);
+    return true;
+}
+
+// 表示される度に呼ばれる
+@Override
+public boolean onPrepareOptionsMenu(Menu menu) {
+    MenuItem logToggle = menu.findItem(R.id.menu_toggle_log);
+    logToggle.setVisible(findViewById(R.id.sample_output) instanceof ViewAnimator);
+    logToggle.setTitle(mLogShown ? R.string.sample_hide_log : R.string.sample_show_log);
+
+    return super.onPrepareOptionsMenu(menu);
+}
+
+@Override
+public boolean onOptionsItemSelected(MenuItem item) {
+    switch(item.getItemId()) {
+        case R.id.menu_toggle_log:
+            mLogShown = !mLogShown;
+            ViewAnimator output = (ViewAnimator) findViewById(R.id.sample_output);
+            if (mLogShown) {
+                output.setDisplayedChild(1);
+            } else {
+                output.setDisplayedChild(0);
+            }　
+            // メニューを再作成する(onCreateOptionsMenu, onPrepareOptionsMenuが呼ばれる)
+            supportInvalidateOptionsMenu();
+            return true;
+    }
+    return super.onOptionsItemSelected(item);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bluetoothchatfragment&#34;&gt;BluetoothChatFragment&lt;/h2&gt;
+
+&lt;p&gt;onCreateではBluetoothAdapterを取得して、Bluetoothが使えるかどうかを確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setHasOptionsMenu(true);
+    // Get local Bluetooth adapter
+    mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
+    // If the adapter is null, then Bluetooth is not supported
+    if (mBluetoothAdapter == null) {
+        FragmentActivity activity = getActivity();
+        Toast.makeText(activity, &amp;quot;Bluetooth is not available&amp;quot;, Toast.LENGTH_LONG).show();
+        activity.finish();
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;onStartではもしBluetoothが有効でなければ有効にするよう要求し、有効になったらsetupする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onStart() {
+    super.onStart();
+    // If BT is not on, request that it be enabled.
+    // setupChat() will then be called during onActivityResult
+    if (!mBluetoothAdapter.isEnabled()) {
+        Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+        startActivityForResult(enableIntent, REQUEST_ENABLE_BT);
+        // Otherwise, setup the chat session
+    } else if (mChatService == null) {
+        setupChat();
+    }
+}
+
+public void onActivityResult(int requestCode, int resultCode, Intent data) {
+    switch (requestCode) {
+        case REQUEST_CONNECT_DEVICE_SECURE:
+            // When DeviceListActivity returns with a device to connect
+            if (resultCode == Activity.RESULT_OK) {
+                connectDevice(data, true);
+            }
+            break;
+        case REQUEST_CONNECT_DEVICE_INSECURE:
+            // When DeviceListActivity returns with a device to connect
+            if (resultCode == Activity.RESULT_OK) {
+                connectDevice(data, false);
+            }
+            break;
+        case REQUEST_ENABLE_BT:
+            // When the request to enable Bluetooth returns
+            if (resultCode == Activity.RESULT_OK) {
+                // Bluetooth is now enabled, so set up a chat session
+                setupChat();
+            } else {
+                // User did not enable Bluetooth or an error occurred
+                Log.d(TAG, &amp;quot;BT not enabled&amp;quot;);
+                Toast.makeText(getActivity(), R.string.bt_not_enabled_leaving,
+                        Toast.LENGTH_SHORT).show();
+                getActivity().finish();
+            }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;onActivityResultではDeviceListActivityで、接続する端末を選択した結果もハンドリングしていて、connectDeviceを呼ぶ。
+アドレスからmBluetoothAdapter.getRemoteDevice(address)でdeviceを取得して、これをサービスに渡して接続する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void connectDevice(Intent data, boolean secure) {
+    // Get the device MAC address
+    String address = data.getExtras()
+            .getString(DeviceListActivity.EXTRA_DEVICE_ADDRESS);
+    // Get the BluetoothDevice object
+    BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+    // Attempt to connect to the device
+    mChatService.connect(device, secure);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Serviceのstartとstop。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onDestroy() {
+    super.onDestroy();
+    if (mChatService != null) {
+        mChatService.stop();
+    }
+}
+
+@Override
+public void onResume() {
+    super.onResume();
+
+    // Performing this check in onResume() covers the case in which BT was
+    // not enabled during onStart(), so we were paused to enable it...
+    // onResume() will be called when ACTION_REQUEST_ENABLE activity returns.
+    if (mChatService != null) {
+        // Only if the state is STATE_NONE, do we know that we haven&#39;t started already
+        if (mChatService.getState() == BluetoothChatService.STATE_NONE) {
+            // Start the Bluetooth chat services
+            mChatService.start();
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;viewまわり。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container,
+                         @Nullable Bundle savedInstanceState) {
+    return inflater.inflate(R.layout.fragment_bluetooth_chat, container, false);
+}
+
+@Override
+public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
+    mConversationView = (ListView) view.findViewById(R.id.in);
+    mOutEditText = (EditText) view.findViewById(R.id.edit_text_out);
+    mSendButton = (Button) view.findViewById(R.id.button_send);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;setupChatでは会話用リストにAdapterをセットしたり、入力欄やボタンにリスナーを登録するほかに、ChatServiceを初期化する。
+初期化する際に第二引数として渡すmHandlerでは、Serviceからのメッセージにより処理を行う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void setupChat() {
+    Log.d(TAG, &amp;quot;setupChat()&amp;quot;);
+
+    // Initialize the array adapter for the conversation thread
+    mConversationArrayAdapter = new ArrayAdapter&amp;lt;String&amp;gt;(getActivity(), R.layout.message);
+
+    mConversationView.setAdapter(mConversationArrayAdapter);
+
+    // Initialize the compose field with a listener for the return key
+    mOutEditText.setOnEditorActionListener(mWriteListener);
+
+    // Initialize the send button with a listener that for click events
+    mSendButton.setOnClickListener(new View.OnClickListener() {
+        public void onClick(View v) {
+            // Send a message using content of the edit text widget
+            View view = getView();
+            if (null != view) {
+                TextView textView = (TextView) view.findViewById(R.id.edit_text_out);
+                String message = textView.getText().toString();
+                sendMessage(message);
+            }
+        }
+    });
+
+    // Initialize the BluetoothChatService to perform bluetooth connections
+    mChatService = new BluetoothChatService(getActivity(), mHandler);
+
+    // Initialize the buffer for outgoing messages
+    mOutStringBuffer = new StringBuffer(&amp;quot;&amp;quot;);
+}
+
+private TextView.OnEditorActionListener mWriteListener = new TextView.OnEditorActionListener() {
+  public boolean onEditorAction(TextView view, int actionId, KeyEvent event) {
+      // If the action is a key-up event on the return key, send the message
+      if (actionId == EditorInfo.IME_NULL &amp;amp;&amp;amp; event.getAction() == KeyEvent.ACTION_UP) {
+          String message = view.getText().toString();
+          sendMessage(message);
+      }
+      return true;
+  }
+};
+
+private final Handler mHandler = new Handler() {
+    @Override
+    public void handleMessage(Message msg) {
+        FragmentActivity activity = getActivity();
+        switch (msg.what) {
+            case Constants.MESSAGE_STATE_CHANGE:
+                switch (msg.arg1) {
+                    case BluetoothChatService.STATE_CONNECTED:
+                        setStatus(getString(R.string.title_connected_to, mConnectedDeviceName));
+                        mConversationArrayAdapter.clear();
+                        break;
+                    case BluetoothChatService.STATE_CONNECTING:
+                        setStatus(R.string.title_connecting);
+                        break;
+                    case BluetoothChatService.STATE_LISTEN:
+                    case BluetoothChatService.STATE_NONE:
+                        setStatus(R.string.title_not_connected);
+                        break;
+                }
+                break;
+            case Constants.MESSAGE_WRITE:
+                byte[] writeBuf = (byte[]) msg.obj;
+                // construct a string from the buffer
+                String writeMessage = new String(writeBuf);
+                mConversationArrayAdapter.add(&amp;quot;Me:  &amp;quot; + writeMessage);
+                break;
+            case Constants.MESSAGE_READ:
+                byte[] readBuf = (byte[]) msg.obj;
+                // construct a string from the valid bytes in the buffer
+                String readMessage = new String(readBuf, 0, msg.arg1);
+                mConversationArrayAdapter.add(mConnectedDeviceName + &amp;quot;:  &amp;quot; + readMessage);
+                break;
+            case Constants.MESSAGE_DEVICE_NAME:
+                // save the connected device&#39;s name
+                mConnectedDeviceName = msg.getData().getString(Constants.DEVICE_NAME);
+                if (null != activity) {
+                    Toast.makeText(activity, &amp;quot;Connected to &amp;quot;
+                            + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
+                }
+                break;
+            case Constants.MESSAGE_TOAST:
+                if (null != activity) {
+                    Toast.makeText(activity, msg.getData().getString(Constants.TOAST),
+                            Toast.LENGTH_SHORT).show();
+                }
+                break;
+        }
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デバイスを検出可能にするのと、DeviceListActivityを始めるメニュー。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+    inflater.inflate(R.menu.bluetooth_chat, menu);
+}
+
+@Override
+public boolean onOptionsItemSelected(MenuItem item) {
+    switch (item.getItemId()) {
+        case R.id.secure_connect_scan: {
+            // Launch the DeviceListActivity to see devices and do scan
+            Intent serverIntent = new Intent(getActivity(), DeviceListActivity.class);
+            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+            return true;
+        }
+        case R.id.insecure_connect_scan: {
+            // Launch the DeviceListActivity to see devices and do scan
+            Intent serverIntent = new Intent(getActivity(), DeviceListActivity.class);
+            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_INSECURE);
+            return true;
+        }
+        case R.id.discoverable: {
+            // Ensure this device is discoverable by others
+            ensureDiscoverable();
+            return true;
+        }
+    }
+    return false;
+}
+
+private void ensureDiscoverable() {
+    if (mBluetoothAdapter.getScanMode() !=
+            BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE) {
+        Intent discoverableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
+        discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
+        startActivity(discoverableIntent);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bluetoothchatservice&#34;&gt;BluetoothChatService&lt;/h2&gt;
+
+&lt;p&gt;初期stateはSTATE_NONE。
+setStateしたときにobtainMessageでstateが変わったときの処理をhandlerに行わせる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public BluetoothChatService(Context context, Handler handler) {
+    mAdapter = BluetoothAdapter.getDefaultAdapter();
+    mState = STATE_NONE;
+    mHandler = handler;
+}
+
+private synchronized void setState(int state) {
+    Log.d(TAG, &amp;quot;setState() &amp;quot; + mState + &amp;quot; -&amp;gt; &amp;quot; + state);
+    mState = state;
+
+    // Give the new state to the Handler so the UI Activity can update
+    mHandler.obtainMessage(Constants.MESSAGE_STATE_CHANGE, state, -1).sendToTarget();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;接続しようとしている、した、される処理はそれぞれ別スレッドで行われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public synchronized void start() {
+    Log.d(TAG, &amp;quot;start&amp;quot;);
+
+    // Cancel any thread attempting to make a connection
+    if (mConnectThread != null) {
+        mConnectThread.cancel();
+        mConnectThread = null;
+    }
+
+    // Cancel any thread currently running a connection
+    if (mConnectedThread != null) {
+        mConnectedThread.cancel();
+        mConnectedThread = null;
+    }
+
+    setState(STATE_LISTEN);
+
+    // Start the thread to listen on a BluetoothServerSocket
+    if (mSecureAcceptThread == null) {
+        mSecureAcceptThread = new AcceptThread(true);
+        mSecureAcceptThread.start();
+    }
+    if (mInsecureAcceptThread == null) {
+        mInsecureAcceptThread = new AcceptThread(false);
+        mInsecureAcceptThread.start();
+    }
+}
+
+public synchronized void stop() {
+    Log.d(TAG, &amp;quot;stop&amp;quot;);
+
+    if (mConnectThread != null) {
+        mConnectThread.cancel();
+        mConnectThread = null;
+    }
+
+    if (mConnectedThread != null) {
+        mConnectedThread.cancel();
+        mConnectedThread = null;
+    }
+
+    if (mSecureAcceptThread != null) {
+        mSecureAcceptThread.cancel();
+        mSecureAcceptThread = null;
+    }
+
+    if (mInsecureAcceptThread != null) {
+        mInsecureAcceptThread.cancel();
+        mInsecureAcceptThread = null;
+    }
+    setState(STATE_NONE);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず、接続するためのConnectThread。コンストラクタでつなげるdeviceからsocketを作成し、
+runで接続する。接続できたらconnectedを呼び、ConnectedThreadを始める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private class ConnectThread extends Thread {
+    private final BluetoothSocket mmSocket;
+    private final BluetoothDevice mmDevice;
+    private String mSocketType;
+
+    public ConnectThread(BluetoothDevice device, boolean secure) {
+        mmDevice = device;
+        BluetoothSocket tmp = null;
+        mSocketType = secure ? &amp;quot;Secure&amp;quot; : &amp;quot;Insecure&amp;quot;;
+
+        // Get a BluetoothSocket for a connection with the
+        // given BluetoothDevice
+        try {
+            if (secure) {
+                tmp = device.createRfcommSocketToServiceRecord(
+                        MY_UUID_SECURE);
+            } else {
+                tmp = device.createInsecureRfcommSocketToServiceRecord(
+                        MY_UUID_INSECURE);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;Socket Type: &amp;quot; + mSocketType + &amp;quot;create() failed&amp;quot;, e);
+        }
+        mmSocket = tmp;
+    }
+
+    public void run() {
+        Log.i(TAG, &amp;quot;BEGIN mConnectThread SocketType:&amp;quot; + mSocketType);
+        setName(&amp;quot;ConnectThread&amp;quot; + mSocketType);
+
+        // Always cancel discovery because it will slow down a connection
+        mAdapter.cancelDiscovery();
+
+        // Make a connection to the BluetoothSocket
+        try {
+            // This is a blocking call and will only return on a
+            // successful connection or an exception
+            mmSocket.connect();
+        } catch (IOException e) {
+            // Close the socket
+            try {
+                mmSocket.close();
+            } catch (IOException e2) {
+                Log.e(TAG, &amp;quot;unable to close() &amp;quot; + mSocketType +
+                        &amp;quot; socket during connection failure&amp;quot;, e2);
+            }
+            connectionFailed();
+            return;
+        }
+
+        // Reset the ConnectThread because we&#39;re done
+        synchronized (BluetoothChatService.this) {
+            mConnectThread = null;
+        }
+
+        // Start the connected thread
+        connected(mmSocket, mmDevice, mSocketType);
+    }
+
+    public void cancel() {
+        try {
+            mmSocket.close();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;close() of connect &amp;quot; + mSocketType + &amp;quot; socket failed&amp;quot;, e);
+        }
+    }
+}
+
+public synchronized void connected(BluetoothSocket socket, BluetoothDevice
+        device, final String socketType) {
+    Log.d(TAG, &amp;quot;connected, Socket Type:&amp;quot; + socketType);
+
+    // Cancel the thread that completed the connection
+    if (mConnectThread != null) {
+        mConnectThread.cancel();
+        mConnectThread = null;
+    }
+
+    // Cancel any thread currently running a connection
+    if (mConnectedThread != null) {
+        mConnectedThread.cancel();
+        mConnectedThread = null;
+    }
+
+    // Cancel the accept thread because we only want to connect to one device
+    if (mSecureAcceptThread != null) {
+        mSecureAcceptThread.cancel();
+        mSecureAcceptThread = null;
+    }
+    if (mInsecureAcceptThread != null) {
+        mInsecureAcceptThread.cancel();
+        mInsecureAcceptThread = null;
+    }
+
+    // Start the thread to manage the connection and perform transmissions
+    mConnectedThread = new ConnectedThread(socket, socketType);
+    mConnectedThread.start();
+
+    // Send the name of the connected device back to the UI Activity
+    Message msg = mHandler.obtainMessage(Constants.MESSAGE_DEVICE_NAME);
+    Bundle bundle = new Bundle();
+    bundle.putString(Constants.DEVICE_NAME, device.getName());
+    msg.setData(bundle);
+    mHandler.sendMessage(msg);
+
+    setState(STATE_CONNECTED);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ConnectedThreadではsocketからinputStreamとoutputStreamを取得し、
+runでは読んでメッセージで渡し、writeで書く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private class ConnectedThread extends Thread {
+    private final BluetoothSocket mmSocket;
+    private final InputStream mmInStream;
+    private final OutputStream mmOutStream;
+
+    public ConnectedThread(BluetoothSocket socket, String socketType) {
+        Log.d(TAG, &amp;quot;create ConnectedThread: &amp;quot; + socketType);
+        mmSocket = socket;
+        InputStream tmpIn = null;
+        OutputStream tmpOut = null;
+
+        // Get the BluetoothSocket input and output streams
+        try {
+            tmpIn = socket.getInputStream();
+            tmpOut = socket.getOutputStream();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;temp sockets not created&amp;quot;, e);
+        }
+
+        mmInStream = tmpIn;
+        mmOutStream = tmpOut;
+    }
+
+    public void run() {
+        Log.i(TAG, &amp;quot;BEGIN mConnectedThread&amp;quot;);
+        byte[] buffer = new byte[1024];
+        int bytes;
+
+        // Keep listening to the InputStream while connected
+        while (mState == STATE_CONNECTED) {
+            try {
+                // Read from the InputStream
+                bytes = mmInStream.read(buffer);
+
+                // Send the obtained bytes to the UI Activity
+                mHandler.obtainMessage(Constants.MESSAGE_READ, bytes, -1, buffer)
+                        .sendToTarget();
+            } catch (IOException e) {
+                Log.e(TAG, &amp;quot;disconnected&amp;quot;, e);
+                connectionLost();
+                // Start the service over to restart listening mode
+                BluetoothChatService.this.start();
+                break;
+            }
+        }
+    }
+
+    /**
+     * Write to the connected OutStream.
+     *
+     * @param buffer The bytes to write
+     */
+    public void write(byte[] buffer) {
+        try {
+            mmOutStream.write(buffer);
+
+            // Share the sent message back to the UI Activity
+            mHandler.obtainMessage(Constants.MESSAGE_WRITE, -1, -1, buffer)
+                    .sendToTarget();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;Exception during write&amp;quot;, e);
+        }
+    }
+
+    public void cancel() {
+        try {
+            mmSocket.close();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;close() of connect socket failed&amp;quot;, e);
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;AcceptThreadでは常に受け入れられる形にしておく。もしつながったらConnectThreadと同様にconnectedする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private class AcceptThread extends Thread {
+    // The local server socket
+    private final BluetoothServerSocket mmServerSocket;
+    private String mSocketType;
+
+    public AcceptThread(boolean secure) {
+        BluetoothServerSocket tmp = null;
+        mSocketType = secure ? &amp;quot;Secure&amp;quot; : &amp;quot;Insecure&amp;quot;;
+
+        // Create a new listening server socket
+        try {
+            if (secure) {
+                tmp = mAdapter.listenUsingRfcommWithServiceRecord(NAME_SECURE,
+                        MY_UUID_SECURE);
+            } else {
+                tmp = mAdapter.listenUsingInsecureRfcommWithServiceRecord(
+                        NAME_INSECURE, MY_UUID_INSECURE);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;Socket Type: &amp;quot; + mSocketType + &amp;quot;listen() failed&amp;quot;, e);
+        }
+        mmServerSocket = tmp;
+    }
+
+    public void run() {
+        Log.d(TAG, &amp;quot;Socket Type: &amp;quot; + mSocketType +
+                &amp;quot;BEGIN mAcceptThread&amp;quot; + this);
+        setName(&amp;quot;AcceptThread&amp;quot; + mSocketType);
+
+        BluetoothSocket socket = null;
+
+        // Listen to the server socket if we&#39;re not connected
+        while (mState != STATE_CONNECTED) {
+            try {
+                // This is a blocking call and will only return on a
+                // successful connection or an exception
+                socket = mmServerSocket.accept();
+            } catch (IOException e) {
+                Log.e(TAG, &amp;quot;Socket Type: &amp;quot; + mSocketType + &amp;quot;accept() failed&amp;quot;, e);
+                break;
+            }
+
+            // If a connection was accepted
+            if (socket != null) {
+                synchronized (BluetoothChatService.this) {
+                    switch (mState) {
+                        case STATE_LISTEN:
+                        case STATE_CONNECTING:
+                            // Situation normal. Start the connected thread.
+                            connected(socket, socket.getRemoteDevice(),
+                                    mSocketType);
+                            break;
+                        case STATE_NONE:
+                        case STATE_CONNECTED:
+                            // Either not ready or already connected. Terminate new socket.
+                            try {
+                                socket.close();
+                            } catch (IOException e) {
+                                Log.e(TAG, &amp;quot;Could not close unwanted socket&amp;quot;, e);
+                            }
+                            break;
+                    }
+                }
+            }
+        }
+        Log.i(TAG, &amp;quot;END mAcceptThread, socket Type: &amp;quot; + mSocketType);
+
+    }
+
+    public void cancel() {
+        Log.d(TAG, &amp;quot;Socket Type&amp;quot; + mSocketType + &amp;quot;cancel &amp;quot; + this);
+        try {
+            mmServerSocket.close();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;Socket Type&amp;quot; + mSocketType + &amp;quot;close() of server failed&amp;quot;, e);
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;connectでは、接続しようとしているならそれをキャンセル、接続したものがあるならsocketを閉じて
+新しい接続を始める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public synchronized void connect(BluetoothDevice device, boolean secure) {
+    Log.d(TAG, &amp;quot;connect to: &amp;quot; + device);
+
+    // Cancel any thread attempting to make a connection
+    if (mState == STATE_CONNECTING) {
+        if (mConnectThread != null) {
+            mConnectThread.cancel();
+            mConnectThread = null;
+        }
+    }
+
+    // Cancel any thread currently running a connection
+    if (mConnectedThread != null) {
+        mConnectedThread.cancel();
+        mConnectedThread = null;
+    }
+
+    // Start the thread to connect with the given device
+    mConnectThread = new ConnectThread(device, secure);
+    mConnectThread.start();
+    setState(STATE_CONNECTING);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;writeでは接続済みであることを確認後、connectedThreadの(参照を)コピーして、writeしている。
+この間にmConnectedThreadにnullが代入されたりすることをsynchronizedで防ぐ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void write(byte[] out) {
+    // Create temporary object
+    ConnectedThread r;
+    // Synchronize a copy of the ConnectedThread
+    synchronized (this) {
+        if (mState != STATE_CONNECTED) return;
+        r = mConnectedThread;
+    }
+    // Perform the write unsynchronized
+    r.write(out);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;devicelistactivity&#34;&gt;DeviceListActivity&lt;/h2&gt;
+
+&lt;p&gt;検出可能にしている他端末を探し、選択する。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS)&lt;/code&gt;して、
+&lt;code&gt;setProgressBarIndeterminateVisibility(true)&lt;/code&gt;すると右上にプログレスバーが表示できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;new IntentFilter(BluetoothDevice.ACTION_FOUND)&lt;/code&gt;と
+&lt;code&gt;new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)&lt;/code&gt;で
+&lt;code&gt;registerReceiver(mReceiver, filter)&lt;/code&gt;して、
+デバイスを見つけたときと探し終わったときにブロードキャストされてくるインテントを受信するレシーバーを登録する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+
+    // Setup the window
+    requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
+    setContentView(R.layout.activity_device_list);
+
+    // Set result CANCELED in case the user backs out
+    setResult(Activity.RESULT_CANCELED);
+
+    // Initialize the button to perform device discovery
+    Button scanButton = (Button) findViewById(R.id.button_scan);
+    scanButton.setOnClickListener(new View.OnClickListener() {
+        public void onClick(View v) {
+            doDiscovery();
+            v.setVisibility(View.GONE);
+        }
+    });
+
+    // Initialize array adapters. One for already paired devices and
+    // one for newly discovered devices
+    ArrayAdapter&amp;lt;String&amp;gt; pairedDevicesArrayAdapter =
+            new ArrayAdapter&amp;lt;String&amp;gt;(this, R.layout.device_name);
+    mNewDevicesArrayAdapter = new ArrayAdapter&amp;lt;String&amp;gt;(this, R.layout.device_name);
+
+    // Find and set up the ListView for paired devices
+    ListView pairedListView = (ListView) findViewById(R.id.paired_devices);
+    pairedListView.setAdapter(pairedDevicesArrayAdapter);
+    pairedListView.setOnItemClickListener(mDeviceClickListener);
+
+    // Find and set up the ListView for newly discovered devices
+    ListView newDevicesListView = (ListView) findViewById(R.id.new_devices);
+    newDevicesListView.setAdapter(mNewDevicesArrayAdapter);
+    newDevicesListView.setOnItemClickListener(mDeviceClickListener);
+
+    // Register for broadcasts when a device is discovered
+    IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+    this.registerReceiver(mReceiver, filter);
+
+    // Register for broadcasts when discovery has finished
+    filter = new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+    this.registerReceiver(mReceiver, filter);
+
+    // Get the local Bluetooth adapter
+    mBtAdapter = BluetoothAdapter.getDefaultAdapter();
+
+    // Get a set of currently paired devices
+    Set&amp;lt;BluetoothDevice&amp;gt; pairedDevices = mBtAdapter.getBondedDevices();
+
+    // If there are paired devices, add each one to the ArrayAdapter
+    if (pairedDevices.size() &amp;gt; 0) {
+        findViewById(R.id.title_paired_devices).setVisibility(View.VISIBLE);
+        for (BluetoothDevice device : pairedDevices) {
+            pairedDevicesArrayAdapter.add(device.getName() + &amp;quot;\n&amp;quot; + device.getAddress());
+        }
+    } else {
+        String noDevices = getResources().getText(R.string.none_paired).toString();
+        pairedDevicesArrayAdapter.add(noDevices);
+    }
+}
+
+private void doDiscovery() {
+    Log.d(TAG, &amp;quot;doDiscovery()&amp;quot;);
+
+    // Indicate scanning in the title
+    setProgressBarIndeterminateVisibility(true);
+    setTitle(R.string.scanning);
+
+    // Turn on sub-title for new devices
+    findViewById(R.id.title_new_devices).setVisibility(View.VISIBLE);
+
+    // If we&#39;re already discovering, stop it
+    if (mBtAdapter.isDiscovering()) {
+        mBtAdapter.cancelDiscovery();
+    }
+
+    // Request discover from BluetoothAdapter
+    mBtAdapter.startDiscovery();
+}
+
+private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String action = intent.getAction();
+
+        // When discovery finds a device
+        if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+            // Get the BluetoothDevice object from the Intent
+            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+            // If it&#39;s already paired, skip it, because it&#39;s been listed already
+            if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+                mNewDevicesArrayAdapter.add(device.getName() + &amp;quot;\n&amp;quot; + device.getAddress());
+            }
+            // When discovery is finished, change the Activity title
+        } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
+            setProgressBarIndeterminateVisibility(false);
+            setTitle(R.string.select_device);
+            if (mNewDevicesArrayAdapter.getCount() == 0) {
+                String noDevices = getResources().getText(R.string.none_found).toString();
+                mNewDevicesArrayAdapter.add(noDevices);
+            }
+        }
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;onDestroyで、探索をやめ、登録したレシーバーを外す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onDestroy() {
+    super.onDestroy();
+
+    // Make sure we&#39;re not doing discovery anymore
+    if (mBtAdapter != null) {
+        mBtAdapter.cancelDiscovery();
+    }
+
+    // Unregister broadcast listeners
+    this.unregisterReceiver(mReceiver);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;接続先リストから選択されたら、アドレスを付けて結果を返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private AdapterView.OnItemClickListener mDeviceClickListener
+        = new AdapterView.OnItemClickListener() {
+    public void onItemClick(AdapterView&amp;lt;?&amp;gt; av, View v, int arg2, long arg3) {
+        // Cancel discovery because it&#39;s costly and we&#39;re about to connect
+        mBtAdapter.cancelDiscovery();
+
+        // Get the device MAC address, which is the last 17 chars in the View
+        String info = ((TextView) v).getText().toString();
+        String address = info.substring(info.length() - 17);
+
+        // Create the result Intent and include the MAC address
+        Intent intent = new Intent();
+        intent.putExtra(EXTRA_DEVICE_ADDRESS, address);
+
+        // Set result and finish this Activity
+        setResult(Activity.RESULT_OK, intent);
+        finish();
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>静的ウェブサイトエンジンHugoに乗り換えた</title>
+          <link>http://sambaiz.net/article/22/</link>
+          <pubDate>Tue, 04 Oct 2016 22:21:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/22/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://gohugo.io/&#34;&gt;https://gohugo.io/&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;今までこのサイトはフロントのReactからLambda &amp;amp; API Gatewayで作った記事APIを呼ぶ構成になっていた。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/1&#34;&gt;ホームページ作った&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;当初はページの描画をフロントに任せることで、
+サーバーレス
+(記事の情報をjsonで渡すAPI Gatewayと、S3の組み合わせ)
+で作れると思っていたが、結果そんなに甘くはなく、サーバーサイドレンダリングするはめになる。
+最初からレンダリングしたものを置いておけばいいと思った。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/5&#34;&gt;webpack環境でredux&amp;amp;react-routerのページをサーバーサイドレンダリングする&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;そんなこんなでHugoに乗り換えることにした。
+記事はmarkdownで管理していたので、これにメタ情報を加えるだけで移行できた。
+タグで絞り込むこともできるようになったので良いと思う。
+また、静的なページになったのでgithub pagesに置けるようにもなった。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>DeepDreaming with TensorFlowをやる(2)</title>
+          <link>http://sambaiz.net/article/21/</link>
+          <pubDate>Sat, 10 Sep 2016 14:46:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/21/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/20&#34;&gt;前回&lt;/a&gt;の続き。&lt;/p&gt;
+
+&lt;h2 id=&#34;multiscale-image-generation&#34;&gt;Multiscale image generation&lt;/h2&gt;
+
+&lt;p&gt;様々なスケールで勾配上昇させる。小さなスケールで上昇させたものをより大きなスケールでさらに上昇させていく。
+ただ、壁紙のようなサイズを生成するような場合にそれを行うと、GPUのメモリを食いつぶしてしまう。
+これを避けるために、画像を小さなタイルに分割し、それぞれ独立に勾配を計算する。
+また、毎回画像をランダムにシフトしていくことで、タイルに見えることを避け、画像全体の品質を向上させる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def tffunc(*argtypes):
+    &#39;&#39;&#39;Helper that transforms TF-graph generating function into a regular one.
+    See &amp;quot;resize&amp;quot; function below.
+    &#39;&#39;&#39;
+    placeholders = list(map(tf.placeholder, argtypes))
+    def wrap(f):
+        out = f(*placeholders)
+        def wrapper(*args, **kw):
+            return out.eval(dict(zip(placeholders, args)), session=kw.get(&#39;session&#39;))
+        return wrapper
+    return wrap
+
+# Helper function that uses TF to resize an image
+def resize(img, size):
+    img = tf.expand_dims(img, 0)
+    return tf.image.resize_bilinear(img, size)[0,:,:,:]
+resize = tffunc(np.float32, np.int32)(resize)
+
+
+def calc_grad_tiled(img, t_grad, tile_size=512):
+    &#39;&#39;&#39;Compute the value of tensor t_grad over the image in a tiled way.
+    Random shifts are applied to the image to blur tile boundaries over
+    multiple iterations.&#39;&#39;&#39;
+    sz = tile_size
+    h, w = img.shape[:2]
+    sx, sy = np.random.randint(sz, size=2)
+    img_shift = np.roll(np.roll(img, sx, 1), sy, 0)
+    grad = np.zeros_like(img)
+    for y in range(0, max(h-sz//2, sz),sz):
+        for x in range(0, max(w-sz//2, sz),sz):
+            sub = img_shift[y:y+sz,x:x+sz]
+            g = sess.run(t_grad, {t_input:sub})
+            grad[y:y+sz,x:x+sz] = g
+    return np.roll(np.roll(grad, -sx, 1), -sy, 0)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;tf.image.resize_bilinear&lt;/code&gt;は&lt;a href=&#34;https://www.tensorflow.org/versions/r0.10/api_docs/python/image.html#resize_bilinear&#34;&gt;双線形補間によってリサイズする。&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;numpy.roll&lt;/code&gt;は&lt;a href=&#34;http://docs.scipy.org/doc/numpy/reference/generated/numpy.roll.html&#34;&gt;配列を第三引数axisによってローリングする&lt;/a&gt;。
+axisを指定しない場合、フラットなものとして扱われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;hoge = [[0, 1, 2],
+        [3, 4, 5],
+        [6, 7, 8]]
+
+print(np.roll(hoge, 1))
+# [[8 0 1]
+#  [2 3 4]
+#  [5 6 7]]
+
+print(np.roll(hoge, 1, axis=0))
+# [[6 7 8]
+#  [0 1 2]
+#  [3 4 5]]
+
+print(np.roll(hoge, 1, axis=1))
+# [[2 0 1]
+#  [5 3 4]
+#  [8 6 7]]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;つまり、&lt;code&gt;calc_grad_tiled&lt;/code&gt;では、ランダムにローリングして、タイルに分割して勾配を求め、ローリングした分を戻して返している。
+これと、画像サイズを&lt;code&gt;octave_scale&lt;/code&gt;倍にしていく以外は前回やったのと基本的に同じだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def render_multiscale(t_obj, img0=img_noise, iter_n=10, step=1.0, octave_n=3, octave_scale=1.4):
+    t_score = tf.reduce_mean(t_obj) # defining the optimization objective
+    t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
+
+    img = img0.copy()
+    for octave in range(octave_n):
+        if octave&amp;gt;0:
+            hw = np.float32(img.shape[:2])*octave_scale
+            img = resize(img, np.int32(hw))
+        for i in range(iter_n):
+            g = calc_grad_tiled(img, t_grad)
+            # normalizing the gradient, so the same step size should work
+            g /= g.std()+1e-8         # for different layers and networks
+            img += g*step
+            print(&#39;.&#39;, end = &#39; &#39;)
+        clear_output()
+        showarray(visstd(img))
+
+render_multiscale(T(layer)[:,:,:,channel])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;laplacian-pyramid-gradient-normalization&#34;&gt;Laplacian Pyramid Gradient Normalization&lt;/h2&gt;
+
+&lt;p&gt;結果の画像は、高い周波数(ピクセルの変化の度合が高い)が多く含まれている。
+これを改善するための一つの方法として、毎回画像をぼかし、高周波数を抑え、画像を滑らかにするものがある。
+ただ、この方法は良い画像にするためにより多くの繰り返しが必要になってしまう。
+逆に、低周波数を上げるのは、ラプラシアンピラミッドを使う方法があって、これで勾配を正規化する。&lt;/p&gt;
+
+&lt;p&gt;ラプラシアンピラミッドというのは、ガウシアンピラミッドにおける、ある解像度の画像と、
+その一つレベルの高い(解像度1/2 * &lt;sup&gt;1&lt;/sup&gt;&amp;frasl;&lt;sub&gt;2&lt;/sub&gt; = &lt;sup&gt;1&lt;/sup&gt;&amp;frasl;&lt;sub&gt;4&lt;/sub&gt;)画像をアップサンプルしたものの差分だ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_pyramids/py_pyramids.html&#34;&gt;画像ピラミッド — OpenCV-Python Tutorials 1 documentation&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;k = np.float32([1,4,6,4,1])
+k = np.outer(k, k)
+# [[  1.   4.   6.   4.   1.]
+#  [  4.  16.  24.  16.   4.]
+#  [  6.  24.  36.  24.   6.]
+#  [  4.  16.  24.  16.   4.]
+#  [  1.   4.   6.   4.   1.]]
+
+k5x5 = k[:,:,None,None]/k.sum()*np.eye(3, dtype=np.float32)
+
+print(len(k5x5))
+# 5
+
+print(k5x5[0])
+# [[[ 0.00390625  0.          0.        ]
+#  [ 0.          0.00390625  0.        ]
+#  [ 0.          0.          0.00390625]]
+
+# [[ 0.015625    0.          0.        ]
+#  [ 0.          0.015625    0.        ]
+#  [ 0.          0.          0.015625  ]]
+
+# [[ 0.0234375   0.          0.        ]
+#  [ 0.          0.0234375   0.        ]
+#  [ 0.          0.          0.0234375 ]]
+
+# [[ 0.015625    0.          0.        ]
+#  [ 0.          0.015625    0.        ]
+#  [ 0.          0.          0.015625  ]]
+
+# [[ 0.00390625  0.          0.        ]
+#  [ 0.          0.00390625  0.        ]
+#  [ 0.          0.          0.00390625]]]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;numpy.outer&lt;/code&gt;は&lt;a href=&#34;http://docs.scipy.org/doc/numpy/reference/generated/numpy.outer.html&#34;&gt;外積を求める&lt;/a&gt;もので、
+&lt;code&gt;numpy.eye&lt;/code&gt;は&lt;a href=&#34;http://docs.scipy.org/doc/numpy/reference/generated/numpy.eye.html&#34;&gt;対角線が1で、それ以外は0の2次元行列を返す&lt;/a&gt;。
+&lt;code&gt;k&lt;/code&gt;を指定すると、対角線の位置を変更できるが、指定していない場合はNxNの単位行列が返ることになる。
+このフィルターで畳み込むことで、ラプラシアンピラミッドの1レベル高い画像に変換できる。
+&lt;code&gt;tf.nn.conv2d_transpose&lt;/code&gt;は
+&lt;a href=&#34;https://www.tensorflow.org/versions/r0.10/api_docs/python/nn.html#conv2d_transpose&#34;&gt;畳み込みの逆処理&lt;/a&gt;のようなもので、
+これでアップサンプルした画像と元画像の差分を取って、ラプラシアンピラミッドを生成している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def lap_split(img):
+    &#39;&#39;&#39;Split the image into lo and hi frequency components&#39;&#39;&#39;
+    with tf.name_scope(&#39;split&#39;):
+        lo = tf.nn.conv2d(img, k5x5, [1,2,2,1], &#39;SAME&#39;)
+        lo2 = tf.nn.conv2d_transpose(lo, k5x5*4, tf.shape(img), [1,2,2,1])
+        hi = img-lo2
+    return lo, hi
+
+def lap_split_n(img, n):
+    &#39;&#39;&#39;Build Laplacian pyramid with n splits&#39;&#39;&#39;
+    levels = []
+    for i in range(n):
+        img, hi = lap_split(img)
+        levels.append(hi)
+    levels.append(img)
+    return levels[::-1]
+
+def lap_merge(levels):
+    &#39;&#39;&#39;Merge Laplacian pyramid&#39;&#39;&#39;
+    img = levels[0]
+    for hi in levels[1:]:
+        with tf.name_scope(&#39;merge&#39;):
+            img = tf.nn.conv2d_transpose(img, k5x5*4, tf.shape(hi), [1,2,2,1]) + hi
+    return img
+
+def normalize_std(img, eps=1e-10):
+    &#39;&#39;&#39;Normalize image by making its standard deviation = 1.0&#39;&#39;&#39;
+    with tf.name_scope(&#39;normalize&#39;):
+        std = tf.sqrt(tf.reduce_mean(tf.square(img)))
+        return img/tf.maximum(std, eps)
+
+def lap_normalize(img, scale_n=4):
+    &#39;&#39;&#39;Perform the Laplacian pyramid normalization.&#39;&#39;&#39;
+    img = tf.expand_dims(img,0)
+    tlevels = lap_split_n(img, scale_n)
+    tlevels = list(map(normalize_std, tlevels))
+    out = lap_merge(tlevels)
+    return out[0,:,:,:]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;lap_normalize&lt;/code&gt;で画像からラプラシアンピラミッドを生成し、それぞれで正規化してからマージして元の画像に戻す処理をしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def render_lapnorm(t_obj, img0=img_noise, visfunc=visstd,
+                   iter_n=10, step=1.0, octave_n=3, octave_scale=1.4, lap_n=4):
+    t_score = tf.reduce_mean(t_obj) # defining the optimization objective
+    t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
+    # build the laplacian normalization graph
+    lap_norm_func = tffunc(np.float32)(partial(lap_normalize, scale_n=lap_n))
+
+    img = img0.copy()
+    for octave in range(octave_n):
+        if octave&amp;gt;0:
+            hw = np.float32(img.shape[:2])*octave_scale
+            img = resize(img, np.int32(hw))
+        for i in range(iter_n):
+            g = calc_grad_tiled(img, t_grad)
+            g = lap_norm_func(g)
+            img += g*step
+            print(&#39;.&#39;, end = &#39; &#39;)
+        clear_output()
+        showarray(visfunc(img))
+
+render_lapnorm(T(layer)[:,:,:,channel])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;deepdream&#34;&gt;DeepDream&lt;/h2&gt;
+
+&lt;p&gt;で、これがDeepDreamのアルゴリズム。
+ラプラシアンピラミッドを生成して、リサイズの際に次のレベルのを足していっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def render_deepdream(t_obj, img0=img_noise,
+                     iter_n=10, step=1.5, octave_n=4, octave_scale=1.4):
+    t_score = tf.reduce_mean(t_obj) # defining the optimization objective
+    t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
+
+    # split the image into a number of octaves
+    img = img0
+    octaves = []
+    for i in range(octave_n-1):
+        hw = img.shape[:2]
+        lo = resize(img, np.int32(np.float32(hw)/octave_scale))
+        hi = img-resize(lo, hw)
+        img = lo
+        octaves.append(hi)
+
+    # generate details octave by octave
+    for octave in range(octave_n):
+        if octave&amp;gt;0:
+            hi = octaves[-octave]
+            img = resize(img, hi.shape[:2])+hi
+        for i in range(iter_n):
+            g = calc_grad_tiled(img, t_grad)
+            img += g*(step / (np.abs(g).mean()+1e-7))
+            print(&#39;.&#39;,end = &#39; &#39;)
+        clear_output()
+        showarray(img/255.0)
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>DeepDreaming with Tensorflowをやる(1)</title>
+          <link>http://sambaiz.net/article/20/</link>
+          <pubDate>Wed, 07 Sep 2016 01:06:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/20/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r0.10/tensorflow/examples/tutorials/deepdream/deepdream.ipynb&#34;&gt;https://github.com/tensorflow/tensorflow/blob/r0.10/tensorflow/examples/tutorials/deepdream/deepdream.ipynb&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;例の通りまとめながら進めていく。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;このノートブックは、畳み込みニューラルネットワークによる画像生成の手法を説明するものだ。
+ネットワークは入力画像へ変換させる配列のレイヤーの集合から成り立っている。
+変換のパラメータは勾配降下法で変形しながら学習していく。
+内部的な画像の表現は意味不明なように見えるが、可視化し、解釈することができる。&lt;/p&gt;
+
+&lt;h3 id=&#34;loading-and-displaying-the-model-graph&#34;&gt;Loading and displaying the model graph&lt;/h3&gt;
+
+&lt;p&gt;学習済みネットワークのprotobufファイルが用意されていて、これをダウンロードして使う。
+ただ&lt;code&gt;gcr.io/tensorflow/tensorflow&lt;/code&gt;にwgetもunzipも入っていなかったので、中に入ってapt-getした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;model_fn = &#39;tensorflow_inception_graph.pb&#39;
+
+# creating TensorFlow session and loading the model
+graph = tf.Graph()
+sess = tf.InteractiveSession(graph=graph)
+with tf.gfile.FastGFile(model_fn, &#39;rb&#39;) as f:
+    graph_def = tf.GraphDef()
+    graph_def.ParseFromString(f.read())
+t_input = tf.placeholder(np.float32, name=&#39;input&#39;) # define the input tensor
+imagenet_mean = 117.0
+t_preprocessed = tf.expand_dims(t_input-imagenet_mean, 0)
+tf.import_graph_def(graph_def, {&#39;input&#39;:t_preprocessed})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;tf.gfile.FastGFile&lt;/code&gt;のドキュメントが見つからないので
+&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/568092d4507996d8aff0c46d6c57488a26596dd5/tensorflow/python/platform/gfile.py#L218&#34;&gt;ソース&lt;/a&gt;
+を探したところFile I/Oのラッパーのようだ。これでprotobufファイルを読み、ParseFromStringでGraphDefにする。&lt;/p&gt;
+
+&lt;p&gt;さらにこれと入力データを&lt;code&gt;tf.import_graph_def&lt;/code&gt;に
+渡すことで&lt;a href=&#34;https://www.tensorflow.org/versions/r0.10/api_docs/python/framework.html#import_graph_def&#34;&gt;Graphに取り込む&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;tf.expand_dims&lt;/code&gt;は&lt;a href=&#34;https://www.tensorflow.org/versions/r0.10/api_docs/python/array_ops.html#expand_dims&#34;&gt;値が1の次元を指定の場所に挿入する&lt;/a&gt;
+もの。なんでそんなことをしたり、&lt;code&gt;imagenet_mean&lt;/code&gt;を引いているのかは説明がなかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;layers = [op.name for op in graph.get_operations() if op.type==&#39;Conv2D&#39; and &#39;import/&#39; in op.name]
+feature_nums = [int(graph.get_tensor_by_name(name+&#39;:0&#39;).get_shape()[-1]) for name in layers]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このlayersに入っているのはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import/conv2d0_pre_relu/conv
+import/conv2d1_pre_relu/conv
+import/conv2d2_pre_relu/conv
+import/mixed3a_1x1_pre_relu/conv
+import/mixed3a_3x3_bottleneck_pre_relu/conv
+import/mixed3a_3x3_pre_relu/conv
+import/mixed3a_5x5_bottleneck_pre_relu/conv
+import/mixed3a_5x5_pre_relu/conv
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これらのレイヤーのうち、&lt;code&gt;mixed4d_3x3_bottleneck_pre_relu&lt;/code&gt;を可視化してみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;layer = &#39;mixed4d_3x3_bottleneck_pre_relu&#39;
+channel = 139 # picking some feature channel to visualize
+
+def T(layer):
+    &#39;&#39;&#39;Helper for getting layer output tensor&#39;&#39;&#39;
+    return graph.get_tensor_by_name(&amp;quot;import/%s:0&amp;quot;%layer)
+
+render_naive(T(layer)[:,:,:,channel])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;mixed4d_3x3_bottleneck_pre_relu&#39;&lt;/code&gt;は144チャンネルのフィルターで、今回はそのうち139番目のチャンネルを選んでいる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;print(T(layer))
+-&amp;gt; Tensor(&amp;quot;import/mixed4d_3x3_bottleneck_pre_relu:0&amp;quot;, shape=(?, ?, ?, 144), dtype=float32, device=/device:CPU:0)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;初期値はRGB100(グレー)にノイズを加えた画像。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# start with a gray image with a little noise
+img_noise = np.random.uniform(size=(224,224,3)) + 100.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スコアはそのチャンネルの値の平均で、これが高くなるように画像を変化させていく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def render_naive(t_obj, img0=img_noise, iter_n=20, step=1.0):
+    t_score = tf.reduce_mean(t_obj) # defining the optimization objective
+    t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
+
+    img = img0.copy()
+    for i in range(iter_n):
+        g, score = sess.run([t_grad, t_score], {t_input:img})
+        # normalizing the gradient, so the same step size should work
+        g /= g.std()+1e-8         # for different layers and networks
+        img += g*step
+        print(score, end = &#39; &#39;)
+    clear_output()
+    showarray(visstd(img))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;tf.gradients(ys,xs)&lt;/code&gt;で
+&lt;a href=&#34;https://www.tensorflow.org/versions/r0.10/api_docs/python/train.html#gradients&#34;&gt;xそれぞれで偏微分したyの和&lt;/a&gt;が得られる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;a = tf.Variable(tf.constant([
+            [1., 2.],
+            [3., 4.]]))
+b = tf.Variable(tf.constant([
+            [2., 3.],
+            [4., 5.]]))
+c = tf.matmul(a, b)
+​
+grad = tf.gradients(c, a)[0]
+init = tf.initialize_all_variables()
+with tf.Session() as sess:
+    sess.run(init)
+
+    print(sess.run(c))
+    # [[ 10.  13.]
+    # [ 22.  29.]]
+
+    print(sess.run(grad))
+    # [[ 5.  9.]
+    # [ 5.  9.]]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;入力画像にこれをを加算していくと、その状態からスコアが上がるパラメータが増え、下がるパラメータが減るため、勾配を上っていくことになる。
+スコアが上昇するに従って、そのフィルターによる模様が浮かんできた。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/21&#34;&gt;続く&lt;/a&gt;。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Grafana/InfluxDB/Fluentdでログを可視化する</title>
+          <link>http://sambaiz.net/article/19/</link>
+          <pubDate>Wed, 31 Aug 2016 20:54:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/19/</guid>
+          <description>
+
+&lt;p&gt;コードは&lt;a href=&#34;https://github.com/sambaiz/grafana-influxdb-fluentd&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;influxdb-https-github-com-influxdata-influxdb&#34;&gt;&lt;a href=&#34;https://github.com/influxdata/influxdb&#34;&gt;InfluxDB&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Golangで書かれた時系列データベース。今回使うのは&lt;code&gt;v0.13&lt;/code&gt;。前のバージョンと結構違うので注意。&lt;/p&gt;
+
+&lt;p&gt;デフォルトでは無効になっている認証を&lt;a href=&#34;https://docs.influxdata.com/influxdb/v0.13/administration/authentication_and_authorization/#set-up-authentication&#34;&gt;有効にする&lt;/a&gt;ために設定ファイルを編集して設置する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install influxdb # OSX
+$ influxd config &amp;gt; influxdb.conf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;[http]
+  ...
+  auth-enabled = true
+  ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM influxdb:0.13
+
+VOLUME /var/lib/influxdb
+ADD influxdb.conf /
+ENV INFLUXDB_CONFIG_PATH /influxdb.conf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run -p 8083:8083 -p 8086:8086 myinfluxdb
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;influxd&lt;/code&gt;コマンドや
+&lt;code&gt;:8083&lt;/code&gt;のWebインタフェースの他に
+&lt;code&gt;:8086&lt;/code&gt;に&lt;a href=&#34;https://docs.influxdata.com/influxdb/v0.13/concepts/api/&#34;&gt;HTTP API&lt;/a&gt;が用意されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -i -XPOST http://localhost:8086/query --data-urlencode &amp;quot;q=CREATE USER root WITH PASSWORD &#39;root&#39; WITH ALL PRIVILEGES&amp;quot;
+
+$ curl -i -XPOST http://localhost:8086/query -u root:root --data-urlencode &amp;quot;q=CREATE DATABASE mydb&amp;quot;
+{&amp;quot;results&amp;quot;:[{}]}
+
+# Line Protocol(https://docs.influxdata.com/influxdb/v0.13/write_protocols/line/)
+$ curl -i -XPOST &#39;http://localhost:8086/write?db=mydb&#39; -u root:root --data-binary &#39;cpu_load_short,host=server01,region=us-west value=0.64 1434055562000000000&#39;
+(204 No Content)
+
+$ curl -GET &#39;http://localhost:8086/query?db=mydb&#39; -u root:root --data-urlencode &#39;q=SELECT * FROM &amp;quot;cpu_load_short&amp;quot;&#39; | jq
+{
+  &amp;quot;results&amp;quot;: [
+    {
+      &amp;quot;series&amp;quot;: [
+        {
+          &amp;quot;name&amp;quot;: &amp;quot;cpu_load_short&amp;quot;,
+          &amp;quot;columns&amp;quot;: [
+            &amp;quot;time&amp;quot;,
+            &amp;quot;host&amp;quot;,
+            &amp;quot;region&amp;quot;,
+            &amp;quot;value&amp;quot;
+          ],
+          &amp;quot;values&amp;quot;: [
+            [
+              &amp;quot;2015-06-11T20:46:02Z&amp;quot;,
+              &amp;quot;server01&amp;quot;,
+              &amp;quot;us-west&amp;quot;,
+              0.64
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;fluent-plugin-influxdb-https-github-com-fangli-fluent-plugin-influxdb&#34;&gt;&lt;a href=&#34;https://github.com/fangli/fluent-plugin-influxdb&#34;&gt;fluent-plugin-influxdb&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;設定はこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  type tail
+  path      /usr/src/app/test.log
+  pos_file  /etc/td-agent/test.log.pos
+  tag       something.log
+  format    json
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match *.log&amp;gt;
+  @type     influxdb
+  host      influxdb
+  port      8086
+  dbname    mydb
+  user      root
+  password  root
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;5秒ごとにランダムな値valueのログを出力し続ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from twisted.internet import task, reactor
+import logging
+import json
+import random
+
+INTERVAL = 5 # sec
+logging.basicConfig(filename=&#39;test.log&#39;, format=&#39;%(message)s&#39;, level=logging.INFO)
+
+def somethingHappend():
+  data = {
+    &amp;quot;value&amp;quot;: random.randint(0, 100),
+    &amp;quot;event&amp;quot;: &amp;quot;something&amp;quot;
+  }
+  logging.info(json.dumps(data))  
+
+if __name__ == &#39;__main__&#39;:
+    instance = task.LoopingCall(somethingHappend)
+    instance.start(INTERVAL)
+    reactor.run()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;grafana-http-grafana-org&#34;&gt;&lt;a href=&#34;http://grafana.org/&#34;&gt;Grafana&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;可視化ツール。データソースとしてInfluxDB、Garaphite、Elasticsearchなどが使える。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://play.grafana.org/&#34;&gt;Demo&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Kibana(+Elasticsearch)だと
+認証するのに&lt;a href=&#34;https://www.elastic.co/subscriptions&#34;&gt;有償&lt;/a&gt;のShieldプラグインが必要だが、
+こちらは最初からできて手軽。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;これらのDockerイメージを作って、minikubeで立ち上げてみた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get pods
+NAME                        READY     STATUS    RESTARTS   AGE
+grafana-1386260931-lq8wh    1/1       Running   0          2m
+influxdb-2543054961-yj1bd   1/1       Running   0          2m
+testapp-532457622-269qo     1/1       Running   0          2m
+
+$ curl -i -XPOST http://192.168.99.100:30005/query?db=mydb -u root:root --data-urlencode &#39;q=SELECT * FROM &amp;quot;something.log&amp;quot; LIMIT 1&#39;
+{&amp;quot;results&amp;quot;:[{&amp;quot;series&amp;quot;:[{&amp;quot;name&amp;quot;:&amp;quot;something.log&amp;quot;,&amp;quot;columns&amp;quot;:[&amp;quot;time&amp;quot;,&amp;quot;event&amp;quot;,&amp;quot;value&amp;quot;],&amp;quot;values&amp;quot;:[[&amp;quot;2016-08-31T08:38:37Z&amp;quot;,&amp;quot;something&amp;quot;,23]]}]}]}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://192.168.99.100:30003&#34;&gt;http://192.168.99.100:30003&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;admin/adminでログインしてDataSourceに&lt;code&gt;http://192.168.99.100:30005&lt;/code&gt;のInfluxDBを設定すると、
+Dashboardにグラフやテーブルなどを置いて表示させることができるようになる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://d2wgaf7ubdj1mv.cloudfront.net/19_grafana.png&#34; alt=&#34;grafana&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>GKEで複数コンテナのアプリケーションを動かす</title>
+          <link>http://sambaiz.net/article/18/</link>
+          <pubDate>Fri, 26 Aug 2016 21:57:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/18/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/17&#34;&gt;前回&lt;/a&gt;は単一コンテナのアプリケーションを動かしたが、今回はコンテナ間でやり取りが発生するものを動かす。
+流れとしては、クライアントからのリクエストを&lt;code&gt;GATEWAY&lt;/code&gt;サーバーで受け取り、&lt;code&gt;SERVICE&lt;/code&gt;サーバーにリクエストし、その結果を返すまで。&lt;/p&gt;
+
+&lt;p&gt;プログラムは以下の通り、環境変数&lt;code&gt;TYPE&lt;/code&gt;の値によって挙動を変えていて、同じイメージを使い回す。コードは&lt;a href=&#34;https://github.com/sambaiz/gke-multi-container-app&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var http = require(&#39;http&#39;);
+var handleRequest = function(request, response) {
+  if(process.env.TYPE == &amp;quot;GATEWAY&amp;quot;){
+    console.log(&#39;Passed.&#39;);
+    var options = {
+      host: &#39;service&#39;,
+      port: 8080,
+      method: &#39;GET&#39;
+    };
+    var req = http.request(options, function(res) {
+      data = &amp;quot;&amp;quot;
+      res.on(&#39;data&#39;, function (chunk) {
+        data+=chunk;
+      });
+
+      res.on(&#39;end&#39;, () =&amp;gt; {
+        response.writeHead(200);
+        response.end(data);
+      });
+    });
+    req.on(&#39;error&#39;, function(e) {
+      response.writeHead(500)
+      response.end(e.message);
+    });
+    req.end();
+  }else{
+    console.log(&#39;Received.&#39;);
+    response.writeHead(200);
+    response.end(&#39;ok&#39;);
+  }
+};
+var www = http.createServer(handleRequest);
+www.listen(8080);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをContainer RegistryにPushする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ export PROJECT_ID=&amp;quot;gcp-test-141011&amp;quot;
+$ docker build -t gcr.io/$PROJECT_ID/multitest:v1 .
+$ gcloud docker push gcr.io/$PROJECT_ID/multitest:v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ローカルで試すためにminikubeを起動。コンテキストがminikubeに設定される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube start
+$ kubectl config current-context
+minikube
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;minikubeでContainer Registryから取得できるようにsecretを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create secret docker-registry myregistrykey --docker-server=https://gcr.io --docker-username=oauth2accesstoken --docker-password=&amp;quot;$(gcloud auth print-access-token)&amp;quot; --docker-email=***
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず、以下の&lt;code&gt;service_deployment.yaml&lt;/code&gt;でDeploymentを作成する。
+envのところで環境変数&lt;code&gt;TYPE&lt;/code&gt;を&lt;code&gt;SERVICE&lt;/code&gt;に設定した。
+また、先ほど作成したsecretを&lt;code&gt;imagePullSecrets&lt;/code&gt;で指定し、
+ローカルのminikube環境でContainer Registryから取得できるようにしている。
+同様に&lt;code&gt;gateway_deployment.yaml&lt;/code&gt;でも作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: service
+  labels:
+    app: service
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: service
+    spec:
+      containers:
+      - name: service
+        image: gcr.io/gcp-test-141011/multitest:v1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        env:
+        - name: TYPE
+          value: SERVICE
+        ports:
+        - containerPort: 8080
+      imagePullSecrets:
+      - name: myregistrykey    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f service_deployment.yaml
+$ kubectl create -f gateway_deployment.yaml
+$ kubectl get deployment
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+gateway   1         1         1            1           8m
+service   1         1         1            1           28m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に、これを内部から呼べるようにするためのServiceを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: service
+  labels:
+    app: service
+spec:
+  ports:
+  - port: 8080
+  selector:
+    app: service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;GATEWAY&lt;/code&gt;の方は外に開くので、EXTERNAL IPが割り当てられるようにする。
+ただ、minikubeでは&lt;code&gt;type: LoadBalancer&lt;/code&gt;に対応していないので代わりに&lt;code&gt;type: NodePort&lt;/code&gt;を指定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  # type: LoadBalancer
+  type: NodePort
+  ports:
+  - port: 8080
+    nodePort: 30002
+  selector:
+    app: gateway
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f service_service.yaml
+$ kubectl create -f gateway_service.yaml
+$ kubectl get services
+NAME            CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+gateway         10.0.0.176   &amp;lt;nodes&amp;gt;       8080/TCP   1h
+service         10.0.0.111   &amp;lt;none&amp;gt;        8080/TCP   2d
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;GATEWAY&lt;/code&gt;サーバーを越えて&lt;code&gt;SERVICE&lt;/code&gt;サーバーまで到達したことが確認できた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl 192.168.99.100:30002
+ok
+
+$ kubectl get pods
+NAME                       READY     STATUS    RESTARTS   AGE
+gateway-3043515563-a0tb5   1/1       Running   0          38m
+service-2727435432-9glvb   1/1       Running   0          38m
+
+$ kubectl logs service-2727435432-9glvb
+Received.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一通り動いたのでこんなシェルスクリプトを書いた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/bash
+
+context=`kubectl config current-context`
+echo &amp;quot;${context}で実行します。よろしいですか[Y/N]&amp;quot;
+read ANSWER
+case $ANSWER in
+    &amp;quot;Y&amp;quot; ) :;;
+    * ) exit;;
+esac
+if [ $context = &amp;quot;minikube&amp;quot; ] ; then
+  kubectl create -f yaml/gateway_service_minikube.yaml
+  kubectl create -f yaml/service_deployment_minikube.yaml
+  kubectl create -f yaml/gateway_deployment_minikube.yaml
+else
+  kubectl create -f yaml/gateway_service.yaml
+  kubectl create -f yaml/service_deployment.yaml
+  kubectl create -f yaml/gateway_deployment.yaml
+fi
+kubectl create -f yaml/service_service.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行するとこうなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud container clusters create multi-container-app
+$ kubectl config current-context
+gke_gcp-test-141011_asia-east1-b_multi-container-app
+
+$ sh create.sh
+gke_gcp-test-141011_asia-east1-b_multi-container-appで実行します。よろしいですか[Y/N]
+Y
+service &amp;quot;gateway&amp;quot; created
+deployment &amp;quot;service&amp;quot; created
+deployment &amp;quot;gateway&amp;quot; created
+service &amp;quot;service&amp;quot; created
+
+$ kubectl get service
+NAME         CLUSTER-IP      EXTERNAL-IP       PORT(S)    AGE
+gateway      10.83.254.5     104.199.206.147   8080/TCP   4m
+service      10.83.255.118   &amp;lt;none&amp;gt;            8080/TCP   4m
+
+$ curl 104.199.206.147:8080
+ok
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Google Container Engine(GKE)で単一コンテナのアプリケーションを動かす</title>
+          <link>http://sambaiz.net/article/17/</link>
+          <pubDate>Sun, 21 Aug 2016 23:37:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/17/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://kubernetes.io/docs/hellonode/&#34;&gt;Kubernetes - Hello World Walkthrough&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;cloudsdkとkubectlのインストール&#34;&gt;CloudSDKとkubectlのインストール&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/sdk/#Quick_Start&#34;&gt;Cloud SDKをインストール&lt;/a&gt;して&lt;code&gt;gloud&lt;/code&gt;コマンドを使えるようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud --version
+Google Cloud SDK 122.0.0
+$ gcloud components install kubectl
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;google-container-registryにpush&#34;&gt;Google Container RegistryにPush&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ export PROJECT_ID=&amp;quot;******&amp;quot;
+$ docker build -t gcr.io/$PROJECT_ID/test:v1 .
+$ gcloud docker push gcr.io/$PROJECT_ID/test:v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;プロジェクトの課金を有効にしていないとこんなエラーメッセージが出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;denied: Unable to create the repository, please check that you have access to do so.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;clusterの作成&#34;&gt;Clusterの作成&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud config set core/project $PROJECT_ID
+$ gcloud config set compute/zone asia-east1-b
+$ gcloud container clusters create test-cluster
+$ gcloud config set container/cluster test-cluster
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Container Engine APIが有効になっていない場合はこうなる。
+一度コンソールからContainer Engineを選ぶと、サービスの準備が始まって有効になる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ERROR: (gcloud.container.clusters.create) ResponseError: code=503, message=Project **** is not fully initialized with the default service accounts. Please try again later.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;pod-とそのdeployment-の作成&#34;&gt;Pod(とそのDeployment)の作成&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl run test-node --image=gcr.io/$PROJECT_ID/test:v1 --port=8080
+$ kubectl get deployments
+NAME        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+test-node   1         1         1            0           12s
+
+$ kubectl get pods
+NAME                         READY     STATUS              RESTARTS   AGE
+test-node-1016577872-h7yiz   0/1       ContainerCreating   0          18s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;serviceを作成してクラスタの外からアクセスできるようにする&#34;&gt;Serviceを作成してクラスタの外からアクセスできるようにする&lt;/h2&gt;
+
+&lt;p&gt;デフォルトではクラスタ内からしかアクセスできない。
+&lt;code&gt;--type=&amp;quot;LoadBalancer&amp;quot;&lt;/code&gt;のServiceを作成するとEXTERNAL_IPが割り当てられ、外からアクセスできるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl expose deployment test-node --type=&amp;quot;LoadBalancer&amp;quot;
+$ kubectl get services test-node
+NAME        CLUSTER-IP     EXTERNAL-IP       PORT(S)    AGE
+test-node   10.43.247.66   104.199.158.131   8080/TCP   1m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;スケーリング&#34;&gt;スケーリング&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl scale deployment test-node --replicas=4
+$ kubectl get deployment
+NAME        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+test-node   4         4         4            2           11m
+
+$ kubectl get pods
+NAME                         READY     STATUS              RESTARTS   AGE
+test-node-1016577872-fso09   0/1       ContainerCreating   0          12s
+test-node-1016577872-h7yiz   1/1       Running             0          11m
+test-node-1016577872-sbdvl   1/1       Running             0          12s
+test-node-1016577872-z9ji3   0/1       ContainerCreating   0          12s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;更新&#34;&gt;更新&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t gcr.io/$PROJECT_ID/test:v2 .
+$ gcloud docker push gcr.io/$PROJECT_ID/test:v2
+$ kubectl set image deployment/test-node test-node=gcr.io/$PROJECT_ID/test:v2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;削除&#34;&gt;削除&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl delete service,deployment test-node
+$ gcloud container clusters delete test-cluster
+$ gcloud config unset container/cluster
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>JenkinsのMultiple SCMs PluginからPipeline Pluginへの移行</title>
+          <link>http://sambaiz.net/article/16/</link>
+          <pubDate>Sat, 20 Aug 2016 16:18:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/16/</guid>
+          <description>&lt;p&gt;Jenkins環境を作り直すことになり、
+長らく使ってきた&lt;a href=&#34;https://wiki.jenkins-ci.org/display/JENKINS/Multiple+SCMs+Plugin&#34;&gt;Multiple SCMs Plugin&lt;/a&gt;がDeprecatedなので、
+&lt;a href=&#34;https://wiki.jenkins-ci.org/display/JENKINS/Pipeline+Plugin&#34;&gt;Pipeline Plugin&lt;/a&gt;に移行することにした。&lt;/p&gt;
+
+&lt;p&gt;プラグインをインストールすると、ジョブ作成時にPipelineを選択できるようになる。
+Pipeline scriptの複数リポジトリを指定するところはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;node {
+   stage &#39;Checkout rep1&#39;
+   git([url: &#39;git@rep1.git&#39;, branch: REP1_BRANCH])
+
+   stage &#39;Checkout rep2&#39;
+   dir(&#39;rep2&#39;) {
+      git([url: &#39;git@rep2.git&#39;, branch: REP2_BRANCH])
+   }
+
+   stage &#39;Checkout rep3&#39;
+   dir(&#39;subdir3/rep3&#39;) {
+      git([url: &#39;git@rep3.git&#39;, branch: REP3_BRANCH])
+   }
+
+   stage &#39;Build&#39;
+   ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まとめて入った&lt;a href=&#34;https://wiki.jenkins-ci.org/display/JENKINS/Pipeline+Stage+View+Plugin&#34;&gt;Pipeline Stage View Plugin&lt;/a&gt;によって、
+経過や変更などいろいろ見やすくなった。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>GolangでAPIとテストを書く(echo/dbr/glide/goose/mock)</title>
+          <link>http://sambaiz.net/article/15/</link>
+          <pubDate>Mon, 15 Aug 2016 04:07:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/15/</guid>
+          <description>
+
+&lt;p&gt;久々にGolangを書くことになったので、以下の記事を参考にして簡単なAPIとそのテストを書いてみた。
+コードは&lt;a href=&#34;https://github.com/sambaiz/go-api-with-test&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://ameblo.jp/principia-ca/entry-12130127314.html&#34;&gt;Go言語でTestableなWebアプリケーションを目指して｜サイバーエージェント 公式エンジニアブログ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;使った主なライブラリ-ツール&#34;&gt;使った主なライブラリ・ツール&lt;/h2&gt;
+
+&lt;h3 id=&#34;echo-https-github-com-labstack-echo&#34;&gt;&lt;a href=&#34;https://github.com/labstack/echo&#34;&gt;echo&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;webフレームワーク。速いらしい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get -u github.com/labstack/echo
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;func main() {
+    conn, err := dbr.Open(&amp;quot;mysql&amp;quot;, &amp;quot;root:@tcp(localhost:3306)/mboard&amp;quot;, nil)
+    if err != nil {
+        panic(err)
+    }
+    conn.SetMaxIdleConns(200)
+    conn.SetMaxOpenConns(200)
+
+    e := echo.New()
+
+    // middlewares
+    e.Use(middleware.Logger())
+    e.Use(middleware.Recover())
+    e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+        AllowOrigins: []string{&amp;quot;*&amp;quot;},
+        AllowMethods: []string{echo.GET, echo.PUT, echo.POST, echo.DELETE},
+    }))
+
+    // endpoints
+    e.GET(&amp;quot;/&amp;quot;, func(c echo.Context) error {
+		    return c.String(http.StatusOK, &amp;quot;Hello, World!&amp;quot;)
+  	})
+  	e.GET(&amp;quot;/messages&amp;quot;, func(c echo.Context) error {
+  		  return handler.NewMessageWithSession(conn.NewSession(nil)).GetMessages(c)
+  	})
+  	e.POST(&amp;quot;/messages&amp;quot;, func(c echo.Context) error {
+  		  return handler.NewMessageWithSession(conn.NewSession(nil)).CreateMessage(c)
+  	})
+    std := standard.New(&amp;quot;:1323&amp;quot;)
+    std.SetHandler(e)
+    gracehttp.Serve(std.Server)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dbr-https-github-com-gocraft-dbr&#34;&gt;&lt;a href=&#34;https://github.com/gocraft/dbr&#34;&gt;dbr&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;database/sql&lt;/code&gt;を強化したもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get -u github.com/gocraft/dbr
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;res, err := t.sess.InsertInto(&amp;quot;message&amp;quot;).Columns(&amp;quot;content&amp;quot;).Record(model.Message{Content: content}).Exec()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;glide-https-github-com-masterminds-glide&#34;&gt;&lt;a href=&#34;https://github.com/Masterminds/glide&#34;&gt;glide&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;パッケージ管理ツール。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install glide
+$ glide create
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で&lt;code&gt;glide.yaml&lt;/code&gt;が作られる。&lt;code&gt;glide get&lt;/code&gt;で&lt;code&gt;glide.yaml&lt;/code&gt;に追加していったり、
+&lt;code&gt;glide install&lt;/code&gt;でvendor下にインストールしたりする。&lt;/p&gt;
+
+&lt;h3 id=&#34;goose-https-bitbucket-org-liamstask-goose&#34;&gt;&lt;a href=&#34;https://bitbucket.org/liamstask/goose&#34;&gt;goose&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;DBマイグレーションツール。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;db/dbconf.yml&lt;/code&gt;に以下のようなyamlファイルを置いて&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;development:
+  driver: mymysql
+  open: tcp:localhost:3306*bbs_go/root/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;goose create&lt;/code&gt;でマイグレーションファイルを作成する。これはgoかsqlで書ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get bitbucket.org/liamstask/goose/cmd/goose
+$ goose create CreateMessages sql
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;
+-- +goose Up
+-- SQL in section &#39;Up&#39; is executed when this migration is applied
+CREATE TABLE message (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  content TEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- +goose Down
+-- SQL section &#39;Down&#39; is executed when this migration is rolled back
+DROP TABLE message;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ goose up
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;テストの書き方&#34;&gt;テストの書き方&lt;/h2&gt;
+
+&lt;p&gt;参考にした記事と同じく、handler, service, daoで構成し、
+それぞれのコンストラクタの引数に直下のレイヤーのインタフェースを取ることでDIする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func NewMessage(tx dao.Tx, messageDao dao.Message) *MessageImpl {
+	return &amp;amp;MessageImpl{tx: tx, messageDao: messageDao}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;
+テスト時には&lt;a href=&#34;https://github.com/golang/mock&#34;&gt;mock&lt;/a&gt;を渡す。
+&lt;code&gt;mockgen&lt;/code&gt;でmockを生成し、以下のようにして入力と出力を指定することができる。
+これによってテストでdbを参照するのがdaoだけになり、各パッケージを並行してテストできるようになる、ということが
+記事に書いてあった。mockを簡単に用意できるのがいい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get github.com/golang/mock/gomock
+$ go get github.com/golang/mock/mockgen
+$ mockgen -package dao -source message.go -destination message_mock.go
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;ctl := gomock.NewController(t)
+defer ctl.Finish()
+
+message := model.Message{ID: 1, Content: &amp;quot;メッセージ&amp;quot;}
+messageDaoMoc := dao.NewMockMessage(ctl)
+messageDaoMoc.EXPECT().Create(message.Content).Return(int64(1), nil)
+messageDaoMoc.EXPECT().FindById(message.ID).Return(&amp;amp;message, nil)
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>O&#39;Reillyの「マイクロサービスアーキテクチャ」を読んだ</title>
+          <link>http://sambaiz.net/article/14/</link>
+          <pubDate>Sat, 06 Aug 2016 18:20:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/14/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://www.oreilly.co.jp/books/9784873117607/&#34;&gt;O&amp;rsquo;Reilly Japan - マイクロサービスアーキテクチャ&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;設計、開発、テストや監視など一通りまとまっているマイクロサービスアーキテクチャの本。&lt;/p&gt;
+
+&lt;p&gt;マイクロサービスアーキテクチャというのは、協調して動作する小規模で自律的なサービスでシステムを構成するもので、
+一般的なモノリシック(一枚岩)システムのモジュールのように独立したサービスを作っていく。
+自律的というのは、他には何も変更せずに、単独でサービスの変更やデプロイを行えるということ。&lt;/p&gt;
+
+&lt;p&gt;メリットとしては&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;サービスごとに異なる技術を使うことができる&lt;/li&gt;
+&lt;li&gt;一部のサービスで障害が発生しても、機能低下させて稼働し続けるシステムを構築できる&lt;/li&gt;
+&lt;li&gt;性能を高める必要があるサービスだけをスケールでき、効率的にリソースを使うことができる&lt;/li&gt;
+&lt;li&gt;デプロイのリスクを最小限に抑えることができるため、迅速に行うことができる&lt;/li&gt;
+&lt;li&gt;レガシーなコードを捨て去る障壁が低い&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;などが挙げられていた。&lt;/p&gt;
+
+&lt;p&gt;正しくサービスを切り分けるにはドメインの理解が必要で、「境界づけられたコンテキスト」が1つのサービスとなるようにする。
+そのため、最初はモノシリックに進めることも推奨されていた。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;特に初めてのドメインでは、システムをマイクロサービスに分解するのが時期尚早だとコストがかかってしまう場合があります。いろいろな意味で、マイクロサービスに分解したい既存のコードベースがある方が、最初からマイクロサービスに取り組むよりもはるかに簡単です (3.3.3)&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;実現する上で、DBの扱いが難しいと思った。
+サービス間のDBの共有はスキーマの変更に弱く、技術の縛りが発生してしまうので避けなければならない。
+一方で、DBを分割すると1つのトランザクションで完結しなくなり、どのように整合性を保っていくかという話が5章に書いてあった。
+いくつか方法は挙げられているが、いずれにせよ何かしらの制御をしなくてはいけないし、
+障害が発生したときのリカバリー方法を自前で用意するのはなるべくなら避けたい。
+また、データの取得の上でも一つのデータベースにあったほうが便利だ。
+そういうこともあってサービスの単位がデータに引きずられてしまうと、マイクロサービスとはいえないものが出来上がりそうだ。&lt;/p&gt;
+
+&lt;p&gt;すぐにマイクロサービスを採用するかは別としても、考え方として活かせそうなことが多かった。
+実際にやってみて、また読み返して自分のものにしていこうと思う。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Tensorflowの学習データを使ったAPIを作る</title>
+          <link>http://sambaiz.net/article/13/</link>
+          <pubDate>Fri, 05 Aug 2016 22:08:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/13/</guid>
+          <description>
+
+&lt;p&gt;チュートリアルのMNISTの学習データを使って、手書き数字画像のデータを受け取り、数字を返すAPIを作る。
+コードは&lt;a href=&#34;https://github.com/sambaiz/tensorflow-use-api-sample&#34;&gt;ここ&lt;/a&gt;にある。&lt;/p&gt;
+
+&lt;h2 id=&#34;学習して結果を保存する&#34;&gt;学習して結果を保存する&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/6&#34;&gt;前回&lt;/a&gt;の学習結果のチェックポイントファイルを出力する。
+&lt;code&gt;tf.train.Saver().save&lt;/code&gt;でnameで対応するVariableの値が保存できる。&lt;/p&gt;
+
+&lt;p&gt;今回は、学習側、アプリケーション側共にPythonを使うので、以下のようなクラスを作った。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import tensorflow as tf
+from tensorflow.examples.tutorials.mnist import input_data
+
+class Mnist:
+
+    def __init__(self):
+
+        g = tf.Graph()
+
+        with g.as_default():
+
+            W_conv1 = self._weight_variable([5, 5, 1, 32],  &amp;quot;W_conv1&amp;quot;)
+            b_conv1 = self._bias_variable([32],  &amp;quot;b_conv1&amp;quot;)
+
+            self._x = tf.placeholder(tf.float32, [None, 784])
+            x_image = tf.reshape(self._x, [-1,28,28,1])
+
+            h_conv1 = tf.nn.relu(self._conv2d(x_image, W_conv1) + b_conv1)
+            h_pool1 = self._max_pool_2x2(h_conv1)
+
+            W_conv2 = self._weight_variable([5, 5, 32, 64],  &amp;quot;W_conv2&amp;quot;)
+            b_conv2 = self._bias_variable([64],  &amp;quot;b_conv2&amp;quot;)
+
+            h_conv2 = tf.nn.relu(self._conv2d(h_pool1, W_conv2) + b_conv2)
+            h_pool2 = self._max_pool_2x2(h_conv2)
+
+            W_fc1 = self._weight_variable([7 * 7 * 64, 1024],  &amp;quot;W_fc1&amp;quot;)
+            b_fc1 = self._bias_variable([1024],  &amp;quot;b_fc1&amp;quot;)
+
+            h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])
+            h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+
+            self._keep_prob = tf.placeholder(tf.float32)
+            h_fc1_drop = tf.nn.dropout(h_fc1, self._keep_prob)
+
+            W_fc2 = self._weight_variable([1024, 10],  &amp;quot;W_fc2&amp;quot;)
+            b_fc2 = self._bias_variable([10],  &amp;quot;b_fc2&amp;quot;)
+
+            y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
+            self._what_number = tf.argmax(y_conv, 1)
+
+            self._y_ = tf.placeholder(tf.float32, [None, 10])
+            cross_entropy = tf.reduce_mean(-tf.reduce_sum(self._y_ * tf.log(y_conv), reduction_indices=[1]))
+            self._train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+            correct_prediction = tf.equal(tf.argmax(y_conv,1), tf.argmax(self._y_,1))
+            self._accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+            self.sess = tf.Session()
+            init = tf.initialize_all_variables()
+            self.sess.run(init)
+            self._saver = tf.train.Saver()
+
+    def save(self, ckpt_file_name):
+        self._saver.save(self.sess, ckpt_file_name)
+
+    def restore(self, ckpt_file_name):
+        self._saver.restore(self.sess, ckpt_file_name)
+
+    def what_number(self, image_array):
+        return self.sess.run(self._what_number, feed_dict={self._x: image_array, self._keep_prob: 1.0})
+
+    def train(self, num):
+        if not hasattr(self, &amp;quot;_mnist&amp;quot;):
+            self._mnist = input_data.read_data_sets(&amp;quot;MNIST_data/&amp;quot;, one_hot=True)
+
+        for i in range(num):
+            batch = self._mnist.train.next_batch(50)
+            if i%100 == 0:
+              train_accuracy = self._accuracy.eval(session=self.sess, feed_dict={
+                      self._x:batch[0], self._y_: batch[1], self._keep_prob: 1.0
+                  })
+              print(&amp;quot;step %d, training accuracy %g&amp;quot;%(i, train_accuracy))
+            self.sess.run(self._train_step, feed_dict={self._x: batch[0], self._y_: batch[1], self._keep_prob: 0.5})
+
+        print(&amp;quot;test accuracy %g&amp;quot;%self._accuracy.eval(session=self.sess, feed_dict={
+                self._x: self._mnist.test.images, self._y_: self._mnist.test.labels, self._keep_prob: 1.0
+            }))
+
+    def close(self):
+        self.sess.close()
+
+    def _weight_variable(self, shape, name):
+      initial = tf.truncated_normal(shape, stddev=0.1)
+      return tf.Variable(initial, name=name)
+
+    def _bias_variable(self, shape, name):
+      initial = tf.constant(0.1, shape=shape)
+      return tf.Variable(initial, name=name)
+
+    def _conv2d(self, x, W):
+      return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding=&#39;SAME&#39;)
+
+    def _max_pool_2x2(self, x):
+      return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
+                            strides=[1, 2, 2, 1], padding=&#39;SAME&#39;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;train&lt;/code&gt;で学習し、&lt;code&gt;save&lt;/code&gt;でチェックポイントファイルを保存できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from mnist import Mnist
+
+mnist = Mnist()
+mnist.train(20000)
+mnist.save(&amp;quot;model.ckpt&amp;quot;)
+mnist.close()
+print(&amp;quot;done&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なので、例えばこんなDockerfileを書いて&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM gcr.io/tensorflow/tensorflow
+
+ADD training.py /
+ADD mnist.py /
+
+CMD python /training.py &amp;amp;&amp;amp; /bin/bash
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;しばらく待つ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t training .
+$ docker run -itd training
+$ docker logs -f &amp;lt;CONTAINER_ID&amp;gt;
+$ docker cp &amp;lt;CONTAINER_ID&amp;gt;:/notebooks/model.ckpt .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;学習データを使う&#34;&gt;学習データを使う&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;tf.train.Saver().restore&lt;/code&gt;でチェックポイントファイルを読み、Variableの値を復元できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from flask import Flask, request, jsonify
+import tensorflow as tf
+from mnist import Mnist
+
+app = Flask(__name__)
+
+mnist = Mnist()
+mnist.restore(&amp;quot;/model.ckpt&amp;quot;)
+
+@app.route(&amp;quot;/&amp;quot;, methods=[&#39;POST&#39;])
+def what_number():
+
+    json = request.json
+    if(json is None or &amp;quot;image&amp;quot; not in json or len(json[&amp;quot;image&amp;quot;]) != 784):
+        return jsonify(error=&amp;quot;Need json includes image property which is 784(28 * 28) length, float([0, 1.0]) array&amp;quot;)
+    else:
+        result = list(mnist.what_number([json[&amp;quot;image&amp;quot;]]))
+        return jsonify(result=result[0])
+
+if __name__ == &amp;quot;__main__&amp;quot;:
+    app.run(port=3000, host=&#39;0.0.0.0&#39;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これもDockerで動かすならこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM gcr.io/tensorflow/tensorflow
+
+ADD requirements.txt /tmp
+ADD model.ckpt /
+ADD training/mnist.py /
+ADD app.py /
+
+RUN pip install -q -r /tmp/requirements.txt
+
+EXPOSE 3000
+
+CMD [&amp;quot;python&amp;quot;, &amp;quot;/app.py&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t tensor_api .
+$ docker run -itd -p 3000:3000 tensor_app
+$ docker logs -f &amp;lt;CONTAINER_ID&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これに以下のようにして28*28の画像のデータを渡すと、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;image&amp;quot;: [ ..., 0.32941177, 0.72549021, 0.62352943, ...]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それが何の数字なのかが返ってくる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;result&amp;quot;: 7
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Googleが作ったRPCフレームワークgRPCを使ってみた</title>
+          <link>http://sambaiz.net/article/12/</link>
+          <pubDate>Fri, 29 Jul 2016 22:00:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/12/</guid>
+          <description>
+
+&lt;blockquote&gt;
+&lt;p&gt;A high performance, open source, general RPC framework that puts mobile and HTTP/2 first.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h2 id=&#34;what-is-grpc-http-www-grpc-io-docs-what-is-grpc&#34;&gt;&lt;a href=&#34;http://www.grpc.io/docs/#what-is-grpc&#34;&gt;What is gRPC?&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;gRPCを使うと、クライアントアプリケーションは直接、ローカルのオブジェクトのように、他のマシンのサーバーアプリケーションのメソッドを呼ぶことができ、
+分散したアプリケーションやサービスを簡単に作ることができる。
+多くのRPCシステムと同様に、gRPCはサービスを定義し、リモートから呼べるメソッドと、そのパラメーターおよび返り値の型を記述するようになっている。
+サーバーサイドではインタフェースを実装し、クライアントからの呼び出しをハンドリングするgRPCサーバーを実行する。
+クライアントサイドでは、サーバーと同じメソッドを提供するスタブを持っている。&lt;/p&gt;
+
+&lt;p&gt;gRPCクライアントとサーバーは様々な環境同士でやり取りすることができ、いくつもの言語でサポートされている。
+そのため、例えば、gRPCサーバーをJavaで、クライアントをGoやPython、Rubyで作るのも簡単だ。
+加えて、最新のGoodle APIにはgRPCのインタフェースが存在するので、これらをアプリケーションに組み込むのも容易にできる。&lt;/p&gt;
+
+&lt;h2 id=&#34;protobuf&#34;&gt;Protobuf&lt;/h2&gt;
+
+&lt;p&gt;デフォルトではgRPCはprotobuf(protocol buffers)を使う。
+&lt;a href=&#34;https://github.com/google/protobuf&#34;&gt;protobuf&lt;/a&gt;というのは、
+Googleによるオープンソースの、構造化されたデータをシリアライズするメカニズムだ。&lt;/p&gt;
+
+&lt;p&gt;今回作るのは、同じ文字列を返すだけのEchoサーバーで、コードは&lt;a href=&#34;https://github.com/sambaiz/try-gRPC&#34;&gt;ここ&lt;/a&gt;にある。
+以下のprotoファイルでは、&lt;code&gt;Echo&lt;/code&gt;というサービスは&lt;code&gt;RetEcho&lt;/code&gt;というメソッドを含み、
+これは文字列&lt;code&gt;say&lt;/code&gt;を含む&lt;code&gt;EchoRequest&lt;/code&gt;に対して、文字列&lt;code&gt;ret&lt;/code&gt;を含む&lt;code&gt;EchoReply&lt;/code&gt;を返すということを表している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;syntax = &amp;quot;proto3&amp;quot;;
+
+option java_package = &amp;quot;net.sambaiz.trygrpc.protos&amp;quot;;
+
+package protos;
+
+service Echo {
+  rpc RetEcho (EchoRequest) returns (EchoReply) {}
+}
+
+message EchoRequest {
+  string say = 1;
+}
+
+message EchoReply {
+  string ret = 1;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;code&gt;protoc&lt;/code&gt;でコンパイルすると&lt;code&gt;echo.pb.go&lt;/code&gt;のようなコードが生成される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install --devel protobuf # install Install Protocol Compiler v3.0.0-beta-2
+$ go get -u github.com/golang/protobuf/protoc-gen-go # Install Go Protobuf Runtime Installation
+$ protoc --go_out=plugins=grpc:protos/. protos/*.proto
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;サーバー&#34;&gt;サーバー&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get google.golang.org/grpc
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;protoファイルに書いた、RetEchoを実装し、サーバーを立ち上げる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;golang.org/x/net/context&amp;quot;
+	&amp;quot;google.golang.org/grpc&amp;quot;
+	&amp;quot;net&amp;quot;
+	&amp;quot;log&amp;quot;
+	pb &amp;quot;github.com/sambaiz/try-gRPC/protos&amp;quot;
+)
+
+const (
+	port = &amp;quot;:50051&amp;quot;
+)
+
+type server struct{}
+
+func (s *server) RetEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoReply, error) {
+	return &amp;amp;pb.EchoReply{Ret: in.Say}, nil
+}
+
+func main() {
+	lis, err := net.Listen(&amp;quot;tcp&amp;quot;, port)
+	if err != nil {
+		log.Fatalf(&amp;quot;failed to listen: %v&amp;quot;, err)
+	}
+	s := grpc.NewServer()
+	pb.RegisterEchoServer(s, &amp;amp;server{})
+	log.Printf(&amp;quot;server start localhost%s&amp;quot;, port)
+	s.Serve(lis)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;クライアント&#34;&gt;クライアント&lt;/h2&gt;
+
+&lt;p&gt;サーバーに接続すると、他のメソッドと同じようにサーバー側の&lt;code&gt;RetEcho&lt;/code&gt;メソッドを呼び出すことができるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;log&amp;quot;
+	&amp;quot;google.golang.org/grpc&amp;quot;
+	&amp;quot;golang.org/x/net/context&amp;quot;
+	pb &amp;quot;github.com/sambaiz/try-gRPC/protos&amp;quot;
+
+)
+
+const (
+	address = &amp;quot;localhost:50051&amp;quot;
+)
+
+func main() {
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf(&amp;quot;did not connect: %v&amp;quot;, err)
+	}
+	defer conn.Close()
+	c := pb.NewEchoClient(conn)
+
+	r, err := c.RetEcho(context.Background(), &amp;amp;pb.EchoRequest{Say: &amp;quot;hello&amp;quot;})
+	if err != nil {
+		log.Fatalf(&amp;quot;Error: %v&amp;quot;, err)
+	}
+	log.Printf(&amp;quot;Return: %s&amp;quot;, r.Ret)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最新のprotoファイルを共有すれば、どんな言語で書いても自分で型を定義したり、呼び出すロジックを書く必要がないし、
+インタフェースが変わったときにコードレベルでエラーに気づけるのは通常のAPIリクエストと比較しても良い点だと思う。
+また、同じ理由でロジックが複数のサーバーに渡る場合の負担を最小限にできるため、一つのサービスを小さく作ることができる。
+要はマイクロサービスアーキテクチャだ。もちろん性能や管理のしやすさなどの面でもメリット/デメリットはあるだろうし、
+&lt;a href=&#34;https://www.oreilly.co.jp/books/9784873117607/&#34;&gt;オライリー本&lt;/a&gt;を読んで勉強しようと思う。(&lt;a href=&#34;http://sambaiz.net/article/14&#34;&gt;読んだ&lt;/a&gt;)&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>MySQLはそのままだと大文字小文字を区別しない</title>
+          <link>http://sambaiz.net/article/11/</link>
+          <pubDate>Sun, 24 Jul 2016 22:12:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/11/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;MySQL 5.6
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;CREATE TABLE sample (
+  id SERIAL,
+  name VARCHAR(30)
+) ENGINE=InnoDB CHARACTER SET utf8mb4;
+
+INSERT INTO sample (name) VALUES (&#39;tom&#39;),(&#39;Tom&#39;),(&#39;TOM&#39;);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このテーブルを&amp;rdquo;tom&amp;rdquo;で絞り込むとこうなる。大文字小文字を区別していない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SELECT * FROM sample2 WHERE name = &#39;tom&#39;;
++----+------+
+| id | name |
++----+------+
+|  1 | tom  |
+|  2 | Tom  |
+|  3 | TOM  |
++----+------+
+3 rows in set (0.01 sec)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/case-sensitivity.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: B.5.5.1 文字列検索での大文字/小文字の区別&lt;/a&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;単純な比較操作 (&amp;gt;=、&amp;gt;、=、&amp;lt;、&amp;lt;=、ソート、およびグループ化) は、各文字の「ソート値」に基づきます。
+同じソート値を持つ文字は同じ文字として扱われます。たとえば、「e」 と 「é」 が対象の照合順序で同じソート値を持つ場合は、等しいと判断されます。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://dev.mysql.com/doc/refman/5.6/ja/charset-mysql.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: 10.1.2 MySQL での文字セットと照合順序&lt;/a&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;照合順序名には、関連する文字セットの名前で始まる、通常は言語名を含む、
+_ci (大文字と小文字を区別しない)、_cs (大文字と小文字を区別する)、_bin (バイナリ)
+のいずれかで終わる、という規則が適用されます。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;ciはcase-insensitive、csというのはcase-sensitiveの略だ。
+照合順序(Collation)を&lt;code&gt;SHOW FULL COLUMNS FROM sample&lt;/code&gt;で確認したところ、確かに区別しない&lt;code&gt;utf8mb4_general_ci&lt;/code&gt;となっていた。
+これは、文字コード&lt;code&gt;utf8mb4&lt;/code&gt;のデフォルトの照合順序だ。(&lt;code&gt;SHOW CHARACTER SET&lt;/code&gt;で確認できる)&lt;/p&gt;
+
+&lt;p&gt;それなら&lt;code&gt;utf8mb4_general_cs&lt;/code&gt;というのがあるんだなと、&lt;code&gt;SHOW COLLATION LIKE &#39;utf8mb4%&#39;&lt;/code&gt;で確認してみたが、
+そんなものはなかった。どうやら区別させるためには&lt;code&gt;utf8mb4_bin&lt;/code&gt;を使うのが正解みたいで、これをCOLLATEで指定してやるか、
+カラム単位でBINARYとすると、照合順序が&lt;code&gt;utf8mb4_bin&lt;/code&gt;となり、期待通りの結果が得られる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CREATE TABLE sample2 (
+  id SERIAL,
+  name VARCHAR(30)
+) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+
+CREATE TABLE sample3 (
+  id SERIAL,
+  name VARCHAR(30) BINARY
+) ENGINE=InnoDB CHARACTER SET utf8mb4;
+
+ALTER TABLE sample MODIFY name VARCHAR(30) BINARY;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SELECT * FROM sample2 WHERE name = &#39;tom&#39;;
++----+------+
+| id | name |
++----+------+
+|  1 | tom  |
++----+------+
+1 row in set (0.01 sec)
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>グラフデータベースNeo4jを触ってみた</title>
+          <link>http://sambaiz.net/article/10/</link>
+          <pubDate>Thu, 21 Jul 2016 09:20:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/10/</guid>
+          <description>
+
+&lt;p&gt;社内勉強会で&lt;a href=&#34;https://github.com/neo4j/neo4j&#34;&gt;オープンソース&lt;/a&gt;の
+グラフデータベース&lt;a href=&#34;https://neo4j.com/&#34;&gt;Neo4j&lt;/a&gt;が紹介されていたので触ってみた。&lt;/p&gt;
+
+&lt;h2 id=&#34;what-is-a-graph-database-https-neo4j-com-developer-graph-database&#34;&gt;&lt;a href=&#34;https://neo4j.com/developer/graph-database/&#34;&gt;What is a Graph Database?&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;つながりも含めたグラフとしてデータを扱うデータベース。
+データセットのサイズによらず、複雑なつながりや、クエリをうまく扱える。
+無数のデータの中から、関係ないデータを見ることなく多数のノードとつながりからなる必要なデータだけを取れる。&lt;/p&gt;
+
+&lt;h2 id=&#34;インストール&#34;&gt;インストール&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://neo4j.com/download/&#34;&gt;ここ&lt;/a&gt;からCommunity Editionを選んで
+OSごとに用意されている実行ファイルをダウンロードしてくる。
+ファイルを実行し、Startを押すとブラウザで開けるようになる。&lt;/p&gt;
+
+&lt;h2 id=&#34;グラフ&#34;&gt;グラフ&lt;/h2&gt;
+
+&lt;p&gt;グラフは以下の要素から構成される。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Node: データそのもので、まとめるためのラベルを複数付けられる&lt;/li&gt;
+&lt;li&gt;Relationships: typeを持つ、Nodeのつながり&lt;/li&gt;
+&lt;li&gt;Properties: NodeやRelationshipsが持てるkey-valueの値&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;cypher&#34;&gt;Cypher&lt;/h2&gt;
+
+&lt;p&gt;Neo4jで使うクエリ言語。&lt;/p&gt;
+
+&lt;p&gt;まずはCREATE文でNodeを作る。Personはラベルだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CREATE (ee:Person { name: &amp;quot;Emil&amp;quot;, from: &amp;quot;Sweden&amp;quot;, klout: 99 })
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CREATE文では使われていなかった謎のeeだが、MATCH文を見るとデータが格納される変数だということがわかる。
+このeeは次のCREATE文でも参照できて、&lt;code&gt;(ee)-[:KNOWS {since: 2001}]-&amp;gt;(js)&lt;/code&gt;で
+作ったNodeとのRelationshipsを張るのに使っている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;MATCH (ee:Person) WHERE ee.name = &amp;quot;Emil&amp;quot; RETURN ee;
+
+CREATE (js:Person { name: &amp;quot;Johan&amp;quot;, from: &amp;quot;Sweden&amp;quot;, learn: &amp;quot;surfing&amp;quot; }),
+(ir:Person { name: &amp;quot;Ian&amp;quot;, from: &amp;quot;England&amp;quot;, title: &amp;quot;author&amp;quot; }),
+(rvb:Person { name: &amp;quot;Rik&amp;quot;, from: &amp;quot;Belgium&amp;quot;, pet: &amp;quot;Orval&amp;quot; }),
+(ally:Person { name: &amp;quot;Allison&amp;quot;, from: &amp;quot;California&amp;quot;, hobby: &amp;quot;surfing&amp;quot; }),
+(ee)-[:KNOWS {since: 2001}]-&amp;gt;(js),(ee)-[:KNOWS {rating: 5}]-&amp;gt;(ir),
+(js)-[:KNOWS]-&amp;gt;(ir),(js)-[:KNOWS]-&amp;gt;(rvb),
+(ir)-[:KNOWS]-&amp;gt;(js),(ir)-[:KNOWS]-&amp;gt;(ally),
+(rvb)-[:KNOWS]-&amp;gt;(ally)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のようにパターンマッチもできる。この例だとEmilの友達が取得できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;MATCH (ee:Person)-[:KNOWS]-(friends)
+WHERE ee.name = &amp;quot;Emil&amp;quot; RETURN ee, friends
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;必ずしも変数に入れなくても良く、&lt;code&gt;()&lt;/code&gt;のように無視することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;MATCH (js:Person)-[:KNOWS]-()-[:KNOWS]-(surfer)
+WHERE js.name = &amp;quot;Johan&amp;quot; AND surfer.hobby = &amp;quot;surfing&amp;quot;
+RETURN DISTINCT surfer
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最短経路を取得するのも簡単だ。&lt;code&gt;[*1..4]&lt;/code&gt;にして、ホップ数に制限をかけたり、範囲を指定したりすることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;MATCH p=shortestPath(
+  (bacon:Person {name:&amp;quot;Kevin Bacon&amp;quot;})-[*]-(meg:Person {name:&amp;quot;Meg Ryan&amp;quot;})
+)
+RETURN p
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;もちろんSQLの&lt;code&gt;LIMIT&lt;/code&gt;や&lt;code&gt;ORDER BY&lt;/code&gt;、&lt;code&gt;GROUP BY&lt;/code&gt;相当のこともできる。
+文法が直感的に分かりやすいものになっていて良いと思った。&lt;/p&gt;
+
+&lt;h2 id=&#34;欠点&#34;&gt;欠点&lt;/h2&gt;
+
+&lt;p&gt;とにかくSQLのJOIN地獄から脱出できそうなのが大きくて、それだけで採用したい気になってしまうが、
+データの総量とは関係なく一つのNodeに大量にRelationshipsが付くと非常に遅くなるという問題があるらしい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.cyberagent.co.jp/technology/ca_tech/report/8980456.html&#34;&gt;【CyberAgent】技術情報／TechReport - テックレポート／MongoDB de GraphDB | 株式会社サイバーエージェント&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;なぜかというと隣接Node/RelationshipsのポインタをLinkedListで持っているからみたいだ。これは苦しい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://the.igreque.info/posts/2014-06-08-neo4j.html&#34;&gt;igreque : Info -&amp;gt; Neo4jについてちょちょいと調べたまとめ&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;電車の路線のように一つのNodeに対して高々いくつかのRelationshipsしかつながらないことが分かっている場合には問題ないので、
+そういうモデルを作るか、あるいはデータの数を絞るか、使うにあたって工夫が必要そうだ。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Kubernatesのチュートリアルをたどる</title>
+          <link>http://sambaiz.net/article/9/</link>
+          <pubDate>Mon, 18 Jul 2016 22:22:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/9/</guid>
+          <description>
+
+&lt;h2 id=&#34;kubernatesとは-http-kubernetes-io-docs-whatisk8s&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/whatisk8s/&#34;&gt;Kubernatesとは&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Kubernates(クバネテスと周りでは呼んでる。ギリシャ語で操舵手)はアプリケーションコンテナにおける、自動デプロイ、スケーリング、操作を
+自動化するオープンソースプラットフォームだ。K8sと略される。Googleによって開発が始められた。&lt;/p&gt;
+
+&lt;h2 id=&#34;minikube-https-github-com-kubernetes-minikube&#34;&gt;&lt;a href=&#34;https://github.com/kubernetes/minikube&#34;&gt;Minikube&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;K8sをローカルで試すためのに、MinikubeというVMの中で単一ノードのK8sクラスターを動かすツールを入れる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/kubernetes/minikube/releases/tag/v0.6.0&#34;&gt;v0.6.0&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.6.0/minikube-darwin-amd64 &amp;amp;&amp;amp; chmod +x minikube &amp;amp;&amp;amp; sudo mv minikube /usr/local/bin/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube start
+Starting local Kubernetes cluster...
+
+...
+
+$ kubectl version
+Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;2&amp;quot;, GitVersion:&amp;quot;v1.2.4&amp;quot;, GitCommit:&amp;quot;3eed1e3be6848b877ff80a93da3785d9034d0a4f&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+Server Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;3&amp;quot;, GitVersion:&amp;quot;v1.3.0&amp;quot;, GitCommit:&amp;quot;283137936a498aed572ee22af6774b6fb6e9fd94&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;pods-http-kubernetes-io-docs-user-guide-walkthrough-pods&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/#pods&#34;&gt;Pods&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;K8sではコンテナのグループをpodと呼ぶ。pod中のコンテナは共にデプロイされ、起動し、停止する。
+また、グループとして複製される。&lt;/p&gt;
+
+&lt;p&gt;Podの定義は以下のようにyamlで書かれる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.7.9
+    ports:
+    - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Podの定義に望ましい状態を記述すると、Kubernatesはそれを見て現在の状態が一致しているかどうか確認する。
+例えば、Podが作られたときに、コンテナがその中で動いている状態が望ましい状態だとすると、
+コンテナが動かなくなったときに、Kubernatesは新しいものを再作成することで望ましい状態にする。&lt;/p&gt;
+
+&lt;p&gt;podの作成とリストの取得のコマンドは以下の通り。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f nginx.yaml
+$ kubectl get pods
+NAME      READY     STATUS    RESTARTS   AGE
+nginx     1/1       Running   0          4s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;kubectl exec&lt;/code&gt;で&lt;a href=&#34;http://kubernetes.io/docs/user-guide/getting-into-containers/&#34;&gt;コマンドを実行&lt;/a&gt;し、
+podが動いていることを確認しようとしたが、使えそうなコマンドが見つからなかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl exec -it nginx ps
+rpc error: code = 2 desc = &amp;quot;oci runtime error: exec failed: exec: \&amp;quot;ps\&amp;quot;: executable file not found in $PATH&amp;quot;error: error executing remote command: error executing command in container: Error executing in Docker Container: 126
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そこで、リクエストを投げるために&lt;code&gt;kubectl run&lt;/code&gt;で&lt;a href=&#34;http://kubernetes.io/docs/user-guide/kubectl/kubectl_run/&#34;&gt;イメージを動かす単一コンテナのpodを管理するためのDeploymentを作成する。&lt;/a&gt;
+Deploymentについては後で説明がある。
+&lt;code&gt;--restart=Never&lt;/code&gt;でpodが存在しなくなったときに再起動しないようにし、&lt;code&gt;--env&lt;/code&gt;で環境変数としてnginxのpodのIPを渡している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl run busybox --image=busybox --restart=Never --tty -i --env &amp;quot;POD_IP=$(kubectl get pod nginx -o go-template={{.status.podIP}})&amp;quot;
+busybox$ wget -qO- http://$POD_IP
+busybox$ exit # Exit the busybox container
+
+$ kubectl get deployments
+
+$ kubectl get pods
+NAME      READY     STATUS    RESTARTS   AGE
+nginx     1/1       Running   0          54m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;--restart=Never&lt;/code&gt;なしで実行するとこうなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl run busybox --image=busybox --tty -i --env &amp;quot;POD_IP=$(kubectl get pod nginx -o go-template={{.status.podIP}})&amp;quot;
+busybox$ exit
+Session ended, resume using &#39;kubectl attach busybox-985443498-9elny -c busybox -i -t&#39; command when the pod is running
+
+$ kubectl get deployments
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+busybox   1         1         1            1           3m
+
+$ kubectl get pods
+NAME                      READY     STATUS    RESTARTS   AGE
+busybox-985443498-9elny   1/1       Running   1          3m
+nginx                     1/1       Running   0          59m
+
+$ kubectl delete pods busybox-985443498-9elny
+pod &amp;quot;busybox-985443498-9elny&amp;quot; deleted
+
+$ kubectl get pods # Podsだけ削除しても新しいものが立ち上がってくる
+NAME                      READY     STATUS              RESTARTS   AGE
+busybox-985443498-4iyvx   0/1       ContainerCreating   0          1s
+busybox-985443498-9elny   1/1       Terminating         1          13m
+nginx                     1/1       Running             0          1h
+
+$ kubectl delete deployment busybox
+
+$ kubectl get pods # Deploymentを削除するとPodsも消える
+NAME      READY     STATUS    RESTARTS   AGE
+nginx     1/1       Running   0          1h
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;volumes-http-kubernetes-io-docs-user-guide-walkthrough-volumes&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/#volumes&#34;&gt;Volumes&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;コンテナのファイルシステムはコンテナが生存しているときに限り有効なので、
+永続化したいデータはコンテナの外に保存する必要がある。&lt;/p&gt;
+
+&lt;p&gt;以下の例のように&lt;code&gt;volumes&lt;/code&gt;でvolumeを定義し、&lt;code&gt;volumeMounts&lt;/code&gt;でどこにマウントするか指定することができる。
+&lt;code&gt;volumes&lt;/code&gt;には、そのPodがノードで実行されている間存在するディレクトリを作成して使う&lt;code&gt;EmptyDir&lt;/code&gt;か、
+ノードのファイルシステムに既に存在するディレクトリを使う&lt;code&gt;HostPath&lt;/code&gt;を指定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Pod
+metadata:
+  name: redis
+spec:
+  containers:
+  - name: redis
+    image: redis
+    volumeMounts:
+    - name: redis-persistent-storage
+      mountPath: /data/redis
+  volumes:
+  - name: redis-persistent-storage
+    emptyDir: {}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;labels-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-labels&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#labels&#34;&gt;Labels&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;metadataとしてkey-valueのラベルを付けることができる。たくさんのPodをまとめたりするのに便利だ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;metadata:
+  name: nginx
+  labels:
+    app: nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;kubectl get pods -l app=nginx
+NAME      READY     STATUS    RESTARTS   AGE
+nginx     1/1       Running   0          2m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;deployments-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-deployments&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#deployments&#34;&gt;Deployments&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;実行しているPodの維持と更新を管理するのが、上でも出てきたDeploymentだ。
+Deploymentの定義には、Podを作るためのテンプレートと、維持するPod数を記述する。
+pod名はDeployment名から生成されるので、templateには含めない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f deployment.yaml
+$ kubectl get deployment
+NAME               DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+nginx-deployment   2         2         2            2           3m
+
+$ kubectl get pods -l app=nginx
+NAME                                READY     STATUS    RESTARTS   AGE
+nginx-deployment-1159050644-ar3i7   1/1       Running   0          3m
+nginx-deployment-1159050644-kdjly   1/1       Running   0          3m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;kubectl apply&lt;/code&gt;でDeploymentは変更を実行中のPodに安全にロールアウトする。
+以下の例ではnginxのバージョンを上げている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.8
+        ports:
+        - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl apply -f deployment-update.yaml
+$ kubectl get pods
+NAME                                READY     STATUS              RESTARTS   AGE
+nginx-deployment-1159050644-kdjly   1/1       Running             0          30m
+nginx-deployment-1771418926-pi3vy   0/1       ContainerCreating   0          7s
+nginx-deployment-1771418926-ygoxl   0/1       ContainerCreating   0          7s
+
+$ kubectl get pods
+NAME                                READY     STATUS              RESTARTS   AGE
+nginx-deployment-1771418926-pi3vy   0/1       ContainerCreating   0          12s
+nginx-deployment-1771418926-ygoxl   1/1       Running             0          12s
+
+$ kubectl get pods
+NAME                                READY     STATUS    RESTARTS   AGE
+nginx-deployment-1771418926-pi3vy   1/1       Running   0          15s
+nginx-deployment-1771418926-ygoxl   1/1       Running   0          15s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;services-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-services&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#services&#34;&gt;Services&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;アプリケーションのレイヤー間(例えばフロントエンドとバックエンド)の接続で使われるのがServiceだ。
+以下のServiceは、8080番ポートで待ち、&lt;code&gt;app: nginx&lt;/code&gt;のラベルが付いているPodの80番ポートに向けるロードバランサーとして働く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  ports:
+  - port: 8000
+    targetPort: 80
+    protocol: TCP
+  selector:
+    app: nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f service.yaml
+$ kubectl get services
+NAME            CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+kubernetes      10.0.0.1     &amp;lt;none&amp;gt;        443/TCP    19h
+nginx-service   10.0.0.90    &amp;lt;none&amp;gt;        8000/TCP   36s
+
+$ export SERVICE_IP=$(kubectl get service nginx-service -o go-template=&#39;{{.spec.clusterIP}}&#39;)
+$ export SERVICE_PORT=$(kubectl get service nginx-service -o go-template=&#39;{{(index .spec.ports 0).port}}&#39;)
+$ echo &amp;quot;$SERVICE_IP:$SERVICE_PORT&amp;quot;
+10.0.0.90:8000
+$ kubectl run busybox --image=busybox --restart=Never --tty -i --env &amp;quot;SERVICE_IP=$SERVICE_IP,SERVICE_PORT=$SERVICE_PORT&amp;quot;
+busybox$ wget -qO- http://$SERVICE_IP:$SERVICE_PORT
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;health-checking-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-health-checking&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#health-checking&#34;&gt;Health Checking&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;livenessProbe&lt;/code&gt;でヘルスチェックの設定を含めることができる。
+以下の例では、初期化のために30秒待った後、&lt;code&gt;/_status/healthz&lt;/code&gt;へのHTTP GETリクエストに対して
+200~399以外のステータスコードが返るか、1秒以上かかった場合、コンテナを再起動する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-healthcheck
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    livenessProbe:
+      httpGet:
+        path: /_status/healthz
+        port: 80
+      initialDelaySeconds: 30
+      timeoutSeconds: 1
+    ports:
+    - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>nでNode.jsのバージョン管理</title>
+          <link>http://sambaiz.net/article/8/</link>
+          <pubDate>Fri, 15 Jul 2016 19:20:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/8/</guid>
+          <description>&lt;p&gt;Nodeのバージョンを上げようと思って調べてみたら&lt;a href=&#34;https://github.com/tj/n&#34;&gt;n&lt;/a&gt;という
+バージョン管理ツールがあったので使ってみた。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;n latest&lt;/code&gt;, &lt;code&gt;n stable&lt;/code&gt;, &lt;code&gt;n lts&lt;/code&gt;でバージョンが切り替わる。
+バージョンを指定する場合、&lt;code&gt;n &amp;lt;version&amp;gt;&lt;/code&gt;でインストールし、&lt;code&gt;n&lt;/code&gt;でインストールされているバージョンの一覧から選択できる。
+バージョンの削除は&lt;code&gt;n - &amp;lt;version&amp;gt;&lt;/code&gt;。簡単だ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install -g n
+$ n stable
+$ node -v
+v6.2.2
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Docker公式ドキュメント&#34;network コマンドを使う&#34;をまとめた</title>
+          <link>http://sambaiz.net/article/7/</link>
+          <pubDate>Fri, 15 Jul 2016 00:38:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/7/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;Docker version 1.12.0-rc2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;公式ドキュメント&lt;a href=&#34;http://docs.docker.jp/engine/userguide/networking/work-with-networks.html&#34;&gt;network コマンドを使う&lt;/a&gt;
+の内容をまとめてみた。&lt;/p&gt;
+
+&lt;p&gt;dockerには3つのデフォルトネットワークが存在する。&lt;code&gt;docker run&lt;/code&gt;時に&lt;code&gt;--net&lt;/code&gt;オプションでネットワークを指定しない限り、
+docker0として表示されるbridgeネットワークにコンテナを接続する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker network ls
+NETWORK ID          NAME                DRIVER              SCOPE
+a3b712537566        bridge              bridge              local               
+f6d86cb54edd        host                host                local               
+33cb30b024d9        none                null                local            
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ただし、後方互換性を維持するため、デフォルトのbridgeネットワークでは自動的に名前解決が行われない。&lt;/p&gt;
+
+&lt;p&gt;これらのネットワークとは別にユーザー定義のネットワークを作成することもできる。
+単一ホストの&lt;code&gt;bridge&lt;/code&gt;ネットワークと、複数ホストにまたがる&lt;code&gt;overlay&lt;/code&gt;ネットワークから選択でき、
+何も指定しなかったら&lt;code&gt;bridge&lt;/code&gt;になる。&lt;code&gt;subnet&lt;/code&gt;を指定しなければ、
+dockerデーモンがネットワークに対してサブネットを自動的に割り当てるが、
+dockerが管理していないサブネットと重複するのを避けるために指定することが推奨されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker network create -d bridge --subnet 172.25.0.0/16 isolated_nw
+$ docker network inspect isolated_nw
+$ docker network rm isolated_nw  # 削除
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;docker network inspect&lt;/code&gt;で以下のようなネットワークの情報が得られる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[
+    {
+        &amp;quot;Name&amp;quot;: &amp;quot;isolated_nw&amp;quot;,
+        &amp;quot;Id&amp;quot;: &amp;quot;c81547cf7ed897054ea645192c6c47dcf7a248e77bc8067609becab5330e417d&amp;quot;,
+        &amp;quot;Scope&amp;quot;: &amp;quot;local&amp;quot;,
+        &amp;quot;Driver&amp;quot;: &amp;quot;bridge&amp;quot;,
+        &amp;quot;EnableIPv6&amp;quot;: false,
+        &amp;quot;IPAM&amp;quot;: {
+            &amp;quot;Driver&amp;quot;: &amp;quot;default&amp;quot;,
+            &amp;quot;Options&amp;quot;: {},
+            &amp;quot;Config&amp;quot;: [
+                {
+                    &amp;quot;Subnet&amp;quot;: &amp;quot;172.25.0.0/16&amp;quot;
+                }
+            ]
+        },
+        &amp;quot;Internal&amp;quot;: false,
+        &amp;quot;Containers&amp;quot;: {},
+        &amp;quot;Options&amp;quot;: {},
+        &amp;quot;Labels&amp;quot;: {}
+    }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;起動時に&lt;code&gt;--net&lt;/code&gt;オプションでネットワークに接続したり、
+既に存在するコンテナを&lt;code&gt;docker network connect&lt;/code&gt;で接続することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run --net=isolated_nw -itd --name=container1 --link container2:c2 busybox
+$ docker network connect isolated_nw container1
+$ docker network disconnect isolated_nw container1 # 切断
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上の&lt;code&gt;run&lt;/code&gt;によって同一ネットワークからこのコンテナへ、&lt;code&gt;ping container1&lt;/code&gt;が届くようになり、
+このコンテナから同一ネットワークのconteiner2にc2というエイリアスが付くため、&lt;code&gt;ping c2&lt;/code&gt;が届くようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker attach container1
+# ping c2
+PING c2 (172.25.0.2): 56 data bytes
+64 bytes from 172.25.0.2: seq=0 ttl=64 time=0.094 ms
+...
+CTRL-p CTRL-q
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この設定時点でcontainer2が存在しなかったとしてもエラーにならない。
+また、この&lt;code&gt;--link&lt;/code&gt;によるエイリアスは所属するネットワーク全体に適用される。&lt;/p&gt;
+
+&lt;p&gt;他にrunで指定している&lt;a href=&#34;http://docs.docker.jp/engine/reference/commandline/run.html&#34;&gt;オプション&lt;/a&gt;は以下の通り。
+どれも良く使うもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-i コンテナの STDIN にアタッチ
+-t 疑似ターミナル (pseudo-TTY) を割り当てる
+-d コンテナをバックグラウンドで実行し、コンテナIDを表示
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;--link&lt;/code&gt;は、コンテナ内におけるプライベートな名前解決のために、他のコンテナの&lt;code&gt;name&lt;/code&gt;に対してエイリアスを付けるものだったが、
+これとは別に同一ネットワークの他のコンテナからの名前解決のために使われる、ネットワーク範囲のエイリアスを&lt;code&gt;--net-alias&lt;/code&gt;で付けることができる。
+このエイリアスは同一ネットワークの複数のコンテナで同じものに設定でき、有効ないずれかのコンテナに名前解決される。
+つまり、コンテナが停止するかネットワークから切断されると、同じネットワーク範囲のエイリアスを持った別のコンテナに名前解決されることになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run --net=isolated_nw -itd --name=container3 --net-alias app busybox
+$ docker run --net=isolated_nw -itd --name=container4 --net-alias app busybox
+$ docker network connect --alias app isolated_nw container5 # connectで指定するとき
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>TensorFlow チュートリアル2(Deep MNIST for Experts)</title>
+          <link>http://sambaiz.net/article/6/</link>
+          <pubDate>Tue, 12 Jul 2016 21:16:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/6/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/3&#34;&gt;前回&lt;/a&gt;に引き続き、まとめながら進めていく。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/tutorials/mnist/pros/index.html&#34;&gt;Deep MNIST for Experts&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;start-tensorflow-interactivesession&#34;&gt;Start TensorFlow InteractiveSession&lt;/h3&gt;
+
+&lt;p&gt;今回は、前回のようにグラフを作成してからSessionを開始する代わりに
+&lt;code&gt;InteractiveSession&lt;/code&gt;を使う。
+グラフを作成し実行するのをインタラクティブに行うことができ、IPythonのような環境で便利だ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import tensorflow as tf
+sess = tf.InteractiveSession()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;build-a-multilayer-convolutional-network&#34;&gt;Build a Multilayer Convolutional Network&lt;/h3&gt;
+
+&lt;p&gt;前回のシンプルなモデルでは、あまり良い結果が出なかった。
+そこで、今回はもう少し洗練されたモデル、小さな畳み込みニューラルネットワークを作成する。&lt;/p&gt;
+
+&lt;h3 id=&#34;weight-initialization&#34;&gt;Weight Initialization&lt;/h3&gt;
+
+&lt;p&gt;このモデルを作成するためには、たくさんの重みとバイアスを作成する必要がある。&lt;/p&gt;
+
+&lt;p&gt;重みは、対称性を破り、勾配0を避けるために、少しのノイズで初期化すべきだ。&lt;/p&gt;
+
+&lt;p&gt;また、&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E6%B4%BB%E6%80%A7%E5%8C%96%E9%96%A2%E6%95%B0#ReLU.EF.BC.88.E3.83.A9.E3.83.B3.E3.83.97.E9.96.A2.E6.95.B0.EF.BC.89&#34;&gt;ReLU(Rectified Linear Unit, 正規化線形関数)&lt;/a&gt;ニューロンを使うので、&amp;rdquo;死んだニューロン&amp;rdquo;を避けるためにわずかな正の値のバイアスで初期化すると良い。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;tf.truncated_normal&lt;/code&gt;は&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/api_docs/python/constant_op.html#truncated_normal&#34;&gt;正規分布で、μ±2σ範囲内のランダムな値を返す。&lt;/a&gt;
+以下の例だと、&lt;code&gt;mean&lt;/code&gt;のデフォルトが0.0なので、正規分布 &lt;code&gt;N(0, 0.01)&lt;/code&gt;の、&lt;code&gt;-0.2&amp;lt;=x&amp;lt;=0.2&lt;/code&gt;な値がランダムに返ることになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def weight_variable(shape):
+  initial = tf.truncated_normal(shape, stddev=0.1)
+  return tf.Variable(initial)
+
+def bias_variable(shape):
+  initial = tf.constant(0.1, shape=shape)
+  return tf.Variable(initial)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;convolution-and-pooling&#34;&gt;Convolution and Pooling&lt;/h3&gt;
+
+&lt;p&gt;TensorFlowは柔軟な畳み込みとプーリングの手続きを提供している。&lt;/p&gt;
+
+&lt;p&gt;畳み込みというのは、画像に対してフィルターを少しずつ動かしながら掛けていく処理のことだ。&lt;a href=&#34;http://www.clg.niigata-u.ac.jp/~medimg/practice_medical_imaging/imgproc_scion/4filter/index.htm&#34;&gt;このページ&lt;/a&gt;が分かりやすい。
+例えば、&lt;a href=&#34;https://en.wikipedia.org/wiki/Sobel_operator&#34;&gt;ソーベルフィルタ&lt;/a&gt;で輪郭になっているところを抽出するように、
+フィルターの値によって、その区域における、ある特徴を際立たせたりすることができる。
+今回はこのフィルターが重みとなり、際立たせたいのはその数字を識別するための特徴ということになる。
+前回は画像を一次元の配列として扱い重みを学習していたので、縦の情報が失われていたが、この方法ではそれがない。&lt;/p&gt;
+
+&lt;p&gt;プーリングというのは画像から区域ごとにサンプリングする処理だ。最大プーリングや、平均プーリングなどの手法がある。
+畳み込みのように順番に区域を見ていって、最大プーリングならそのうちの最大のものを採用し、他のものは無視する。
+サイズが小さくなるだけではなく、ちょっとした位置のずれを吸収することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def conv2d(x, W):
+  return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding=&#39;SAME&#39;)
+
+def max_pool_2x2(x):
+  return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
+                        strides=[1, 2, 2, 1], padding=&#39;SAME&#39;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;tf.nn.conv2d&lt;/code&gt;は&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/api_docs/python/nn.html#conv2d&#34;&gt;畳み込みを行う。&lt;/a&gt;
+主な入力は&lt;code&gt;[画像の数, 縦サイズ, 横サイズ, チャンネル数(色とか)]&lt;/code&gt;の画像と、
+&lt;code&gt;[縦サイズ, 横サイズ, 入力チャンネル数, 出力チャンネル数]&lt;/code&gt;のフィルターだ。
+&lt;code&gt;strides&lt;/code&gt;は一度にどれくらいフィルターを動かしていくかで、&lt;code&gt;strides[1]&lt;/code&gt;が縦、&lt;code&gt;strides[2]&lt;/code&gt;が横に動かす量だ。
+&lt;code&gt;strides[0]&lt;/code&gt;と&lt;code&gt;strides[3]&lt;/code&gt;は1でなくてはならない。
+&lt;code&gt;padding&lt;/code&gt;は&amp;rdquo;SAME&amp;rdquo;か&amp;rdquo;VALID&amp;rdquo;から選択できるパディングについての設定だ。詳細は
+&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/api_docs/python/nn.html#convolution&#34;&gt;ここ&lt;/a&gt;
+に書いてある。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;tf.nn.max_pool&lt;/code&gt;は&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/api_docs/python/nn.html#max_pool&#34;&gt;最大プーリングを行う。&lt;/a&gt;
+&lt;code&gt;ksize&lt;/code&gt;は入力のそれぞれの次元に対応した見ていく区域のサイズだ。&lt;code&gt;[1, 2, 2, 1]&lt;/code&gt;ならそれぞれの画像を&lt;code&gt;2*2&lt;/code&gt;ずつ見ていくことになる。&lt;/p&gt;
+
+&lt;h3 id=&#34;first-convolutional-layer&#34;&gt;First Convolutional Layer&lt;/h3&gt;
+
+&lt;p&gt;最初のレイヤーは、畳み込みと最大プーリングで構成される。
+畳み込みはそれぞれ&lt;code&gt;5*5&lt;/code&gt;の32チャンネル出力のフィルターでされる。
+つまり、重みであるフィルターは&lt;code&gt;[5, 5, 1, 32]&lt;/code&gt;のtensorということになる。
+そして、それぞれのチャンネルに対してバイアスが存在する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;W_conv1 = weight_variable([5, 5, 1, 32])
+b_conv1 = bias_variable([32])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;画像に対して、畳み込みを適用するするために&lt;code&gt;tf.reshape&lt;/code&gt;で
+&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/api_docs/python/array_ops.html#reshape&#34;&gt;変形する&lt;/a&gt;
+必要がある。-1というのは特別な値で、他の次元との積が合計が元のものと変わらないように決定される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;x = tf.placeholder(tf.float32, [None, 784])
+x_image = tf.reshape(x, [-1,28,28,1])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで畳み込めるようになったので、画像と重みを畳み込み、バイアスを足したものにReLUを適用した後、最大プーリングする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
+h_pool1 = max_pool_2x2(h_conv1)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;second-convolutional-layer&#34;&gt;Second Convolutional Layer&lt;/h3&gt;
+
+&lt;p&gt;deepネットワークにするために最初のレイヤーのようなものをいくつか重ねる。
+2番目のレイヤーでは64チャンネル出力のフィルターで畳み込みを行い、プーリングする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;W_conv2 = weight_variable([5, 5, 32, 64])
+b_conv2 = bias_variable([64])
+
+h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
+h_pool2 = max_pool_2x2(h_conv2)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;densely-connected-layer&#34;&gt;Densely Connected Layer&lt;/h3&gt;
+
+&lt;p&gt;2つのレイヤーを経て元々&lt;code&gt;28*28&lt;/code&gt;だった画像は&lt;code&gt;7*7&lt;/code&gt;にまで削減された。
+2つめのレイヤーの出力は64チャンネルだったので、&lt;code&gt;7*7*64&lt;/code&gt;次元のデータになっている。
+このレイヤーでは、これらにそれぞれ1024のニューロンを結びつける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;W_fc1 = weight_variable([7 * 7 * 64, 1024])
+b_fc1 = bias_variable([1024])
+
+h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])
+h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dropout&#34;&gt;Dropout&lt;/h3&gt;
+
+&lt;p&gt;過学習を防ぐために
+&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%83%BC%E3%83%97%E3%83%A9%E3%83%BC%E3%83%8B%E3%83%B3%E3%82%B0#.E3.83.89.E3.83.AD.E3.83.83.E3.83.97.E3.82.A2.E3.82.A6.E3.83.88&#34;&gt;ドロップアウト&lt;/a&gt;
+を行う。
+ドロップアウトというのは訓練データごとにニューロンを何割か無視することだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;keep_prob = tf.placeholder(tf.float32)
+h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;readout-layer&#34;&gt;Readout Layer&lt;/h3&gt;
+
+&lt;p&gt;最後にsoftmaxでそれぞれの数字である確率を求める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;W_fc2 = weight_variable([1024, 10])
+b_fc2 = bias_variable([10])
+
+y_conv=tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;train-and-evaluate-the-model&#34;&gt;Train and Evaluate the Model&lt;/h3&gt;
+
+&lt;p&gt;今回は前回使った&lt;code&gt;GradientDescentOptimizer&lt;/code&gt;よりも洗練されている&lt;code&gt;AdamOptimizer&lt;/code&gt;というのが使われている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;y_ = tf.placeholder(tf.float32, [None, 10])
+cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv), reduction_indices=[1]))
+train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+correct_prediction = tf.equal(tf.argmax(y_conv,1), tf.argmax(y_,1))
+accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+sess.run(tf.initialize_all_variables())
+for i in range(20000):
+  batch = mnist.train.next_batch(50)
+  if i%100 == 0:
+    train_accuracy = accuracy.eval(feed_dict={
+        x:batch[0], y_: batch[1], keep_prob: 1.0})
+    print(&amp;quot;step %d, training accuracy %g&amp;quot;%(i, train_accuracy))
+  train_step.run(feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
+
+print(&amp;quot;test accuracy %g&amp;quot;%accuracy.eval(feed_dict={
+    x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行するとこんな出力が得られた。
+かなり時間がかかったのでここで打ち切ったが、およそ99.2%の正解率になるらしい。
+前回が92%だったのに比べてもすごく良い値に見える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;step 0, training accuracy 0.12
+step 100, training accuracy 0.8
+step 200, training accuracy 0.9
+step 300, training accuracy 0.9
+step 400, training accuracy 0.98
+step 500, training accuracy 0.88
+step 600, training accuracy 0.98
+step 700, training accuracy 0.98
+step 800, training accuracy 0.9
+step 900, training accuracy 1
+step 1000, training accuracy 0.98
+step 1100, training accuracy 0.98
+step 1200, training accuracy 1
+step 1300, training accuracy 0.98
+step 1400, training accuracy 0.94
+step 1500, training accuracy 0.98
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>webpack環境でredux&amp;react-routerのページをサーバーサイドレンダリングする</title>
+          <link>http://sambaiz.net/article/5/</link>
+          <pubDate>Sun, 10 Jul 2016 03:08:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/5/</guid>
+          <description>&lt;p&gt;このページをGoogleのSearch Consoleからクローラーがちゃんと見ているか確認してみたら、
+なぜか真っ白のページが表示されていた・・・。とりあえずサーバーサイドレンダリングしてみることにした。
+コードは&lt;a href=&#34;https://github.com/sambaiz/sambaiz.net/tree/v0.23&#34;&gt;github&lt;/a&gt;に上げてある。&lt;/p&gt;
+
+&lt;p&gt;サーバーサイドとはいえ、css-loaderでcss moduleを使っているのでwebpackを使う必要があった。
+まず、そのままのwebpackの設定で作ったものをserver.jsから呼ぶとエラーが出た。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;***/sambaiz-net/web/public/bundle.js:20933
+	module.exports = self.fetch.bind(self);
+ReferenceError: self is not defined
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そこで、targetをnodeにしたサーバーサイド用にwebpackの設定を作成し、実行してみたところ&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;module.exports = {
+	entry: &#39;./js/server.js&#39;,
+	target: &#39;node&#39;,
+	output: {
+		path: path.join(__dirname, &#39;dist&#39;),
+		filename: &#39;server.js&#39;,
+		publicPath: &#39;/&#39;
+	},
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今度はこんなエラーが出たので&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ERROR in ./~/iconv-lite/encodings/tables/gb18030-ranges.json
+Module parse failed: ***/sambaiz-net/web/node_modules/iconv-lite/encodings/tables/gb18030-ranges.json Unexpected token (1:9)
+You may need an appropriate loader to handle this file type.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;loadersに下の設定を追加した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{ test: /\.json$/, loader: &amp;quot;json-loader&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;webpackには成功したが、serverを起動すると今度は以下のようなエラーが出た。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;return /msie [6-9]\b/.test(window.navigator.userAgent.toLowerCase());
+ReferenceError: window is not defined
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;style-loaderのコードだったので、
+まず、フロント側のwebpackで
+&lt;a href=&#34;https://github.com/webpack/extract-text-webpack-plugin&#34;&gt;extract-text-webpack-plugin&lt;/a&gt;を使ってcssを別に出力することにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var ExtractTextPlugin = require(&#39;extract-text-webpack-plugin&#39;);
+...
+{
+  test: /\.css$/,
+  loader:  ExtractTextPlugin.extract(&#39;style&#39;, &#39;css?modules&#39;, &#39;postcss&#39;),
+  include: __dirname
+},
+...
+plugins: [
+    new ExtractTextPlugin(&amp;quot;styles.css&amp;quot;)
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そして、サーバー側のwebpackでは&lt;a href=&#34;https://github.com/kriasoft/isomorphic-style-loader&#34;&gt;isomorphic-style-loader&lt;/a&gt;でなんとか動かして、
+フロント側で出力したcssと対応するようにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;loaders: [&#39;isomorphic-style&#39;, &#39;css?modules&#39;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これでようやくwebpackまわりの問題は解決できたので、react-routerの方のコードを書いていく。&lt;/p&gt;
+
+&lt;p&gt;reduxに関しては&lt;a href=&#34;http://redux.js.org/docs/recipes/ServerRendering.html&#34;&gt;ドキュメント&lt;/a&gt;通りに
+描画した後のstoreをこんな感じでフロントに渡す。
+そのほかに、同じ処理をサーバーとフロントで二度行わないようにするための値を追加する必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;window.__INITIAL_STATE__ = ${JSON.stringify(state)}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;react-routerも以下のようにmatchとRouterContextを組み合わせるだけだ。
+ただし、APIリクエスト等の非同期処理が含まれているので、レンダリングが完了したかどうか判断しなくてはならない。
+そのため、storeの状態をsubscribeしてレンダリングの終了判定を都度チェックしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;function render(req, res, isFinishLoading, title, description, fullUrl) {
+
+  match({ routes, location: req.url }, (error, redirectLocation, renderProps) =&amp;gt; {
+
+    let store = createStore();
+
+    if (error) {
+      res.status(500).send(error.message)
+    } else if (redirectLocation) {
+      res.redirect(302, redirectLocation.pathname + redirectLocation.search)
+    } else if (renderProps) {
+
+      const _render = () =&amp;gt;
+        renderToString(&amp;lt;Provider store={store}&amp;gt;
+          &amp;lt;RouterContext {...renderProps} /&amp;gt;
+        &amp;lt;/Provider&amp;gt;)
+
+      let unscribe = store.subscribe(() =&amp;gt; {
+        if(isFinishLoading(store.getState()) === true){
+          res.status(200).send(
+            page(_render(), store.getState(), title, description, fullUrl)
+          )
+          unscribe();
+        }
+      })
+
+      _render();
+
+    } else {
+      res.status(404).send(&#39;Not found&#39;)
+    }
+  })
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>MySQLのUNIX_TIMESTAMPにある程度未来の日付を渡すと0になる</title>
+          <link>http://sambaiz.net/article/4/</link>
+          <pubDate>Mon, 04 Jul 2016 19:49:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/4/</guid>
+          <description>&lt;p&gt;以下、MySQL5.6で遭遇した。&lt;/p&gt;
+
+&lt;p&gt;MySQLの&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/date-and-time-functions.html#function_unix-timestamp&#34;&gt;UNIX_TIMESTAMP&lt;/a&gt;は
+DATETIME文字列などを引数にとり、UNIXタイムスタンプ(1970-01-01 00:00:00 UTCを起点とした経過秒数)を返す関数だ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SET SESSION time_zone = &#39;UTC&#39;;
+mysql&amp;gt; select UNIX_TIMESTAMP(&#39;1970-01-01 00:00:00&#39;);
++---------------------------------------+
+| UNIX_TIMESTAMP(&#39;1970-01-01 00:00:00&#39;) |
++---------------------------------------+
+|                                     0 |
++---------------------------------------+
+1 row in set (0.00 sec)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ただし、2038年1月19日3時14分7秒(UTC)以降を渡すと0になってしまう。
+これはドキュメントにも書いてある通り範囲外だから。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;mysql&amp;gt; select UNIX_TIMESTAMP(&#39;2038-01-19-03-14-07&#39;);
++---------------------------------------+
+| UNIX_TIMESTAMP(&#39;2038-01-19-03-14-07&#39;) |
++---------------------------------------+
+|                            2147483647 |
++---------------------------------------+
+1 row in set (0.04 sec)
+
+mysql&amp;gt; select UNIX_TIMESTAMP(&#39;2038-01-19-03-14-08&#39;);
++---------------------------------------+
+| UNIX_TIMESTAMP(&#39;2038-01-19-03-14-08&#39;) |
++---------------------------------------+
+|                                     0 |
++---------------------------------------+
+1 row in set (0.00 sec)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;では、この境目は何かというと、32ビットで表せる符号付数値の最大値だ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; 2 ** 31
+=&amp;gt; 2147483648
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これはMySQLに限らず、&lt;a href=&#34;https://ja.wikipedia.org/wiki/2038%E5%B9%B4%E5%95%8F%E9%A1%8C&#34;&gt;2038年問題&lt;/a&gt;と呼ばれているもので、
+DATETIME型は&amp;rsquo;9999-12-31&amp;rsquo;までサポートしているのでこれ以降も表すことはできるが、&lt;code&gt;UNIX_TIMESTAMP&lt;/code&gt;しても正しい値は得られなくなる。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>TensorFlow チュートリアルまで</title>
+          <link>http://sambaiz.net/article/3/</link>
+          <pubDate>Sun, 03 Jul 2016 23:37:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/3/</guid>
+          <description>
+
+&lt;p&gt;Googleが公開した人工知能ライブラリTensorFlowを使ってみる。
+&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/get_started/os_setup.html&#34;&gt;セットアップ&lt;/a&gt;方法はいくつか提供されているが、Dockerで動かすことにした。
+Jupyter Notebookが立ち上がるのですぐに試せて良い。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run -it -p 8888:8888 gcr.io/tensorflow/tensorflow
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://localhost:8888/tree&#34;&gt;http://localhost:8888/tree&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;公式のチュートリアルをまとめながら進めてみる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/tutorials/mnist/beginners/index.html&#34;&gt;MNIST For ML Beginners&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;the-mnist-data&#34;&gt;The MNIST Data&lt;/h3&gt;
+
+&lt;p&gt;MNISTというのは0~9の書き数字の画像のデータセットのことで、これらを正しく分類するのが目的。&lt;/p&gt;
+
+&lt;p&gt;それぞれの画像は一律28*28=784ピクセルで、それぞれのピクセルは0と1の間の数値(強さ)で表されている。
+今回はこれの縦横を取っ払って784次元のベクトルとして扱っている。&lt;/p&gt;
+
+&lt;p&gt;したがって、学習用の画像データは[55000, 784]のtensor(n次元の配列)で表される。
+55000というのが画像の数で、784というのがそれぞれの画像の次元を意味している。&lt;/p&gt;
+
+&lt;p&gt;それぞれの画像に対応した数字のラベルは[55000, 10]で表される。
+10というのは、0~9それぞれに対応した次元のうち、一つだけ1で、それ以外が0という風に使われる。これをone-hot vectorという。&lt;/p&gt;
+
+&lt;h3 id=&#34;softmax-regressions&#34;&gt;Softmax Regressions&lt;/h3&gt;
+
+&lt;p&gt;Softmaxはいくつかの異なるもの(今回でいうと数字)に確率を割り当てる。&lt;/p&gt;
+
+&lt;p&gt;画像が特定のクラス(0~9)に属するかどうか計算するために、ピクセルの強さに重みを付けた合計を計算する。
+もし、そのピクセルがそのクラスに属さない根拠になるなら負の重みがかかり、属する根拠になるなら、正の重みがかかるようにする。
+また合計にさらに入力と無関係なクラスごとに異なるバイアスを足す。&lt;/p&gt;
+
+&lt;p&gt;全てのクラスで計算した値をsoftmax関数に入れ、それぞれ確率に変換する。この確率の和は1になるようになっている。&lt;/p&gt;
+
+&lt;h3 id=&#34;implementing-the-regression&#34;&gt;Implementing the Regression&lt;/h3&gt;
+
+&lt;p&gt;Pythonでは行列の積のような重い処理をするとき、NumPyのようなライブラリを使ってPythonの外で行うが、
+外からPythonに戻るときにオーバーヘッドが発生してしまう。
+TensorFlowでも重い処理を外で行うが、オーバーヘッドを避けるために、
+単体の重い処理をPythonから独立して実行する代わりに、Pythonの外側で実行される関連した処理のグラフを記述させる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import tensorflow as tf
+x = tf.placeholder(tf.float32, [None, 784])
+W = tf.Variable(tf.zeros([784, 10]))
+b = tf.Variable(tf.zeros([10]))
+y = tf.nn.softmax(tf.matmul(x, W) + b)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;tf.placeholder&lt;/code&gt;は実行時に与えられる値で、今回が画像データ。
+W(重み)とb(バイアス)は学習する変数。
+&lt;code&gt;tf.matmul(x, W) + b&lt;/code&gt;の部分が重みを付けた合計にバイアスを足したものに対応している。
+matmulはmatrix multiple、つまり行列の積。&lt;/p&gt;
+
+&lt;h3 id=&#34;training&#34;&gt;Training&lt;/h3&gt;
+
+&lt;p&gt;機械学習では一般的に、悪いモデルとは何か定義し、それを最小化しようとする。
+一般的で、良い誤差関数として&amp;rdquo;cross-entropy&amp;rdquo;というものがある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;y_ = tf.placeholder(tf.float32, [None, 10])
+cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y), reduction_indices=[1]))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;y_が正しい答えで、これとy(softmaxで求めた各数字の確率)の対数の積をを次元ごとにとり、それらの和を求めて-1を掛けている。
+&lt;code&gt;reduction_indices=[1]&lt;/code&gt;というのは[784, 10]の10の方を指している模様。
+全ての学習データにおいてこれを求め、さらにそれらの平均をとり、これをcross_entropyとしている。
+この値はy_とyが離れていれば大きくなるので、なるべく小さくすることが良いモデルにするということになる。&lt;/p&gt;
+
+&lt;p&gt;ではどうやってこの値を小さくするか、TensorFlowは関係する計算のグラフを持っているので、自動的に&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%83%90%E3%83%83%E3%82%AF%E3%83%97%E3%83%AD%E3%83%91%E3%82%B2%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3&#34;&gt;バックプロパゲーション&lt;/a&gt;を使って、どの変数がcross_entropyに影響しているか効率的に特定することができる。&lt;/p&gt;
+
+&lt;p&gt;以下のようにGradientDescent(勾配降下)Optimizerで0.5のleartning rateでcross_entropyが小さくなるように、変数を少しずつ変えていく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを使って学習していく。学習とテストに使うデータは&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r0.9/tensorflow/examples/tutorials/mnist/input_data.py&#34;&gt;これ&lt;/a&gt;
+と&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from tensorflow.examples.tutorials.mnist import input_data
+mnist = input_data.read_data_sets(&amp;quot;MNIST_data/&amp;quot;, one_hot=True)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;を実行すれば用意できるようになっている。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;tf.Session()&lt;/code&gt;と&lt;code&gt;tf.run()&lt;/code&gt;はSessionを取得し、モデルを実行するもの。
+変数は&lt;code&gt;tf.initialize_all_variables()&lt;/code&gt;で初期化する必要がある。
+batch_xsが画像のピクセルデータで、batch_ysが正しい答え。
+&lt;code&gt;sess.run()&lt;/code&gt;の&lt;code&gt;feed_dict={x: batch_xs, y_: batch_ys}&lt;/code&gt;はそれぞれ対応するplaceholderのところに与えられる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;init = tf.initialize_all_variables()
+sess = tf.Session()
+sess.run(init)
+for i in range(1000):
+  batch_xs, batch_ys = mnist.train.next_batch(100)
+  sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このような小さいランダムなデータを使うのはstochastic(確率的) trainingと呼ばれていて、
+今回はstochastic gradient descent。
+理想的には全てのデータを全ての訓練のステップで使いたいが、コストがかかるので代わりに毎回異なるサブセットを使うことで
+同じ効果を得ている。&lt;/p&gt;
+
+&lt;h3 id=&#34;evaluating-our-model&#34;&gt;Evaluating Our Model&lt;/h3&gt;
+
+&lt;p&gt;モデルがどのくらい良いかを測る。&lt;/p&gt;
+
+&lt;p&gt;以下のcorrect_predictionでは&lt;code&gt;tf.argmax&lt;/code&gt;で最も数値の大きい、つまり確率の高いラベルを取得し、これが正解のものと一致するかというのを
+画像データごとに比較している。
+結果、[True, False, True, True]であるなら、これを[1, 0, 1, 1]にキャストし、平均を取ったものがaccuracy、正解率となる。
+そしてこの値をテスト用のデータで出力している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
+accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+print(sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
+&amp;gt; 0.9206
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この簡単なモデルだと正解率は92%になったが、実はこれは非常に悪いとのこと。
+モデルにもう少し変更を加えるだけで97%になったりするらしい。&lt;/p&gt;
+
+&lt;p&gt;続き: &lt;a href=&#34;http://sambaiz.net/article/6&#34;&gt;TensorFlow チュートリアル2(Deep MNIST for Experts)&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Reactで作ったページにTwitterCardsとOGPのメタデータを埋める</title>
+          <link>http://sambaiz.net/article/2/</link>
+          <pubDate>Sat, 02 Jul 2016 13:23:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/2/</guid>
+          <description>&lt;p&gt;せっかくページを作ったので、SNSにシェアするときに見栄えをよくしようと思った。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://d2wgaf7ubdj1mv.cloudfront.net/2_ogp.jpg&#34; alt=&#34;Facebookの例&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Twitter CardsやOGPのmetaタグを埋めるとTwitterやFacebookにURLを貼ったときに上のように表示されるようになる(上はFacebookの例)。そこで、&lt;a href=&#34;https://github.com/nfl/react-helmet&#34;&gt;react-helmet&lt;/a&gt;でこんな感じで動的に埋め込んだんだけど読んでくれない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;Helmet title={&#39;sambaiz.net&#39;}
+        meta={[
+            {&amp;quot;name&amp;quot;: &amp;quot;twitter:card&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;summary&amp;quot;},
+            {&amp;quot;name&amp;quot;: &amp;quot;twitter:site&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;@sambaiz&amp;quot;},
+            {&amp;quot;name&amp;quot;: &amp;quot;twitter:title&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;sambaiz.net&amp;quot;},
+            {&amp;quot;name&amp;quot;: &amp;quot;twitter:description&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;僕のホームページ&amp;quot;},
+            {&amp;quot;property&amp;quot;: &amp;quot;og:title&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;sambaiz.net&amp;quot;},
+            {&amp;quot;property&amp;quot;: &amp;quot;og:type&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;blog&amp;quot;},
+            {&amp;quot;property&amp;quot;: &amp;quot;og:image&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;http://d2wgaf7ubdj1mv.cloudfront.net/my.jpg&amp;quot;},
+            {&amp;quot;property&amp;quot;: &amp;quot;og:url&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;http://sambaiz.net&amp;quot;}
+        ]}
+/&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Googleのクローラーのように&lt;a href=&#34;https://webmasters.googleblog.com/2014/05/understanding-web-pages-better.html&#34;&gt;Javascriptを解釈してくれる&lt;/a&gt;
+と思ってた。残念。&lt;/p&gt;
+
+&lt;p&gt;しょうがないのでここだけサーバーサイドレンダリングすることにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;
+
+import express from &#39;express&#39;
+import path from &#39;path&#39;
+import compression from &#39;compression&#39;
+
+require(&#39;isomorphic-fetch&#39;);
+
+var app = express()
+
+app.use(compression())
+
+// serve our static stuff
+app.use(express.static(path.join(__dirname, &#39;..&#39;, &#39;..&#39;, &#39;public&#39;)))
+
+app.get(&#39;/&#39;, function (req, res) {
+  res.status(200).send(page(&#39;http://sambaiz.net&#39;, &#39;sambaiz.net&#39;, &#39;僕のホームページ&#39;));
+})
+
+app.get(&#39;/article/:articleId&#39;, function (req, res) {
+  fetch(`https://zx9h12n6jb.execute-api.ap-northeast-1.amazonaws.com/api/articles/${req.params.articleId}`).then(function(response){
+    if (response.status == 404) {
+      res.status(404).send(&#39;not found&#39;)
+    }else if(response.status != 200){
+      res.status(response.status).send(`API error ${response.status}`)
+    }else{
+      return response.json();
+    }
+  }).then(function(json) {
+    if(json){
+      res.status(200).send(page(`http://sambaiz.net${req.url}`, json.title, &#39;書いた&#39;));
+    }
+  })
+})
+
+function page(fullUrl, title, description)  {
+  return `
+    &amp;lt;!doctype html&amp;gt;
+    &amp;lt;html&amp;gt;
+      &amp;lt;head&amp;gt;
+        &amp;lt;title&amp;gt;${title}&amp;lt;/title&amp;gt;
+        &amp;lt;meta charset=&amp;quot;utf-8&amp;quot;&amp;gt;
+        &amp;lt;link rel=&amp;quot;stylesheet&amp;quot; href=&amp;quot;//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css&amp;quot;&amp;gt;
+        &amp;lt;meta name=&amp;quot;twitter:card&amp;quot; content=&amp;quot;summary&amp;quot;&amp;gt;
+        &amp;lt;meta name=&amp;quot;twitter:site&amp;quot; content=&amp;quot;@sambaiz&amp;quot;&amp;gt;
+        &amp;lt;meta name=&amp;quot;twitter:title&amp;quot; content=&amp;quot;${title}&amp;quot;&amp;gt;
+        &amp;lt;meta name=&amp;quot;twitter:description&amp;quot; content=&amp;quot;${description}&amp;quot;&amp;gt;
+        &amp;lt;meta property=&amp;quot;og:title&amp;quot; content=&amp;quot;${title}&amp;quot;&amp;gt;
+        &amp;lt;meta property=&amp;quot;og:type&amp;quot; content=&amp;quot;blog&amp;quot;&amp;gt;
+        &amp;lt;meta property=&amp;quot;og:image&amp;quot; content=&amp;quot;http://d2wgaf7ubdj1mv.cloudfront.net/my.jpg&amp;quot;&amp;gt;
+        &amp;lt;meta property=&amp;quot;og:url&amp;quot; content=&amp;quot;${fullUrl}&amp;quot;&amp;gt;
+      &amp;lt;/head&amp;gt;
+      &amp;lt;body&amp;gt;
+        &amp;lt;div id=&amp;quot;app&amp;quot;&amp;gt;&amp;lt;/div&amp;gt;
+        &amp;lt;script src=&amp;quot;/bundle.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+      &amp;lt;/body&amp;gt;
+    &amp;lt;/html&amp;gt;
+    `
+}
+
+var PORT = process.env.PORT || 8080
+
+app.listen(PORT, function() {
+  console.log(&#39;Production Express server running at localhost:&#39; + PORT)
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんと読まれているかは以下のページで確認できる。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://cards-dev.twitter.com/validator&#34;&gt;Card validator&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://developers.facebook.com/tools/debug/&#34;&gt;Sharing Debugger&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;が、&lt;a href=&#34;http://sambaiz.net/article/5&#34;&gt;結局全部サーバーサイドレンダリングすることになった。&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ホームページ作った</title>
+          <link>http://sambaiz.net/article/1/</link>
+          <pubDate>Wed, 29 Jun 2016 23:43:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/1/</guid>
+          <description>&lt;p&gt;最近表に出るものを作っていなかったので、ホームページを作ってみた。&lt;/p&gt;
+
+&lt;p&gt;表はReact/Reduxで、裏側はAWSのLambdaでサーバーレスに作ってある。
+コードは&lt;a href=&#34;https://github.com/sambaiz/sambaiz.net&#34;&gt;github&lt;/a&gt;に公開してみた。&lt;/p&gt;
+
+&lt;p&gt;これを期になるべくアウトプットしていこうと思う。大抵三日坊主なのだけれど。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

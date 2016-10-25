@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/mysql/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-07-24 22:12:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>MySQLはそのままだと大文字小文字を区別しない</title>
+          <link>http://sambaiz.net/article/11/</link>
+          <pubDate>Sun, 24 Jul 2016 22:12:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/11/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;MySQL 5.6
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;CREATE TABLE sample (
+  id SERIAL,
+  name VARCHAR(30)
+) ENGINE=InnoDB CHARACTER SET utf8mb4;
+
+INSERT INTO sample (name) VALUES (&#39;tom&#39;),(&#39;Tom&#39;),(&#39;TOM&#39;);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このテーブルを&amp;rdquo;tom&amp;rdquo;で絞り込むとこうなる。大文字小文字を区別していない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SELECT * FROM sample2 WHERE name = &#39;tom&#39;;
++----+------+
+| id | name |
++----+------+
+|  1 | tom  |
+|  2 | Tom  |
+|  3 | TOM  |
++----+------+
+3 rows in set (0.01 sec)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/case-sensitivity.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: B.5.5.1 文字列検索での大文字/小文字の区別&lt;/a&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;単純な比較操作 (&amp;gt;=、&amp;gt;、=、&amp;lt;、&amp;lt;=、ソート、およびグループ化) は、各文字の「ソート値」に基づきます。
+同じソート値を持つ文字は同じ文字として扱われます。たとえば、「e」 と 「é」 が対象の照合順序で同じソート値を持つ場合は、等しいと判断されます。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://dev.mysql.com/doc/refman/5.6/ja/charset-mysql.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: 10.1.2 MySQL での文字セットと照合順序&lt;/a&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;照合順序名には、関連する文字セットの名前で始まる、通常は言語名を含む、
+_ci (大文字と小文字を区別しない)、_cs (大文字と小文字を区別する)、_bin (バイナリ)
+のいずれかで終わる、という規則が適用されます。&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;ciはcase-insensitive、csというのはcase-sensitiveの略だ。
+照合順序(Collation)を&lt;code&gt;SHOW FULL COLUMNS FROM sample&lt;/code&gt;で確認したところ、確かに区別しない&lt;code&gt;utf8mb4_general_ci&lt;/code&gt;となっていた。
+これは、文字コード&lt;code&gt;utf8mb4&lt;/code&gt;のデフォルトの照合順序だ。(&lt;code&gt;SHOW CHARACTER SET&lt;/code&gt;で確認できる)&lt;/p&gt;
+
+&lt;p&gt;それなら&lt;code&gt;utf8mb4_general_cs&lt;/code&gt;というのがあるんだなと、&lt;code&gt;SHOW COLLATION LIKE &#39;utf8mb4%&#39;&lt;/code&gt;で確認してみたが、
+そんなものはなかった。どうやら区別させるためには&lt;code&gt;utf8mb4_bin&lt;/code&gt;を使うのが正解みたいで、これをCOLLATEで指定してやるか、
+カラム単位でBINARYとすると、照合順序が&lt;code&gt;utf8mb4_bin&lt;/code&gt;となり、期待通りの結果が得られる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CREATE TABLE sample2 (
+  id SERIAL,
+  name VARCHAR(30)
+) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+
+CREATE TABLE sample3 (
+  id SERIAL,
+  name VARCHAR(30) BINARY
+) ENGINE=InnoDB CHARACTER SET utf8mb4;
+
+ALTER TABLE sample MODIFY name VARCHAR(30) BINARY;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SELECT * FROM sample2 WHERE name = &#39;tom&#39;;
++----+------+
+| id | name |
++----+------+
+|  1 | tom  |
++----+------+
+1 row in set (0.01 sec)
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>MySQLのUNIX_TIMESTAMPにある程度未来の日付を渡すと0になる</title>
+          <link>http://sambaiz.net/article/4/</link>
+          <pubDate>Mon, 04 Jul 2016 19:49:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/4/</guid>
+          <description>&lt;p&gt;以下、MySQL5.6で遭遇した。&lt;/p&gt;
+
+&lt;p&gt;MySQLの&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/date-and-time-functions.html#function_unix-timestamp&#34;&gt;UNIX_TIMESTAMP&lt;/a&gt;は
+DATETIME文字列などを引数にとり、UNIXタイムスタンプ(1970-01-01 00:00:00 UTCを起点とした経過秒数)を返す関数だ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SET SESSION time_zone = &#39;UTC&#39;;
+mysql&amp;gt; select UNIX_TIMESTAMP(&#39;1970-01-01 00:00:00&#39;);
++---------------------------------------+
+| UNIX_TIMESTAMP(&#39;1970-01-01 00:00:00&#39;) |
++---------------------------------------+
+|                                     0 |
++---------------------------------------+
+1 row in set (0.00 sec)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ただし、2038年1月19日3時14分7秒(UTC)以降を渡すと0になってしまう。
+これはドキュメントにも書いてある通り範囲外だから。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;mysql&amp;gt; select UNIX_TIMESTAMP(&#39;2038-01-19-03-14-07&#39;);
++---------------------------------------+
+| UNIX_TIMESTAMP(&#39;2038-01-19-03-14-07&#39;) |
++---------------------------------------+
+|                            2147483647 |
++---------------------------------------+
+1 row in set (0.04 sec)
+
+mysql&amp;gt; select UNIX_TIMESTAMP(&#39;2038-01-19-03-14-08&#39;);
++---------------------------------------+
+| UNIX_TIMESTAMP(&#39;2038-01-19-03-14-08&#39;) |
++---------------------------------------+
+|                                     0 |
++---------------------------------------+
+1 row in set (0.00 sec)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;では、この境目は何かというと、32ビットで表せる符号付数値の最大値だ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; 2 ** 31
+=&amp;gt; 2147483648
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これはMySQLに限らず、&lt;a href=&#34;https://ja.wikipedia.org/wiki/2038%E5%B9%B4%E5%95%8F%E9%A1%8C&#34;&gt;2038年問題&lt;/a&gt;と呼ばれているもので、
+DATETIME型は&amp;rsquo;9999-12-31&amp;rsquo;までサポートしているのでこれ以降も表すことはできるが、&lt;code&gt;UNIX_TIMESTAMP&lt;/code&gt;しても正しい値は得られなくなる。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

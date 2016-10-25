@@ -1,0 +1,891 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/ble/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-10-23 01:29:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>iOS端末をBLEのPeripheralにする</title>
+          <link>http://sambaiz.net/article/26/</link>
+          <pubDate>Sun, 23 Oct 2016 01:29:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/26/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://developer.apple.com/jp/documentation/CoreBluetoothPG.pdf&#34;&gt;CoreBluetoothプログラミングガイド&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;流れ&#34;&gt;流れ&lt;/h2&gt;
+
+&lt;p&gt;まず、CoreBluetooth.frameworkを追加する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import CoreBluetooth
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CBPeripheralManagerを生成。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;stateが変化したらdelegateメソッドが呼ばれるので&lt;code&gt;.poweredOn&lt;/code&gt;であることを確認できれば
+Managerの準備は完了。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager){        
+    switch (peripheral.state){
+    case .poweredOn:
+        print(&amp;quot;PeripheralManager state is ok&amp;quot;)
+        ready = true
+
+    default:
+        print(&amp;quot;PeripheralManager state is ng:&amp;quot;, peripheral.state)
+        ready = false
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicを作成。&lt;code&gt;CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify)&lt;/code&gt;で、
+Centralが読みにくることも、通知を受け取ることもできるようにし、&lt;code&gt;CBAttributePermissions.readable&lt;/code&gt;でreadのみ許可する。
+このvalueをnilにしておかないと、キャッシュされあとで変更できなくなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;characteristic = CBMutableCharacteristic(
+    type: CHARACTERISTIC_UUID,
+    properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+    value:nil,
+    permissions:CBAttributePermissions.readable)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このCharacteristicのServiceを作成し、Managerに登録する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;let service = CBMutableService(type: SERVICE_UUID, primary: true)
+service.characteristics = [characteristic]
+peripheralManager!.add(service)
+ready = true         
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?){
+    if(error != nil){
+        print(&amp;quot;Add Service error:&amp;quot;, error)
+    }else{
+        print(&amp;quot;Add Service ok&amp;quot;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ServiceをAdvertiseする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheral.startAdvertising([
+    CBAdvertisementDataLocalNameKey: LOCAL_NAME,
+    CBAdvertisementDataServiceUUIDsKey: [SERVICE_UUID]
+    ])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?){
+    if(error != nil){
+        print(&amp;quot;Start Advertising error:&amp;quot;, error)
+    }else{
+        print(&amp;quot;Start Advertising ok&amp;quot;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;通知要求してきたCentralに向けて通知する。&lt;code&gt;onSubscribedCentrals: nil&lt;/code&gt;で全てのCentralに送る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheralManager!.updateValue(d, for: characteristic, onSubscribedCentrals: nil)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;読みにきたときのdelegateメソッド。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest){
+    if (request.characteristic.uuid.isEqual(self.characteristic.uuid)) {
+        if let value = self.characteristic.value{
+            if (request.offset &amp;gt; value.count) {
+                peripheral.respond(to: request, withResult: CBATTError.invalidOffset)
+                print(&amp;quot;Read fail: invalid offset&amp;quot;)
+                return;
+            }
+        }
+
+        request.value = self.characteristic.value?.subdata(
+            in: Range(uncheckedBounds: (request.offset, (self.characteristic.value?.count)! - request.offset))
+        )
+        peripheral.respond(to: request, withResult: CBATTError.success)
+        print(&amp;quot;Read success&amp;quot;)
+    }else{
+        print(&amp;quot;Read fail: wrong characteristic uuid:&amp;quot;, request.characteristic.uuid)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;全体&#34;&gt;全体&lt;/h2&gt;
+
+&lt;p&gt;エラーハンドリングは適当だけど、とりあえず動くものができた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import CoreBluetooth
+
+class BLEPeripheral : NSObject, CBPeripheralManagerDelegate {
+
+    let CHARACTERISTIC_ROTATION_X_UUID = CBUUID(string:&amp;quot;5F83E23F-BCA1-42B3-B6F2-EA82BE46A93D&amp;quot;)
+    let CHARACTERISTIC_ROTATION_Y_UUID = CBUUID(string:&amp;quot;61B21612-86E7-4EDA-8F26-9FD9FB66739D&amp;quot;)
+    let CHARACTERISTIC_ROTATION_Z_UUID = CBUUID(string:&amp;quot;2481735C-0E12-4428-9E13-B7D987404802&amp;quot;)
+    let SERVICE_UUID = CBUUID(string:&amp;quot;BF9CB85F-620C-4A67-BDD2-1A64213F74CA&amp;quot;)
+    let LOCAL_NAME = &amp;quot;clock&amp;quot;
+
+    private var peripheralManager : CBPeripheralManager?
+    private var characteristicX: CBMutableCharacteristic
+    private var characteristicY: CBMutableCharacteristic
+    private var characteristicZ: CBMutableCharacteristic
+    private var ready = false
+
+    public override init(){
+        characteristicX = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_X_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        characteristicY = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_Y_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        characteristicZ = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_Z_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        super.init()
+
+        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+    }
+
+    public func updateRotationX(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicX.value = d
+                peripheralManager!.updateValue(d, for: characteristicX, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+    public func updateRotationY(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicX.value = d
+                peripheralManager!.updateValue(d, for: characteristicY, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+    public func updateRotationZ(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicZ.value = d
+                peripheralManager!.updateValue(d, for: characteristicZ, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+
+    /*
+     CBPeripheralManagerDelegate
+    */
+
+    public func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager){        
+        switch (peripheral.state){
+        case .poweredOn:
+            print(&amp;quot;PeripheralManager state is ok&amp;quot;)
+
+            let service = CBMutableService(type: SERVICE_UUID, primary: true)
+            service.characteristics = [characteristicX, characteristicY, characteristicZ]
+            peripheralManager!.add(service)
+            ready = true
+
+        default:
+            print(&amp;quot;PeripheralManager state is ng:&amp;quot;, peripheral.state)
+            ready = false
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?){
+        if(error != nil){
+            print(&amp;quot;Add Service error:&amp;quot;, error)
+        }else{
+            print(&amp;quot;Add Service ok&amp;quot;)
+            peripheral.startAdvertising([
+                CBAdvertisementDataLocalNameKey: LOCAL_NAME,
+                CBAdvertisementDataServiceUUIDsKey: [SERVICE_UUID]
+                ])
+        }
+    }
+
+    public func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?){
+        if(error != nil){
+            print(&amp;quot;Start Advertising error:&amp;quot;, error)
+        }else{
+            print(&amp;quot;Start Advertising ok&amp;quot;)
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest){
+        if (request.characteristic.uuid.isEqual(characteristicX.uuid)) {
+            if let value = characteristicX.value{
+                if (request.offset &amp;gt; value.count) {
+                    peripheral.respond(to: request, withResult: CBATTError.invalidOffset)
+                    print(&amp;quot;Read fail: invalid offset&amp;quot;)
+                    return;
+                }
+            }
+
+            request.value = characteristicX.value?.subdata(
+                in: Range(uncheckedBounds: (request.offset, (characteristicX.value?.count)! - request.offset))
+            )
+            peripheral.respond(to: request, withResult: CBATTError.success)
+            print(&amp;quot;Read success&amp;quot;)
+        }else{
+            print(&amp;quot;Read fail: wrong characteristic uuid:&amp;quot;, request.characteristic.uuid)
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic){
+        print(&amp;quot;Subscribe to&amp;quot;, characteristic.uuid)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;現在の時間を1秒ごとに更新して通知がくることを確認した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(self.update), userInfo: nil, repeats: true)
+timer!.fire()
+
+public func update(){
+    let now = String(format: &amp;quot;%.0f&amp;quot;, arguments: [Date().timeIntervalSince1970])
+    peripheral.updateCharacteristic(now.data(using: String.Encoding.utf8))
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>android-BluetoothLeGattを読む</title>
+          <link>http://sambaiz.net/article/25/</link>
+          <pubDate>Fri, 21 Oct 2016 14:10:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/25/</guid>
+          <description>
+
+&lt;p&gt;BLEのサンプルコード。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/googlesamples/android-BluetoothLeGatt&#34;&gt;https://github.com/googlesamples/android-BluetoothLeGatt&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;devicescanactivity&#34;&gt;DeviceScanActivity&lt;/h2&gt;
+
+&lt;p&gt;BLEをサポートしているかチェックする。
+&lt;a href=&#34;http://sambaiz.net/article/23&#34;&gt;BluetoothChat&lt;/a&gt;ではBluetoothAdapterを取得するのに
+&lt;code&gt;BluetoothAdapter.getDefaultAdapter()&lt;/code&gt;のようにしていたが、
+BLEをサポートしているような新しいバージョンでは、BluetoothManagerの&lt;code&gt;getAdapter()&lt;/code&gt;を使うらしい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    getActionBar().setTitle(R.string.title_devices);
+    mHandler = new Handler();
+
+    // Use this check to determine whether BLE is supported on the device.  Then you can
+    // selectively disable BLE-related features.
+    if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+        Toast.makeText(this, R.string.ble_not_supported, Toast.LENGTH_SHORT).show();
+        finish();
+    }
+
+    // Initializes a Bluetooth adapter.  For API level 18 and above, get a reference to
+    // BluetoothAdapter through BluetoothManager.
+    final BluetoothManager bluetoothManager =
+            (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+    mBluetoothAdapter = bluetoothManager.getAdapter();
+
+    // Checks if Bluetooth is supported on the device.
+    if (mBluetoothAdapter == null) {
+        Toast.makeText(this, R.string.error_bluetooth_not_supported, Toast.LENGTH_SHORT).show();
+        finish();
+        return;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BluetoothChatと同様にBluetoothを有効にさせるのと、scanの開始。
+&lt;code&gt;mBluetoothAdapter.startLeScan(mLeScanCallback)&lt;/code&gt;で
+見つかったらcallbackの&lt;code&gt;onLeScan&lt;/code&gt;が呼ばれるのでデバイスリストに追加していく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onResume() {
+    super.onResume();
+
+    // Ensures Bluetooth is enabled on the device.  If Bluetooth is not currently enabled,
+    // fire an intent to display a dialog asking the user to grant permission to enable it.
+    if (!mBluetoothAdapter.isEnabled()) {
+        if (!mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+    }
+
+    // Initializes list view adapter.
+    mLeDeviceListAdapter = new LeDeviceListAdapter();
+    setListAdapter(mLeDeviceListAdapter);
+    scanLeDevice(true);
+}
+
+private void scanLeDevice(final boolean enable) {
+    if (enable) {
+        // Stops scanning after a pre-defined scan period.
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mScanning = false;
+                mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                invalidateOptionsMenu();
+            }
+        }, SCAN_PERIOD);
+
+        mScanning = true;
+        mBluetoothAdapter.startLeScan(mLeScanCallback);
+    } else {
+        mScanning = false;
+        mBluetoothAdapter.stopLeScan(mLeScanCallback);
+    }
+    invalidateOptionsMenu();
+}
+
+private BluetoothAdapter.LeScanCallback mLeScanCallback =
+            new BluetoothAdapter.LeScanCallback() {
+    @Override
+    public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mLeDeviceListAdapter.addDevice(device);
+                mLeDeviceListAdapter.notifyDataSetChanged();
+            }
+        });
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pause時はscanを止め、Listをクリアする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onPause() {
+    super.onPause();
+    scanLeDevice(false);
+    mLeDeviceListAdapter.clear();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;リストが選択されたら、scanを止め、そのデバイスの情報を渡してDeviceControlActivityを始める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onListItemClick(ListView l, View v, int position, long id) {
+    final BluetoothDevice device = mLeDeviceListAdapter.getDevice(position);
+    if (device == null) return;
+    final Intent intent = new Intent(this, DeviceControlActivity.class);
+    intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_NAME, device.getName());
+    intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_ADDRESS, device.getAddress());
+    if (mScanning) {
+        mBluetoothAdapter.stopLeScan(mLeScanCallback);
+        mScanning = false;
+    }
+    startActivity(intent);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;devicecontrolactivity&#34;&gt;DeviceControlActivity&lt;/h2&gt;
+
+&lt;p&gt;bindServiceでBluetoothLeServiceにServiceConnectionをバインドする。
+Serviceと接続したらServiceConnectionの&lt;code&gt;onServiceConnected&lt;/code&gt;が呼ばれるので、
+LocalBinderの&lt;code&gt;getService&lt;/code&gt;で取得し、初期化して対象のデバイスにconnectする。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.android.com/guide/components/services.html?hl=ja&#34;&gt;Service&lt;/a&gt;は、
+開始したコンポーネントや、ユーザーの操作に関係なく、バックグラウンドで動く。
+サーバー/クライアントでいうサーバーで、複数のクライアントが同時にバインドでき、
+その場合バインドしているクライアントが存在しなくなったら破棄される。
+ホストプロセスのメインスレッドで実行される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.gatt_services_characteristics);
+
+    final Intent intent = getIntent();
+    mDeviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME);
+    mDeviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS);
+
+    // Sets up UI references.
+    ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
+    mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
+    mGattServicesList.setOnChildClickListener(servicesListClickListner);
+    mConnectionState = (TextView) findViewById(R.id.connection_state);
+    mDataField = (TextView) findViewById(R.id.data_value);
+
+    getActionBar().setTitle(mDeviceName);
+    getActionBar().setDisplayHomeAsUpEnabled(true);
+    Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
+    bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
+}
+
+private final ServiceConnection mServiceConnection = new ServiceConnection() {
+
+    @Override
+    public void onServiceConnected(ComponentName componentName, IBinder service) {
+        mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
+        if (!mBluetoothLeService.initialize()) {
+            Log.e(TAG, &amp;quot;Unable to initialize Bluetooth&amp;quot;);
+            finish();
+        }
+        // Automatically connects to the device upon successful start-up initialization.
+        mBluetoothLeService.connect(mDeviceAddress);
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName componentName) {
+        mBluetoothLeService = null;
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BroadcastReceiverを登録して、対象デバイスに繋ぎに行く。
+GATTのService(AndroidのServiceとは違うもの)やCharacteristicが見つかったら表示する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.bluetooth.com/specifications/gatt&#34;&gt;GATT(Generic Attribute Profile)&lt;/a&gt;
+というのは、BLEで通信するときに使う階層化されたデータ構造の定義。
+ProfileにはいくつかのServiceが含まれ、ServiceにはいくつかのCharacteristic、または他のServiceが含まれる。
+Characteristicというのが値。ServiceやCharacteristicはUUIDで識別することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onResume() {
+    super.onResume();
+    registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
+    if (mBluetoothLeService != null) {
+        final boolean result = mBluetoothLeService.connect(mDeviceAddress);
+        Log.d(TAG, &amp;quot;Connect request result=&amp;quot; + result);
+    }
+}
+
+private final BroadcastReceiver mGattUpdateReceiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        final String action = intent.getAction();
+        if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
+            mConnected = true;
+            updateConnectionState(R.string.connected);
+            invalidateOptionsMenu();
+        } else if (BluetoothLeService.ACTION_GATT_DISCONNECTED.equals(action)) {
+            mConnected = false;
+            updateConnectionState(R.string.disconnected);
+            invalidateOptionsMenu();
+            clearUI();
+        } else if (BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
+            // Show all the supported services and characteristics on the user interface.
+            displayGattServices(mBluetoothLeService.getSupportedGattServices());
+        } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
+            displayData(intent.getStringExtra(BluetoothLeService.EXTRA_DATA));
+        }
+    }
+};
+
+private static IntentFilter makeGattUpdateIntentFilter() {
+    final IntentFilter intentFilter = new IntentFilter();
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
+    intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
+    return intentFilter;
+}
+
+private void displayGattServices(List&amp;lt;BluetoothGattService&amp;gt; gattServices) {
+    if (gattServices == null) return;
+    String uuid = null;
+    String unknownServiceString = getResources().getString(R.string.unknown_service);
+    String unknownCharaString = getResources().getString(R.string.unknown_characteristic);
+    ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt; gattServiceData = new ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;();
+    ArrayList&amp;lt;ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;&amp;gt; gattCharacteristicData
+            = new ArrayList&amp;lt;ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;&amp;gt;();
+    mGattCharacteristics = new ArrayList&amp;lt;ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt;&amp;gt;();
+
+    // Loops through available GATT Services.
+    for (BluetoothGattService gattService : gattServices) {
+        HashMap&amp;lt;String, String&amp;gt; currentServiceData = new HashMap&amp;lt;String, String&amp;gt;();
+        uuid = gattService.getUuid().toString();
+        currentServiceData.put(
+                LIST_NAME, SampleGattAttributes.lookup(uuid, unknownServiceString));
+        currentServiceData.put(LIST_UUID, uuid);
+        gattServiceData.add(currentServiceData);
+
+        ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt; gattCharacteristicGroupData =
+                new ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;();
+        List&amp;lt;BluetoothGattCharacteristic&amp;gt; gattCharacteristics =
+                gattService.getCharacteristics();
+        ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt; charas =
+                new ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt;();
+
+        // Loops through available Characteristics.
+        for (BluetoothGattCharacteristic gattCharacteristic : gattCharacteristics) {
+            charas.add(gattCharacteristic);
+            HashMap&amp;lt;String, String&amp;gt; currentCharaData = new HashMap&amp;lt;String, String&amp;gt;();
+            uuid = gattCharacteristic.getUuid().toString();
+            currentCharaData.put(
+                    LIST_NAME, SampleGattAttributes.lookup(uuid, unknownCharaString));
+            currentCharaData.put(LIST_UUID, uuid);
+            gattCharacteristicGroupData.add(currentCharaData);
+        }
+        mGattCharacteristics.add(charas);
+        gattCharacteristicData.add(gattCharacteristicGroupData);
+    }
+
+    SimpleExpandableListAdapter gattServiceAdapter = new SimpleExpandableListAdapter(
+            this,
+            gattServiceData,
+            android.R.layout.simple_expandable_list_item_2,
+            new String[] {LIST_NAME, LIST_UUID},
+            new int[] { android.R.id.text1, android.R.id.text2 },
+            gattCharacteristicData,
+            android.R.layout.simple_expandable_list_item_2,
+            new String[] {LIST_NAME, LIST_UUID},
+            new int[] { android.R.id.text1, android.R.id.text2 }
+    );
+    mGattServicesList.setAdapter(gattServiceAdapter);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;BluetoothGattCharacteristic.PROPERTY_READ&lt;/code&gt;と
+&lt;code&gt;BluetoothGattCharacteristic.PROPERTY_NOTIFY&lt;/code&gt;は
+それぞれCharacteristicが読めることと、値が変化したときにPeripheralから通知が受けられることを表している。&lt;/p&gt;
+
+&lt;p&gt;PeripheralというのはiBeaconのように、Advertising(見つかるようにする)し、接続される方。
+それに対して接続する方をCentralという。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private final ExpandableListView.OnChildClickListener servicesListClickListner =
+  new ExpandableListView.OnChildClickListener() {
+      @Override
+      public boolean onChildClick(ExpandableListView parent, View v, int groupPosition,
+                                  int childPosition, long id) {
+          if (mGattCharacteristics != null) {
+              final BluetoothGattCharacteristic characteristic =
+                      mGattCharacteristics.get(groupPosition).get(childPosition);
+              final int charaProp = characteristic.getProperties();
+              if ((charaProp | BluetoothGattCharacteristic.PROPERTY_READ) &amp;gt; 0) {
+                  // If there is an active notification on a characteristic, clear
+                  // it first so it doesn&#39;t update the data field on the user interface.
+                  if (mNotifyCharacteristic != null) {
+                      mBluetoothLeService.setCharacteristicNotification(
+                              mNotifyCharacteristic, false);
+                      mNotifyCharacteristic = null;
+                  }
+                  mBluetoothLeService.readCharacteristic(characteristic);
+              }
+              if ((charaProp | BluetoothGattCharacteristic.PROPERTY_NOTIFY) &amp;gt; 0) {
+                  mNotifyCharacteristic = characteristic;
+                  mBluetoothLeService.setCharacteristicNotification(
+                          characteristic, true);
+              }
+              return true;
+          }
+          return false;
+      }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BroadcastReceiverを外すのと、サービスのバインドをやめる処理。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onPause() {
+    super.onPause();
+    unregisterReceiver(mGattUpdateReceiver);
+}
+
+@Override
+protected void onDestroy() {
+    super.onDestroy();
+    unbindService(mServiceConnection);
+    mBluetoothLeService = null;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bluetoothleservice&#34;&gt;BluetoothLeService&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.android.com/reference/android/os/Binder.html&#34;&gt;Binder&lt;/a&gt;というのは
+プロセス間通信(IPC; Inter-Process Communication)するためのもの。&lt;/p&gt;
+
+&lt;p&gt;全てのクライアントのバインドが外れると&lt;code&gt;onUnbind&lt;/code&gt;が呼ばれるので、close処理をする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public class LocalBinder extends Binder {
+    BluetoothLeService getService() {
+        return BluetoothLeService.this;
+    }
+}
+
+@Override
+public IBinder onBind(Intent intent) {
+    return mBinder;
+}
+
+@Override
+public boolean onUnbind(Intent intent) {
+    // After using a given device, you should make sure that BluetoothGatt.close() is called
+    // such that resources are cleaned up properly.  In this particular example, close() is
+    // invoked when the UI is disconnected from the Service.
+    close();
+    return super.onUnbind(intent);
+}
+
+private final IBinder mBinder = new LocalBinder();
+
+public void close() {
+    if (mBluetoothGatt == null) {
+        return;
+    }
+    mBluetoothGatt.close();
+    mBluetoothGatt = null;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;初期化処理。BluetoothAdapterを取得する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public boolean initialize() {
+    // For API level 18 and above, get a reference to BluetoothAdapter through
+    // BluetoothManager.
+    if (mBluetoothManager == null) {
+        mBluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        if (mBluetoothManager == null) {
+            Log.e(TAG, &amp;quot;Unable to initialize BluetoothManager.&amp;quot;);
+            return false;
+        }
+    }
+
+    mBluetoothAdapter = mBluetoothManager.getAdapter();
+    if (mBluetoothAdapter == null) {
+        Log.e(TAG, &amp;quot;Unable to obtain a BluetoothAdapter.&amp;quot;);
+        return false;
+    }
+
+    return true;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;既に接続したことがあれば、そのBluetoothGattで再接続し、そうでなければ&lt;code&gt;connectGatt&lt;/code&gt;する。
+callbackでは必要に応じてIntentをブロードキャストする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public boolean connect(final String address) {
+    if (mBluetoothAdapter == null || address == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized or unspecified address.&amp;quot;);
+        return false;
+    }
+
+    // Previously connected device.  Try to reconnect.
+    if (mBluetoothDeviceAddress != null &amp;amp;&amp;amp; address.equals(mBluetoothDeviceAddress)
+            &amp;amp;&amp;amp; mBluetoothGatt != null) {
+        Log.d(TAG, &amp;quot;Trying to use an existing mBluetoothGatt for connection.&amp;quot;);
+        if (mBluetoothGatt.connect()) {
+            mConnectionState = STATE_CONNECTING;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+    if (device == null) {
+        Log.w(TAG, &amp;quot;Device not found.  Unable to connect.&amp;quot;);
+        return false;
+    }
+    // We want to directly connect to the device, so we are setting the autoConnect
+    // parameter to false.
+    mBluetoothGatt = device.connectGatt(this, false, mGattCallback);
+    Log.d(TAG, &amp;quot;Trying to create a new connection.&amp;quot;);
+    mBluetoothDeviceAddress = address;
+    mConnectionState = STATE_CONNECTING;
+    return true;
+}
+
+private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+    @Override
+    public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+        String intentAction;
+        if (newState == BluetoothProfile.STATE_CONNECTED) {
+            intentAction = ACTION_GATT_CONNECTED;
+            mConnectionState = STATE_CONNECTED;
+            broadcastUpdate(intentAction);
+            Log.i(TAG, &amp;quot;Connected to GATT server.&amp;quot;);
+            // Attempts to discover services after successful connection.
+            Log.i(TAG, &amp;quot;Attempting to start service discovery:&amp;quot; +
+                    mBluetoothGatt.discoverServices());
+
+        } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+            intentAction = ACTION_GATT_DISCONNECTED;
+            mConnectionState = STATE_DISCONNECTED;
+            Log.i(TAG, &amp;quot;Disconnected from GATT server.&amp;quot;);
+            broadcastUpdate(intentAction);
+        }
+    }
+
+    @Override
+    public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED);
+        } else {
+            Log.w(TAG, &amp;quot;onServicesDiscovered received: &amp;quot; + status);
+        }
+    }
+
+    @Override
+    public void onCharacteristicRead(BluetoothGatt gatt,
+                                     BluetoothGattCharacteristic characteristic,
+                                     int status) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
+        }
+    }
+
+    @Override
+    public void onCharacteristicChanged(BluetoothGatt gatt,
+                                        BluetoothGattCharacteristic characteristic) {
+        broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;private void broadcastUpdate(final String action) {
+    final Intent intent = new Intent(action);
+    sendBroadcast(intent);
+}
+
+private void broadcastUpdate(final String action,
+                             final BluetoothGattCharacteristic characteristic) {
+    final Intent intent = new Intent(action);
+
+    // This is special handling for the Heart Rate Measurement profile.  Data parsing is
+    // carried out as per profile specifications:
+    // http://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.heart_rate_measurement.xml
+    if (UUID_HEART_RATE_MEASUREMENT.equals(characteristic.getUuid())) {
+        int flag = characteristic.getProperties();
+        int format = -1;
+        if ((flag &amp;amp; 0x01) != 0) {
+            format = BluetoothGattCharacteristic.FORMAT_UINT16;
+            Log.d(TAG, &amp;quot;Heart rate format UINT16.&amp;quot;);
+        } else {
+            format = BluetoothGattCharacteristic.FORMAT_UINT8;
+            Log.d(TAG, &amp;quot;Heart rate format UINT8.&amp;quot;);
+        }
+        final int heartRate = characteristic.getIntValue(format, 1);
+        Log.d(TAG, String.format(&amp;quot;Received heart rate: %d&amp;quot;, heartRate));
+        intent.putExtra(EXTRA_DATA, String.valueOf(heartRate));
+    } else {
+        // For all other profiles, writes the data formatted in HEX.
+        final byte[] data = characteristic.getValue();
+        if (data != null &amp;amp;&amp;amp; data.length &amp;gt; 0) {
+            final StringBuilder stringBuilder = new StringBuilder(data.length);
+            for(byte byteChar : data)
+                stringBuilder.append(String.format(&amp;quot;%02X &amp;quot;, byteChar));
+            intent.putExtra(EXTRA_DATA, new String(data) + &amp;quot;\n&amp;quot; + stringBuilder.toString());
+        }
+    }
+    sendBroadcast(intent);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;切断する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void disconnect() {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.disconnect();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicを読む。結果は&lt;code&gt;BluetoothGattCallback#onCharacteristicRead&lt;/code&gt;で受け取る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void readCharacteristic(BluetoothGattCharacteristic characteristic) {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.readCharacteristic(characteristic);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicの通知を設定。Descriptorというのは、Characteristicの値を説明するもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void setCharacteristicNotification(BluetoothGattCharacteristic characteristic,
+                                          boolean enabled) {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.setCharacteristicNotification(characteristic, enabled);
+
+    // This is specific to Heart Rate Measurement.
+    if (UUID_HEART_RATE_MEASUREMENT.equals(characteristic.getUuid())) {
+        BluetoothGattDescriptor descriptor = characteristic.getDescriptor(
+                UUID.fromString(SampleGattAttributes.CLIENT_CHARACTERISTIC_CONFIG));
+        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+        mBluetoothGatt.writeDescriptor(descriptor);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GATTのサービスのリストを返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public List&amp;lt;BluetoothGattService&amp;gt; getSupportedGattServices() {
+    if (mBluetoothGatt == null) return null;
+
+    return mBluetoothGatt.getServices();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;android-6-0以降の端末で動かす&#34;&gt;Android 6.0以降の端末で動かす&lt;/h2&gt;
+
+&lt;p&gt;Android6.0以降ではscanに位置情報のパーミッションが必要になったため、手を入れる必要がある。
+&lt;a href=&#34;https://github.com/googlesamples/android-BluetoothLeGatt/pull/20&#34;&gt;プルリク&lt;/a&gt;は出てるのでそのうち入るかも。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;uses-permission android:name=&amp;quot;android.permission.ACCESS_COARSE_LOCATION&amp;quot;/&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SDK Versionが23以上だったら、さらにリクエストする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        != PackageManager.PERMISSION_GRANTED) {
+    Log.w(&amp;quot;BleActivity&amp;quot;, &amp;quot;Location access not granted!&amp;quot;);
+    ActivityCompat.requestPermissions(this,
+            new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
+            MY_PERMISSION_RESPONSE);
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

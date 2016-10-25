@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/ios/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-10-23 01:29:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>iOS端末をBLEのPeripheralにする</title>
+          <link>http://sambaiz.net/article/26/</link>
+          <pubDate>Sun, 23 Oct 2016 01:29:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/26/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://developer.apple.com/jp/documentation/CoreBluetoothPG.pdf&#34;&gt;CoreBluetoothプログラミングガイド&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;流れ&#34;&gt;流れ&lt;/h2&gt;
+
+&lt;p&gt;まず、CoreBluetooth.frameworkを追加する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import CoreBluetooth
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CBPeripheralManagerを生成。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;stateが変化したらdelegateメソッドが呼ばれるので&lt;code&gt;.poweredOn&lt;/code&gt;であることを確認できれば
+Managerの準備は完了。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager){        
+    switch (peripheral.state){
+    case .poweredOn:
+        print(&amp;quot;PeripheralManager state is ok&amp;quot;)
+        ready = true
+
+    default:
+        print(&amp;quot;PeripheralManager state is ng:&amp;quot;, peripheral.state)
+        ready = false
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicを作成。&lt;code&gt;CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify)&lt;/code&gt;で、
+Centralが読みにくることも、通知を受け取ることもできるようにし、&lt;code&gt;CBAttributePermissions.readable&lt;/code&gt;でreadのみ許可する。
+このvalueをnilにしておかないと、キャッシュされあとで変更できなくなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;characteristic = CBMutableCharacteristic(
+    type: CHARACTERISTIC_UUID,
+    properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+    value:nil,
+    permissions:CBAttributePermissions.readable)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このCharacteristicのServiceを作成し、Managerに登録する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;let service = CBMutableService(type: SERVICE_UUID, primary: true)
+service.characteristics = [characteristic]
+peripheralManager!.add(service)
+ready = true         
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?){
+    if(error != nil){
+        print(&amp;quot;Add Service error:&amp;quot;, error)
+    }else{
+        print(&amp;quot;Add Service ok&amp;quot;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ServiceをAdvertiseする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheral.startAdvertising([
+    CBAdvertisementDataLocalNameKey: LOCAL_NAME,
+    CBAdvertisementDataServiceUUIDsKey: [SERVICE_UUID]
+    ])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?){
+    if(error != nil){
+        print(&amp;quot;Start Advertising error:&amp;quot;, error)
+    }else{
+        print(&amp;quot;Start Advertising ok&amp;quot;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;通知要求してきたCentralに向けて通知する。&lt;code&gt;onSubscribedCentrals: nil&lt;/code&gt;で全てのCentralに送る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;peripheralManager!.updateValue(d, for: characteristic, onSubscribedCentrals: nil)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;読みにきたときのdelegateメソッド。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest){
+    if (request.characteristic.uuid.isEqual(self.characteristic.uuid)) {
+        if let value = self.characteristic.value{
+            if (request.offset &amp;gt; value.count) {
+                peripheral.respond(to: request, withResult: CBATTError.invalidOffset)
+                print(&amp;quot;Read fail: invalid offset&amp;quot;)
+                return;
+            }
+        }
+
+        request.value = self.characteristic.value?.subdata(
+            in: Range(uncheckedBounds: (request.offset, (self.characteristic.value?.count)! - request.offset))
+        )
+        peripheral.respond(to: request, withResult: CBATTError.success)
+        print(&amp;quot;Read success&amp;quot;)
+    }else{
+        print(&amp;quot;Read fail: wrong characteristic uuid:&amp;quot;, request.characteristic.uuid)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;全体&#34;&gt;全体&lt;/h2&gt;
+
+&lt;p&gt;エラーハンドリングは適当だけど、とりあえず動くものができた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import CoreBluetooth
+
+class BLEPeripheral : NSObject, CBPeripheralManagerDelegate {
+
+    let CHARACTERISTIC_ROTATION_X_UUID = CBUUID(string:&amp;quot;5F83E23F-BCA1-42B3-B6F2-EA82BE46A93D&amp;quot;)
+    let CHARACTERISTIC_ROTATION_Y_UUID = CBUUID(string:&amp;quot;61B21612-86E7-4EDA-8F26-9FD9FB66739D&amp;quot;)
+    let CHARACTERISTIC_ROTATION_Z_UUID = CBUUID(string:&amp;quot;2481735C-0E12-4428-9E13-B7D987404802&amp;quot;)
+    let SERVICE_UUID = CBUUID(string:&amp;quot;BF9CB85F-620C-4A67-BDD2-1A64213F74CA&amp;quot;)
+    let LOCAL_NAME = &amp;quot;clock&amp;quot;
+
+    private var peripheralManager : CBPeripheralManager?
+    private var characteristicX: CBMutableCharacteristic
+    private var characteristicY: CBMutableCharacteristic
+    private var characteristicZ: CBMutableCharacteristic
+    private var ready = false
+
+    public override init(){
+        characteristicX = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_X_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        characteristicY = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_Y_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        characteristicZ = CBMutableCharacteristic(
+            type: CHARACTERISTIC_ROTATION_Z_UUID,
+            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
+            value:nil,
+            permissions:CBAttributePermissions.readable)
+
+        super.init()
+
+        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+    }
+
+    public func updateRotationX(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicX.value = d
+                peripheralManager!.updateValue(d, for: characteristicX, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+    public func updateRotationY(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicX.value = d
+                peripheralManager!.updateValue(d, for: characteristicY, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+    public func updateRotationZ(_ data: Data?){
+        if(ready){
+            if let d = data{
+                characteristicZ.value = d
+                peripheralManager!.updateValue(d, for: characteristicZ, onSubscribedCentrals: nil)
+            }else{
+                print(&amp;quot;data is null&amp;quot;)
+            }
+        }else{
+            print(&amp;quot;not ready&amp;quot;)
+        }
+    }
+
+
+    /*
+     CBPeripheralManagerDelegate
+    */
+
+    public func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager){        
+        switch (peripheral.state){
+        case .poweredOn:
+            print(&amp;quot;PeripheralManager state is ok&amp;quot;)
+
+            let service = CBMutableService(type: SERVICE_UUID, primary: true)
+            service.characteristics = [characteristicX, characteristicY, characteristicZ]
+            peripheralManager!.add(service)
+            ready = true
+
+        default:
+            print(&amp;quot;PeripheralManager state is ng:&amp;quot;, peripheral.state)
+            ready = false
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?){
+        if(error != nil){
+            print(&amp;quot;Add Service error:&amp;quot;, error)
+        }else{
+            print(&amp;quot;Add Service ok&amp;quot;)
+            peripheral.startAdvertising([
+                CBAdvertisementDataLocalNameKey: LOCAL_NAME,
+                CBAdvertisementDataServiceUUIDsKey: [SERVICE_UUID]
+                ])
+        }
+    }
+
+    public func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?){
+        if(error != nil){
+            print(&amp;quot;Start Advertising error:&amp;quot;, error)
+        }else{
+            print(&amp;quot;Start Advertising ok&amp;quot;)
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest){
+        if (request.characteristic.uuid.isEqual(characteristicX.uuid)) {
+            if let value = characteristicX.value{
+                if (request.offset &amp;gt; value.count) {
+                    peripheral.respond(to: request, withResult: CBATTError.invalidOffset)
+                    print(&amp;quot;Read fail: invalid offset&amp;quot;)
+                    return;
+                }
+            }
+
+            request.value = characteristicX.value?.subdata(
+                in: Range(uncheckedBounds: (request.offset, (characteristicX.value?.count)! - request.offset))
+            )
+            peripheral.respond(to: request, withResult: CBATTError.success)
+            print(&amp;quot;Read success&amp;quot;)
+        }else{
+            print(&amp;quot;Read fail: wrong characteristic uuid:&amp;quot;, request.characteristic.uuid)
+        }
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic){
+        print(&amp;quot;Subscribe to&amp;quot;, characteristic.uuid)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;現在の時間を1秒ごとに更新して通知がくることを確認した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(self.update), userInfo: nil, repeats: true)
+timer!.fire()
+
+public func update(){
+    let now = String(format: &amp;quot;%.0f&amp;quot;, arguments: [Date().timeIntervalSince1970])
+    peripheral.updateCharacteristic(now.data(using: String.Encoding.utf8))
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

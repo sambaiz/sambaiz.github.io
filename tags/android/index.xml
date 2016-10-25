@@ -1,0 +1,1761 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/android/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-10-23 20:39:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>UnityでAndroidのBLEを使うネイティブプラグインを作る</title>
+          <link>http://sambaiz.net/article/27/</link>
+          <pubDate>Sun, 23 Oct 2016 20:39:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/27/</guid>
+          <description>
+
+&lt;p&gt;UnityからBLEを使うためのネイティブプラグインを作る。&lt;/p&gt;
+
+&lt;h2 id=&#34;android側&#34;&gt;Android側&lt;/h2&gt;
+
+&lt;p&gt;まず、Activityなしのプロジェクトを作って、New ModuleからAndroid Libraryを選択。
+これらのパッケージ名がUnityで使うものと被らないようにする。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;/Applications/Unity/PlaybackEngines/AndroidPlayer/Variations/mono/Release/Classes/classes.jar&lt;/code&gt;
+をModuleの方のlibsに置く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import com.unity3d.player.UnityPlayer;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このjarは元々のやつとかぶってしまうので除外(build.gradleに追加)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;android.libraryVariants.all { variant -&amp;gt;
+    variant.outputs.each { output -&amp;gt;
+        output.packageLibrary.exclude(&#39;libs/classes.jar&#39;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Activiyは&lt;code&gt;UnityPlayer.currentActivity&lt;/code&gt;で取得でき、
+Unity側のメソッドを呼ぶのも
+&lt;code&gt;UnityPlayer.UnitySendMessage(mGameObjName, mCallBackName, new String(characteristic.getValue()));&lt;/code&gt;
+のようにできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public class BLE {
+
+    private final static String TAG = BLE.class.getSimpleName();
+    private static final int REQUEST_ENABLE_BT = 1;
+    private static final int MY_PERMISSION_RESPONSE = 2;
+
+    private static final String PERIPHERAL_LOCAL_NAME = &amp;quot;my-ble&amp;quot;;
+    private static final UUID PERIPHERAL_SERIVCE_UUID = UUID.fromString(&amp;quot;BF9CB85F-620C-4A67-BDD2-1A64213F74CA&amp;quot;);
+    private static final UUID PERIPHERAL_CHARACTERISTIC_UUID = UUID.fromString(&amp;quot;5F83E23F-BCA1-42B3-B6F2-EA82BE46A93D&amp;quot;);
+    private static final UUID CLIENT_CHARACTERISTIC_CONFIG = UUID.fromString(&amp;quot;00002902-0000-1000-8000-00805f9b34fb&amp;quot;);
+
+    private String mGameObjName;
+    private String mCallBackName;
+
+    private BluetoothAdapter mBluetoothAdapter;
+    private BluetoothGatt mBluetoothGatt;
+    private BluetoothGattCharacteristic mCharacteristic;
+    private Handler mHandler;
+
+    // Stops scanning after 30 seconds.
+    private static final long SCAN_PERIOD = 30000;
+
+    public BLE(String gameObjName, String callBackName) {
+
+        this.mGameObjName = gameObjName;
+        this.mCallBackName = callBackName;
+
+        mHandler = new Handler();
+
+        if (!UnityPlayer.currentActivity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            Toast.makeText(UnityPlayer.currentActivity, &amp;quot;BLEをサポートしていません&amp;quot;, Toast.LENGTH_SHORT).show();
+            UnityPlayer.currentActivity.finish();
+            return;
+        }
+
+        final BluetoothManager bluetoothManager =
+                (BluetoothManager) UnityPlayer.currentActivity.getSystemService(Context.BLUETOOTH_SERVICE);
+        mBluetoothAdapter = bluetoothManager.getAdapter();
+
+        if (mBluetoothAdapter == null) {
+            Toast.makeText(UnityPlayer.currentActivity, &amp;quot;Bluetoothをサポートしていません&amp;quot;, Toast.LENGTH_SHORT).show();
+            UnityPlayer.currentActivity.finish();
+            return;
+        }
+
+        onActive();
+    }
+
+    public void onActive() {
+        Log.d(TAG, &amp;quot;onActive&amp;quot;);
+        if (!mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            UnityPlayer.currentActivity.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+
+        scanLeDevice(true);
+    }
+
+    public void onPause() {
+        Log.d(TAG, &amp;quot;onPause&amp;quot;);
+        scanLeDevice(false);
+
+        if(mCharacteristic != null){
+            mBluetoothGatt.setCharacteristicNotification(
+                    mCharacteristic,
+                    false
+            );
+        }
+
+        if(mBluetoothGatt != null) {
+            mBluetoothGatt.close();
+            mBluetoothGatt = null;
+        }
+    }
+
+    private void scanLeDevice(final boolean enable) {
+        if (enable) {
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                }
+            }, SCAN_PERIOD);
+
+            mBluetoothAdapter.startLeScan(mLeScanCallback);
+        } else {
+            mBluetoothAdapter.stopLeScan(mLeScanCallback);
+        }
+    }
+
+    private BluetoothAdapter.LeScanCallback mLeScanCallback =
+            new BluetoothAdapter.LeScanCallback() {
+
+                @Override
+                public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
+                    if(PERIPHERAL_LOCAL_NAME.equals(device.getName())){
+                        scanLeDevice(false);
+                        connect(device);
+                    }
+                }
+            };
+
+    private boolean connect(BluetoothDevice device) {
+        if (mBluetoothAdapter == null) {
+            Log.w(TAG, &amp;quot;BluetoothAdapter not initialized or unspecified address.&amp;quot;);
+            return false;
+        }
+
+        // Previously connected device.  Try to reconnect.
+        if (mBluetoothGatt != null) {
+            Log.d(TAG, &amp;quot;Trying to use an existing mBluetoothGatt for connection.&amp;quot;);
+            if (mBluetoothGatt.connect()) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        mBluetoothGatt = device.connectGatt(UnityPlayer.currentActivity, false, mGattCallback);
+        Log.d(TAG, &amp;quot;Trying to create a new connection.&amp;quot;);
+        return true;
+    }
+
+
+    private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+        @Override
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+
+                scanLeDevice(false);
+                Log.i(TAG, &amp;quot;Connected to GATT server.&amp;quot;);
+                gatt.discoverServices();
+
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                Log.i(TAG, &amp;quot;Disconnected from GATT server.&amp;quot;);
+            } else{
+                Log.i(TAG, &amp;quot;onConnectionStateChange:&amp;quot; + newState);
+            }
+        }
+
+        @Override
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                mCharacteristic = gatt.getService(PERIPHERAL_SERIVCE_UUID).
+                        getCharacteristic(PERIPHERAL_CHARACTERISTIC_UUID);
+
+                gatt.setCharacteristicNotification(
+                        mCharacteristic,
+                        true
+                );
+                BluetoothGattDescriptor descriptor = mCharacteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG);
+                descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                mBluetoothGatt.writeDescriptor(descriptor);
+            } else {
+                Log.w(TAG, &amp;quot;onServicesDiscovered received: &amp;quot; + status);
+            }
+        }
+
+        @Override
+        public void onCharacteristicChanged(BluetoothGatt gatt,
+                                            BluetoothGattCharacteristic characteristic) {
+            UnityPlayer.UnitySendMessage(mGameObjName, mCallBackName, new String(characteristic.getValue()));
+        }
+    };
+
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Manifestに追加した分。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;uses-feature android:name=&amp;quot;android.hardware.bluetooth_le&amp;quot; android:required=&amp;quot;true&amp;quot;/&amp;gt;
+
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.BLUETOOTH&amp;quot; /&amp;gt;
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.BLUETOOTH_ADMIN&amp;quot; /&amp;gt;
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.ACCESS_COARSE_LOCATION&amp;quot;/&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;できたらaarを生成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ./gradlew assembleRelease
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;build/outputs/aar/*-release.aar&lt;/code&gt;をUnityの&lt;code&gt;Assets/Plugins/Android/libs&lt;/code&gt;に置く。&lt;/p&gt;
+
+&lt;p&gt;あと、依存aarはこの中に含まれないようなのでそれもまとめてコピーする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;task copyLibs(type: Copy) {
+    from configurations.compile
+    into &#39;build/outputs/aar&#39;
+    exclude { details -&amp;gt; details.file.name.endsWith(&amp;quot;.jar&amp;quot;) }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Manifetstのmergeに失敗したのでSDKVersionを合わせる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;compileSdkVersion 22
+
+defaultConfig {
+    minSdkVersion 19
+    targetSdkVersion 22
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;unity側&#34;&gt;Unity側&lt;/h2&gt;
+
+&lt;p&gt;こんな感じでインスタンスを作り、
+&lt;a href=&#34;https://docs.unity3d.com/ja/current/ScriptReference/AndroidJavaObject.Call.html&#34;&gt;メソッドを呼べる&lt;/a&gt;。
+ただし、unity editor上では&lt;code&gt;Init&#39;d AndroidJavaClass with null ptr!&lt;/code&gt;のエラーが出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;plugin = new AndroidJavaObject(&amp;quot;net.sambaiz.unity_ble.BLE&amp;quot;, this.gameObject.name, &amp;quot;received&amp;quot;);
+
+void received(string message){
+	Debug.Log (&amp;quot;BLE:&amp;quot; + message);
+}
+
+void OnApplicationPause (bool pauseStatus)
+{
+	if (pauseStatus) {
+		plugin.Call (&amp;quot;onPause&amp;quot;);
+	} else {
+		plugin.Call (&amp;quot;onActive&amp;quot;);
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>android-BluetoothLeGattを読む</title>
+          <link>http://sambaiz.net/article/25/</link>
+          <pubDate>Fri, 21 Oct 2016 14:10:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/25/</guid>
+          <description>
+
+&lt;p&gt;BLEのサンプルコード。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/googlesamples/android-BluetoothLeGatt&#34;&gt;https://github.com/googlesamples/android-BluetoothLeGatt&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;devicescanactivity&#34;&gt;DeviceScanActivity&lt;/h2&gt;
+
+&lt;p&gt;BLEをサポートしているかチェックする。
+&lt;a href=&#34;http://sambaiz.net/article/23&#34;&gt;BluetoothChat&lt;/a&gt;ではBluetoothAdapterを取得するのに
+&lt;code&gt;BluetoothAdapter.getDefaultAdapter()&lt;/code&gt;のようにしていたが、
+BLEをサポートしているような新しいバージョンでは、BluetoothManagerの&lt;code&gt;getAdapter()&lt;/code&gt;を使うらしい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    getActionBar().setTitle(R.string.title_devices);
+    mHandler = new Handler();
+
+    // Use this check to determine whether BLE is supported on the device.  Then you can
+    // selectively disable BLE-related features.
+    if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+        Toast.makeText(this, R.string.ble_not_supported, Toast.LENGTH_SHORT).show();
+        finish();
+    }
+
+    // Initializes a Bluetooth adapter.  For API level 18 and above, get a reference to
+    // BluetoothAdapter through BluetoothManager.
+    final BluetoothManager bluetoothManager =
+            (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+    mBluetoothAdapter = bluetoothManager.getAdapter();
+
+    // Checks if Bluetooth is supported on the device.
+    if (mBluetoothAdapter == null) {
+        Toast.makeText(this, R.string.error_bluetooth_not_supported, Toast.LENGTH_SHORT).show();
+        finish();
+        return;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BluetoothChatと同様にBluetoothを有効にさせるのと、scanの開始。
+&lt;code&gt;mBluetoothAdapter.startLeScan(mLeScanCallback)&lt;/code&gt;で
+見つかったらcallbackの&lt;code&gt;onLeScan&lt;/code&gt;が呼ばれるのでデバイスリストに追加していく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onResume() {
+    super.onResume();
+
+    // Ensures Bluetooth is enabled on the device.  If Bluetooth is not currently enabled,
+    // fire an intent to display a dialog asking the user to grant permission to enable it.
+    if (!mBluetoothAdapter.isEnabled()) {
+        if (!mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+    }
+
+    // Initializes list view adapter.
+    mLeDeviceListAdapter = new LeDeviceListAdapter();
+    setListAdapter(mLeDeviceListAdapter);
+    scanLeDevice(true);
+}
+
+private void scanLeDevice(final boolean enable) {
+    if (enable) {
+        // Stops scanning after a pre-defined scan period.
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mScanning = false;
+                mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                invalidateOptionsMenu();
+            }
+        }, SCAN_PERIOD);
+
+        mScanning = true;
+        mBluetoothAdapter.startLeScan(mLeScanCallback);
+    } else {
+        mScanning = false;
+        mBluetoothAdapter.stopLeScan(mLeScanCallback);
+    }
+    invalidateOptionsMenu();
+}
+
+private BluetoothAdapter.LeScanCallback mLeScanCallback =
+            new BluetoothAdapter.LeScanCallback() {
+    @Override
+    public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mLeDeviceListAdapter.addDevice(device);
+                mLeDeviceListAdapter.notifyDataSetChanged();
+            }
+        });
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pause時はscanを止め、Listをクリアする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onPause() {
+    super.onPause();
+    scanLeDevice(false);
+    mLeDeviceListAdapter.clear();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;リストが選択されたら、scanを止め、そのデバイスの情報を渡してDeviceControlActivityを始める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onListItemClick(ListView l, View v, int position, long id) {
+    final BluetoothDevice device = mLeDeviceListAdapter.getDevice(position);
+    if (device == null) return;
+    final Intent intent = new Intent(this, DeviceControlActivity.class);
+    intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_NAME, device.getName());
+    intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_ADDRESS, device.getAddress());
+    if (mScanning) {
+        mBluetoothAdapter.stopLeScan(mLeScanCallback);
+        mScanning = false;
+    }
+    startActivity(intent);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;devicecontrolactivity&#34;&gt;DeviceControlActivity&lt;/h2&gt;
+
+&lt;p&gt;bindServiceでBluetoothLeServiceにServiceConnectionをバインドする。
+Serviceと接続したらServiceConnectionの&lt;code&gt;onServiceConnected&lt;/code&gt;が呼ばれるので、
+LocalBinderの&lt;code&gt;getService&lt;/code&gt;で取得し、初期化して対象のデバイスにconnectする。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.android.com/guide/components/services.html?hl=ja&#34;&gt;Service&lt;/a&gt;は、
+開始したコンポーネントや、ユーザーの操作に関係なく、バックグラウンドで動く。
+サーバー/クライアントでいうサーバーで、複数のクライアントが同時にバインドでき、
+その場合バインドしているクライアントが存在しなくなったら破棄される。
+ホストプロセスのメインスレッドで実行される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.gatt_services_characteristics);
+
+    final Intent intent = getIntent();
+    mDeviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME);
+    mDeviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS);
+
+    // Sets up UI references.
+    ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
+    mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
+    mGattServicesList.setOnChildClickListener(servicesListClickListner);
+    mConnectionState = (TextView) findViewById(R.id.connection_state);
+    mDataField = (TextView) findViewById(R.id.data_value);
+
+    getActionBar().setTitle(mDeviceName);
+    getActionBar().setDisplayHomeAsUpEnabled(true);
+    Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
+    bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
+}
+
+private final ServiceConnection mServiceConnection = new ServiceConnection() {
+
+    @Override
+    public void onServiceConnected(ComponentName componentName, IBinder service) {
+        mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
+        if (!mBluetoothLeService.initialize()) {
+            Log.e(TAG, &amp;quot;Unable to initialize Bluetooth&amp;quot;);
+            finish();
+        }
+        // Automatically connects to the device upon successful start-up initialization.
+        mBluetoothLeService.connect(mDeviceAddress);
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName componentName) {
+        mBluetoothLeService = null;
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BroadcastReceiverを登録して、対象デバイスに繋ぎに行く。
+GATTのService(AndroidのServiceとは違うもの)やCharacteristicが見つかったら表示する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.bluetooth.com/specifications/gatt&#34;&gt;GATT(Generic Attribute Profile)&lt;/a&gt;
+というのは、BLEで通信するときに使う階層化されたデータ構造の定義。
+ProfileにはいくつかのServiceが含まれ、ServiceにはいくつかのCharacteristic、または他のServiceが含まれる。
+Characteristicというのが値。ServiceやCharacteristicはUUIDで識別することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onResume() {
+    super.onResume();
+    registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
+    if (mBluetoothLeService != null) {
+        final boolean result = mBluetoothLeService.connect(mDeviceAddress);
+        Log.d(TAG, &amp;quot;Connect request result=&amp;quot; + result);
+    }
+}
+
+private final BroadcastReceiver mGattUpdateReceiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        final String action = intent.getAction();
+        if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
+            mConnected = true;
+            updateConnectionState(R.string.connected);
+            invalidateOptionsMenu();
+        } else if (BluetoothLeService.ACTION_GATT_DISCONNECTED.equals(action)) {
+            mConnected = false;
+            updateConnectionState(R.string.disconnected);
+            invalidateOptionsMenu();
+            clearUI();
+        } else if (BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED.equals(action)) {
+            // Show all the supported services and characteristics on the user interface.
+            displayGattServices(mBluetoothLeService.getSupportedGattServices());
+        } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)) {
+            displayData(intent.getStringExtra(BluetoothLeService.EXTRA_DATA));
+        }
+    }
+};
+
+private static IntentFilter makeGattUpdateIntentFilter() {
+    final IntentFilter intentFilter = new IntentFilter();
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
+    intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
+    intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
+    return intentFilter;
+}
+
+private void displayGattServices(List&amp;lt;BluetoothGattService&amp;gt; gattServices) {
+    if (gattServices == null) return;
+    String uuid = null;
+    String unknownServiceString = getResources().getString(R.string.unknown_service);
+    String unknownCharaString = getResources().getString(R.string.unknown_characteristic);
+    ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt; gattServiceData = new ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;();
+    ArrayList&amp;lt;ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;&amp;gt; gattCharacteristicData
+            = new ArrayList&amp;lt;ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;&amp;gt;();
+    mGattCharacteristics = new ArrayList&amp;lt;ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt;&amp;gt;();
+
+    // Loops through available GATT Services.
+    for (BluetoothGattService gattService : gattServices) {
+        HashMap&amp;lt;String, String&amp;gt; currentServiceData = new HashMap&amp;lt;String, String&amp;gt;();
+        uuid = gattService.getUuid().toString();
+        currentServiceData.put(
+                LIST_NAME, SampleGattAttributes.lookup(uuid, unknownServiceString));
+        currentServiceData.put(LIST_UUID, uuid);
+        gattServiceData.add(currentServiceData);
+
+        ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt; gattCharacteristicGroupData =
+                new ArrayList&amp;lt;HashMap&amp;lt;String, String&amp;gt;&amp;gt;();
+        List&amp;lt;BluetoothGattCharacteristic&amp;gt; gattCharacteristics =
+                gattService.getCharacteristics();
+        ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt; charas =
+                new ArrayList&amp;lt;BluetoothGattCharacteristic&amp;gt;();
+
+        // Loops through available Characteristics.
+        for (BluetoothGattCharacteristic gattCharacteristic : gattCharacteristics) {
+            charas.add(gattCharacteristic);
+            HashMap&amp;lt;String, String&amp;gt; currentCharaData = new HashMap&amp;lt;String, String&amp;gt;();
+            uuid = gattCharacteristic.getUuid().toString();
+            currentCharaData.put(
+                    LIST_NAME, SampleGattAttributes.lookup(uuid, unknownCharaString));
+            currentCharaData.put(LIST_UUID, uuid);
+            gattCharacteristicGroupData.add(currentCharaData);
+        }
+        mGattCharacteristics.add(charas);
+        gattCharacteristicData.add(gattCharacteristicGroupData);
+    }
+
+    SimpleExpandableListAdapter gattServiceAdapter = new SimpleExpandableListAdapter(
+            this,
+            gattServiceData,
+            android.R.layout.simple_expandable_list_item_2,
+            new String[] {LIST_NAME, LIST_UUID},
+            new int[] { android.R.id.text1, android.R.id.text2 },
+            gattCharacteristicData,
+            android.R.layout.simple_expandable_list_item_2,
+            new String[] {LIST_NAME, LIST_UUID},
+            new int[] { android.R.id.text1, android.R.id.text2 }
+    );
+    mGattServicesList.setAdapter(gattServiceAdapter);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;BluetoothGattCharacteristic.PROPERTY_READ&lt;/code&gt;と
+&lt;code&gt;BluetoothGattCharacteristic.PROPERTY_NOTIFY&lt;/code&gt;は
+それぞれCharacteristicが読めることと、値が変化したときにPeripheralから通知が受けられることを表している。&lt;/p&gt;
+
+&lt;p&gt;PeripheralというのはiBeaconのように、Advertising(見つかるようにする)し、接続される方。
+それに対して接続する方をCentralという。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private final ExpandableListView.OnChildClickListener servicesListClickListner =
+  new ExpandableListView.OnChildClickListener() {
+      @Override
+      public boolean onChildClick(ExpandableListView parent, View v, int groupPosition,
+                                  int childPosition, long id) {
+          if (mGattCharacteristics != null) {
+              final BluetoothGattCharacteristic characteristic =
+                      mGattCharacteristics.get(groupPosition).get(childPosition);
+              final int charaProp = characteristic.getProperties();
+              if ((charaProp | BluetoothGattCharacteristic.PROPERTY_READ) &amp;gt; 0) {
+                  // If there is an active notification on a characteristic, clear
+                  // it first so it doesn&#39;t update the data field on the user interface.
+                  if (mNotifyCharacteristic != null) {
+                      mBluetoothLeService.setCharacteristicNotification(
+                              mNotifyCharacteristic, false);
+                      mNotifyCharacteristic = null;
+                  }
+                  mBluetoothLeService.readCharacteristic(characteristic);
+              }
+              if ((charaProp | BluetoothGattCharacteristic.PROPERTY_NOTIFY) &amp;gt; 0) {
+                  mNotifyCharacteristic = characteristic;
+                  mBluetoothLeService.setCharacteristicNotification(
+                          characteristic, true);
+              }
+              return true;
+          }
+          return false;
+      }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BroadcastReceiverを外すのと、サービスのバインドをやめる処理。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onPause() {
+    super.onPause();
+    unregisterReceiver(mGattUpdateReceiver);
+}
+
+@Override
+protected void onDestroy() {
+    super.onDestroy();
+    unbindService(mServiceConnection);
+    mBluetoothLeService = null;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bluetoothleservice&#34;&gt;BluetoothLeService&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.android.com/reference/android/os/Binder.html&#34;&gt;Binder&lt;/a&gt;というのは
+プロセス間通信(IPC; Inter-Process Communication)するためのもの。&lt;/p&gt;
+
+&lt;p&gt;全てのクライアントのバインドが外れると&lt;code&gt;onUnbind&lt;/code&gt;が呼ばれるので、close処理をする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public class LocalBinder extends Binder {
+    BluetoothLeService getService() {
+        return BluetoothLeService.this;
+    }
+}
+
+@Override
+public IBinder onBind(Intent intent) {
+    return mBinder;
+}
+
+@Override
+public boolean onUnbind(Intent intent) {
+    // After using a given device, you should make sure that BluetoothGatt.close() is called
+    // such that resources are cleaned up properly.  In this particular example, close() is
+    // invoked when the UI is disconnected from the Service.
+    close();
+    return super.onUnbind(intent);
+}
+
+private final IBinder mBinder = new LocalBinder();
+
+public void close() {
+    if (mBluetoothGatt == null) {
+        return;
+    }
+    mBluetoothGatt.close();
+    mBluetoothGatt = null;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;初期化処理。BluetoothAdapterを取得する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public boolean initialize() {
+    // For API level 18 and above, get a reference to BluetoothAdapter through
+    // BluetoothManager.
+    if (mBluetoothManager == null) {
+        mBluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        if (mBluetoothManager == null) {
+            Log.e(TAG, &amp;quot;Unable to initialize BluetoothManager.&amp;quot;);
+            return false;
+        }
+    }
+
+    mBluetoothAdapter = mBluetoothManager.getAdapter();
+    if (mBluetoothAdapter == null) {
+        Log.e(TAG, &amp;quot;Unable to obtain a BluetoothAdapter.&amp;quot;);
+        return false;
+    }
+
+    return true;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;既に接続したことがあれば、そのBluetoothGattで再接続し、そうでなければ&lt;code&gt;connectGatt&lt;/code&gt;する。
+callbackでは必要に応じてIntentをブロードキャストする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public boolean connect(final String address) {
+    if (mBluetoothAdapter == null || address == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized or unspecified address.&amp;quot;);
+        return false;
+    }
+
+    // Previously connected device.  Try to reconnect.
+    if (mBluetoothDeviceAddress != null &amp;amp;&amp;amp; address.equals(mBluetoothDeviceAddress)
+            &amp;amp;&amp;amp; mBluetoothGatt != null) {
+        Log.d(TAG, &amp;quot;Trying to use an existing mBluetoothGatt for connection.&amp;quot;);
+        if (mBluetoothGatt.connect()) {
+            mConnectionState = STATE_CONNECTING;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+    if (device == null) {
+        Log.w(TAG, &amp;quot;Device not found.  Unable to connect.&amp;quot;);
+        return false;
+    }
+    // We want to directly connect to the device, so we are setting the autoConnect
+    // parameter to false.
+    mBluetoothGatt = device.connectGatt(this, false, mGattCallback);
+    Log.d(TAG, &amp;quot;Trying to create a new connection.&amp;quot;);
+    mBluetoothDeviceAddress = address;
+    mConnectionState = STATE_CONNECTING;
+    return true;
+}
+
+private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+    @Override
+    public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+        String intentAction;
+        if (newState == BluetoothProfile.STATE_CONNECTED) {
+            intentAction = ACTION_GATT_CONNECTED;
+            mConnectionState = STATE_CONNECTED;
+            broadcastUpdate(intentAction);
+            Log.i(TAG, &amp;quot;Connected to GATT server.&amp;quot;);
+            // Attempts to discover services after successful connection.
+            Log.i(TAG, &amp;quot;Attempting to start service discovery:&amp;quot; +
+                    mBluetoothGatt.discoverServices());
+
+        } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+            intentAction = ACTION_GATT_DISCONNECTED;
+            mConnectionState = STATE_DISCONNECTED;
+            Log.i(TAG, &amp;quot;Disconnected from GATT server.&amp;quot;);
+            broadcastUpdate(intentAction);
+        }
+    }
+
+    @Override
+    public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED);
+        } else {
+            Log.w(TAG, &amp;quot;onServicesDiscovered received: &amp;quot; + status);
+        }
+    }
+
+    @Override
+    public void onCharacteristicRead(BluetoothGatt gatt,
+                                     BluetoothGattCharacteristic characteristic,
+                                     int status) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
+        }
+    }
+
+    @Override
+    public void onCharacteristicChanged(BluetoothGatt gatt,
+                                        BluetoothGattCharacteristic characteristic) {
+        broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;private void broadcastUpdate(final String action) {
+    final Intent intent = new Intent(action);
+    sendBroadcast(intent);
+}
+
+private void broadcastUpdate(final String action,
+                             final BluetoothGattCharacteristic characteristic) {
+    final Intent intent = new Intent(action);
+
+    // This is special handling for the Heart Rate Measurement profile.  Data parsing is
+    // carried out as per profile specifications:
+    // http://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.heart_rate_measurement.xml
+    if (UUID_HEART_RATE_MEASUREMENT.equals(characteristic.getUuid())) {
+        int flag = characteristic.getProperties();
+        int format = -1;
+        if ((flag &amp;amp; 0x01) != 0) {
+            format = BluetoothGattCharacteristic.FORMAT_UINT16;
+            Log.d(TAG, &amp;quot;Heart rate format UINT16.&amp;quot;);
+        } else {
+            format = BluetoothGattCharacteristic.FORMAT_UINT8;
+            Log.d(TAG, &amp;quot;Heart rate format UINT8.&amp;quot;);
+        }
+        final int heartRate = characteristic.getIntValue(format, 1);
+        Log.d(TAG, String.format(&amp;quot;Received heart rate: %d&amp;quot;, heartRate));
+        intent.putExtra(EXTRA_DATA, String.valueOf(heartRate));
+    } else {
+        // For all other profiles, writes the data formatted in HEX.
+        final byte[] data = characteristic.getValue();
+        if (data != null &amp;amp;&amp;amp; data.length &amp;gt; 0) {
+            final StringBuilder stringBuilder = new StringBuilder(data.length);
+            for(byte byteChar : data)
+                stringBuilder.append(String.format(&amp;quot;%02X &amp;quot;, byteChar));
+            intent.putExtra(EXTRA_DATA, new String(data) + &amp;quot;\n&amp;quot; + stringBuilder.toString());
+        }
+    }
+    sendBroadcast(intent);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;切断する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void disconnect() {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.disconnect();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicを読む。結果は&lt;code&gt;BluetoothGattCallback#onCharacteristicRead&lt;/code&gt;で受け取る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void readCharacteristic(BluetoothGattCharacteristic characteristic) {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.readCharacteristic(characteristic);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Characteristicの通知を設定。Descriptorというのは、Characteristicの値を説明するもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void setCharacteristicNotification(BluetoothGattCharacteristic characteristic,
+                                          boolean enabled) {
+    if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+        Log.w(TAG, &amp;quot;BluetoothAdapter not initialized&amp;quot;);
+        return;
+    }
+    mBluetoothGatt.setCharacteristicNotification(characteristic, enabled);
+
+    // This is specific to Heart Rate Measurement.
+    if (UUID_HEART_RATE_MEASUREMENT.equals(characteristic.getUuid())) {
+        BluetoothGattDescriptor descriptor = characteristic.getDescriptor(
+                UUID.fromString(SampleGattAttributes.CLIENT_CHARACTERISTIC_CONFIG));
+        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+        mBluetoothGatt.writeDescriptor(descriptor);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GATTのサービスのリストを返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public List&amp;lt;BluetoothGattService&amp;gt; getSupportedGattServices() {
+    if (mBluetoothGatt == null) return null;
+
+    return mBluetoothGatt.getServices();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;android-6-0以降の端末で動かす&#34;&gt;Android 6.0以降の端末で動かす&lt;/h2&gt;
+
+&lt;p&gt;Android6.0以降ではscanに位置情報のパーミッションが必要になったため、手を入れる必要がある。
+&lt;a href=&#34;https://github.com/googlesamples/android-BluetoothLeGatt/pull/20&#34;&gt;プルリク&lt;/a&gt;は出てるのでそのうち入るかも。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;uses-permission android:name=&amp;quot;android.permission.ACCESS_COARSE_LOCATION&amp;quot;/&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SDK Versionが23以上だったら、さらにリクエストする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        != PackageManager.PERMISSION_GRANTED) {
+    Log.w(&amp;quot;BleActivity&amp;quot;, &amp;quot;Location access not granted!&amp;quot;);
+    ActivityCompat.requestPermissions(this,
+            new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
+            MY_PERMISSION_RESPONSE);
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>android-bluetoothChatを読む</title>
+          <link>http://sambaiz.net/article/23/</link>
+          <pubDate>Sat, 15 Oct 2016 14:00:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/23/</guid>
+          <description>
+
+&lt;p&gt;Classic Bluetoothのサンプルコード。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/googlesamples/android-BluetoothChat&#34;&gt;https://github.com/googlesamples/android-BluetoothChat&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;mainactivity&#34;&gt;MainActivity&lt;/h2&gt;
+
+&lt;p&gt;まず、MainActivity。&lt;/p&gt;
+
+&lt;p&gt;Fragmentのcommitや、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
+
+    if (savedInstanceState == null) {
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        BluetoothChatFragment fragment = new BluetoothChatFragment();
+        transaction.replace(R.id.sample_content_fragment, fragment);
+        transaction.commit();
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;オプションメニューの設定をしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// 最初だけ呼ばれる
+@Override
+public boolean onCreateOptionsMenu(Menu menu) {
+    getMenuInflater().inflate(R.menu.main, menu);
+    return true;
+}
+
+// 表示される度に呼ばれる
+@Override
+public boolean onPrepareOptionsMenu(Menu menu) {
+    MenuItem logToggle = menu.findItem(R.id.menu_toggle_log);
+    logToggle.setVisible(findViewById(R.id.sample_output) instanceof ViewAnimator);
+    logToggle.setTitle(mLogShown ? R.string.sample_hide_log : R.string.sample_show_log);
+
+    return super.onPrepareOptionsMenu(menu);
+}
+
+@Override
+public boolean onOptionsItemSelected(MenuItem item) {
+    switch(item.getItemId()) {
+        case R.id.menu_toggle_log:
+            mLogShown = !mLogShown;
+            ViewAnimator output = (ViewAnimator) findViewById(R.id.sample_output);
+            if (mLogShown) {
+                output.setDisplayedChild(1);
+            } else {
+                output.setDisplayedChild(0);
+            }　
+            // メニューを再作成する(onCreateOptionsMenu, onPrepareOptionsMenuが呼ばれる)
+            supportInvalidateOptionsMenu();
+            return true;
+    }
+    return super.onOptionsItemSelected(item);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bluetoothchatfragment&#34;&gt;BluetoothChatFragment&lt;/h2&gt;
+
+&lt;p&gt;onCreateではBluetoothAdapterを取得して、Bluetoothが使えるかどうかを確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setHasOptionsMenu(true);
+    // Get local Bluetooth adapter
+    mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
+    // If the adapter is null, then Bluetooth is not supported
+    if (mBluetoothAdapter == null) {
+        FragmentActivity activity = getActivity();
+        Toast.makeText(activity, &amp;quot;Bluetooth is not available&amp;quot;, Toast.LENGTH_LONG).show();
+        activity.finish();
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;onStartではもしBluetoothが有効でなければ有効にするよう要求し、有効になったらsetupする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onStart() {
+    super.onStart();
+    // If BT is not on, request that it be enabled.
+    // setupChat() will then be called during onActivityResult
+    if (!mBluetoothAdapter.isEnabled()) {
+        Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+        startActivityForResult(enableIntent, REQUEST_ENABLE_BT);
+        // Otherwise, setup the chat session
+    } else if (mChatService == null) {
+        setupChat();
+    }
+}
+
+public void onActivityResult(int requestCode, int resultCode, Intent data) {
+    switch (requestCode) {
+        case REQUEST_CONNECT_DEVICE_SECURE:
+            // When DeviceListActivity returns with a device to connect
+            if (resultCode == Activity.RESULT_OK) {
+                connectDevice(data, true);
+            }
+            break;
+        case REQUEST_CONNECT_DEVICE_INSECURE:
+            // When DeviceListActivity returns with a device to connect
+            if (resultCode == Activity.RESULT_OK) {
+                connectDevice(data, false);
+            }
+            break;
+        case REQUEST_ENABLE_BT:
+            // When the request to enable Bluetooth returns
+            if (resultCode == Activity.RESULT_OK) {
+                // Bluetooth is now enabled, so set up a chat session
+                setupChat();
+            } else {
+                // User did not enable Bluetooth or an error occurred
+                Log.d(TAG, &amp;quot;BT not enabled&amp;quot;);
+                Toast.makeText(getActivity(), R.string.bt_not_enabled_leaving,
+                        Toast.LENGTH_SHORT).show();
+                getActivity().finish();
+            }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;onActivityResultではDeviceListActivityで、接続する端末を選択した結果もハンドリングしていて、connectDeviceを呼ぶ。
+アドレスからmBluetoothAdapter.getRemoteDevice(address)でdeviceを取得して、これをサービスに渡して接続する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void connectDevice(Intent data, boolean secure) {
+    // Get the device MAC address
+    String address = data.getExtras()
+            .getString(DeviceListActivity.EXTRA_DEVICE_ADDRESS);
+    // Get the BluetoothDevice object
+    BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+    // Attempt to connect to the device
+    mChatService.connect(device, secure);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Serviceのstartとstop。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onDestroy() {
+    super.onDestroy();
+    if (mChatService != null) {
+        mChatService.stop();
+    }
+}
+
+@Override
+public void onResume() {
+    super.onResume();
+
+    // Performing this check in onResume() covers the case in which BT was
+    // not enabled during onStart(), so we were paused to enable it...
+    // onResume() will be called when ACTION_REQUEST_ENABLE activity returns.
+    if (mChatService != null) {
+        // Only if the state is STATE_NONE, do we know that we haven&#39;t started already
+        if (mChatService.getState() == BluetoothChatService.STATE_NONE) {
+            // Start the Bluetooth chat services
+            mChatService.start();
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;viewまわり。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container,
+                         @Nullable Bundle savedInstanceState) {
+    return inflater.inflate(R.layout.fragment_bluetooth_chat, container, false);
+}
+
+@Override
+public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
+    mConversationView = (ListView) view.findViewById(R.id.in);
+    mOutEditText = (EditText) view.findViewById(R.id.edit_text_out);
+    mSendButton = (Button) view.findViewById(R.id.button_send);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;setupChatでは会話用リストにAdapterをセットしたり、入力欄やボタンにリスナーを登録するほかに、ChatServiceを初期化する。
+初期化する際に第二引数として渡すmHandlerでは、Serviceからのメッセージにより処理を行う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void setupChat() {
+    Log.d(TAG, &amp;quot;setupChat()&amp;quot;);
+
+    // Initialize the array adapter for the conversation thread
+    mConversationArrayAdapter = new ArrayAdapter&amp;lt;String&amp;gt;(getActivity(), R.layout.message);
+
+    mConversationView.setAdapter(mConversationArrayAdapter);
+
+    // Initialize the compose field with a listener for the return key
+    mOutEditText.setOnEditorActionListener(mWriteListener);
+
+    // Initialize the send button with a listener that for click events
+    mSendButton.setOnClickListener(new View.OnClickListener() {
+        public void onClick(View v) {
+            // Send a message using content of the edit text widget
+            View view = getView();
+            if (null != view) {
+                TextView textView = (TextView) view.findViewById(R.id.edit_text_out);
+                String message = textView.getText().toString();
+                sendMessage(message);
+            }
+        }
+    });
+
+    // Initialize the BluetoothChatService to perform bluetooth connections
+    mChatService = new BluetoothChatService(getActivity(), mHandler);
+
+    // Initialize the buffer for outgoing messages
+    mOutStringBuffer = new StringBuffer(&amp;quot;&amp;quot;);
+}
+
+private TextView.OnEditorActionListener mWriteListener = new TextView.OnEditorActionListener() {
+  public boolean onEditorAction(TextView view, int actionId, KeyEvent event) {
+      // If the action is a key-up event on the return key, send the message
+      if (actionId == EditorInfo.IME_NULL &amp;amp;&amp;amp; event.getAction() == KeyEvent.ACTION_UP) {
+          String message = view.getText().toString();
+          sendMessage(message);
+      }
+      return true;
+  }
+};
+
+private final Handler mHandler = new Handler() {
+    @Override
+    public void handleMessage(Message msg) {
+        FragmentActivity activity = getActivity();
+        switch (msg.what) {
+            case Constants.MESSAGE_STATE_CHANGE:
+                switch (msg.arg1) {
+                    case BluetoothChatService.STATE_CONNECTED:
+                        setStatus(getString(R.string.title_connected_to, mConnectedDeviceName));
+                        mConversationArrayAdapter.clear();
+                        break;
+                    case BluetoothChatService.STATE_CONNECTING:
+                        setStatus(R.string.title_connecting);
+                        break;
+                    case BluetoothChatService.STATE_LISTEN:
+                    case BluetoothChatService.STATE_NONE:
+                        setStatus(R.string.title_not_connected);
+                        break;
+                }
+                break;
+            case Constants.MESSAGE_WRITE:
+                byte[] writeBuf = (byte[]) msg.obj;
+                // construct a string from the buffer
+                String writeMessage = new String(writeBuf);
+                mConversationArrayAdapter.add(&amp;quot;Me:  &amp;quot; + writeMessage);
+                break;
+            case Constants.MESSAGE_READ:
+                byte[] readBuf = (byte[]) msg.obj;
+                // construct a string from the valid bytes in the buffer
+                String readMessage = new String(readBuf, 0, msg.arg1);
+                mConversationArrayAdapter.add(mConnectedDeviceName + &amp;quot;:  &amp;quot; + readMessage);
+                break;
+            case Constants.MESSAGE_DEVICE_NAME:
+                // save the connected device&#39;s name
+                mConnectedDeviceName = msg.getData().getString(Constants.DEVICE_NAME);
+                if (null != activity) {
+                    Toast.makeText(activity, &amp;quot;Connected to &amp;quot;
+                            + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
+                }
+                break;
+            case Constants.MESSAGE_TOAST:
+                if (null != activity) {
+                    Toast.makeText(activity, msg.getData().getString(Constants.TOAST),
+                            Toast.LENGTH_SHORT).show();
+                }
+                break;
+        }
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デバイスを検出可能にするのと、DeviceListActivityを始めるメニュー。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+    inflater.inflate(R.menu.bluetooth_chat, menu);
+}
+
+@Override
+public boolean onOptionsItemSelected(MenuItem item) {
+    switch (item.getItemId()) {
+        case R.id.secure_connect_scan: {
+            // Launch the DeviceListActivity to see devices and do scan
+            Intent serverIntent = new Intent(getActivity(), DeviceListActivity.class);
+            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE);
+            return true;
+        }
+        case R.id.insecure_connect_scan: {
+            // Launch the DeviceListActivity to see devices and do scan
+            Intent serverIntent = new Intent(getActivity(), DeviceListActivity.class);
+            startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_INSECURE);
+            return true;
+        }
+        case R.id.discoverable: {
+            // Ensure this device is discoverable by others
+            ensureDiscoverable();
+            return true;
+        }
+    }
+    return false;
+}
+
+private void ensureDiscoverable() {
+    if (mBluetoothAdapter.getScanMode() !=
+            BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE) {
+        Intent discoverableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
+        discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
+        startActivity(discoverableIntent);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bluetoothchatservice&#34;&gt;BluetoothChatService&lt;/h2&gt;
+
+&lt;p&gt;初期stateはSTATE_NONE。
+setStateしたときにobtainMessageでstateが変わったときの処理をhandlerに行わせる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public BluetoothChatService(Context context, Handler handler) {
+    mAdapter = BluetoothAdapter.getDefaultAdapter();
+    mState = STATE_NONE;
+    mHandler = handler;
+}
+
+private synchronized void setState(int state) {
+    Log.d(TAG, &amp;quot;setState() &amp;quot; + mState + &amp;quot; -&amp;gt; &amp;quot; + state);
+    mState = state;
+
+    // Give the new state to the Handler so the UI Activity can update
+    mHandler.obtainMessage(Constants.MESSAGE_STATE_CHANGE, state, -1).sendToTarget();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;接続しようとしている、した、される処理はそれぞれ別スレッドで行われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public synchronized void start() {
+    Log.d(TAG, &amp;quot;start&amp;quot;);
+
+    // Cancel any thread attempting to make a connection
+    if (mConnectThread != null) {
+        mConnectThread.cancel();
+        mConnectThread = null;
+    }
+
+    // Cancel any thread currently running a connection
+    if (mConnectedThread != null) {
+        mConnectedThread.cancel();
+        mConnectedThread = null;
+    }
+
+    setState(STATE_LISTEN);
+
+    // Start the thread to listen on a BluetoothServerSocket
+    if (mSecureAcceptThread == null) {
+        mSecureAcceptThread = new AcceptThread(true);
+        mSecureAcceptThread.start();
+    }
+    if (mInsecureAcceptThread == null) {
+        mInsecureAcceptThread = new AcceptThread(false);
+        mInsecureAcceptThread.start();
+    }
+}
+
+public synchronized void stop() {
+    Log.d(TAG, &amp;quot;stop&amp;quot;);
+
+    if (mConnectThread != null) {
+        mConnectThread.cancel();
+        mConnectThread = null;
+    }
+
+    if (mConnectedThread != null) {
+        mConnectedThread.cancel();
+        mConnectedThread = null;
+    }
+
+    if (mSecureAcceptThread != null) {
+        mSecureAcceptThread.cancel();
+        mSecureAcceptThread = null;
+    }
+
+    if (mInsecureAcceptThread != null) {
+        mInsecureAcceptThread.cancel();
+        mInsecureAcceptThread = null;
+    }
+    setState(STATE_NONE);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず、接続するためのConnectThread。コンストラクタでつなげるdeviceからsocketを作成し、
+runで接続する。接続できたらconnectedを呼び、ConnectedThreadを始める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private class ConnectThread extends Thread {
+    private final BluetoothSocket mmSocket;
+    private final BluetoothDevice mmDevice;
+    private String mSocketType;
+
+    public ConnectThread(BluetoothDevice device, boolean secure) {
+        mmDevice = device;
+        BluetoothSocket tmp = null;
+        mSocketType = secure ? &amp;quot;Secure&amp;quot; : &amp;quot;Insecure&amp;quot;;
+
+        // Get a BluetoothSocket for a connection with the
+        // given BluetoothDevice
+        try {
+            if (secure) {
+                tmp = device.createRfcommSocketToServiceRecord(
+                        MY_UUID_SECURE);
+            } else {
+                tmp = device.createInsecureRfcommSocketToServiceRecord(
+                        MY_UUID_INSECURE);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;Socket Type: &amp;quot; + mSocketType + &amp;quot;create() failed&amp;quot;, e);
+        }
+        mmSocket = tmp;
+    }
+
+    public void run() {
+        Log.i(TAG, &amp;quot;BEGIN mConnectThread SocketType:&amp;quot; + mSocketType);
+        setName(&amp;quot;ConnectThread&amp;quot; + mSocketType);
+
+        // Always cancel discovery because it will slow down a connection
+        mAdapter.cancelDiscovery();
+
+        // Make a connection to the BluetoothSocket
+        try {
+            // This is a blocking call and will only return on a
+            // successful connection or an exception
+            mmSocket.connect();
+        } catch (IOException e) {
+            // Close the socket
+            try {
+                mmSocket.close();
+            } catch (IOException e2) {
+                Log.e(TAG, &amp;quot;unable to close() &amp;quot; + mSocketType +
+                        &amp;quot; socket during connection failure&amp;quot;, e2);
+            }
+            connectionFailed();
+            return;
+        }
+
+        // Reset the ConnectThread because we&#39;re done
+        synchronized (BluetoothChatService.this) {
+            mConnectThread = null;
+        }
+
+        // Start the connected thread
+        connected(mmSocket, mmDevice, mSocketType);
+    }
+
+    public void cancel() {
+        try {
+            mmSocket.close();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;close() of connect &amp;quot; + mSocketType + &amp;quot; socket failed&amp;quot;, e);
+        }
+    }
+}
+
+public synchronized void connected(BluetoothSocket socket, BluetoothDevice
+        device, final String socketType) {
+    Log.d(TAG, &amp;quot;connected, Socket Type:&amp;quot; + socketType);
+
+    // Cancel the thread that completed the connection
+    if (mConnectThread != null) {
+        mConnectThread.cancel();
+        mConnectThread = null;
+    }
+
+    // Cancel any thread currently running a connection
+    if (mConnectedThread != null) {
+        mConnectedThread.cancel();
+        mConnectedThread = null;
+    }
+
+    // Cancel the accept thread because we only want to connect to one device
+    if (mSecureAcceptThread != null) {
+        mSecureAcceptThread.cancel();
+        mSecureAcceptThread = null;
+    }
+    if (mInsecureAcceptThread != null) {
+        mInsecureAcceptThread.cancel();
+        mInsecureAcceptThread = null;
+    }
+
+    // Start the thread to manage the connection and perform transmissions
+    mConnectedThread = new ConnectedThread(socket, socketType);
+    mConnectedThread.start();
+
+    // Send the name of the connected device back to the UI Activity
+    Message msg = mHandler.obtainMessage(Constants.MESSAGE_DEVICE_NAME);
+    Bundle bundle = new Bundle();
+    bundle.putString(Constants.DEVICE_NAME, device.getName());
+    msg.setData(bundle);
+    mHandler.sendMessage(msg);
+
+    setState(STATE_CONNECTED);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ConnectedThreadではsocketからinputStreamとoutputStreamを取得し、
+runでは読んでメッセージで渡し、writeで書く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private class ConnectedThread extends Thread {
+    private final BluetoothSocket mmSocket;
+    private final InputStream mmInStream;
+    private final OutputStream mmOutStream;
+
+    public ConnectedThread(BluetoothSocket socket, String socketType) {
+        Log.d(TAG, &amp;quot;create ConnectedThread: &amp;quot; + socketType);
+        mmSocket = socket;
+        InputStream tmpIn = null;
+        OutputStream tmpOut = null;
+
+        // Get the BluetoothSocket input and output streams
+        try {
+            tmpIn = socket.getInputStream();
+            tmpOut = socket.getOutputStream();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;temp sockets not created&amp;quot;, e);
+        }
+
+        mmInStream = tmpIn;
+        mmOutStream = tmpOut;
+    }
+
+    public void run() {
+        Log.i(TAG, &amp;quot;BEGIN mConnectedThread&amp;quot;);
+        byte[] buffer = new byte[1024];
+        int bytes;
+
+        // Keep listening to the InputStream while connected
+        while (mState == STATE_CONNECTED) {
+            try {
+                // Read from the InputStream
+                bytes = mmInStream.read(buffer);
+
+                // Send the obtained bytes to the UI Activity
+                mHandler.obtainMessage(Constants.MESSAGE_READ, bytes, -1, buffer)
+                        .sendToTarget();
+            } catch (IOException e) {
+                Log.e(TAG, &amp;quot;disconnected&amp;quot;, e);
+                connectionLost();
+                // Start the service over to restart listening mode
+                BluetoothChatService.this.start();
+                break;
+            }
+        }
+    }
+
+    /**
+     * Write to the connected OutStream.
+     *
+     * @param buffer The bytes to write
+     */
+    public void write(byte[] buffer) {
+        try {
+            mmOutStream.write(buffer);
+
+            // Share the sent message back to the UI Activity
+            mHandler.obtainMessage(Constants.MESSAGE_WRITE, -1, -1, buffer)
+                    .sendToTarget();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;Exception during write&amp;quot;, e);
+        }
+    }
+
+    public void cancel() {
+        try {
+            mmSocket.close();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;close() of connect socket failed&amp;quot;, e);
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;AcceptThreadでは常に受け入れられる形にしておく。もしつながったらConnectThreadと同様にconnectedする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private class AcceptThread extends Thread {
+    // The local server socket
+    private final BluetoothServerSocket mmServerSocket;
+    private String mSocketType;
+
+    public AcceptThread(boolean secure) {
+        BluetoothServerSocket tmp = null;
+        mSocketType = secure ? &amp;quot;Secure&amp;quot; : &amp;quot;Insecure&amp;quot;;
+
+        // Create a new listening server socket
+        try {
+            if (secure) {
+                tmp = mAdapter.listenUsingRfcommWithServiceRecord(NAME_SECURE,
+                        MY_UUID_SECURE);
+            } else {
+                tmp = mAdapter.listenUsingInsecureRfcommWithServiceRecord(
+                        NAME_INSECURE, MY_UUID_INSECURE);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;Socket Type: &amp;quot; + mSocketType + &amp;quot;listen() failed&amp;quot;, e);
+        }
+        mmServerSocket = tmp;
+    }
+
+    public void run() {
+        Log.d(TAG, &amp;quot;Socket Type: &amp;quot; + mSocketType +
+                &amp;quot;BEGIN mAcceptThread&amp;quot; + this);
+        setName(&amp;quot;AcceptThread&amp;quot; + mSocketType);
+
+        BluetoothSocket socket = null;
+
+        // Listen to the server socket if we&#39;re not connected
+        while (mState != STATE_CONNECTED) {
+            try {
+                // This is a blocking call and will only return on a
+                // successful connection or an exception
+                socket = mmServerSocket.accept();
+            } catch (IOException e) {
+                Log.e(TAG, &amp;quot;Socket Type: &amp;quot; + mSocketType + &amp;quot;accept() failed&amp;quot;, e);
+                break;
+            }
+
+            // If a connection was accepted
+            if (socket != null) {
+                synchronized (BluetoothChatService.this) {
+                    switch (mState) {
+                        case STATE_LISTEN:
+                        case STATE_CONNECTING:
+                            // Situation normal. Start the connected thread.
+                            connected(socket, socket.getRemoteDevice(),
+                                    mSocketType);
+                            break;
+                        case STATE_NONE:
+                        case STATE_CONNECTED:
+                            // Either not ready or already connected. Terminate new socket.
+                            try {
+                                socket.close();
+                            } catch (IOException e) {
+                                Log.e(TAG, &amp;quot;Could not close unwanted socket&amp;quot;, e);
+                            }
+                            break;
+                    }
+                }
+            }
+        }
+        Log.i(TAG, &amp;quot;END mAcceptThread, socket Type: &amp;quot; + mSocketType);
+
+    }
+
+    public void cancel() {
+        Log.d(TAG, &amp;quot;Socket Type&amp;quot; + mSocketType + &amp;quot;cancel &amp;quot; + this);
+        try {
+            mmServerSocket.close();
+        } catch (IOException e) {
+            Log.e(TAG, &amp;quot;Socket Type&amp;quot; + mSocketType + &amp;quot;close() of server failed&amp;quot;, e);
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;connectでは、接続しようとしているならそれをキャンセル、接続したものがあるならsocketを閉じて
+新しい接続を始める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public synchronized void connect(BluetoothDevice device, boolean secure) {
+    Log.d(TAG, &amp;quot;connect to: &amp;quot; + device);
+
+    // Cancel any thread attempting to make a connection
+    if (mState == STATE_CONNECTING) {
+        if (mConnectThread != null) {
+            mConnectThread.cancel();
+            mConnectThread = null;
+        }
+    }
+
+    // Cancel any thread currently running a connection
+    if (mConnectedThread != null) {
+        mConnectedThread.cancel();
+        mConnectedThread = null;
+    }
+
+    // Start the thread to connect with the given device
+    mConnectThread = new ConnectThread(device, secure);
+    mConnectThread.start();
+    setState(STATE_CONNECTING);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;writeでは接続済みであることを確認後、connectedThreadの(参照を)コピーして、writeしている。
+この間にmConnectedThreadにnullが代入されたりすることをsynchronizedで防ぐ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void write(byte[] out) {
+    // Create temporary object
+    ConnectedThread r;
+    // Synchronize a copy of the ConnectedThread
+    synchronized (this) {
+        if (mState != STATE_CONNECTED) return;
+        r = mConnectedThread;
+    }
+    // Perform the write unsynchronized
+    r.write(out);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;devicelistactivity&#34;&gt;DeviceListActivity&lt;/h2&gt;
+
+&lt;p&gt;検出可能にしている他端末を探し、選択する。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS)&lt;/code&gt;して、
+&lt;code&gt;setProgressBarIndeterminateVisibility(true)&lt;/code&gt;すると右上にプログレスバーが表示できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;new IntentFilter(BluetoothDevice.ACTION_FOUND)&lt;/code&gt;と
+&lt;code&gt;new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)&lt;/code&gt;で
+&lt;code&gt;registerReceiver(mReceiver, filter)&lt;/code&gt;して、
+デバイスを見つけたときと探し終わったときにブロードキャストされてくるインテントを受信するレシーバーを登録する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+
+    // Setup the window
+    requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
+    setContentView(R.layout.activity_device_list);
+
+    // Set result CANCELED in case the user backs out
+    setResult(Activity.RESULT_CANCELED);
+
+    // Initialize the button to perform device discovery
+    Button scanButton = (Button) findViewById(R.id.button_scan);
+    scanButton.setOnClickListener(new View.OnClickListener() {
+        public void onClick(View v) {
+            doDiscovery();
+            v.setVisibility(View.GONE);
+        }
+    });
+
+    // Initialize array adapters. One for already paired devices and
+    // one for newly discovered devices
+    ArrayAdapter&amp;lt;String&amp;gt; pairedDevicesArrayAdapter =
+            new ArrayAdapter&amp;lt;String&amp;gt;(this, R.layout.device_name);
+    mNewDevicesArrayAdapter = new ArrayAdapter&amp;lt;String&amp;gt;(this, R.layout.device_name);
+
+    // Find and set up the ListView for paired devices
+    ListView pairedListView = (ListView) findViewById(R.id.paired_devices);
+    pairedListView.setAdapter(pairedDevicesArrayAdapter);
+    pairedListView.setOnItemClickListener(mDeviceClickListener);
+
+    // Find and set up the ListView for newly discovered devices
+    ListView newDevicesListView = (ListView) findViewById(R.id.new_devices);
+    newDevicesListView.setAdapter(mNewDevicesArrayAdapter);
+    newDevicesListView.setOnItemClickListener(mDeviceClickListener);
+
+    // Register for broadcasts when a device is discovered
+    IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+    this.registerReceiver(mReceiver, filter);
+
+    // Register for broadcasts when discovery has finished
+    filter = new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+    this.registerReceiver(mReceiver, filter);
+
+    // Get the local Bluetooth adapter
+    mBtAdapter = BluetoothAdapter.getDefaultAdapter();
+
+    // Get a set of currently paired devices
+    Set&amp;lt;BluetoothDevice&amp;gt; pairedDevices = mBtAdapter.getBondedDevices();
+
+    // If there are paired devices, add each one to the ArrayAdapter
+    if (pairedDevices.size() &amp;gt; 0) {
+        findViewById(R.id.title_paired_devices).setVisibility(View.VISIBLE);
+        for (BluetoothDevice device : pairedDevices) {
+            pairedDevicesArrayAdapter.add(device.getName() + &amp;quot;\n&amp;quot; + device.getAddress());
+        }
+    } else {
+        String noDevices = getResources().getText(R.string.none_paired).toString();
+        pairedDevicesArrayAdapter.add(noDevices);
+    }
+}
+
+private void doDiscovery() {
+    Log.d(TAG, &amp;quot;doDiscovery()&amp;quot;);
+
+    // Indicate scanning in the title
+    setProgressBarIndeterminateVisibility(true);
+    setTitle(R.string.scanning);
+
+    // Turn on sub-title for new devices
+    findViewById(R.id.title_new_devices).setVisibility(View.VISIBLE);
+
+    // If we&#39;re already discovering, stop it
+    if (mBtAdapter.isDiscovering()) {
+        mBtAdapter.cancelDiscovery();
+    }
+
+    // Request discover from BluetoothAdapter
+    mBtAdapter.startDiscovery();
+}
+
+private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        String action = intent.getAction();
+
+        // When discovery finds a device
+        if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+            // Get the BluetoothDevice object from the Intent
+            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+            // If it&#39;s already paired, skip it, because it&#39;s been listed already
+            if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+                mNewDevicesArrayAdapter.add(device.getName() + &amp;quot;\n&amp;quot; + device.getAddress());
+            }
+            // When discovery is finished, change the Activity title
+        } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
+            setProgressBarIndeterminateVisibility(false);
+            setTitle(R.string.select_device);
+            if (mNewDevicesArrayAdapter.getCount() == 0) {
+                String noDevices = getResources().getText(R.string.none_found).toString();
+                mNewDevicesArrayAdapter.add(noDevices);
+            }
+        }
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;onDestroyで、探索をやめ、登録したレシーバーを外す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;@Override
+protected void onDestroy() {
+    super.onDestroy();
+
+    // Make sure we&#39;re not doing discovery anymore
+    if (mBtAdapter != null) {
+        mBtAdapter.cancelDiscovery();
+    }
+
+    // Unregister broadcast listeners
+    this.unregisterReceiver(mReceiver);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;接続先リストから選択されたら、アドレスを付けて結果を返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private AdapterView.OnItemClickListener mDeviceClickListener
+        = new AdapterView.OnItemClickListener() {
+    public void onItemClick(AdapterView&amp;lt;?&amp;gt; av, View v, int arg2, long arg3) {
+        // Cancel discovery because it&#39;s costly and we&#39;re about to connect
+        mBtAdapter.cancelDiscovery();
+
+        // Get the device MAC address, which is the last 17 chars in the View
+        String info = ((TextView) v).getText().toString();
+        String address = info.substring(info.length() - 17);
+
+        // Create the result Intent and include the MAC address
+        Intent intent = new Intent();
+        intent.putExtra(EXTRA_DEVICE_ADDRESS, address);
+
+        // Set result and finish this Activity
+        setResult(Activity.RESULT_OK, intent);
+        finish();
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.16" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+    <link rel="stylesheet" href="/css/slidebars.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="http://sambaiz.net/index.xml">
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@sambaiz">
+    
+    <title>GKEで複数コンテナのアプリケーションを動かす - sambaiz.net</title>
+    <meta name="twitter:title" content="GKEで複数コンテナのアプリケーションを動かす - sambaiz.net">
+    <meta property='og:title' content="GKEで複数コンテナのアプリケーションを動かす - sambaiz.net">
+    <meta property="og:type" content="article">
+    
+      <meta name="description" content="GKE">
+      <meta name="twitter:description" content="GKE">
+    
+    
+
+    <meta property="og:url" content="http://sambaiz.net/article/18/">
+    <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
+    <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
+    <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"http:\/\/sambaiz.net\/"
+    },
+    "headline": "GKEで複数コンテナのアプリケーションを動かす | sambaiz.net ",
+    "datePublished": "2016-08-26T21:57:00JST",
+    "dateModified": "2016-08-26T21:57:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "http:\/\/sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz.net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "http:\/\/sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "http:\/\/sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "GKE"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="http://sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="http://sambaiz.net/tags/k8s">k8s</a></li><li><a href="http://sambaiz.net/tags/android">android</a></li><li><a href="http://sambaiz.net/tags/gcp">gcp</a></li><li><a href="http://sambaiz.net/tags/ble">ble</a></li><li><a href="http://sambaiz.net/tags/docker">docker</a></li><li><a href="http://sambaiz.net/tags/mysql">mysql</a></li><li><a href="http://sambaiz.net/tags/react">react</a></li><li><a href="http://sambaiz.net/tags/aws">aws</a></li><li><a href="http://sambaiz.net/tags/golang">golang</a></li><li><a href="http://sambaiz.net/tags/grpc">grpc</a></li><li><a href="http://sambaiz.net/tags/hugo">hugo</a></li><li><a href="http://sambaiz.net/tags/infra">infra</a></li><li><a href="http://sambaiz.net/tags/ios">ios</a></li><li><a href="http://sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="http://sambaiz.net/tags/log">log</a></li><li><a href="http://sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="http://sambaiz.net/tags/node.js">node.js</a></li><li><a href="http://sambaiz.net/tags/unity">unity</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <a class="nl" href="http://sambaiz.net/">sambaiz.net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+      </div>
+    </header>
+
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>GKEで複数コンテナのアプリケーションを動かす</h1>
+          <p>(2016-08-26)</p>
+          <p><a href="http://sambaiz.net/article/17">前回</a>は単一コンテナのアプリケーションを動かしたが、今回はコンテナ間でやり取りが発生するものを動かす。
+流れとしては、クライアントからのリクエストを<code>GATEWAY</code>サーバーで受け取り、<code>SERVICE</code>サーバーにリクエストし、その結果を返すまで。</p>
+
+<p>プログラムは以下の通り、環境変数<code>TYPE</code>の値によって挙動を変えていて、同じイメージを使い回す。コードは<a href="https://github.com/sambaiz/gke-multi-container-app">ここ</a>。</p>
+
+<pre><code>var http = require('http');
+var handleRequest = function(request, response) {
+  if(process.env.TYPE == &quot;GATEWAY&quot;){
+    console.log('Passed.');
+    var options = {
+      host: 'service',
+      port: 8080,
+      method: 'GET'
+    };
+    var req = http.request(options, function(res) {
+      data = &quot;&quot;
+      res.on('data', function (chunk) {
+        data+=chunk;
+      });
+
+      res.on('end', () =&gt; {
+        response.writeHead(200);
+        response.end(data);
+      });
+    });
+    req.on('error', function(e) {
+      response.writeHead(500)
+      response.end(e.message);
+    });
+    req.end();
+  }else{
+    console.log('Received.');
+    response.writeHead(200);
+    response.end('ok');
+  }
+};
+var www = http.createServer(handleRequest);
+www.listen(8080);
+</code></pre>
+
+<p>これをContainer RegistryにPushする。</p>
+
+<pre><code>$ export PROJECT_ID=&quot;gcp-test-141011&quot;
+$ docker build -t gcr.io/$PROJECT_ID/multitest:v1 .
+$ gcloud docker push gcr.io/$PROJECT_ID/multitest:v1
+</code></pre>
+
+<p>ローカルで試すためにminikubeを起動。コンテキストがminikubeに設定される。</p>
+
+<pre><code>$ minikube start
+$ kubectl config current-context
+minikube
+</code></pre>
+
+<p>minikubeでContainer Registryから取得できるようにsecretを作成する。</p>
+
+<pre><code>$ kubectl create secret docker-registry myregistrykey --docker-server=https://gcr.io --docker-username=oauth2accesstoken --docker-password=&quot;$(gcloud auth print-access-token)&quot; --docker-email=***
+</code></pre>
+
+<p>まず、以下の<code>service_deployment.yaml</code>でDeploymentを作成する。
+envのところで環境変数<code>TYPE</code>を<code>SERVICE</code>に設定した。
+また、先ほど作成したsecretを<code>imagePullSecrets</code>で指定し、
+ローカルのminikube環境でContainer Registryから取得できるようにしている。
+同様に<code>gateway_deployment.yaml</code>でも作成する。</p>
+
+<pre><code>apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: service
+  labels:
+    app: service
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: service
+    spec:
+      containers:
+      - name: service
+        image: gcr.io/gcp-test-141011/multitest:v1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        env:
+        - name: TYPE
+          value: SERVICE
+        ports:
+        - containerPort: 8080
+      imagePullSecrets:
+      - name: myregistrykey    
+</code></pre>
+
+<pre><code>$ kubectl create -f service_deployment.yaml
+$ kubectl create -f gateway_deployment.yaml
+$ kubectl get deployment
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+gateway   1         1         1            1           8m
+service   1         1         1            1           28m
+</code></pre>
+
+<p>次に、これを内部から呼べるようにするためのServiceを作成する。</p>
+
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: service
+  labels:
+    app: service
+spec:
+  ports:
+  - port: 8080
+  selector:
+    app: service
+</code></pre>
+
+<p><code>GATEWAY</code>の方は外に開くので、EXTERNAL IPが割り当てられるようにする。
+ただ、minikubeでは<code>type: LoadBalancer</code>に対応していないので代わりに<code>type: NodePort</code>を指定する。</p>
+
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  # type: LoadBalancer
+  type: NodePort
+  ports:
+  - port: 8080
+    nodePort: 30002
+  selector:
+    app: gateway
+</code></pre>
+
+<pre><code>$ kubectl create -f service_service.yaml
+$ kubectl create -f gateway_service.yaml
+$ kubectl get services
+NAME            CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+gateway         10.0.0.176   &lt;nodes&gt;       8080/TCP   1h
+service         10.0.0.111   &lt;none&gt;        8080/TCP   2d
+</code></pre>
+
+<p><code>GATEWAY</code>サーバーを越えて<code>SERVICE</code>サーバーまで到達したことが確認できた。</p>
+
+<pre><code>$ curl 192.168.99.100:30002
+ok
+
+$ kubectl get pods
+NAME                       READY     STATUS    RESTARTS   AGE
+gateway-3043515563-a0tb5   1/1       Running   0          38m
+service-2727435432-9glvb   1/1       Running   0          38m
+
+$ kubectl logs service-2727435432-9glvb
+Received.
+</code></pre>
+
+<p>一通り動いたのでこんなシェルスクリプトを書いた。</p>
+
+<pre><code>#!/bin/bash
+
+context=`kubectl config current-context`
+echo &quot;${context}で実行します。よろしいですか[Y/N]&quot;
+read ANSWER
+case $ANSWER in
+    &quot;Y&quot; ) :;;
+    * ) exit;;
+esac
+if [ $context = &quot;minikube&quot; ] ; then
+  kubectl create -f yaml/gateway_service_minikube.yaml
+  kubectl create -f yaml/service_deployment_minikube.yaml
+  kubectl create -f yaml/gateway_deployment_minikube.yaml
+else
+  kubectl create -f yaml/gateway_service.yaml
+  kubectl create -f yaml/service_deployment.yaml
+  kubectl create -f yaml/gateway_deployment.yaml
+fi
+kubectl create -f yaml/service_service.yaml
+</code></pre>
+
+<p>これを実行するとこうなる。</p>
+
+<pre><code>$ gcloud container clusters create multi-container-app
+$ kubectl config current-context
+gke_gcp-test-141011_asia-east1-b_multi-container-app
+
+$ sh create.sh
+gke_gcp-test-141011_asia-east1-b_multi-container-appで実行します。よろしいですか[Y/N]
+Y
+service &quot;gateway&quot; created
+deployment &quot;service&quot; created
+deployment &quot;gateway&quot; created
+service &quot;service&quot; created
+
+$ kubectl get service
+NAME         CLUSTER-IP      EXTERNAL-IP       PORT(S)    AGE
+gateway      10.83.254.5     104.199.206.147   8080/TCP   4m
+service      10.83.255.118   &lt;none&gt;            8080/TCP   4m
+
+$ curl 104.199.206.147:8080
+ok
+</code></pre>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.16" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+    <link rel="stylesheet" href="/css/slidebars.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="http://sambaiz.net/index.xml">
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@sambaiz">
+    
+    <title>DeepDreaming with TensorFlowをやる(2) - sambaiz.net</title>
+    <meta name="twitter:title" content="DeepDreaming with TensorFlowをやる(2) - sambaiz.net">
+    <meta property='og:title' content="DeepDreaming with TensorFlowをやる(2) - sambaiz.net">
+    <meta property="og:type" content="article">
+    
+      <meta name="description" content="Tensorflowで画像処理(続き)">
+      <meta name="twitter:description" content="Tensorflowで画像処理(続き)">
+    
+    
+
+    <meta property="og:url" content="http://sambaiz.net/article/21/">
+    <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
+    <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
+    <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"http:\/\/sambaiz.net\/"
+    },
+    "headline": "DeepDreaming with TensorFlowをやる(2) | sambaiz.net ",
+    "datePublished": "2016-09-10T14:46:00JST",
+    "dateModified": "2016-09-10T14:46:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "http:\/\/sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz.net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "http:\/\/sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "http:\/\/sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "Tensorflowで画像処理(続き)"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="http://sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="http://sambaiz.net/tags/k8s">k8s</a></li><li><a href="http://sambaiz.net/tags/android">android</a></li><li><a href="http://sambaiz.net/tags/gcp">gcp</a></li><li><a href="http://sambaiz.net/tags/ble">ble</a></li><li><a href="http://sambaiz.net/tags/docker">docker</a></li><li><a href="http://sambaiz.net/tags/mysql">mysql</a></li><li><a href="http://sambaiz.net/tags/react">react</a></li><li><a href="http://sambaiz.net/tags/aws">aws</a></li><li><a href="http://sambaiz.net/tags/golang">golang</a></li><li><a href="http://sambaiz.net/tags/grpc">grpc</a></li><li><a href="http://sambaiz.net/tags/hugo">hugo</a></li><li><a href="http://sambaiz.net/tags/infra">infra</a></li><li><a href="http://sambaiz.net/tags/ios">ios</a></li><li><a href="http://sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="http://sambaiz.net/tags/log">log</a></li><li><a href="http://sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="http://sambaiz.net/tags/node.js">node.js</a></li><li><a href="http://sambaiz.net/tags/unity">unity</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <a class="nl" href="http://sambaiz.net/">sambaiz.net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+      </div>
+    </header>
+
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>DeepDreaming with TensorFlowをやる(2)</h1>
+          <p>(2016-09-10)</p>
+          
+
+<p><a href="http://sambaiz.net/article/20">前回</a>の続き。</p>
+
+<h2 id="multiscale-image-generation">Multiscale image generation</h2>
+
+<p>様々なスケールで勾配上昇させる。小さなスケールで上昇させたものをより大きなスケールでさらに上昇させていく。
+ただ、壁紙のようなサイズを生成するような場合にそれを行うと、GPUのメモリを食いつぶしてしまう。
+これを避けるために、画像を小さなタイルに分割し、それぞれ独立に勾配を計算する。
+また、毎回画像をランダムにシフトしていくことで、タイルに見えることを避け、画像全体の品質を向上させる。</p>
+
+<pre><code>def tffunc(*argtypes):
+    '''Helper that transforms TF-graph generating function into a regular one.
+    See &quot;resize&quot; function below.
+    '''
+    placeholders = list(map(tf.placeholder, argtypes))
+    def wrap(f):
+        out = f(*placeholders)
+        def wrapper(*args, **kw):
+            return out.eval(dict(zip(placeholders, args)), session=kw.get('session'))
+        return wrapper
+    return wrap
+
+# Helper function that uses TF to resize an image
+def resize(img, size):
+    img = tf.expand_dims(img, 0)
+    return tf.image.resize_bilinear(img, size)[0,:,:,:]
+resize = tffunc(np.float32, np.int32)(resize)
+
+
+def calc_grad_tiled(img, t_grad, tile_size=512):
+    '''Compute the value of tensor t_grad over the image in a tiled way.
+    Random shifts are applied to the image to blur tile boundaries over
+    multiple iterations.'''
+    sz = tile_size
+    h, w = img.shape[:2]
+    sx, sy = np.random.randint(sz, size=2)
+    img_shift = np.roll(np.roll(img, sx, 1), sy, 0)
+    grad = np.zeros_like(img)
+    for y in range(0, max(h-sz//2, sz),sz):
+        for x in range(0, max(w-sz//2, sz),sz):
+            sub = img_shift[y:y+sz,x:x+sz]
+            g = sess.run(t_grad, {t_input:sub})
+            grad[y:y+sz,x:x+sz] = g
+    return np.roll(np.roll(grad, -sx, 1), -sy, 0)
+</code></pre>
+
+<p><code>tf.image.resize_bilinear</code>は<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/image.html#resize_bilinear">双線形補間によってリサイズする。</a></p>
+
+<p><code>numpy.roll</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.roll.html">配列を第三引数axisによってローリングする</a>。
+axisを指定しない場合、フラットなものとして扱われる。</p>
+
+<pre><code>hoge = [[0, 1, 2],
+        [3, 4, 5],
+        [6, 7, 8]]
+
+print(np.roll(hoge, 1))
+# [[8 0 1]
+#  [2 3 4]
+#  [5 6 7]]
+
+print(np.roll(hoge, 1, axis=0))
+# [[6 7 8]
+#  [0 1 2]
+#  [3 4 5]]
+
+print(np.roll(hoge, 1, axis=1))
+# [[2 0 1]
+#  [5 3 4]
+#  [8 6 7]]
+</code></pre>
+
+<p>つまり、<code>calc_grad_tiled</code>では、ランダムにローリングして、タイルに分割して勾配を求め、ローリングした分を戻して返している。
+これと、画像サイズを<code>octave_scale</code>倍にしていく以外は前回やったのと基本的に同じだ。</p>
+
+<pre><code>def render_multiscale(t_obj, img0=img_noise, iter_n=10, step=1.0, octave_n=3, octave_scale=1.4):
+    t_score = tf.reduce_mean(t_obj) # defining the optimization objective
+    t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
+
+    img = img0.copy()
+    for octave in range(octave_n):
+        if octave&gt;0:
+            hw = np.float32(img.shape[:2])*octave_scale
+            img = resize(img, np.int32(hw))
+        for i in range(iter_n):
+            g = calc_grad_tiled(img, t_grad)
+            # normalizing the gradient, so the same step size should work
+            g /= g.std()+1e-8         # for different layers and networks
+            img += g*step
+            print('.', end = ' ')
+        clear_output()
+        showarray(visstd(img))
+
+render_multiscale(T(layer)[:,:,:,channel])
+</code></pre>
+
+<h2 id="laplacian-pyramid-gradient-normalization">Laplacian Pyramid Gradient Normalization</h2>
+
+<p>結果の画像は、高い周波数(ピクセルの変化の度合が高い)が多く含まれている。
+これを改善するための一つの方法として、毎回画像をぼかし、高周波数を抑え、画像を滑らかにするものがある。
+ただ、この方法は良い画像にするためにより多くの繰り返しが必要になってしまう。
+逆に、低周波数を上げるのは、ラプラシアンピラミッドを使う方法があって、これで勾配を正規化する。</p>
+
+<p>ラプラシアンピラミッドというのは、ガウシアンピラミッドにおける、ある解像度の画像と、
+その一つレベルの高い(解像度1/2 * <sup>1</sup>&frasl;<sub>2</sub> = <sup>1</sup>&frasl;<sub>4</sub>)画像をアップサンプルしたものの差分だ。</p>
+
+<p><a href="http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_pyramids/py_pyramids.html">画像ピラミッド — OpenCV-Python Tutorials 1 documentation</a></p>
+
+<pre><code>k = np.float32([1,4,6,4,1])
+k = np.outer(k, k)
+# [[  1.   4.   6.   4.   1.]
+#  [  4.  16.  24.  16.   4.]
+#  [  6.  24.  36.  24.   6.]
+#  [  4.  16.  24.  16.   4.]
+#  [  1.   4.   6.   4.   1.]]
+
+k5x5 = k[:,:,None,None]/k.sum()*np.eye(3, dtype=np.float32)
+
+print(len(k5x5))
+# 5
+
+print(k5x5[0])
+# [[[ 0.00390625  0.          0.        ]
+#  [ 0.          0.00390625  0.        ]
+#  [ 0.          0.          0.00390625]]
+
+# [[ 0.015625    0.          0.        ]
+#  [ 0.          0.015625    0.        ]
+#  [ 0.          0.          0.015625  ]]
+
+# [[ 0.0234375   0.          0.        ]
+#  [ 0.          0.0234375   0.        ]
+#  [ 0.          0.          0.0234375 ]]
+
+# [[ 0.015625    0.          0.        ]
+#  [ 0.          0.015625    0.        ]
+#  [ 0.          0.          0.015625  ]]
+
+# [[ 0.00390625  0.          0.        ]
+#  [ 0.          0.00390625  0.        ]
+#  [ 0.          0.          0.00390625]]]
+</code></pre>
+
+<p><code>numpy.outer</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.outer.html">外積を求める</a>もので、
+<code>numpy.eye</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.eye.html">対角線が1で、それ以外は0の2次元行列を返す</a>。
+<code>k</code>を指定すると、対角線の位置を変更できるが、指定していない場合はNxNの単位行列が返ることになる。
+このフィルターで畳み込むことで、ラプラシアンピラミッドの1レベル高い画像に変換できる。
+<code>tf.nn.conv2d_transpose</code>は
+<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/nn.html#conv2d_transpose">畳み込みの逆処理</a>のようなもので、
+これでアップサンプルした画像と元画像の差分を取って、ラプラシアンピラミッドを生成している。</p>
+
+<pre><code>def lap_split(img):
+    '''Split the image into lo and hi frequency components'''
+    with tf.name_scope('split'):
+        lo = tf.nn.conv2d(img, k5x5, [1,2,2,1], 'SAME')
+        lo2 = tf.nn.conv2d_transpose(lo, k5x5*4, tf.shape(img), [1,2,2,1])
+        hi = img-lo2
+    return lo, hi
+
+def lap_split_n(img, n):
+    '''Build Laplacian pyramid with n splits'''
+    levels = []
+    for i in range(n):
+        img, hi = lap_split(img)
+        levels.append(hi)
+    levels.append(img)
+    return levels[::-1]
+
+def lap_merge(levels):
+    '''Merge Laplacian pyramid'''
+    img = levels[0]
+    for hi in levels[1:]:
+        with tf.name_scope('merge'):
+            img = tf.nn.conv2d_transpose(img, k5x5*4, tf.shape(hi), [1,2,2,1]) + hi
+    return img
+
+def normalize_std(img, eps=1e-10):
+    '''Normalize image by making its standard deviation = 1.0'''
+    with tf.name_scope('normalize'):
+        std = tf.sqrt(tf.reduce_mean(tf.square(img)))
+        return img/tf.maximum(std, eps)
+
+def lap_normalize(img, scale_n=4):
+    '''Perform the Laplacian pyramid normalization.'''
+    img = tf.expand_dims(img,0)
+    tlevels = lap_split_n(img, scale_n)
+    tlevels = list(map(normalize_std, tlevels))
+    out = lap_merge(tlevels)
+    return out[0,:,:,:]
+</code></pre>
+
+<p><code>lap_normalize</code>で画像からラプラシアンピラミッドを生成し、それぞれで正規化してからマージして元の画像に戻す処理をしている。</p>
+
+<pre><code>def render_lapnorm(t_obj, img0=img_noise, visfunc=visstd,
+                   iter_n=10, step=1.0, octave_n=3, octave_scale=1.4, lap_n=4):
+    t_score = tf.reduce_mean(t_obj) # defining the optimization objective
+    t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
+    # build the laplacian normalization graph
+    lap_norm_func = tffunc(np.float32)(partial(lap_normalize, scale_n=lap_n))
+
+    img = img0.copy()
+    for octave in range(octave_n):
+        if octave&gt;0:
+            hw = np.float32(img.shape[:2])*octave_scale
+            img = resize(img, np.int32(hw))
+        for i in range(iter_n):
+            g = calc_grad_tiled(img, t_grad)
+            g = lap_norm_func(g)
+            img += g*step
+            print('.', end = ' ')
+        clear_output()
+        showarray(visfunc(img))
+
+render_lapnorm(T(layer)[:,:,:,channel])
+</code></pre>
+
+<h2 id="deepdream">DeepDream</h2>
+
+<p>で、これがDeepDreamのアルゴリズム。
+ラプラシアンピラミッドを生成して、リサイズの際に次のレベルのを足していっている。</p>
+
+<pre><code>def render_deepdream(t_obj, img0=img_noise,
+                     iter_n=10, step=1.5, octave_n=4, octave_scale=1.4):
+    t_score = tf.reduce_mean(t_obj) # defining the optimization objective
+    t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
+
+    # split the image into a number of octaves
+    img = img0
+    octaves = []
+    for i in range(octave_n-1):
+        hw = img.shape[:2]
+        lo = resize(img, np.int32(np.float32(hw)/octave_scale))
+        hi = img-resize(lo, hw)
+        img = lo
+        octaves.append(hi)
+
+    # generate details octave by octave
+    for octave in range(octave_n):
+        if octave&gt;0:
+            hi = octaves[-octave]
+            img = resize(img, hi.shape[:2])+hi
+        for i in range(iter_n):
+            g = calc_grad_tiled(img, t_grad)
+            img += g*(step / (np.abs(g).mean()+1e-7))
+            print('.',end = ' ')
+        clear_output()
+        showarray(img/255.0)
+</code></pre>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

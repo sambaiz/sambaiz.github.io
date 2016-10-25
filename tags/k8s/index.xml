@@ -1,0 +1,646 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/k8s/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-10-25 20:29:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>gcloudのアカウント切り替えとkubectlのcontext変更</title>
+          <link>http://sambaiz.net/article/28/</link>
+          <pubDate>Tue, 25 Oct 2016 20:29:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/28/</guid>
+          <description>
+
+&lt;p&gt;いつも迷うのでまとめた。&lt;/p&gt;
+
+&lt;h2 id=&#34;gcloudのアカウント一覧と切り替え&#34;&gt;gcloudのアカウント一覧と切り替え&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud auth list
+$ gcloud config set account `ACCOUNT`
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;kubectlのcontext変更&#34;&gt;kubectlのcontext変更&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl config current-context
+$ kubectl config view # contexts
+$ kubectl config use-context minikube
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>GKEで複数コンテナのアプリケーションを動かす</title>
+          <link>http://sambaiz.net/article/18/</link>
+          <pubDate>Fri, 26 Aug 2016 21:57:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/18/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/17&#34;&gt;前回&lt;/a&gt;は単一コンテナのアプリケーションを動かしたが、今回はコンテナ間でやり取りが発生するものを動かす。
+流れとしては、クライアントからのリクエストを&lt;code&gt;GATEWAY&lt;/code&gt;サーバーで受け取り、&lt;code&gt;SERVICE&lt;/code&gt;サーバーにリクエストし、その結果を返すまで。&lt;/p&gt;
+
+&lt;p&gt;プログラムは以下の通り、環境変数&lt;code&gt;TYPE&lt;/code&gt;の値によって挙動を変えていて、同じイメージを使い回す。コードは&lt;a href=&#34;https://github.com/sambaiz/gke-multi-container-app&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var http = require(&#39;http&#39;);
+var handleRequest = function(request, response) {
+  if(process.env.TYPE == &amp;quot;GATEWAY&amp;quot;){
+    console.log(&#39;Passed.&#39;);
+    var options = {
+      host: &#39;service&#39;,
+      port: 8080,
+      method: &#39;GET&#39;
+    };
+    var req = http.request(options, function(res) {
+      data = &amp;quot;&amp;quot;
+      res.on(&#39;data&#39;, function (chunk) {
+        data+=chunk;
+      });
+
+      res.on(&#39;end&#39;, () =&amp;gt; {
+        response.writeHead(200);
+        response.end(data);
+      });
+    });
+    req.on(&#39;error&#39;, function(e) {
+      response.writeHead(500)
+      response.end(e.message);
+    });
+    req.end();
+  }else{
+    console.log(&#39;Received.&#39;);
+    response.writeHead(200);
+    response.end(&#39;ok&#39;);
+  }
+};
+var www = http.createServer(handleRequest);
+www.listen(8080);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをContainer RegistryにPushする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ export PROJECT_ID=&amp;quot;gcp-test-141011&amp;quot;
+$ docker build -t gcr.io/$PROJECT_ID/multitest:v1 .
+$ gcloud docker push gcr.io/$PROJECT_ID/multitest:v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ローカルで試すためにminikubeを起動。コンテキストがminikubeに設定される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube start
+$ kubectl config current-context
+minikube
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;minikubeでContainer Registryから取得できるようにsecretを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create secret docker-registry myregistrykey --docker-server=https://gcr.io --docker-username=oauth2accesstoken --docker-password=&amp;quot;$(gcloud auth print-access-token)&amp;quot; --docker-email=***
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず、以下の&lt;code&gt;service_deployment.yaml&lt;/code&gt;でDeploymentを作成する。
+envのところで環境変数&lt;code&gt;TYPE&lt;/code&gt;を&lt;code&gt;SERVICE&lt;/code&gt;に設定した。
+また、先ほど作成したsecretを&lt;code&gt;imagePullSecrets&lt;/code&gt;で指定し、
+ローカルのminikube環境でContainer Registryから取得できるようにしている。
+同様に&lt;code&gt;gateway_deployment.yaml&lt;/code&gt;でも作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: service
+  labels:
+    app: service
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: service
+    spec:
+      containers:
+      - name: service
+        image: gcr.io/gcp-test-141011/multitest:v1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        env:
+        - name: TYPE
+          value: SERVICE
+        ports:
+        - containerPort: 8080
+      imagePullSecrets:
+      - name: myregistrykey    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f service_deployment.yaml
+$ kubectl create -f gateway_deployment.yaml
+$ kubectl get deployment
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+gateway   1         1         1            1           8m
+service   1         1         1            1           28m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に、これを内部から呼べるようにするためのServiceを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: service
+  labels:
+    app: service
+spec:
+  ports:
+  - port: 8080
+  selector:
+    app: service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;GATEWAY&lt;/code&gt;の方は外に開くので、EXTERNAL IPが割り当てられるようにする。
+ただ、minikubeでは&lt;code&gt;type: LoadBalancer&lt;/code&gt;に対応していないので代わりに&lt;code&gt;type: NodePort&lt;/code&gt;を指定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  # type: LoadBalancer
+  type: NodePort
+  ports:
+  - port: 8080
+    nodePort: 30002
+  selector:
+    app: gateway
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f service_service.yaml
+$ kubectl create -f gateway_service.yaml
+$ kubectl get services
+NAME            CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+gateway         10.0.0.176   &amp;lt;nodes&amp;gt;       8080/TCP   1h
+service         10.0.0.111   &amp;lt;none&amp;gt;        8080/TCP   2d
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;GATEWAY&lt;/code&gt;サーバーを越えて&lt;code&gt;SERVICE&lt;/code&gt;サーバーまで到達したことが確認できた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl 192.168.99.100:30002
+ok
+
+$ kubectl get pods
+NAME                       READY     STATUS    RESTARTS   AGE
+gateway-3043515563-a0tb5   1/1       Running   0          38m
+service-2727435432-9glvb   1/1       Running   0          38m
+
+$ kubectl logs service-2727435432-9glvb
+Received.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一通り動いたのでこんなシェルスクリプトを書いた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/bash
+
+context=`kubectl config current-context`
+echo &amp;quot;${context}で実行します。よろしいですか[Y/N]&amp;quot;
+read ANSWER
+case $ANSWER in
+    &amp;quot;Y&amp;quot; ) :;;
+    * ) exit;;
+esac
+if [ $context = &amp;quot;minikube&amp;quot; ] ; then
+  kubectl create -f yaml/gateway_service_minikube.yaml
+  kubectl create -f yaml/service_deployment_minikube.yaml
+  kubectl create -f yaml/gateway_deployment_minikube.yaml
+else
+  kubectl create -f yaml/gateway_service.yaml
+  kubectl create -f yaml/service_deployment.yaml
+  kubectl create -f yaml/gateway_deployment.yaml
+fi
+kubectl create -f yaml/service_service.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行するとこうなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud container clusters create multi-container-app
+$ kubectl config current-context
+gke_gcp-test-141011_asia-east1-b_multi-container-app
+
+$ sh create.sh
+gke_gcp-test-141011_asia-east1-b_multi-container-appで実行します。よろしいですか[Y/N]
+Y
+service &amp;quot;gateway&amp;quot; created
+deployment &amp;quot;service&amp;quot; created
+deployment &amp;quot;gateway&amp;quot; created
+service &amp;quot;service&amp;quot; created
+
+$ kubectl get service
+NAME         CLUSTER-IP      EXTERNAL-IP       PORT(S)    AGE
+gateway      10.83.254.5     104.199.206.147   8080/TCP   4m
+service      10.83.255.118   &amp;lt;none&amp;gt;            8080/TCP   4m
+
+$ curl 104.199.206.147:8080
+ok
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Google Container Engine(GKE)で単一コンテナのアプリケーションを動かす</title>
+          <link>http://sambaiz.net/article/17/</link>
+          <pubDate>Sun, 21 Aug 2016 23:37:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/17/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://kubernetes.io/docs/hellonode/&#34;&gt;Kubernetes - Hello World Walkthrough&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;cloudsdkとkubectlのインストール&#34;&gt;CloudSDKとkubectlのインストール&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/sdk/#Quick_Start&#34;&gt;Cloud SDKをインストール&lt;/a&gt;して&lt;code&gt;gloud&lt;/code&gt;コマンドを使えるようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud --version
+Google Cloud SDK 122.0.0
+$ gcloud components install kubectl
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;google-container-registryにpush&#34;&gt;Google Container RegistryにPush&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ export PROJECT_ID=&amp;quot;******&amp;quot;
+$ docker build -t gcr.io/$PROJECT_ID/test:v1 .
+$ gcloud docker push gcr.io/$PROJECT_ID/test:v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;プロジェクトの課金を有効にしていないとこんなエラーメッセージが出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;denied: Unable to create the repository, please check that you have access to do so.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;clusterの作成&#34;&gt;Clusterの作成&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud config set core/project $PROJECT_ID
+$ gcloud config set compute/zone asia-east1-b
+$ gcloud container clusters create test-cluster
+$ gcloud config set container/cluster test-cluster
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Container Engine APIが有効になっていない場合はこうなる。
+一度コンソールからContainer Engineを選ぶと、サービスの準備が始まって有効になる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ERROR: (gcloud.container.clusters.create) ResponseError: code=503, message=Project **** is not fully initialized with the default service accounts. Please try again later.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;pod-とそのdeployment-の作成&#34;&gt;Pod(とそのDeployment)の作成&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl run test-node --image=gcr.io/$PROJECT_ID/test:v1 --port=8080
+$ kubectl get deployments
+NAME        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+test-node   1         1         1            0           12s
+
+$ kubectl get pods
+NAME                         READY     STATUS              RESTARTS   AGE
+test-node-1016577872-h7yiz   0/1       ContainerCreating   0          18s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;serviceを作成してクラスタの外からアクセスできるようにする&#34;&gt;Serviceを作成してクラスタの外からアクセスできるようにする&lt;/h2&gt;
+
+&lt;p&gt;デフォルトではクラスタ内からしかアクセスできない。
+&lt;code&gt;--type=&amp;quot;LoadBalancer&amp;quot;&lt;/code&gt;のServiceを作成するとEXTERNAL_IPが割り当てられ、外からアクセスできるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl expose deployment test-node --type=&amp;quot;LoadBalancer&amp;quot;
+$ kubectl get services test-node
+NAME        CLUSTER-IP     EXTERNAL-IP       PORT(S)    AGE
+test-node   10.43.247.66   104.199.158.131   8080/TCP   1m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;スケーリング&#34;&gt;スケーリング&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl scale deployment test-node --replicas=4
+$ kubectl get deployment
+NAME        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+test-node   4         4         4            2           11m
+
+$ kubectl get pods
+NAME                         READY     STATUS              RESTARTS   AGE
+test-node-1016577872-fso09   0/1       ContainerCreating   0          12s
+test-node-1016577872-h7yiz   1/1       Running             0          11m
+test-node-1016577872-sbdvl   1/1       Running             0          12s
+test-node-1016577872-z9ji3   0/1       ContainerCreating   0          12s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;更新&#34;&gt;更新&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t gcr.io/$PROJECT_ID/test:v2 .
+$ gcloud docker push gcr.io/$PROJECT_ID/test:v2
+$ kubectl set image deployment/test-node test-node=gcr.io/$PROJECT_ID/test:v2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;削除&#34;&gt;削除&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl delete service,deployment test-node
+$ gcloud container clusters delete test-cluster
+$ gcloud config unset container/cluster
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Kubernatesのチュートリアルをたどる</title>
+          <link>http://sambaiz.net/article/9/</link>
+          <pubDate>Mon, 18 Jul 2016 22:22:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/9/</guid>
+          <description>
+
+&lt;h2 id=&#34;kubernatesとは-http-kubernetes-io-docs-whatisk8s&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/whatisk8s/&#34;&gt;Kubernatesとは&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Kubernates(クバネテスと周りでは呼んでる。ギリシャ語で操舵手)はアプリケーションコンテナにおける、自動デプロイ、スケーリング、操作を
+自動化するオープンソースプラットフォームだ。K8sと略される。Googleによって開発が始められた。&lt;/p&gt;
+
+&lt;h2 id=&#34;minikube-https-github-com-kubernetes-minikube&#34;&gt;&lt;a href=&#34;https://github.com/kubernetes/minikube&#34;&gt;Minikube&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;K8sをローカルで試すためのに、MinikubeというVMの中で単一ノードのK8sクラスターを動かすツールを入れる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/kubernetes/minikube/releases/tag/v0.6.0&#34;&gt;v0.6.0&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.6.0/minikube-darwin-amd64 &amp;amp;&amp;amp; chmod +x minikube &amp;amp;&amp;amp; sudo mv minikube /usr/local/bin/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube start
+Starting local Kubernetes cluster...
+
+...
+
+$ kubectl version
+Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;2&amp;quot;, GitVersion:&amp;quot;v1.2.4&amp;quot;, GitCommit:&amp;quot;3eed1e3be6848b877ff80a93da3785d9034d0a4f&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+Server Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;3&amp;quot;, GitVersion:&amp;quot;v1.3.0&amp;quot;, GitCommit:&amp;quot;283137936a498aed572ee22af6774b6fb6e9fd94&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;pods-http-kubernetes-io-docs-user-guide-walkthrough-pods&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/#pods&#34;&gt;Pods&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;K8sではコンテナのグループをpodと呼ぶ。pod中のコンテナは共にデプロイされ、起動し、停止する。
+また、グループとして複製される。&lt;/p&gt;
+
+&lt;p&gt;Podの定義は以下のようにyamlで書かれる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.7.9
+    ports:
+    - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Podの定義に望ましい状態を記述すると、Kubernatesはそれを見て現在の状態が一致しているかどうか確認する。
+例えば、Podが作られたときに、コンテナがその中で動いている状態が望ましい状態だとすると、
+コンテナが動かなくなったときに、Kubernatesは新しいものを再作成することで望ましい状態にする。&lt;/p&gt;
+
+&lt;p&gt;podの作成とリストの取得のコマンドは以下の通り。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f nginx.yaml
+$ kubectl get pods
+NAME      READY     STATUS    RESTARTS   AGE
+nginx     1/1       Running   0          4s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;kubectl exec&lt;/code&gt;で&lt;a href=&#34;http://kubernetes.io/docs/user-guide/getting-into-containers/&#34;&gt;コマンドを実行&lt;/a&gt;し、
+podが動いていることを確認しようとしたが、使えそうなコマンドが見つからなかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl exec -it nginx ps
+rpc error: code = 2 desc = &amp;quot;oci runtime error: exec failed: exec: \&amp;quot;ps\&amp;quot;: executable file not found in $PATH&amp;quot;error: error executing remote command: error executing command in container: Error executing in Docker Container: 126
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そこで、リクエストを投げるために&lt;code&gt;kubectl run&lt;/code&gt;で&lt;a href=&#34;http://kubernetes.io/docs/user-guide/kubectl/kubectl_run/&#34;&gt;イメージを動かす単一コンテナのpodを管理するためのDeploymentを作成する。&lt;/a&gt;
+Deploymentについては後で説明がある。
+&lt;code&gt;--restart=Never&lt;/code&gt;でpodが存在しなくなったときに再起動しないようにし、&lt;code&gt;--env&lt;/code&gt;で環境変数としてnginxのpodのIPを渡している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl run busybox --image=busybox --restart=Never --tty -i --env &amp;quot;POD_IP=$(kubectl get pod nginx -o go-template={{.status.podIP}})&amp;quot;
+busybox$ wget -qO- http://$POD_IP
+busybox$ exit # Exit the busybox container
+
+$ kubectl get deployments
+
+$ kubectl get pods
+NAME      READY     STATUS    RESTARTS   AGE
+nginx     1/1       Running   0          54m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;--restart=Never&lt;/code&gt;なしで実行するとこうなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl run busybox --image=busybox --tty -i --env &amp;quot;POD_IP=$(kubectl get pod nginx -o go-template={{.status.podIP}})&amp;quot;
+busybox$ exit
+Session ended, resume using &#39;kubectl attach busybox-985443498-9elny -c busybox -i -t&#39; command when the pod is running
+
+$ kubectl get deployments
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+busybox   1         1         1            1           3m
+
+$ kubectl get pods
+NAME                      READY     STATUS    RESTARTS   AGE
+busybox-985443498-9elny   1/1       Running   1          3m
+nginx                     1/1       Running   0          59m
+
+$ kubectl delete pods busybox-985443498-9elny
+pod &amp;quot;busybox-985443498-9elny&amp;quot; deleted
+
+$ kubectl get pods # Podsだけ削除しても新しいものが立ち上がってくる
+NAME                      READY     STATUS              RESTARTS   AGE
+busybox-985443498-4iyvx   0/1       ContainerCreating   0          1s
+busybox-985443498-9elny   1/1       Terminating         1          13m
+nginx                     1/1       Running             0          1h
+
+$ kubectl delete deployment busybox
+
+$ kubectl get pods # Deploymentを削除するとPodsも消える
+NAME      READY     STATUS    RESTARTS   AGE
+nginx     1/1       Running   0          1h
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;volumes-http-kubernetes-io-docs-user-guide-walkthrough-volumes&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/#volumes&#34;&gt;Volumes&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;コンテナのファイルシステムはコンテナが生存しているときに限り有効なので、
+永続化したいデータはコンテナの外に保存する必要がある。&lt;/p&gt;
+
+&lt;p&gt;以下の例のように&lt;code&gt;volumes&lt;/code&gt;でvolumeを定義し、&lt;code&gt;volumeMounts&lt;/code&gt;でどこにマウントするか指定することができる。
+&lt;code&gt;volumes&lt;/code&gt;には、そのPodがノードで実行されている間存在するディレクトリを作成して使う&lt;code&gt;EmptyDir&lt;/code&gt;か、
+ノードのファイルシステムに既に存在するディレクトリを使う&lt;code&gt;HostPath&lt;/code&gt;を指定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Pod
+metadata:
+  name: redis
+spec:
+  containers:
+  - name: redis
+    image: redis
+    volumeMounts:
+    - name: redis-persistent-storage
+      mountPath: /data/redis
+  volumes:
+  - name: redis-persistent-storage
+    emptyDir: {}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;labels-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-labels&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#labels&#34;&gt;Labels&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;metadataとしてkey-valueのラベルを付けることができる。たくさんのPodをまとめたりするのに便利だ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;metadata:
+  name: nginx
+  labels:
+    app: nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;kubectl get pods -l app=nginx
+NAME      READY     STATUS    RESTARTS   AGE
+nginx     1/1       Running   0          2m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;deployments-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-deployments&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#deployments&#34;&gt;Deployments&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;実行しているPodの維持と更新を管理するのが、上でも出てきたDeploymentだ。
+Deploymentの定義には、Podを作るためのテンプレートと、維持するPod数を記述する。
+pod名はDeployment名から生成されるので、templateには含めない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f deployment.yaml
+$ kubectl get deployment
+NAME               DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+nginx-deployment   2         2         2            2           3m
+
+$ kubectl get pods -l app=nginx
+NAME                                READY     STATUS    RESTARTS   AGE
+nginx-deployment-1159050644-ar3i7   1/1       Running   0          3m
+nginx-deployment-1159050644-kdjly   1/1       Running   0          3m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;kubectl apply&lt;/code&gt;でDeploymentは変更を実行中のPodに安全にロールアウトする。
+以下の例ではnginxのバージョンを上げている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.8
+        ports:
+        - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl apply -f deployment-update.yaml
+$ kubectl get pods
+NAME                                READY     STATUS              RESTARTS   AGE
+nginx-deployment-1159050644-kdjly   1/1       Running             0          30m
+nginx-deployment-1771418926-pi3vy   0/1       ContainerCreating   0          7s
+nginx-deployment-1771418926-ygoxl   0/1       ContainerCreating   0          7s
+
+$ kubectl get pods
+NAME                                READY     STATUS              RESTARTS   AGE
+nginx-deployment-1771418926-pi3vy   0/1       ContainerCreating   0          12s
+nginx-deployment-1771418926-ygoxl   1/1       Running             0          12s
+
+$ kubectl get pods
+NAME                                READY     STATUS    RESTARTS   AGE
+nginx-deployment-1771418926-pi3vy   1/1       Running   0          15s
+nginx-deployment-1771418926-ygoxl   1/1       Running   0          15s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;services-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-services&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#services&#34;&gt;Services&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;アプリケーションのレイヤー間(例えばフロントエンドとバックエンド)の接続で使われるのがServiceだ。
+以下のServiceは、8080番ポートで待ち、&lt;code&gt;app: nginx&lt;/code&gt;のラベルが付いているPodの80番ポートに向けるロードバランサーとして働く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  ports:
+  - port: 8000
+    targetPort: 80
+    protocol: TCP
+  selector:
+    app: nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f service.yaml
+$ kubectl get services
+NAME            CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+kubernetes      10.0.0.1     &amp;lt;none&amp;gt;        443/TCP    19h
+nginx-service   10.0.0.90    &amp;lt;none&amp;gt;        8000/TCP   36s
+
+$ export SERVICE_IP=$(kubectl get service nginx-service -o go-template=&#39;{{.spec.clusterIP}}&#39;)
+$ export SERVICE_PORT=$(kubectl get service nginx-service -o go-template=&#39;{{(index .spec.ports 0).port}}&#39;)
+$ echo &amp;quot;$SERVICE_IP:$SERVICE_PORT&amp;quot;
+10.0.0.90:8000
+$ kubectl run busybox --image=busybox --restart=Never --tty -i --env &amp;quot;SERVICE_IP=$SERVICE_IP,SERVICE_PORT=$SERVICE_PORT&amp;quot;
+busybox$ wget -qO- http://$SERVICE_IP:$SERVICE_PORT
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;health-checking-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-health-checking&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#health-checking&#34;&gt;Health Checking&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;livenessProbe&lt;/code&gt;でヘルスチェックの設定を含めることができる。
+以下の例では、初期化のために30秒待った後、&lt;code&gt;/_status/healthz&lt;/code&gt;へのHTTP GETリクエストに対して
+200~399以外のステータスコードが返るか、1秒以上かかった場合、コンテナを再起動する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-healthcheck
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    livenessProbe:
+      httpGet:
+        path: /_status/healthz
+        port: 80
+      initialDelaySeconds: 30
+      timeoutSeconds: 1
+    ports:
+    - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

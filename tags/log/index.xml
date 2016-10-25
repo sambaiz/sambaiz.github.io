@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/log/</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2016</rights>
+    <updated>2016-08-31 20:54:00 &#43;0900 JST</updated>
+
+    
+      
+        <item>
+          <title>Grafana/InfluxDB/Fluentdでログを可視化する</title>
+          <link>http://sambaiz.net/article/19/</link>
+          <pubDate>Wed, 31 Aug 2016 20:54:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/19/</guid>
+          <description>
+
+&lt;p&gt;コードは&lt;a href=&#34;https://github.com/sambaiz/grafana-influxdb-fluentd&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;influxdb-https-github-com-influxdata-influxdb&#34;&gt;&lt;a href=&#34;https://github.com/influxdata/influxdb&#34;&gt;InfluxDB&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Golangで書かれた時系列データベース。今回使うのは&lt;code&gt;v0.13&lt;/code&gt;。前のバージョンと結構違うので注意。&lt;/p&gt;
+
+&lt;p&gt;デフォルトでは無効になっている認証を&lt;a href=&#34;https://docs.influxdata.com/influxdb/v0.13/administration/authentication_and_authorization/#set-up-authentication&#34;&gt;有効にする&lt;/a&gt;ために設定ファイルを編集して設置する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install influxdb # OSX
+$ influxd config &amp;gt; influxdb.conf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;[http]
+  ...
+  auth-enabled = true
+  ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM influxdb:0.13
+
+VOLUME /var/lib/influxdb
+ADD influxdb.conf /
+ENV INFLUXDB_CONFIG_PATH /influxdb.conf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run -p 8083:8083 -p 8086:8086 myinfluxdb
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;influxd&lt;/code&gt;コマンドや
+&lt;code&gt;:8083&lt;/code&gt;のWebインタフェースの他に
+&lt;code&gt;:8086&lt;/code&gt;に&lt;a href=&#34;https://docs.influxdata.com/influxdb/v0.13/concepts/api/&#34;&gt;HTTP API&lt;/a&gt;が用意されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -i -XPOST http://localhost:8086/query --data-urlencode &amp;quot;q=CREATE USER root WITH PASSWORD &#39;root&#39; WITH ALL PRIVILEGES&amp;quot;
+
+$ curl -i -XPOST http://localhost:8086/query -u root:root --data-urlencode &amp;quot;q=CREATE DATABASE mydb&amp;quot;
+{&amp;quot;results&amp;quot;:[{}]}
+
+# Line Protocol(https://docs.influxdata.com/influxdb/v0.13/write_protocols/line/)
+$ curl -i -XPOST &#39;http://localhost:8086/write?db=mydb&#39; -u root:root --data-binary &#39;cpu_load_short,host=server01,region=us-west value=0.64 1434055562000000000&#39;
+(204 No Content)
+
+$ curl -GET &#39;http://localhost:8086/query?db=mydb&#39; -u root:root --data-urlencode &#39;q=SELECT * FROM &amp;quot;cpu_load_short&amp;quot;&#39; | jq
+{
+  &amp;quot;results&amp;quot;: [
+    {
+      &amp;quot;series&amp;quot;: [
+        {
+          &amp;quot;name&amp;quot;: &amp;quot;cpu_load_short&amp;quot;,
+          &amp;quot;columns&amp;quot;: [
+            &amp;quot;time&amp;quot;,
+            &amp;quot;host&amp;quot;,
+            &amp;quot;region&amp;quot;,
+            &amp;quot;value&amp;quot;
+          ],
+          &amp;quot;values&amp;quot;: [
+            [
+              &amp;quot;2015-06-11T20:46:02Z&amp;quot;,
+              &amp;quot;server01&amp;quot;,
+              &amp;quot;us-west&amp;quot;,
+              0.64
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;fluent-plugin-influxdb-https-github-com-fangli-fluent-plugin-influxdb&#34;&gt;&lt;a href=&#34;https://github.com/fangli/fluent-plugin-influxdb&#34;&gt;fluent-plugin-influxdb&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;設定はこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  type tail
+  path      /usr/src/app/test.log
+  pos_file  /etc/td-agent/test.log.pos
+  tag       something.log
+  format    json
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match *.log&amp;gt;
+  @type     influxdb
+  host      influxdb
+  port      8086
+  dbname    mydb
+  user      root
+  password  root
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;5秒ごとにランダムな値valueのログを出力し続ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from twisted.internet import task, reactor
+import logging
+import json
+import random
+
+INTERVAL = 5 # sec
+logging.basicConfig(filename=&#39;test.log&#39;, format=&#39;%(message)s&#39;, level=logging.INFO)
+
+def somethingHappend():
+  data = {
+    &amp;quot;value&amp;quot;: random.randint(0, 100),
+    &amp;quot;event&amp;quot;: &amp;quot;something&amp;quot;
+  }
+  logging.info(json.dumps(data))  
+
+if __name__ == &#39;__main__&#39;:
+    instance = task.LoopingCall(somethingHappend)
+    instance.start(INTERVAL)
+    reactor.run()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;grafana-http-grafana-org&#34;&gt;&lt;a href=&#34;http://grafana.org/&#34;&gt;Grafana&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;可視化ツール。データソースとしてInfluxDB、Garaphite、Elasticsearchなどが使える。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://play.grafana.org/&#34;&gt;Demo&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Kibana(+Elasticsearch)だと
+認証するのに&lt;a href=&#34;https://www.elastic.co/subscriptions&#34;&gt;有償&lt;/a&gt;のShieldプラグインが必要だが、
+こちらは最初からできて手軽。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;これらのDockerイメージを作って、minikubeで立ち上げてみた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get pods
+NAME                        READY     STATUS    RESTARTS   AGE
+grafana-1386260931-lq8wh    1/1       Running   0          2m
+influxdb-2543054961-yj1bd   1/1       Running   0          2m
+testapp-532457622-269qo     1/1       Running   0          2m
+
+$ curl -i -XPOST http://192.168.99.100:30005/query?db=mydb -u root:root --data-urlencode &#39;q=SELECT * FROM &amp;quot;something.log&amp;quot; LIMIT 1&#39;
+{&amp;quot;results&amp;quot;:[{&amp;quot;series&amp;quot;:[{&amp;quot;name&amp;quot;:&amp;quot;something.log&amp;quot;,&amp;quot;columns&amp;quot;:[&amp;quot;time&amp;quot;,&amp;quot;event&amp;quot;,&amp;quot;value&amp;quot;],&amp;quot;values&amp;quot;:[[&amp;quot;2016-08-31T08:38:37Z&amp;quot;,&amp;quot;something&amp;quot;,23]]}]}]}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://192.168.99.100:30003&#34;&gt;http://192.168.99.100:30003&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;admin/adminでログインしてDataSourceに&lt;code&gt;http://192.168.99.100:30005&lt;/code&gt;のInfluxDBを設定すると、
+Dashboardにグラフやテーブルなどを置いて表示させることができるようになる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://d2wgaf7ubdj1mv.cloudfront.net/19_grafana.png&#34; alt=&#34;grafana&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>
