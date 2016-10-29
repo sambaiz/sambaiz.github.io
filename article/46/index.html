@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.16" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+    <link rel="stylesheet" href="/css/slidebars.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="http://sambaiz.net/index.xml">
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@sambaiz">
+    
+    <title>汎用シリアライズ方法(MessagePack/Protocol Buffers/FlatBuffers)のGoでのベンチマーク - sambaiz.net</title>
+    <meta name="twitter:title" content="汎用シリアライズ方法(MessagePack/Protocol Buffers/FlatBuffers)のGoでのベンチマーク - sambaiz.net">
+    <meta property='og:title' content="汎用シリアライズ方法(MessagePack/Protocol Buffers/FlatBuffers)のGoでのベンチマーク - sambaiz.net">
+    <meta property="og:type" content="article">
+    
+    
+
+    <meta property="og:url" content="http://sambaiz.net/article/46/">
+    <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
+    <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
+    <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"http:\/\/sambaiz.net\/"
+    },
+    "headline": "汎用シリアライズ方法(MessagePack\/Protocol Buffers\/FlatBuffers)のGoでのベンチマーク | sambaiz.net ",
+    "datePublished": "2016-12-30T18:48:00JST",
+    "dateModified": "2016-12-30T18:48:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "http:\/\/sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz.net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "http:\/\/sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "http:\/\/sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": ""
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="http://sambaiz.net/tags/docker">docker</a></li><li><a href="http://sambaiz.net/tags/golang">golang</a></li><li><a href="http://sambaiz.net/tags/infra">infra</a></li><li><a href="http://sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="http://sambaiz.net/tags/k8s">k8s</a></li><li><a href="http://sambaiz.net/tags/android">android</a></li><li><a href="http://sambaiz.net/tags/gcp">gcp</a></li><li><a href="http://sambaiz.net/tags/log">log</a></li><li><a href="http://sambaiz.net/tags/aws">aws</a></li><li><a href="http://sambaiz.net/tags/ble">ble</a></li><li><a href="http://sambaiz.net/tags/mysql">mysql</a></li><li><a href="http://sambaiz.net/tags/react">react</a></li><li><a href="http://sambaiz.net/tags/unity">unity</a></li><li><a href="http://sambaiz.net/tags/vr">vr</a></li><li><a href="http://sambaiz.net/tags/angular">angular</a></li><li><a href="http://sambaiz.net/tags/api">api</a></li><li><a href="http://sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="http://sambaiz.net/tags/grpc">grpc</a></li><li><a href="http://sambaiz.net/tags/hugo">hugo</a></li><li><a href="http://sambaiz.net/tags/ios">ios</a></li><li><a href="http://sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="http://sambaiz.net/tags/jvm">jvm</a></li><li><a href="http://sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="http://sambaiz.net/tags/messagepack">messagepack</a></li><li><a href="http://sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="http://sambaiz.net/tags/node.js">node.js</a></li><li><a href="http://sambaiz.net/tags/video">video</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="http://sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="http://sambaiz.net/">sambaiz.net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+      </div>
+    </header>
+
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>汎用シリアライズ方法(MessagePack/Protocol Buffers/FlatBuffers)のGoでのベンチマーク</h1>
+          <p>(2016-12-30)</p>
+          
+
+<h2 id="messagepackとは">MessagePackとは</h2>
+
+<p><a href="http://msgpack.org/">http://msgpack.org/</a></p>
+
+<p>JSONのように使うことができ、速くてサイズが小さい。</p>
+
+<pre><code>{&quot;compact&quot;:true,&quot;スキーマ&quot;:{&quot;number&quot;: 999, &quot;string&quot;: &quot;aaa&quot;}}
+</code></pre>
+
+<p>のjson(61bytes)をMessagePack(45bytes)に変換したのがこれ。見やすいように改行している。</p>
+
+<pre><code>82 
+a7 63 6f 6d 70 61 63 74 c3 
+ac e3 82 b9 e3 82 ad e3 83 bc e3 83 9e 
+   82 
+   a6 6e 75 6d 62 65 72 cd 03 e7 
+   a6 73 74 72 69 6e 67 a3 61 61 61
+</code></pre>
+
+<p>一行目の<code>82</code>は<a href="https://github.com/msgpack/msgpack/blob/master/spec.md#map-format-family">要素数2のfixmap(要素数15まで)</a>を表す。</p>
+
+<p>二行目の<code>a7</code>が<a href="https://github.com/msgpack/msgpack/blob/master/spec.md#str-format-family">7バイトのfixstr(31bytesまで)</a>で、
+<code>63 6f 6d 70 61 63 74</code>が&rdquo;compact&rdquo;。<code>c3</code>は<a href="https://github.com/msgpack/msgpack/blob/master/spec.md#bool-format-family">true</a>。</p>
+
+<p>三行目の<code>ac</code>は12バイトのfixstrで、<code>e3 82 b9 e3 82 ad e3 83 bc e3 83 9e</code>が&rdquo;スキーマ&rdquo;。</p>
+
+<p>四行目はこれのvalueで、要素数2のfixmap(<code>82</code>)。</p>
+
+<p>五行目は6バイトのfixstr(<code>a6</code>)、&rdquo;number&rdquo;(<code>6e 75 6d 62 65 72</code>)、
+<code>cd</code>が<a href="https://github.com/msgpack/msgpack/blob/master/spec.md#int-format-family">uint16</a>で、999(<code>03 e7</code>)。</p>
+
+<p>六行目は6バイトのfixstr(<code>a6</code>)、&rdquo;string&rdquo;(<code>73 74 72 69 6e 67</code>)、3バイトのfixstr(<code>a3</code>)、&rdquo;aaa&rdquo;(<code>61 61 61</code>)。</p>
+
+<p>と、こんな感じで分かりやすいバイナリになっている。</p>
+
+<h3 id="使い方">使い方</h3>
+
+<pre><code>$ go get github.com/ugorji/go/codec
+</code></pre>
+
+<pre><code>mh := codec.MsgpackHandle{RawToString: true}
+origin := serialize.Data{
+	Title: &quot;aaaa&quot;,
+}
+
+func MessagePackEncode(mh codec.MsgpackHandle, origin Data) []byte {
+	var encoded []byte
+
+	enc := codec.NewEncoderBytes(&amp;encoded, &amp;mh)
+	if err := enc.Encode(&amp;origin); err != nil {
+		panic(err)
+	}
+
+	return encoded
+}
+
+func MessagePackDecode(mh codec.MsgpackHandle, bytes []byte) Data {
+	var decoded Data
+
+	dec := codec.NewDecoderBytes(bytes, &amp;mh)
+	if err := dec.Decode(&amp;decoded); err != nil {
+		panic(err)
+	}
+
+	return decoded
+}
+</code></pre>
+
+<h2 id="protocol-buffersとは">Protocol Buffersとは</h2>
+
+<p><a href="https://developers.google.com/protocol-buffers/">https://developers.google.com/protocol-buffers/</a></p>
+
+<p>Googleのシリアライズライブラリ。gRPCでも使われる。</p>
+
+<p><a href="http://sambaiz.net/article/12/">Googleが作ったRPCフレームワークgRPCを使ってみた</a></p>
+
+<p>message typeを<code>proto</code>ファイルで定義する(proto3)。このファイルから各言語のコードを生成することができる。</p>
+
+<pre><code>syntax = &quot;proto3&quot;;
+
+message SearchResponse {
+  repeated Result results = 1;
+}
+
+message Result {
+  string url = 1;
+  string title = 2;
+  repeated string snippets = 3;
+}
+</code></pre>
+
+<p>それぞれのmessage typeには名前と型を持つユニークな数値のフィールドが含まれる。一度割り当てた数値のtypeは変更しないようにする。
+<a href="https://developers.google.com/protocol-buffers/docs/proto3#assigning-tags">(Assigning Tags)</a></p>
+
+<p><code>repeated</code>は0以上の任意の個数で、順番は保存される。
+<a href="https://developers.google.com/protocol-buffers/docs/proto3#specifying-field-rules">(Specifying Field Rules)</a></p>
+
+<p>新しいコードがフィールドを追加してメッセージを送ると、古いコードは未知のフィールドを無視する。
+逆に、古いコードがメッセージを送ると、
+新しいコードの新しいフィールドには<a href="https://developers.google.com/protocol-buffers/docs/proto3#default">デフォルト値</a>が入る。
+<a href="https://developers.google.com/protocol-buffers/docs/proto3#updating">(Updating A Message Type)</a></p>
+
+<h3 id="使い方-1">使い方</h3>
+
+<pre><code>syntax = &quot;proto3&quot;;
+
+message Data {
+  string title = 1;
+}
+</code></pre>
+
+<pre><code>$ brew install protobuf
+$ protoc --version
+libprotoc 3.1.0
+
+$ go get github.com/golang/protobuf/protoc-gen-go
+
+$ mkdir -p build/gen 
+$ protoc --proto_path=proto --go_out=data proto/data.proto
+$ ls data
+data.pb.go
+</code></pre>
+
+<pre><code>// Code generated by protoc-gen-go.
+// source: data.proto
+// DO NOT EDIT!
+
+/*
+Package data is a generated protocol buffer package.
+
+It is generated from these files:
+	data.proto
+
+It has these top-level messages:
+	Data
+*/
+package data
+
+import proto &quot;github.com/golang/protobuf/proto&quot;
+import fmt &quot;fmt&quot;
+import math &quot;math&quot;
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+
+type Data struct {
+	Title string `protobuf:&quot;bytes,1,opt,name=title&quot; json:&quot;title,omitempty&quot;`
+}
+
+func (m *Data) Reset()                    { *m = Data{} }
+func (m *Data) String() string            { return proto.CompactTextString(m) }
+func (*Data) ProtoMessage()               {}
+func (*Data) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+
+func init() {
+	proto.RegisterType((*Data)(nil), &quot;Data&quot;)
+}
+
+func init() { proto.RegisterFile(&quot;data.proto&quot;, fileDescriptor0) }
+
+var fileDescriptor0 = []byte{
+	// 67 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x4a, 0x49, 0x2c, 0x49,
+	0xd4, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x57, 0x92, 0xe1, 0x62, 0x71, 0x49, 0x2c, 0x49, 0x14, 0x12,
+	0xe1, 0x62, 0x2d, 0xc9, 0x2c, 0xc9, 0x49, 0x95, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x0c, 0x82, 0x70,
+	0x92, 0xd8, 0xc0, 0x8a, 0x8c, 0x01, 0x01, 0x00, 0x00, 0xff, 0xff, 0xf5, 0x0d, 0xbe, 0x9b, 0x32,
+	0x00, 0x00, 0x00,
+}
+</code></pre>
+
+<pre><code>$ go get github.com/golang/protobuf/proto
+</code></pre>
+
+<pre><code>func ProtoBufEncode(origin data.Data) []byte {
+	encoded, err := proto.Marshal(&amp;origin)
+	if err != nil {
+		panic(err)
+	}
+
+	return encoded
+}
+
+func ProtoBufDecode(bytes []byte) data.Data {
+	var decoded data.Data
+	if err := proto.Unmarshal(bytes, &amp;decoded); err != nil {
+		panic(err)
+	}
+
+	return decoded
+}
+</code></pre>
+
+<h2 id="flatbuffers">FlatBuffers</h2>
+
+<p><a href="http://google.github.io/flatbuffers/">http://google.github.io/flatbuffers/</a></p>
+
+<p>Googleの、ゲームなどパフォーマンスを要求するアプリケーションのためのシリアライズライブラリ。
+データにアクセスする前にparseやunpackする必要がなく、オブジェクトごとのメモリ割り当てが必要。</p>
+
+<p><code>proto</code>の代わりにこんな<code>schema</code>ファイルを書く。</p>
+
+<pre><code>namespace MyGame.Sample;
+enum Color:byte { Red = 0, Green, Blue = 2 }
+union Equipment { Weapon } // Optionally add more tables.
+struct Vec3 {
+  x:float;
+  y:float;
+  z:float;
+}
+table Monster {
+  pos:Vec3; // Struct.
+  mana:short = 150;
+  hp:short = 100;
+  name:string;
+  friendly:bool = false (deprecated);
+  inventory:[ubyte];  // Vector of scalars.
+  color:Color = Blue; // Enum.
+  weapons:[Weapon];   // Vector of tables.
+  equipped:Equipment; // Union.
+}
+table Weapon {
+  name:string;
+  damage:short;
+}
+root_type Monster;
+</code></pre>
+
+<h3 id="使い方-2">使い方</h3>
+
+<pre><code>namespace dataf;
+
+table data {
+    title:string;
+}
+
+root_type data;
+</code></pre>
+
+<pre><code>$ brew install flatbuffers
+
+$ flatc --go fbs/dataf.fbs
+$ ls dataf/
+data.go
+
+$ go get github.com/google/flatbuffers/go
+</code></pre>
+
+<pre><code>// automatically generated by the FlatBuffers compiler, do not modify
+
+package dataf
+
+import (
+	flatbuffers &quot;github.com/google/flatbuffers/go&quot;
+)
+
+type data struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsdata(buf []byte, offset flatbuffers.UOffsetT) *data {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &amp;data{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func (rcv *data) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *data) Title() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func dataStart(builder *flatbuffers.Builder) {
+	builder.StartObject(1)
+}
+func dataAddTitle(builder *flatbuffers.Builder, title flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(title), 0)
+}
+func dataEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+</code></pre>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

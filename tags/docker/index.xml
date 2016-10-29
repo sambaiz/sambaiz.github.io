@@ -2,12 +2,636 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>sambaiz.net</title>
-    <link>http://sambaiz.net/tags/docker/</link>
+    <link>http://sambaiz.net/tags/docker/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
-    <rights>(C) 2016</rights>
-    <updated>2016-07-18 22:22:00 &#43;0900 JST</updated>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
+    
+      
+        <item>
+          <title>ElasticsearchをDockerで動かしてGrafanaで可視化する</title>
+          <link>http://sambaiz.net/article/52/</link>
+          <pubDate>Sun, 29 Jan 2017 17:08:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/52/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html&#34;&gt;https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;vm.max_map_count
+(&lt;a href=&#34;http://www.atmarkit.co.jp/flinux/special/proctune/proctune02b.html&#34;&gt;バーチャルメモリにマッピングできる最大ページ数&lt;/a&gt;)
+を262144以上にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sysctl vm.max_map_count
+$ grep vm.max_map_count /etc/sysctl.conf
+vm.max_map_count=262144
+# sysctl -w vm.max_map_count=262144
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;30日トライアル後、有償ライセンスが必要になるxpackのsecurity(旧sheild)がデフォルトで有効になっているのでfalseにしている。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;-cap-add=IPC_LOCK&lt;/code&gt;でLock memory(スワップアウトしないようにする)を
+&lt;a href=&#34;https://docs.docker.com/engine/reference/run/#/runtime-privilege-and-linux-capabilities&#34;&gt;許可&lt;/a&gt;する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.elastic.co/guide/en/elasticsearch/reference/5.2/heap-size.html&#34;&gt;https://www.elastic.co/guide/en/elasticsearch/reference/5.2/heap-size.html&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ES_HEAP_SIZEでヒープ領域を設定する。デフォルトでは2GB。多いほどキャッシュに使用できる。
+ただし、物理RAMの50%以下で、&lt;a href=&#34;https://www.elastic.co/guide/en/elasticsearch/guide/current/heap-sizing.html#compressed_oops&#34;&gt;32GB近辺の境界を超えないようにする&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir -p ~/do/elasticsearch/data
+$ docker run -itd -v elasticsearch:/usr/share/elasticsearch/data \
+--name elasticsearch \
+-p 9200:9200 \
+-e xpack.security.enabled=false \
+-e bootstrap.memory_lock=true -e cluster.name=hogehoge-cluster -e ES_JAVA_OPTS=&amp;quot;-Xms28g -Xmx28g&amp;quot; \
+--cap-add=IPC_LOCK --ulimit memlock=-1:-1 --ulimit nofile=65536:65536 \
+--restart=always \
+docker.elastic.co/elasticsearch/elasticsearch:5.1.2
+
+$ docker volume ls
+local               elasticsearch
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;問題なく起動しているか確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl localhost:9200 | jq
+{
+  &amp;quot;name&amp;quot;: &amp;quot;eqIkJ48&amp;quot;,
+  &amp;quot;cluster_name&amp;quot;: &amp;quot;docker-cluster&amp;quot;,
+  &amp;quot;cluster_uuid&amp;quot;: &amp;quot;Lsu_C7wORS6G-0m9PJ9sFQ&amp;quot;,
+  &amp;quot;version&amp;quot;: {
+    &amp;quot;number&amp;quot;: &amp;quot;5.1.2&amp;quot;,
+    &amp;quot;build_hash&amp;quot;: &amp;quot;c8c4c16&amp;quot;,
+    &amp;quot;build_date&amp;quot;: &amp;quot;2017-01-11T20:18:39.146Z&amp;quot;,
+    &amp;quot;build_snapshot&amp;quot;: false,
+    &amp;quot;lucene_version&amp;quot;: &amp;quot;6.3.0&amp;quot;
+  },
+  &amp;quot;tagline&amp;quot;: &amp;quot;You Know, for Search&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic-mapping.html&#34;&gt;dynamic mapping&lt;/a&gt;
+を無効にする場合&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -XPUT &#39;localhost:9200/_template/template_all?pretty&#39; -d&#39;
+{
+  &amp;quot;template&amp;quot;: &amp;quot;*&amp;quot;,
+  &amp;quot;order&amp;quot;:0,
+  &amp;quot;settings&amp;quot;: {
+    &amp;quot;index.mapper.dynamic&amp;quot;: false 
+  }
+}
+&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Kuromojiを入れる場合&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker exec -it ***** bin/elasticsearch-plugin install analysis-kuromoji
+$ docker restart  *****
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;grafanaで可視化する&#34;&gt;Grafanaで可視化する&lt;/h2&gt;
+
+&lt;p&gt;前は&lt;a href=&#34;http://sambaiz.net/article/19/&#34;&gt;InfluxDBとつなげた&lt;/a&gt;が、Elasticsearchにも対応している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir -p /var/lib/grafana/plugins
+$ docker run -itd --restart=always -p 3000:3000 -v grafana:/var/lib/grafana grafana/grafana
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.grafana.org/datasources/elasticsearch/&#34;&gt;http://docs.grafana.org/datasources/elasticsearch/&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;admin/adminでログインして、data sourceを追加する。AccessはProxyにする。&lt;/p&gt;
+
+&lt;p&gt;適当にデータを入れて表示してみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -XPUT &#39;localhost:9200/test_index?pretty&#39; -H &#39;Content-Type: application/json&#39; -d&#39;
+{
+  &amp;quot;mappings&amp;quot;: {
+    &amp;quot;test_type&amp;quot;: { 
+      &amp;quot;_all&amp;quot;:       { &amp;quot;enabled&amp;quot;: false  }, 
+      &amp;quot;properties&amp;quot;: { 
+        &amp;quot;name&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;string&amp;quot; },
+        &amp;quot;age&amp;quot;:    { &amp;quot;type&amp;quot;: &amp;quot;integer&amp;quot;  },
+        &amp;quot;timestamp&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;date&amp;quot;, &amp;quot;format&amp;quot;: &amp;quot;epoch_millis&amp;quot; }
+      }
+    }
+  }
+}
+&#39;
+
+$ curl &#39;localhost:9200/_cat/indices?format=json&amp;amp;pretty&#39;
+[
+  {
+    &amp;quot;health&amp;quot; : &amp;quot;yellow&amp;quot;,
+    &amp;quot;status&amp;quot; : &amp;quot;open&amp;quot;,
+    &amp;quot;index&amp;quot; : &amp;quot;test_index&amp;quot;,
+    &amp;quot;uuid&amp;quot; : &amp;quot;kVbt2V-rS2m6vhplIkMKNg&amp;quot;,
+    &amp;quot;pri&amp;quot; : &amp;quot;5&amp;quot;,
+    &amp;quot;rep&amp;quot; : &amp;quot;1&amp;quot;,
+    &amp;quot;docs.count&amp;quot; : &amp;quot;0&amp;quot;,
+    &amp;quot;docs.deleted&amp;quot; : &amp;quot;0&amp;quot;,
+    &amp;quot;store.size&amp;quot; : &amp;quot;260b&amp;quot;,
+    &amp;quot;pri.store.size&amp;quot; : &amp;quot;260b&amp;quot;
+  },
+  ...
+]
+
+$ curl -XPOST &#39;localhost:9200/test_index/test_type?pretty&#39; -H &#39;Content-Type: application/json&#39; -d&#39;
+{
+    &amp;quot;name&amp;quot;: &amp;quot;hoge fuga&amp;quot;,
+    &amp;quot;age&amp;quot;: 24,
+    &amp;quot;timestamp&amp;quot;: 1485676393044
+}
+&#39;
+
+$ curl &#39;localhost:9200/test_index/test_type/_search?pretty&#39;
+{
+  &amp;quot;took&amp;quot; : 2,
+  &amp;quot;timed_out&amp;quot; : false,
+  &amp;quot;_shards&amp;quot; : {
+    &amp;quot;total&amp;quot; : 5,
+    &amp;quot;successful&amp;quot; : 5,
+    &amp;quot;failed&amp;quot; : 0
+  },
+  &amp;quot;hits&amp;quot; : {
+    &amp;quot;total&amp;quot; : 1,
+    &amp;quot;max_score&amp;quot; : 1.0,
+    &amp;quot;hits&amp;quot; : [
+      {
+        &amp;quot;_index&amp;quot; : &amp;quot;test_index&amp;quot;,
+        &amp;quot;_type&amp;quot; : &amp;quot;test_type&amp;quot;,
+        &amp;quot;_id&amp;quot; : &amp;quot;AVnpOGrseo3fDHi0SK-P&amp;quot;,
+        &amp;quot;_score&amp;quot; : 1.0,
+        &amp;quot;_source&amp;quot; : {
+          &amp;quot;name&amp;quot; : &amp;quot;hoge fuga&amp;quot;,
+          &amp;quot;age&amp;quot; : 24,
+          &amp;quot;timestamp&amp;quot; : 1485676393044
+        }
+      }
+    ]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/52.png&#34; alt=&#34;表示してみた&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ファイルディスクリプタの上限を増やす</title>
+          <link>http://sambaiz.net/article/41/</link>
+          <pubDate>Thu, 08 Dec 2016 21:36:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/41/</guid>
+          <description>
+
+&lt;h2 id=&#34;ファイルディスクリプタとは&#34;&gt;ファイルディスクリプタとは&lt;/h2&gt;
+
+&lt;p&gt;プロセスの外部とやりとりするための識別子。POSIXではint型で、0がstdin、1がstdout、2がstderrといったもの。
+ファイルやデバイスに対するopen()や、
+ネットワーク(INETドメインソケット)やホスト内(UNIXドメインソケット)で
+通信するためのソケットを生成するsocket()などのシステムコールで生成される。&lt;/p&gt;
+
+&lt;h2 id=&#34;ファイルディスクリプタの上限&#34;&gt;ファイルディスクリプタの上限&lt;/h2&gt;
+
+&lt;p&gt;一つのプロセスがリソースを食いつぶさないように
+使えるファイルディスクリプタの上限が決まっていて、&lt;code&gt;ulimit -n&lt;/code&gt;で確認できる。デフォルトは大体1024。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ulimit -n
+1024
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;各プロセスの上限と使っているファイルディスクリプタはこれで確認できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /proc/&amp;lt;プロセスID&amp;gt;/limits
+...
+Max open files            1024                 4096                 files     
+...
+
+$ ls -l /proc/&amp;lt;プロセスID&amp;gt;/fd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;webサーバーのように同時にたくさん通信したりすると上限に達してしまい、&lt;code&gt;Too many open files&lt;/code&gt;になってしまうので増やす必要がある。&lt;/p&gt;
+
+&lt;h3 id=&#34;etc-security-limits-conf-で変更する&#34;&gt;&lt;code&gt;/etc/security/limits.conf&lt;/code&gt;で変更する&lt;/h3&gt;
+
+&lt;p&gt;PAM認証時(ログインするときなど)に適用されるので、サーバーの起動時に立ち上がったデーモンには使えない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /etc/pam.d/sshd
+...
+session    required     pam_limits.so
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;全てのユーザー(&lt;code&gt;*&lt;/code&gt;)のプロセスが使える
+ファイルディスクリプタ(nofile)のsoft(ユーザーが設定できる)とhard(rootが設定できる)上限を共に64000にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &amp;quot;* hard nofile 64000&amp;quot; &amp;gt;&amp;gt; /etc/security/limits.conf
+$ echo &amp;quot;* soft nofile 64000&amp;quot; &amp;gt;&amp;gt; /etc/security/limits.conf
+$ ulimit -n
+64000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;ulimit-n-で変更する&#34;&gt;&lt;code&gt;ulimit -n&lt;/code&gt;で変更する&lt;/h3&gt;
+
+&lt;p&gt;シェルと、起動したプロセスで有効。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ulimit -n 64000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dockerコンテナでは&#34;&gt;dockerコンテナでは&lt;/h3&gt;
+
+&lt;p&gt;run時に&lt;a href=&#34;https://docs.docker.com/engine/reference/commandline/run/#/set-ulimits-in-container---ulimit&#34;&gt;ulimitオプション&lt;/a&gt;で
+&lt;code&gt;--ulimit nofile=11111&lt;/code&gt;のように指定することもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run -itd --ulimit nofile=11111 ubuntu
+$ docker exec -it &amp;lt;id&amp;gt; /bin/bash -c &amp;quot;ulimit -n&amp;quot;
+11111
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://open-groove.net/linux/memo-etcsecuritylimits-conf/&#34;&gt;/etc/security/limits.confに関するメモ | OpenGroove&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://staffblog.yumemi.jp/%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%83%87%E3%82%A3%E3%82%B9%E3%82%AF%E3%83%AA%E3%83%97%E3%82%BF%E6%95%B0%E3%81%AE%E4%B8%8A%E9%99%90%E5%A4%89%E6%9B%B4%E3%81%A8limits-conf%E3%81%AE%E7%BD%A0-2/&#34;&gt;ファイルディスクリプタ数の上限変更とlimits.confの罠&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.koikikukan.com/archives/2013/03/14-005555.php&#34;&gt;Linuxのファイルディスクリプタ数を変更・確認する方法: 小粋空間&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://ja.wikipedia.org/wiki/ファイル記述子&#34;&gt;ファイル記述子 - Wikipedia&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/kuni-nakaji/items/d11219e4ad7c74ece748&#34;&gt;調べなきゃ寝れない！と調べたら余計に寝れなくなったソケットの話 - Qiita&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>OpenVPNサーバーPritunlをDockerで動かす</title>
+          <link>http://sambaiz.net/article/39/</link>
+          <pubDate>Fri, 02 Dec 2016 21:05:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/39/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://pritunl.com/&#34;&gt;Pritunl&lt;/a&gt;でVPNサーバーを立てる。&lt;/p&gt;
+
+&lt;p&gt;Dockerfileはこんな感じ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://hub.docker.com/r/sambaiz/pritunl/&#34;&gt;https://hub.docker.com/r/sambaiz/pritunl/&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM mongo:3.4
+
+# https://docs.pritunl.com/docs/installation
+RUN echo &#39;deb http://repo.pritunl.com/stable/apt jessie main&#39; &amp;gt; /etc/apt/sources.list.d/pritunl.list &amp;amp;&amp;amp; \
+    apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 7568D9BB55FF9E5287D586017AE645C0CF8E292A &amp;amp;&amp;amp; \
+    apt-get --assume-yes update &amp;amp;&amp;amp; \
+    apt-get --assume-yes upgrade &amp;amp;&amp;amp; \
+    apt-get --assume-yes install pritunl iptables
+
+EXPOSE 80 443 12345/udp
+
+CMD mongod --fork --logpath /data/db/mongod.log &amp;amp;&amp;amp; echo &#39;Setup Key:&#39; `pritunl setup-key` &amp;amp;&amp;amp; pritunl start
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run -itd -p 80:80 -p 443:443 -p 12345:12345/udp --privileged sambaiz/pritunl
+$ docker logs &amp;lt;id&amp;gt;
+...
+Setup Key: ***********
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;--privileged&lt;/code&gt;を付けているのはStart Server時にこれで失敗しないように。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CalledProcessError: Command &#39;[&#39;sysctl&#39;, &#39;-w&#39;, &#39;net.ipv4.ip_forward=1&#39;]&#39; returned non-zero exit status 255
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;httpsでアクセスして、Setup Keyを入力すると初期設定が始まり、ログイン画面になる。
+初期パスワードは&lt;code&gt;pritunl/pritunl&lt;/code&gt;。&lt;/p&gt;
+
+&lt;p&gt;あとは、OrganizationとUser、Server(ポートはudpの12345にする)を登録し、ServerにOrganizationを紐付け、
+ServerにRouteを追加して、アクセスしたいCIDRを入力したらStart Serverする。
+ovpnファイルをダウンロードできる24時間有効のリンクを発行でき、これでクライアントに設定すると
+RouteにVPNを通してアクセスできるようになる。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>GKEで複数コンテナのアプリケーションを動かす</title>
+          <link>http://sambaiz.net/article/18/</link>
+          <pubDate>Fri, 26 Aug 2016 21:57:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/18/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/17&#34;&gt;前回&lt;/a&gt;は単一コンテナのアプリケーションを動かしたが、今回はコンテナ間でやり取りが発生するものを動かす。
+流れとしては、クライアントからのリクエストを&lt;code&gt;GATEWAY&lt;/code&gt;サーバーで受け取り、&lt;code&gt;SERVICE&lt;/code&gt;サーバーにリクエストし、その結果を返すまで。&lt;/p&gt;
+
+&lt;p&gt;プログラムは以下の通り、環境変数&lt;code&gt;TYPE&lt;/code&gt;の値によって挙動を変えていて、同じイメージを使い回す。コードは&lt;a href=&#34;https://github.com/sambaiz/gke-multi-container-app&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var http = require(&#39;http&#39;);
+var handleRequest = function(request, response) {
+  if(process.env.TYPE == &amp;quot;GATEWAY&amp;quot;){
+    console.log(&#39;Passed.&#39;);
+    var options = {
+      host: &#39;service&#39;,
+      port: 8080,
+      method: &#39;GET&#39;
+    };
+    var req = http.request(options, function(res) {
+      data = &amp;quot;&amp;quot;
+      res.on(&#39;data&#39;, function (chunk) {
+        data+=chunk;
+      });
+
+      res.on(&#39;end&#39;, () =&amp;gt; {
+        response.writeHead(200);
+        response.end(data);
+      });
+    });
+    req.on(&#39;error&#39;, function(e) {
+      response.writeHead(500)
+      response.end(e.message);
+    });
+    req.end();
+  }else{
+    console.log(&#39;Received.&#39;);
+    response.writeHead(200);
+    response.end(&#39;ok&#39;);
+  }
+};
+var www = http.createServer(handleRequest);
+www.listen(8080);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをContainer RegistryにPushする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ export PROJECT_ID=&amp;quot;gcp-test-141011&amp;quot;
+$ docker build -t gcr.io/$PROJECT_ID/multitest:v1 .
+$ gcloud docker push gcr.io/$PROJECT_ID/multitest:v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ローカルで試すためにminikubeを起動。コンテキストがminikubeに設定される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube start
+$ kubectl config current-context
+minikube
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;minikubeでContainer Registryから取得できるようにsecretを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create secret docker-registry myregistrykey --docker-server=https://gcr.io --docker-username=oauth2accesstoken --docker-password=&amp;quot;$(gcloud auth print-access-token)&amp;quot; --docker-email=***
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず、以下の&lt;code&gt;service_deployment.yaml&lt;/code&gt;でDeploymentを作成する。
+envのところで環境変数&lt;code&gt;TYPE&lt;/code&gt;を&lt;code&gt;SERVICE&lt;/code&gt;に設定した。
+また、先ほど作成したsecretを&lt;code&gt;imagePullSecrets&lt;/code&gt;で指定し、
+ローカルのminikube環境でContainer Registryから取得できるようにしている。
+同様に&lt;code&gt;gateway_deployment.yaml&lt;/code&gt;でも作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: service
+  labels:
+    app: service
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: service
+    spec:
+      containers:
+      - name: service
+        image: gcr.io/gcp-test-141011/multitest:v1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        env:
+        - name: TYPE
+          value: SERVICE
+        ports:
+        - containerPort: 8080
+      imagePullSecrets:
+      - name: myregistrykey    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f service_deployment.yaml
+$ kubectl create -f gateway_deployment.yaml
+$ kubectl get deployment
+NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+gateway   1         1         1            1           8m
+service   1         1         1            1           28m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次に、これを内部から呼べるようにするためのServiceを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: service
+  labels:
+    app: service
+spec:
+  ports:
+  - port: 8080
+  selector:
+    app: service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;GATEWAY&lt;/code&gt;の方は外に開くので、EXTERNAL IPが割り当てられるようにする。
+ただ、minikubeでは&lt;code&gt;type: LoadBalancer&lt;/code&gt;に対応していないので代わりに&lt;code&gt;type: NodePort&lt;/code&gt;を指定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  # type: LoadBalancer
+  type: NodePort
+  ports:
+  - port: 8080
+    nodePort: 30002
+  selector:
+    app: gateway
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f service_service.yaml
+$ kubectl create -f gateway_service.yaml
+$ kubectl get services
+NAME            CLUSTER-IP   EXTERNAL-IP   PORT(S)    AGE
+gateway         10.0.0.176   &amp;lt;nodes&amp;gt;       8080/TCP   1h
+service         10.0.0.111   &amp;lt;none&amp;gt;        8080/TCP   2d
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;GATEWAY&lt;/code&gt;サーバーを越えて&lt;code&gt;SERVICE&lt;/code&gt;サーバーまで到達したことが確認できた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl 192.168.99.100:30002
+ok
+
+$ kubectl get pods
+NAME                       READY     STATUS    RESTARTS   AGE
+gateway-3043515563-a0tb5   1/1       Running   0          38m
+service-2727435432-9glvb   1/1       Running   0          38m
+
+$ kubectl logs service-2727435432-9glvb
+Received.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一通り動いたのでこんなシェルスクリプトを書いた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/bash
+
+context=`kubectl config current-context`
+echo &amp;quot;${context}で実行します。よろしいですか[Y/N]&amp;quot;
+read ANSWER
+case $ANSWER in
+    &amp;quot;Y&amp;quot; ) :;;
+    * ) exit;;
+esac
+if [ $context = &amp;quot;minikube&amp;quot; ] ; then
+  kubectl create -f yaml/gateway_service_minikube.yaml
+  kubectl create -f yaml/service_deployment_minikube.yaml
+  kubectl create -f yaml/gateway_deployment_minikube.yaml
+else
+  kubectl create -f yaml/gateway_service.yaml
+  kubectl create -f yaml/service_deployment.yaml
+  kubectl create -f yaml/gateway_deployment.yaml
+fi
+kubectl create -f yaml/service_service.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行するとこうなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud container clusters create multi-container-app
+$ kubectl config current-context
+gke_gcp-test-141011_asia-east1-b_multi-container-app
+
+$ sh create.sh
+gke_gcp-test-141011_asia-east1-b_multi-container-appで実行します。よろしいですか[Y/N]
+Y
+service &amp;quot;gateway&amp;quot; created
+deployment &amp;quot;service&amp;quot; created
+deployment &amp;quot;gateway&amp;quot; created
+service &amp;quot;service&amp;quot; created
+
+$ kubectl get service
+NAME         CLUSTER-IP      EXTERNAL-IP       PORT(S)    AGE
+gateway      10.83.254.5     104.199.206.147   8080/TCP   4m
+service      10.83.255.118   &amp;lt;none&amp;gt;            8080/TCP   4m
+
+$ curl 104.199.206.147:8080
+ok
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Google Container Engine(GKE)で単一コンテナのアプリケーションを動かす</title>
+          <link>http://sambaiz.net/article/17/</link>
+          <pubDate>Sun, 21 Aug 2016 23:37:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/17/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://kubernetes.io/docs/hellonode/&#34;&gt;Kubernetes - Hello World Walkthrough&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;cloudsdkとkubectlのインストール&#34;&gt;CloudSDKとkubectlのインストール&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/sdk/#Quick_Start&#34;&gt;Cloud SDKをインストール&lt;/a&gt;して&lt;code&gt;gloud&lt;/code&gt;コマンドを使えるようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud --version
+Google Cloud SDK 122.0.0
+$ gcloud components install kubectl
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;google-container-registryにpush&#34;&gt;Google Container RegistryにPush&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ export PROJECT_ID=&amp;quot;******&amp;quot;
+$ docker build -t gcr.io/$PROJECT_ID/test:v1 .
+$ gcloud docker push gcr.io/$PROJECT_ID/test:v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;プロジェクトの課金を有効にしていないとこんなエラーメッセージが出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;denied: Unable to create the repository, please check that you have access to do so.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;clusterの作成&#34;&gt;Clusterの作成&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud config set core/project $PROJECT_ID
+$ gcloud config set compute/zone asia-east1-b
+$ gcloud container clusters create test-cluster
+$ gcloud config set container/cluster test-cluster
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Container Engine APIが有効になっていない場合はこうなる。
+一度コンソールからContainer Engineを選ぶと、サービスの準備が始まって有効になる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ERROR: (gcloud.container.clusters.create) ResponseError: code=503, message=Project **** is not fully initialized with the default service accounts. Please try again later.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;pod-とそのdeployment-の作成&#34;&gt;Pod(とそのDeployment)の作成&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl run test-node --image=gcr.io/$PROJECT_ID/test:v1 --port=8080
+$ kubectl get deployments
+NAME        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+test-node   1         1         1            0           12s
+
+$ kubectl get pods
+NAME                         READY     STATUS              RESTARTS   AGE
+test-node-1016577872-h7yiz   0/1       ContainerCreating   0          18s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;serviceを作成してクラスタの外からアクセスできるようにする&#34;&gt;Serviceを作成してクラスタの外からアクセスできるようにする&lt;/h2&gt;
+
+&lt;p&gt;デフォルトではクラスタ内からしかアクセスできない。
+&lt;code&gt;--type=&amp;quot;LoadBalancer&amp;quot;&lt;/code&gt;のServiceを作成するとEXTERNAL_IPが割り当てられ、外からアクセスできるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl expose deployment test-node --type=&amp;quot;LoadBalancer&amp;quot;
+$ kubectl get services test-node
+NAME        CLUSTER-IP     EXTERNAL-IP       PORT(S)    AGE
+test-node   10.43.247.66   104.199.158.131   8080/TCP   1m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;スケーリング&#34;&gt;スケーリング&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl scale deployment test-node --replicas=4
+$ kubectl get deployment
+NAME        DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+test-node   4         4         4            2           11m
+
+$ kubectl get pods
+NAME                         READY     STATUS              RESTARTS   AGE
+test-node-1016577872-fso09   0/1       ContainerCreating   0          12s
+test-node-1016577872-h7yiz   1/1       Running             0          11m
+test-node-1016577872-sbdvl   1/1       Running             0          12s
+test-node-1016577872-z9ji3   0/1       ContainerCreating   0          12s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;更新&#34;&gt;更新&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t gcr.io/$PROJECT_ID/test:v2 .
+$ gcloud docker push gcr.io/$PROJECT_ID/test:v2
+$ kubectl set image deployment/test-node test-node=gcr.io/$PROJECT_ID/test:v2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;削除&#34;&gt;削除&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl delete service,deployment test-node
+$ gcloud container clusters delete test-cluster
+$ gcloud config unset container/cluster
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -20,7 +644,7 @@
 
 &lt;h2 id=&#34;kubernatesとは-http-kubernetes-io-docs-whatisk8s&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/whatisk8s/&#34;&gt;Kubernatesとは&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;Kubernates(クバネテスと周りでは呼んでる。ギリシャ語で操舵手)はアプリケーションコンテナにおける、自動デプロイ、スケーリング、操作を
+&lt;p&gt;Kubernates(クバネテスと周りでは呼んでる。ギリシャ語で操舵手。)はアプリケーションコンテナにおける、自動デプロイ、スケーリング、操作を
 自動化するオープンソースプラットフォームだ。K8sと略される。Googleによって開発が始められた。&lt;/p&gt;
 
 &lt;h2 id=&#34;minikube-https-github-com-kubernetes-minikube&#34;&gt;&lt;a href=&#34;https://github.com/kubernetes/minikube&#34;&gt;Minikube&lt;/a&gt;&lt;/h2&gt;
@@ -301,7 +925,7 @@ spec:
     
       
         <item>
-          <title>Docker公式ドキュメント&#34;network コマンドを使う&#34;をまとめた</title>
+          <title>Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む</title>
           <link>http://sambaiz.net/article/7/</link>
           <pubDate>Fri, 15 Jul 2016 00:38:00 &#43;0900</pubDate>
           <author></author>

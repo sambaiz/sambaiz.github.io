@@ -2,12 +2,822 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>sambaiz.net</title>
-    <link>http://sambaiz.net/tags/aws/</link>
+    <link>http://sambaiz.net/tags/aws/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
-    <rights>(C) 2016</rights>
-    <updated>2016-10-18 22:37:00 &#43;0900 JST</updated>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
+    
+      
+        <item>
+          <title>FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ</title>
+          <link>http://sambaiz.net/article/84/</link>
+          <pubDate>Wed, 15 Mar 2017 23:00:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/84/</guid>
+          <description>
+
+&lt;h2 id=&#34;kpl-kinesis-producer-library-とは&#34;&gt;KPL(Kinesis Producer Library)とは&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/streams/latest/dev/developing-producers-with-kpl.html&#34;&gt;Developing Amazon Kinesis Streams Producers Using the Amazon Kinesis Producer Library - Amazon Kinesis Streams&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Kinesisに送るとき、自動リトライしてくれたり、レコードをまとめてスループットを向上してくれたりするアプリケーション。Protobufを使っている。
+普通に送るとどんなに小さくてもシャード*1000レコード/秒しか最大でPUTできないのを、KPLを使ってまとめることで増やすことができる。&lt;/p&gt;
+
+&lt;h2 id=&#34;fluentdで送る&#34;&gt;fluentdで送る&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;で&lt;code&gt;kinesis_producer&lt;/code&gt;を指定するとKPLを使って送信する。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;&amp;lt;kinesis_producer&amp;gt;&lt;/code&gt;の中にKPLの設定を書くことができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;kinesis_producer&amp;gt;
+    record_max_buffered_time 10
+&amp;lt;/kinesis_producer&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L239&#34;&gt;record_max_bufferd_time&lt;/a&gt;
+はバッファされたレコードが送られるまでの最大時間(ms)。デフォルトは100ms。この時間が経つか、他のリミットに当たったらレコードは送られる。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L30&#34;&gt;AggregationMaxCount&lt;/a&gt;: 一つのレコードにまとめる最大レコード数&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L44&#34;&gt;AggregationMaxSize&lt;/a&gt;: まとめたレコードの最大バイト数&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L54&#34;&gt;CollectionMaxCount&lt;/a&gt;: PutRecordsで送る最大アイテム数&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L67&#34;&gt;CollectionMaxSize&lt;/a&gt;: PutRecordsで送るデータ量&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;CloudWatchに送る&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L158&#34;&gt;metrics_level&lt;/a&gt;はデフォルトでdetailedになっていて、
+コンソールのメトリクスからstream名で検索すると
+&lt;code&gt;KinesisProducerLibrary&lt;/code&gt;に&lt;code&gt;UserRecordsPerKinesisRecord&lt;/code&gt;や、&lt;code&gt;UserRecordsDataPut&lt;/code&gt;、&lt;code&gt;BufferingTime&lt;/code&gt;、&lt;code&gt;RequestTime&lt;/code&gt;などいろいろ表示される。&lt;/p&gt;
+
+&lt;p&gt;とりあえず試しにこんな設定で送ってみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;match hoge.log&amp;gt;
+  @type kinesis_producer
+  region ap-northeast-1
+  stream_name teststream
+  include_time_key true
+
+  flush_interval 1
+  buffer_chunk_limit 1m
+  try_flush_interval 0.1
+  queued_chunk_flush_interval 0.01
+  num_threads 15
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;lambdaで読む&#34;&gt;Lambdaで読む&lt;/h2&gt;
+
+&lt;p&gt;まとめられたレコードを&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation&#34;&gt;kinesis-aggregation&lt;/a&gt;で分解して読む。
+今回は&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation/tree/master/node&#34;&gt;Node.js&lt;/a&gt;でやる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install --save aws-kinesis-agg
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;注意する必要があるのは&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation/issues/16&#34;&gt;ドキュメントの情報が古く&lt;/a&gt;て、
+関数の引数が足りないこと。第二引数のcomputeChecksumsが抜けているので気付かないと一つずつずれていくことになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;;
+
+const agg = require(&#39;aws-kinesis-agg&#39;);
+
+exports.handler = (event, context, callback) =&amp;gt; {
+    Promise.all(
+        event.Records.map(
+            (record) =&amp;gt; deaggregate(record)
+        )
+    ).then(
+        (records) =&amp;gt; {
+            // LambdaのNode.jsはまだ4.3なのでSpread operatorが使えない・・・
+            // const message = `${[].concat(...records).length} came in`; 
+            let sumCount = 0;
+            records.forEach((r) =&amp;gt; sumCount += r.length);
+            const message = `${records.length} aggregated records and ${sumCount} records come in`; 
+            console.log(message);
+            callback(null, message);
+        },
+        (err) =&amp;gt; callback(err)
+    );
+};
+
+function deaggregate(record){
+    return new Promise((resolve, reject) =&amp;gt; {
+        agg.deaggregateSync(record.kinesis, true, (err, userRecords) =&amp;gt; {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(userRecords);
+            }
+        });
+    });
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;175レコードが10レコードにまとめられた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;10 aggregated records and 175 records come in
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/high-throughput-messaging-system-with-kinesis-kpl-fluentd-lambda/&#34;&gt;Kinesis Producer Library(KPL)とfluentdとLambdaを連携してKinesisのスループットを上げる ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する</title>
+          <link>http://sambaiz.net/article/73/</link>
+          <pubDate>Sun, 26 Feb 2017 18:56:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/73/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;でKinesis Streamsに送り、Lambdaで読んでS3に保存する。
+要するにFirehoseのようなことをやりたいのだけれどTokyoリージョンにまだ来ないので自分でやる。&lt;/p&gt;
+
+&lt;h2 id=&#34;fluentdで送る&#34;&gt;fluentdで送る&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ td-agent-gem install fluent-plugin-kinesis
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;try_flush_interval&lt;/code&gt;と&lt;code&gt;queued_chunk_flush_interval&lt;/code&gt;はドキュメントには載っていないが、
+以下のページによるとそれぞれqueueに次のchunkがないときとあるときのflushする間隔。
+いずれもデフォルトは1だが、これを減らすことでもっと頻繁に吐き出されるようになるらしい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sonots/fluentd-scr/blob/master/02_out_forward_buffered.md&#34;&gt;Fluentd の out_forward と BufferedOutput&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;あとシャードに振り分けるための&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis#partition_key&#34;&gt;partition_key&lt;/a&gt;
+を指定できる。デフォルトはランダム。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type tail
+  path /var/log/td-agent/hoge.log
+  pos_file /etc/td-agent/log.pos
+  tag hoge.log
+  format json
+
+  time_key timestamp
+  # 2017-01-01T01:01:01+0900
+  time_format %Y-%m-%dT%H:%M:%S%z
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match hoge.log&amp;gt;
+  @type kinesis_streams
+  region ap-northeast-1
+  stream_name teststream
+  include_time_key true
+
+  flush_interval 1
+  buffer_chunk_limit 1m
+  try_flush_interval 0.1
+  queued_chunk_flush_interval 0.01
+  num_threads 15
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;いくつか送ってみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;for i in `seq 1 1000`
+do
+  echo &#39;{&amp;quot;hoge&amp;quot;: &amp;quot;fuga&amp;quot;, &amp;quot;timestamp&amp;quot;: &amp;quot;2017-01-01T01:01:01+0900&amp;quot;}&#39; &amp;gt;&amp;gt; /var/log/td-agent/hoge.log
+done
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;kinesisのシャードが足りないと詰まってしまうので注意。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/84/&#34;&gt;FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;lambdaで読む&#34;&gt;Lambdaで読む&lt;/h2&gt;
+
+&lt;p&gt;Lambdaのトリガーの設定でKinesisを選ぶと、バッチサイズや開始位置を設定できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/73-lambda-kinesis.png&#34; alt=&#34;トリガーの設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;コードはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;;
+
+const zlib = require(&#39;zlib&#39;);
+const aws = require(&#39;aws-sdk&#39;);
+const s3 = new aws.S3({ apiVersion: &#39;2006-03-01&#39; });
+const BUCKET_NAME = process.env.BUCKET_NAME; // 環境変数で設定する
+
+exports.handler = (event, context, callback) =&amp;gt; {
+
+    const data = event.Records.map((record) =&amp;gt; new Buffer(record.kinesis.data, &#39;base64&#39;).toString()).join(&amp;quot;\n&amp;quot;);
+    const key = new Date().toISOString();
+    
+    putS3(key, data, true).then(
+        (data) =&amp;gt; callback(null, `Successfully processed ${event.Records.length} records.`),
+        (err) =&amp;gt; callback(err, null)
+    );
+};
+
+function putS3(key, data, gzip){    
+    return new Promise((resolve, reject) =&amp;gt; {
+        
+        const params = {
+            Bucket: BUCKET_NAME,
+            Key: key
+        };
+
+        if(gzip){
+            params.Body = zlib.gzipSync(data);
+            params.ContentEncoding = &amp;quot;gzip&amp;quot;;
+        }else{
+            params.Body = data;
+        }
+        
+        s3.putObject(params, (err, data) =&amp;gt; {
+            if (err) reject(err);
+            else resolve(data);
+        });
+    });
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;トリガーを有効にするとイベントが発火してS3に保存されるようになった。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>AWSのAssumeRole</title>
+          <link>http://sambaiz.net/article/72/</link>
+          <pubDate>Sat, 25 Feb 2017 20:40:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/72/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/id_credentials_temp.html&#34;&gt;AWS Security Token Service&lt;/a&gt;による、
+RoleArn(&lt;code&gt;arn:aws:iam::&amp;lt;account id&amp;gt;:role/&amp;lt;role name&amp;gt;&lt;/code&gt;)から一時的なCredentialを取得する仕組み。
+前もって発行したAPIキーとは違い、有効期限が存在するため続けて呼ぶ場合は失効する前に再発行する必要がある。&lt;/p&gt;
+
+&lt;p&gt;ではRoleArnを知っていたら誰でも取得できるかというと、もちろんそうではなく、
+ロールの信頼関係、&lt;code&gt;&amp;quot;Action&amp;quot;: &amp;quot;sts:AssumeRole&amp;quot;&lt;/code&gt;のPrincipalのところで信頼する対象を設定する。
+例えば、&lt;code&gt;Service&lt;/code&gt;で&lt;code&gt;ec2.amazonaws.com&lt;/code&gt;を指定してEC2がAssumeRoleするのを許可したり、
+&lt;code&gt;AWS&lt;/code&gt;で(他の)アカウントやユーザーを指定してそのAPIキーでこのRoleのCredentialを取得できるようにしたりといった感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;Version&amp;quot;: &amp;quot;2012-10-17&amp;quot;,
+  &amp;quot;Statement&amp;quot;: [
+    {
+      &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;,
+      &amp;quot;Principal&amp;quot;: {
+        &amp;quot;Service&amp;quot;: &amp;quot;ec2.amazonaws.com&amp;quot;
+      },
+      &amp;quot;Action&amp;quot;: &amp;quot;sts:AssumeRole&amp;quot;
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;EC2にロールを設定すると、実はそのロールについてAssumeRoleして自動でCredentialを取得している。
+EC2にロールを設定するにはロールとは別に
+&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html&#34;&gt;インスタンスプロファイルを作成&lt;/a&gt;
+する必要があるが、コンソールでEC2のサービスロールを作ると同名のインスタンスプロファイルが自動で作成される。
+さらに、AssumeRoleのServiceとして&lt;code&gt;ec2.amazonaws.com&lt;/code&gt;が追加されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl http://169.254.169.254/latest/meta-data/iam/info
+{
+  &amp;quot;Code&amp;quot; : &amp;quot;Success&amp;quot;,
+  &amp;quot;LastUpdated&amp;quot; : &amp;quot;2017-02-25T10:56:33Z&amp;quot;,
+  &amp;quot;InstanceProfileArn&amp;quot; : &amp;quot;arn:aws:iam::*****:instance-profile/assume_role_test&amp;quot;,
+  &amp;quot;InstanceProfileId&amp;quot; : &amp;quot;*****&amp;quot;
+}
+
+$ curl http://169.254.169.254/latest/meta-data/iam/security-credentials/assume_role_test
+{
+  &amp;quot;Code&amp;quot; : &amp;quot;Success&amp;quot;,
+  &amp;quot;LastUpdated&amp;quot; : &amp;quot;2017-02-25T10:56:23Z&amp;quot;,
+  &amp;quot;Type&amp;quot; : &amp;quot;AWS-HMAC&amp;quot;,
+  &amp;quot;AccessKeyId&amp;quot; : &amp;quot;*****&amp;quot;,
+  &amp;quot;SecretAccessKey&amp;quot; : &amp;quot;*****&amp;quot;,
+  &amp;quot;Token&amp;quot; : &amp;quot;*****&amp;quot;,
+  &amp;quot;Expiration&amp;quot; : &amp;quot;2017-02-25T17:26:07Z&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/iam-role-and-assumerole/&#34;&gt;IAMロール徹底理解 〜 AssumeRoleの正体 ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/id_credentials_temp_use-resources.html&#34;&gt;一時的なセキュリティ認証情報を使用して AWS リソースへのアクセスをリクエストする - AWS Identity and Access Management&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ELBのスケーリングとsurge queue</title>
+          <link>http://sambaiz.net/article/68/</link>
+          <pubDate>Tue, 21 Feb 2017 19:48:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/68/</guid>
+          <description>
+
+&lt;p&gt;バックエンドだけではなくELB自体もスケーリングし、内部node数はdigで調べることができる。
+このnode数は自分ではコントロールできず、基本的に意識することはない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ dig ****.ap-northeast-1.elb.amazonaws.com
+
+;; ANSWER SECTION:
+*****.elb.amazonaws.com. 60 IN A xxx.xxx.xxx.xxx
+*****.elb.amazonaws.com. 60 IN A yyy.yyy.yyy.yyy
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;nodeが増えるのにはある程度時間がかかるので、
+アクセスが急増(5分間で50%以上のトラフィック増加が&lt;a href=&#34;http://aws.typepad.com/sajp/2015/05/aws-black-belt-elb.html&#34;&gt;目安&lt;/a&gt;)
+したら捌ききれず、503を返すことがある。
+前もって多量のアクセスが来ることが分かっていて、
+&lt;a href=&#34;https://aws.amazon.com/jp/premiumsupport/signup/&#34;&gt;AWSサポート&lt;/a&gt;がBusiness以上なら
+pre-warming申請することでnodeが増えた状態で待ち構えられる。&lt;/p&gt;
+
+&lt;p&gt;バックエンドのアプリケーションがリクエストを処理できない場合、ELBのsurge queueに溜まっていく。
+この数はCloudWatchのSurgeQueueLength(キュー長の急増)メトリクスで確認できる。
+また、SurgeQueueLengthの最大値1024を超えるとリクエストは拒否され、その数はSpoiloverCount(過剰数)メトリクスに出る。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/elb-and-cloudwatch-metrics-in-depth/&#34;&gt;ELBの挙動とCloudWatchメトリクスの読み方を徹底的に理解する ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/premiumsupport/knowledge-center/elb-latency-troubleshooting/&#34;&gt;Elastic Load Balancing でのレイテンシーのトラブルシューティング&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Kinesis Streams/Firehose/Analyticsを試す</title>
+          <link>http://sambaiz.net/article/67/</link>
+          <pubDate>Mon, 20 Feb 2017 21:15:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/67/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/&#34;&gt;https://aws.amazon.com/jp/kinesis/&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;リアルタイムのストリーミングデータを扱うサービス群。
+いまのところTokyoリージョンではKinesis Streamsしか使えない。&lt;/p&gt;
+
+&lt;h3 id=&#34;kinesis-firehose-https-aws-amazon-com-jp-kinesis-firehose&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/&#34;&gt;Kinesis Firehose&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;AWSのデータストアに送るストリーム。自分でデータを読む処理を書かなくてよく、スケーリングも勝手にやってくれるので簡単に使える。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/faqs/&#34;&gt;https://aws.amazon.com/jp/kinesis/firehose/faqs/&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Q: 送信先とは何ですか?
+送信先はデータが配信されるデータストアです。Amazon Kinesis Firehose では、
+現在送信先として Amazon S3、Amazon Redshift、Amazon Elasticsearch Service がサポートされています。
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/pricing/&#34;&gt;料金&lt;/a&gt;は取り込まれたデータ量による。&lt;/p&gt;
+
+&lt;p&gt;今回はS3に送ってみる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-create-firehose.png&#34; alt=&#34;firehose作成&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;圧縮方法を設定したり、Lambdaを噛ませたりすることができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-create-firehose2.png&#34; alt=&#34;firehose作成2&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;StatusがActiveになったら&lt;a href=&#34;http://docs.aws.amazon.com/firehose/latest/dev/writing-with-agents.html&#34;&gt;Kinesis Agent&lt;/a&gt;で送ってみる。
+CloudWatchとFirehoseにPutする権限が必要。Firehoseはkinesis:ではなくfirehose:なので注意。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo yum install –y aws-kinesis-agent
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;/etc/aws-kinesis/agent.json&lt;/code&gt;を編集する。リージョンごとのエンドポイントは
+&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/general/latest/gr/rande.html#fh_region&#34;&gt;ここ&lt;/a&gt;
+にある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;awsAccessKeyId&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;awsSecretAccessKey&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;firehose.endpoint&amp;quot;: &amp;quot;https://firehose.us-east-1.amazonaws.com&amp;quot;, 
+    &amp;quot;flows&amp;quot;: [
+        {
+            &amp;quot;filePattern&amp;quot;: &amp;quot;/tmp/hoge.log&amp;quot;, 
+            &amp;quot;deliveryStream&amp;quot;: &amp;quot;hogefugastream&amp;quot;
+        }
+    ] 
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo service aws-kinesis-agent start
+$ sudo chkconfig aws-kinesis-agent on
+$ echo &amp;quot;aaa&amp;quot; &amp;gt;&amp;gt; /tmp/hoge.log
+$ tail /var/log/aws-kinesis-agent/aws-kinesis-agent.log
+com.amazon.kinesis.streaming.agent.Agent [INFO] Agent: Progress: 2 records parsed (168 bytes), 
+and 2 records sent successfully to destinations. Uptime: 300044ms
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;S3に保存されているのを確認。&lt;/p&gt;
+
+&lt;h3 id=&#34;kinesis-streams-https-aws-amazon-com-jp-kinesis-streams&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/streams/&#34;&gt;Kinesis Streams&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;用途を制限しないストリーム。データは保持期間の間、何度でも読むことができるので、
+とりあえず必要なだけシャードを増やしてデータを入れておけばどうにかなる。
+データを扱う側はそれぞれ独立に必要なタイミングで必要なだけpullするため、スケールするにあたってその先は別に考えることができ、
+高負荷なシステムのlog aggregatorとして使われる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/streams/pricing/&#34;&gt;料金&lt;/a&gt;は&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;時間単位のシャード速度： 1シャードは最大1000件/秒の1MB/秒の入力と2MB/秒の出力能力がある。&lt;/li&gt;
+&lt;li&gt;PUTペイロードユニット: 追加する25KBのチャンクの数。5KBでも1チャンク。&lt;/li&gt;
+&lt;li&gt;データ保持期間: デフォルトで24時間。7日まで延長可能。シャード時間ごとに課金。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;による。&lt;/p&gt;
+
+&lt;p&gt;ストリーム作成時はシャード数を入れる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-create-streams.png&#34; alt=&#34;streams作成&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Firehoseと同じくKinesis Agentで送ってみる。
+エンドポイントは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/general/latest/gr/rande.html#ak_region&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;awsAccessKeyId&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;awsSecretAccessKey&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;kinesis.endpoint&amp;quot;: &amp;quot;https://kinesis.us-east-1.amazonaws.com&amp;quot;, 
+    &amp;quot;flows&amp;quot;: [
+        {
+            &amp;quot;filePattern&amp;quot;: &amp;quot;/tmp/hoge.log&amp;quot;, 
+            &amp;quot;kinesisStream&amp;quot;: &amp;quot;fugafugastream&amp;quot;
+        }
+    ] 
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;aws-cliでデータを&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/streams/latest/dev/fundamental-stream.html#get-records&#34;&gt;取得する&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;まず、シャードイテレーターを取得する。有効時間は300秒。
+&lt;a href=&#34;http://docs.aws.amazon.com/kinesis/latest/APIReference/API_GetShardIterator.html#API_GetShardIterator_RequestSyntax&#34;&gt;TRIM_HORIZON&lt;/a&gt;
+で最も古い方からデータを取得していく。SequenceNumberを指定して途中から読むこともできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws kinesis get-shard-iterator --shard-id shardId-000000000000 --shard-iterator-type TRIM_HORIZON --stream-name fugafugastream
+{
+    &amp;quot;ShardIterator&amp;quot;: &amp;quot;AAAAAAAAAAFjKI0neNqY2N5HzGljYFCzoFqpQsdncdC6xE+ylnqvZpmusNfyViY3hBSS8WQXa67gvtkF0f2eKzxQ/Fd7SXZG8Inkb8l1UDF5t+jHgErA28gVSWyT4uYxTzzbnhm9AhcbztyQrjqehYcjEfpWIz5XmhY9K3Kjp0Crygy+OYNSS5PoQFcB1PZ7xMFE8zLTxJXLv1ANRu0Q+1m/JFxKQ3WS&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このシャードイテレータを使ってget-recordsする。データはBase64で入っているのでデコードして確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws kinesis get-records --shard-iterator AAAAAAAAAAFjKI0neNqY2N5HzGljYFCzoFqpQsdncdC6xE+ylnqvZpmusNfyViY3hBSS8WQXa67gvtkF0f2eKzxQ/Fd7SXZG8Inkb8l1UDF5t+jHgErA28gVSWyT4uYxTzzbnhm9AhcbztyQrjqehYcjEfpWIz5XmhY9K3Kjp0Crygy+OYNSS5PoQFcB1PZ7xMFE8zLTxJXLv1ANRu0Q+1m/JFxKQ3WS
+{
+    &amp;quot;Records&amp;quot;: [
+        {
+            &amp;quot;Data&amp;quot;: &amp;quot;YWFhCg==&amp;quot;, 
+            &amp;quot;PartitionKey&amp;quot;: &amp;quot;999679.8130737302&amp;quot;, 
+            &amp;quot;ApproximateArrivalTimestamp&amp;quot;: 1487082145.518, 
+            &amp;quot;SequenceNumber&amp;quot;: &amp;quot;49570460043263608661463102123405561406360875697772167170&amp;quot;
+        }, 
+        ...
+    ], 
+    &amp;quot;NextShardIterator&amp;quot;: &amp;quot;AAAAAAAAAAE08GRdLF1d76L1wCyLIiuAgpSEkKZSkUEO0VdUt3EOfdm1oOSXA1Xc4+tJPkSmB8g5NaQqDPRS/67u5IXermTUiAj6g2lgvDCGCqWFcYMAxIwIKZjKluCPQjL9kRaUqfVAaElRoKjp4Gv7JmuBDjKpxsbF2yk4uJJDAcevqH/VVkala8UbdhTweGyFgf9VhP/ljzXlrqkZ8wbD0eFwtZ3x&amp;quot;, 
+    &amp;quot;MillisBehindLatest&amp;quot;: 0
+}
+
+$ echo &amp;quot;YWFhCg==&amp;quot; | base64 -d
+aaa
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;kinesis-analytics-https-aws-amazon-com-jp-kinesis-analytics&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/analytics/&#34;&gt;Kinesis Analytics&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;SourceとなるKinesis Streamsか、Firehoseを指定し、SQLを実行できる。そして必要なら次のストリームに入れることができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-create-analytics.png&#34; alt=&#34;analytics作成&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;今回はSourceとしてjsonで株価のデータが入っているDemo streamを使う。
+いくつかSQLテンプレートが用意されていて、その中のContinuous Filterを選択。
+Streamに入ってきたものをTECHで絞って出力する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- ** Continuous Filter ** 
+-- Performs a continuous filter based on a WHERE condition.
+--          .----------.   .----------.   .----------.              
+--          |  SOURCE  |   |  INSERT  |   |  DESTIN. |              
+-- Source--&amp;gt;|  STREAM  |--&amp;gt;| &amp;amp; SELECT |--&amp;gt;|  STREAM  |--&amp;gt;Destination
+--          |          |   |  (PUMP)  |   |          |              
+--          &#39;----------&#39;   &#39;----------&#39;   &#39;----------&#39;               
+-- STREAM (in-application): a continuously updated entity that you can SELECT from and INSERT into like a TABLE
+-- PUMP: an entity used to continuously &#39;SELECT ... FROM&#39; a source STREAM, and INSERT SQL results into an output STREAM
+-- Create output stream, which can be used to send to a destination
+CREATE OR REPLACE STREAM &amp;quot;DESTINATION_SQL_STREAM&amp;quot; (ticker_symbol VARCHAR(4), sector VARCHAR(12), change REAL, price REAL);
+-- Create pump to insert into output 
+CREATE OR REPLACE PUMP &amp;quot;STREAM_PUMP&amp;quot; AS INSERT INTO &amp;quot;DESTINATION_SQL_STREAM&amp;quot;
+-- Select all columns from source stream
+SELECT STREAM ticker_symbol, sector, change, price
+FROM &amp;quot;SOURCE_SQL_STREAM_001&amp;quot;
+-- LIKE compares a string to a string pattern (_ matches all char, % matches substring)
+-- SIMILAR TO compares string to a regex, may use ESCAPE
+WHERE sector SIMILAR TO &#39;%TECH%&#39;;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-run-analytics.png&#34; alt=&#34;analytics実行&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>GoでDynamoDBを使う</title>
+          <link>http://sambaiz.net/article/63/</link>
+          <pubDate>Sun, 12 Feb 2017 23:15:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/63/</guid>
+          <description>
+
+&lt;h2 id=&#34;テーブルを作成する&#34;&gt;テーブルを作成する&lt;/h2&gt;
+
+&lt;h3 id=&#34;プライマリキー&#34;&gt;プライマリキー&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/GuidelinesForTables.html&#34;&gt;テーブルの操作のガイドライン - Amazon DynamoDB&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;プライマリキーとしてパーティションキー(ハッシュキー)とオプションのソートキー(レンジキー)を設定する。
+DynamoDBはこのパーティションキーに基づいて、複数のパーティションに分散して保存する。
+テーブルにプロビジョニングされたスループット性能はパーティション間で均等に使われるので、
+ソートキーを設定する場合にこれを最大限に活用するためには、
+あるパーティションにリクエストが集中しないよう、パーティションキーに特定の値ばかり集中しないようなフィールドを
+選ぶ必要がある。&lt;/p&gt;
+
+&lt;h3 id=&#34;セカンダリインデックス&#34;&gt;セカンダリインデックス&lt;/h3&gt;
+
+&lt;p&gt;パーティションキーのグローバルセカンダリインデックス(GSI)と
+ソートキーのローカルセカンダリインデックス(LSI)がある。
+射影されるフィールドを選択でき、ここに含まれないフィールドは返さない。
+ただし、すべてをインデックスに書き込むのはコストが高いのでなるべく絞る。&lt;/p&gt;
+
+&lt;h3 id=&#34;キャパシティユニット-http-docs-aws-amazon-com-ja-jp-amazondynamodb-latest-developerguide-limits-html-limits-capacity-units-provisioned-throughpu&#34;&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/Limits.html#limits-capacity-units-provisioned-throughpu&#34;&gt;キャパシティユニット&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;1読み込みキャパシティユニット: 4kbを超えないデータを1秒に1~2回(整合性による)読み込める&lt;/li&gt;
+&lt;li&gt;1書き込みキャパシティユニット: 1kbを超えないデータを1秒に1回書き込める&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ユニットに応じて1時間あたりで&lt;a href=&#34;https://aws.amazon.com/jp/dynamodb/pricing/&#34;&gt;課金&lt;/a&gt;される。&lt;/p&gt;
+
+&lt;p&gt;未使用のキャパシティがある場合、最大5分保持して&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/GuidelinesForTables.html#GuidelinesForTables.Bursting&#34;&gt;バーストに備えてくれる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;読み書きする&#34;&gt;読み書きする&lt;/h2&gt;
+
+&lt;p&gt;aws-sdk-goを直接使ってもいいけど、簡単に扱えるラッパー
+&lt;a href=&#34;https://github.com/guregu/dynamo&#34;&gt;guregu/dynamo&lt;/a&gt;
+を使うことにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Data struct {
+	ID   int64 `dynamo:&amp;quot;id&amp;quot;`
+	Name string
+	Age  int
+}
+
+db := dynamo.New(session.New(), &amp;amp;aws.Config{Region: aws.String(&amp;quot;ap-northeast-1&amp;quot;)})
+table := db.Table(&amp;quot;testtable&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;create-update&#34;&gt;Create &amp;amp; Update&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;d := Data{ID: 1, Name: &amp;quot;hogefuga&amp;quot;, Age: 123}
+if err := table.Put(d).Run(); err != nil {
+    return err
+}
+
+if err := table.Update(&amp;quot;id&amp;quot;, 1).Set(&amp;quot;name&amp;quot;, &amp;quot;fugafuga&amp;quot;).Run(); err != nil {
+    return err
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;get&#34;&gt;Get&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;var data Data
+// 結果整合性がある読み込み(1秒に2回/ユニット)　.Consistent(true)で強い整合性のある読み込み(1秒に1回/ユニット)にできる
+if err := table.Get(&amp;quot;id&amp;quot;, 1).One(&amp;amp;data); err != nil {
+    return err
+}
+fmt.Println(data)
+
+if err := table.Get(&amp;quot;id&amp;quot;, 2).One(&amp;amp;data); err != nil {
+    return err // dynamo: no item found
+}
+fmt.Println(data)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/AmazonWebServicesJapan/20150805-aws-blackbeltdynamodb&#34;&gt;AWS Black Belt Tech シリーズ 2015 - Amazon DynamoDB&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>EC2のインスタンスストア</title>
+          <link>http://sambaiz.net/article/58/</link>
+          <pubDate>Mon, 06 Feb 2017 21:52:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/58/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/InstanceStorage.html&#34;&gt;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/InstanceStorage.html&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;EC2ではインスタンスタイプによってはEBSに加えてインスタンスストアが使える。しかも追加料金なし。
+対象はストレージが&amp;rdquo;EBSのみ&amp;rdquo;でないもの。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/ec2/instance-types/&#34;&gt;https://aws.amazon.com/jp/ec2/instance-types/&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;インスタンスストアはインスタンスが停止したり、障害が起きると消える一時ストレージ。再起動では消えない。
+ホストに物理的にアタッチされているので、バッファやキャッシュなどの頻繁に読み書きされ、消えてもいいデータに最適。
+他のインスタンスにアタッチすることはできない。容量や性能もインスタンスタイプに依存する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/add-instance-store-volumes.html&#34;&gt;インスタンスストアボリュームの追加&lt;/a&gt;は
+インスタンスの起動時に、新しいボリュームを追加し、ボリュームタイプをインスタンスストアにすることで行うことができる。&lt;/p&gt;
+
+&lt;p&gt;今回はSSDストレージ1 x 4のm3.mediumで試す。これは4gbのボリュームが一つ追加できるという意味。&lt;/p&gt;
+
+&lt;p&gt;まずはインスタンスストアを追加してないインスタンス。
+lsblkというのはlist block devicesの略。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ df -h
+ファイルシス   サイズ  使用  残り 使用% マウント位置
+/dev/xvda1       7.8G  1.2G  6.6G   15% /
+...
+$ dd if=/dev/zero of=hoge bs=1M count=1000
+$ ls -sh
+合計 1001M
+1001M hoge
+
+$ df -h
+ファイルシス   サイズ  使用  残り 使用% マウント位置
+/dev/xvda1       7.8G  2.2G  5.6G   28% /
+...
+
+$ lsblk
+NAME    MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0   8G  0 disk 
+└─xvda1 202:1    0   8G  0 part /
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それに対してインスタンスストア(/dev/xvdb)を追加したインスタンス。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ df -h
+ファイルシス   サイズ  使用  残り 使用% マウント位置
+/dev/xvda1       7.8G  1.2G  6.6G   15% /
+/dev/xvdb        4.0G   73M  3.7G    2% /media/ephemeral0
+
+$ lsblk
+NAME    MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0   8G  0 disk 
+└─xvda1 202:1    0   8G  0 part /
+xvdb    202:16   0   4G  0 disk /media/ephemeral0
+
+$ dd if=/dev/zero of=/media/ephemeral0/hoge bs=1M count=1000
+$ df -h
+ファイルシス   サイズ  使用  残り 使用% マウント位置
+/dev/xvda1       7.8G  1.2G  6.6G   15% /
+/dev/xvdb        4.0G  1.1G  2.7G   29% /media/ephemeral0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/imaifactory/ephemeral-ssd&#34;&gt;EC2のストレージどう使う? -Instance Storageを理解して高速IOを上手に活用!-&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>複数EC2インスタンスを立ち上げてvegetaで負荷試験する</title>
+          <link>http://sambaiz.net/article/43/</link>
+          <pubDate>Sun, 18 Dec 2016 20:52:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/43/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/tsenart/vegeta&#34;&gt;vegeta&lt;/a&gt;で負荷をかける。&lt;/p&gt;
+
+&lt;h2 id=&#34;インスタンスを立ち上げるスクリプト&#34;&gt;インスタンスを立ち上げるスクリプト&lt;/h2&gt;
+
+&lt;p&gt;コードはここ。 &lt;a href=&#34;https://github.com/sambaiz/loadtest&#34;&gt;sambaiz/loadtest&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;まずキーペアを作成し、EC2インスタンスを立ち上げて、全てのインスタンスが使えるようになるまで待つ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;aws ec2 create-key-pair --key-name LoadTestKeyPare --query &#39;KeyMaterial&#39; --output text &amp;gt; LoadTestKeyPare.pem
+chmod 400 LoadTestKeyPare.pem
+aws ec2 run-instances --image-id $AMI_ID --count $INSTANCE_NUM --instance-type t2.micro --key-name LoadTestKeyPare --security-group-ids $SECURITY_GROUP_IDS --subnet-id $SUBNET_ID
+...
+aws ec2 wait instance-status-ok --instance-ids $INSTANCE_IDS
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このAMIは事前にPackerでつくったもの。vegetaをインストールしてファイルディスクリプタの上限を増やしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;variables&amp;quot;: {
+    &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot;
+  },
+  &amp;quot;builders&amp;quot;: [{
+    &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;,
+    &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;,
+    &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;,
+    &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
+    &amp;quot;source_ami&amp;quot;: &amp;quot;ami-0c11b26d&amp;quot;,
+    &amp;quot;instance_type&amp;quot;: &amp;quot;t2.micro&amp;quot;,
+    &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;,
+    &amp;quot;ami_name&amp;quot;: &amp;quot;loadtest {{timestamp}}&amp;quot;
+  }],
+  &amp;quot;provisioners&amp;quot;: [{
+    &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;,
+    &amp;quot;inline&amp;quot;: [
+      &amp;quot;wget https://github.com/tsenart/vegeta/releases/download/v6.1.1/vegeta-v6.1.1-linux-amd64.tar.gz&amp;quot;,
+      &amp;quot;sudo tar xzf vegeta-v6.1.1-linux-amd64.tar.gz -C /usr/local/bin/&amp;quot;,
+      &amp;quot;sudo sh -c \&amp;quot;echo &#39;* hard nofile 65536&#39; &amp;gt;&amp;gt; /etc/security/limits.conf\&amp;quot;&amp;quot;,
+      &amp;quot;sudo sh -c \&amp;quot;echo &#39;* soft nofile 65536&#39; &amp;gt;&amp;gt; /etc/security/limits.conf\&amp;quot;&amp;quot;
+    ]
+  }]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;立ち上がったインスタンスに対して&lt;a href=&#34;https://code.google.com/p/pdsh/&#34;&gt;pdsh&lt;/a&gt;で
+各マシンでvegetaを実行させ($VEGETA_CMD)、結果のファイルを集めてreportのinputsで指定すると
+まとめてレポートを出力してくれる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;pdsh -l ec2-user -w `echo &amp;quot;$PUBLIC_DNS_NAMES&amp;quot; |  paste -d, -s -` &amp;quot;$VEGETA_CMD &amp;gt; result.bin&amp;quot;
+
+for machine in $PUBLIC_DNS_NAMES; do
+  scp -i ./LoadTestKeyPare.pem -oStrictHostKeyChecking=no ec2-user@$machine:~/result.bin $machine
+done
+
+vegeta report -inputs=`echo $PUBLIC_DNS_NAMES |  paste -d, -s -`
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;終わったら後片付けをする。trapでCtrl+C等での終了時もインスタンスが残らないようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cleanup() {
+  echo &amp;quot;---- Clean up ----&amp;quot;
+  aws ec2 terminate-instances --instance-ids $INSTANCE_IDS
+  aws ec2 delete-key-pair --key-name LoadTestKeyPare
+  rm -f LoadTestKeyPare.pem
+  rm $PUBLIC_DNS_NAMES
+}
+trap cleanup EXIT SIGHUP SIGINT SIGQUIT SIGTERM
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;実行する&#34;&gt;実行する&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install awscli pdsh jq vegeta packer
+$ aws configure
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じのスクリプト(sample/sample.sh)から実行する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/bash
+
+export INSTANCE_NUM=3
+
+export AMI_ID=ami-*****
+export SECURITY_GROUP_IDS=sg-*****
+export SUBNET_ID=subnet-*****
+
+export RESOURCES_DIR=res
+
+# https://github.com/tsenart/vegeta#attack
+export VEGETA_CMD=&#39;vegeta attack -targets=res/targets.txt -rate=1000 -duration=10s&#39;
+
+sh run.sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;sample/res/targets.txt&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;GET http://example.com/
+
+POST http://example.com/
+@res/post.json
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;結果&#34;&gt;結果&lt;/h2&gt;
+
+&lt;p&gt;何も指定しないとこんな感じ(-reporter=text)。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Requests      [total, rate]            10000, 1000.10
+Duration      [total, attack, wait]    10.011642793s, 9.998999835s, 12.642958ms
+Latencies     [mean, 50, 95, 99, max]  14.781775ms, 4.262304ms, 68.475899ms, 97.492882ms, 1.096072997s
+Bytes In      [total, mean]            15285000, 1528.50
+Bytes Out     [total, mean]            110000, 11.00
+Success       [ratio]                  100.00%
+Status Codes  [code:count]             200:10000  
+Error Set:
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;他にもjsonだったり、plotを指定するとレイテンシのグラフのhtmlが出力される。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/43_plot.jpg&#34; alt=&#34;グラフ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>

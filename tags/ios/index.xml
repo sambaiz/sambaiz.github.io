@@ -2,11 +2,11 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>sambaiz.net</title>
-    <link>http://sambaiz.net/tags/ios/</link>
+    <link>http://sambaiz.net/tags/ios/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
-    <rights>(C) 2016</rights>
-    <updated>2016-10-23 01:29:00 &#43;0900 JST</updated>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
     
       
@@ -129,33 +129,17 @@ ready = true
 
 class BLEPeripheral : NSObject, CBPeripheralManagerDelegate {
 
-    let CHARACTERISTIC_ROTATION_X_UUID = CBUUID(string:&amp;quot;5F83E23F-BCA1-42B3-B6F2-EA82BE46A93D&amp;quot;)
-    let CHARACTERISTIC_ROTATION_Y_UUID = CBUUID(string:&amp;quot;61B21612-86E7-4EDA-8F26-9FD9FB66739D&amp;quot;)
-    let CHARACTERISTIC_ROTATION_Z_UUID = CBUUID(string:&amp;quot;2481735C-0E12-4428-9E13-B7D987404802&amp;quot;)
+    let CHARACTERISTIC_UUID = CBUUID(string:&amp;quot;5F83E23F-BCA1-42B3-B6F2-EA82BE46A93D&amp;quot;)
     let SERVICE_UUID = CBUUID(string:&amp;quot;BF9CB85F-620C-4A67-BDD2-1A64213F74CA&amp;quot;)
-    let LOCAL_NAME = &amp;quot;clock&amp;quot;
+    let LOCAL_NAME = &amp;quot;my-ble&amp;quot;
 
     private var peripheralManager : CBPeripheralManager?
-    private var characteristicX: CBMutableCharacteristic
-    private var characteristicY: CBMutableCharacteristic
-    private var characteristicZ: CBMutableCharacteristic
+    private var characteristic: CBMutableCharacteristic
     private var ready = false
 
     public override init(){
-        characteristicX = CBMutableCharacteristic(
-            type: CHARACTERISTIC_ROTATION_X_UUID,
-            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
-            value:nil,
-            permissions:CBAttributePermissions.readable)
-
-        characteristicY = CBMutableCharacteristic(
-            type: CHARACTERISTIC_ROTATION_Y_UUID,
-            properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
-            value:nil,
-            permissions:CBAttributePermissions.readable)
-
-        characteristicZ = CBMutableCharacteristic(
-            type: CHARACTERISTIC_ROTATION_Z_UUID,
+        characteristic = CBMutableCharacteristic(
+            type: CHARACTERISTIC_UUID,
             properties: CBCharacteristicProperties.read.union(CBCharacteristicProperties.notify),
             value:nil,
             permissions:CBAttributePermissions.readable)
@@ -165,44 +149,20 @@ class BLEPeripheral : NSObject, CBPeripheralManagerDelegate {
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
     }
 
-    public func updateRotationX(_ data: Data?){
+    public func update(_ data: Data?) -&amp;gt; Bool {
         if(ready){
             if let d = data{
-                characteristicX.value = d
-                peripheralManager!.updateValue(d, for: characteristicX, onSubscribedCentrals: nil)
+                characteristic.value = d
+                return peripheralManager!.updateValue(d, for: characteristic, onSubscribedCentrals: nil)
             }else{
                 print(&amp;quot;data is null&amp;quot;)
             }
         }else{
             print(&amp;quot;not ready&amp;quot;)
         }
+        return false
     }
 
-    public func updateRotationY(_ data: Data?){
-        if(ready){
-            if let d = data{
-                characteristicX.value = d
-                peripheralManager!.updateValue(d, for: characteristicY, onSubscribedCentrals: nil)
-            }else{
-                print(&amp;quot;data is null&amp;quot;)
-            }
-        }else{
-            print(&amp;quot;not ready&amp;quot;)
-        }
-    }
-
-    public func updateRotationZ(_ data: Data?){
-        if(ready){
-            if let d = data{
-                characteristicZ.value = d
-                peripheralManager!.updateValue(d, for: characteristicZ, onSubscribedCentrals: nil)
-            }else{
-                print(&amp;quot;data is null&amp;quot;)
-            }
-        }else{
-            print(&amp;quot;not ready&amp;quot;)
-        }
-    }
 
 
     /*
@@ -215,7 +175,7 @@ class BLEPeripheral : NSObject, CBPeripheralManagerDelegate {
             print(&amp;quot;PeripheralManager state is ok&amp;quot;)
 
             let service = CBMutableService(type: SERVICE_UUID, primary: true)
-            service.characteristics = [characteristicX, characteristicY, characteristicZ]
+            service.characteristics = [characteristic]
             peripheralManager!.add(service)
             ready = true
 
@@ -246,17 +206,23 @@ class BLEPeripheral : NSObject, CBPeripheralManagerDelegate {
     }
 
     public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest){
-        if (request.characteristic.uuid.isEqual(characteristicX.uuid)) {
-            if let value = characteristicX.value{
-                if (request.offset &amp;gt; value.count) {
-                    peripheral.respond(to: request, withResult: CBATTError.invalidOffset)
-                    print(&amp;quot;Read fail: invalid offset&amp;quot;)
-                    return;
-                }
+        var value: Data?
+        switch request.characteristic.uuid {
+        case characteristic.uuid:
+            value = characteristic.value
+
+        default: break
+        }
+
+        if let v = value{
+            if (request.offset &amp;gt; v.count) {
+                peripheral.respond(to: request, withResult: CBATTError.invalidOffset)
+                print(&amp;quot;Read fail: invalid offset&amp;quot;)
+                return;
             }
 
-            request.value = characteristicX.value?.subdata(
-                in: Range(uncheckedBounds: (request.offset, (characteristicX.value?.count)! - request.offset))
+            request.value = v.subdata(
+                in: Range(uncheckedBounds: (request.offset, v.count - request.offset))
             )
             peripheral.respond(to: request, withResult: CBATTError.success)
             print(&amp;quot;Read success&amp;quot;)
@@ -278,7 +244,7 @@ timer!.fire()
 
 public func update(){
     let now = String(format: &amp;quot;%.0f&amp;quot;, arguments: [Date().timeIntervalSince1970])
-    peripheral.updateCharacteristic(now.data(using: String.Encoding.utf8))
+    peripheral.update(now.data(using: String.Encoding.utf8))
 }
 &lt;/code&gt;&lt;/pre&gt;
 </description>

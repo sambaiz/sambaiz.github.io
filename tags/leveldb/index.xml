@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/leveldb/index.xml</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
+
+    
+      
+        <item>
+          <title>GoogleのkvsライブラリLevelDBを使う</title>
+          <link>http://sambaiz.net/article/45/</link>
+          <pubDate>Sat, 24 Dec 2016 21:18:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/45/</guid>
+          <description>
+
+&lt;h2 id=&#34;leveldbとは&#34;&gt;LevelDBとは&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/google/leveldb&#34;&gt;https://github.com/google/leveldb&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Googleが作った高速なkey-valueストレージライブラリ。&lt;/p&gt;
+
+&lt;p&gt;ChromeのIndexedDBや&lt;a href=&#34;https://prometheus.io/docs/operating/storage/&#34;&gt;prometheus&lt;/a&gt;などで使われている。&lt;/p&gt;
+
+&lt;h3 id=&#34;特徴-https-github-com-google-leveldb-features&#34;&gt;&lt;a href=&#34;https://github.com/google/leveldb#features&#34;&gt;特徴&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Keyと任意のバイト配列のValue&lt;/li&gt;
+&lt;li&gt;データはKeyでソートされる。ソートのための比較関数はオーバーライドできる。&lt;/li&gt;
+&lt;li&gt;基本的な操作はPut, Get, Delete。&lt;/li&gt;
+&lt;li&gt;複数の変更を一つのatomicなバッチで行える&lt;/li&gt;
+&lt;li&gt;一環したデータのビューを取得するために、一時的なスナップショットを作成できる&lt;/li&gt;
+&lt;li&gt;データを前にも後ろにもイテレーションできる&lt;/li&gt;
+&lt;li&gt;データは&lt;a href=&#34;http://google.github.io/snappy/&#34;&gt;Snappy compression library&lt;/a&gt;で自動で圧縮される。&lt;/li&gt;
+&lt;li&gt;ファイルシステムの操作など外部のアクティビティを仮想的なインタフェースを通して行うので、OSとのやりとりをカスタマイズできる。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;制限-https-github-com-google-leveldb-limitations&#34;&gt;&lt;a href=&#34;https://github.com/google/leveldb#limitations&#34;&gt;制限&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SQLデータベースではない。リレーショナルなデータモデルは持てないし、SQLやインデックスにも対応していない。&lt;/li&gt;
+&lt;li&gt;一度に一つのプロセスしかDBにアクセスできない。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;キャッシュ-https-rawgit-com-google-leveldb-master-doc-index-html&#34;&gt;&lt;a href=&#34;https://rawgit.com/google/leveldb/master/doc/index.html&#34;&gt;キャッシュ&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;DBはファイルシステムのディレクトリに対応する名前を持ち、内容はそのディレクトリに保存される。&lt;/li&gt;
+&lt;li&gt;各ファイルには圧縮したブロックが保存され、良く使うものについては非圧縮のブロックがキャッシュされる。&lt;/li&gt;
+&lt;li&gt;ソートして隣接するキーは通常、同じブロックに配置される。ディスク転送とキャッシュはブロック単位。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;フィルタ&#34;&gt;フィルタ&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Getの際、不要なデータを読まなくていいようにフィルタ(Bloom Filter)を用いることができる。&lt;/li&gt;
+&lt;li&gt;独自の比較関数(末尾のスペースを無視するなど)を使う場合、Bloom Filterを使うことができないことがあるので、その場合は独自のフィルタが必要。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;レベル-https-rawgit-com-google-leveldb-master-doc-impl-html&#34;&gt;&lt;a href=&#34;https://rawgit.com/google/leveldb/master/doc/impl.html&#34;&gt;レベル&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;最近の更新はログファイルに保存される。これが決められたサイズ(デフォルトでは約4MB)に達すると、sorted table(sst)に変換され、新しいログファイルが生成される。&lt;/li&gt;
+&lt;li&gt;現在のログファイルのコピーがメモリ(memtable)にも乗って読み取りで参照される。&lt;/li&gt;
+&lt;li&gt;sstはキーによってソートされたエントリーを保存する。エントリーはキーの値か、削除マーカー。&lt;/li&gt;
+&lt;li&gt;sstはレベルによってまとめられる。ログファイルから変換されると、特別なyoungレベル(level-0とも呼ばれる)に配置される。&lt;/li&gt;
+&lt;li&gt;youngファイルの数があるしきい値(現在4つ)を超えると全てのyoungファイルを全てのlevel-1ファイルとマージし、新しいlevel-1ファイルを生成する(2MBごとに1ファイル)。&lt;/li&gt;
+&lt;li&gt;youngレベルのファイルにはキーが重複していることがある。しかし、他のレベルでは重複しないキーの範囲がある。&lt;/li&gt;
+&lt;li&gt;level-L(L&amp;gt;=1)のファイルの合計サイズが&lt;code&gt;10^L MB&lt;/code&gt;を超えたとき、level-Lのファイルと、level-(L+1)の全てのファイルをマージし、新しいlevel-(L+1)ファイルを生成する。&lt;/li&gt;
+&lt;li&gt;これによって、バルク読み込み/書き込みのみを使い、コストが高いシークを最小限にして、youngレベルから大きいレベルに更新を徐々にマイグレーションすることができる。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;動かしてみる&#34;&gt;動かしてみる&lt;/h2&gt;
+
+&lt;p&gt;LevelDBのgo実装。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/syndtr/goleveldb&#34;&gt;syndtr/goleveldb&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get github.com/syndtr/goleveldb/leveldb
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まずDBを開く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// open
+db, err := leveldb.OpenFile(&amp;quot;/Users/sambaiz/leveldb&amp;quot;, nil)
+defer db.Close()
+if err != nil {
+    panic(err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;普通に5個(key0~4)、バッチで5個(key5~9)のデータを入れて、そのうち一つを消す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// put
+for i := 0; i &amp;lt; 5; i++ {
+    if err = db.Put([]byte(fmt.Sprintf(&amp;quot;key%d&amp;quot;, i)), []byte(fmt.Sprintf(&amp;quot;value%d&amp;quot;, i)), nil); err != nil {
+        panic(err)
+    }
+}
+
+// batch
+batch := new(leveldb.Batch)
+for i := 5; i &amp;lt; 10; i++ {
+    batch.Put([]byte(fmt.Sprintf(&amp;quot;key%d&amp;quot;, i)), []byte(fmt.Sprintf(&amp;quot;value%d&amp;quot;, i)))
+}
+if err = db.Write(batch, nil); err != nil{
+    panic(err)
+}
+
+// delete
+if err = db.Delete([]byte(&amp;quot;key2&amp;quot;), nil); err != nil {
+    panic(err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この時点でこんなファイルが生成され、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls
+000001.log	CURRENT		LOCK		LOG		MANIFEST-000000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;000001.logの中身はこんな感じになっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ od -c 000001.log 
+0000000    Z 221   @ 300 031  \0 001 001  \0  \0  \0  \0  \0  \0  \0 001
+0000020   \0  \0  \0 001 004   k   e   y   0 006   v   a   l   u   e   0
+0000040    o 037   = 373 031  \0 001 002  \0  \0  \0  \0  \0  \0  \0 001
+0000060   \0  \0  \0 001 004   k   e   y   1 006   v   a   l   u   e   1
+0000100  256 343   &amp;gt; 311 031  \0 001 003  \0  \0  \0  \0  \0  \0  \0 001
+0000120   \0  \0  \0 001 004   k   e   y   2 006   v   a   l   u   e   2
+0000140    = 006 330 341 031  \0 001 004  \0  \0  \0  \0  \0  \0  \0 001
+0000160   \0  \0  \0 001 004   k   e   y   3 006   v   a   l   u   e   3
+0000200  002 005   4 016 031  \0 001 005  \0  \0  \0  \0  \0  \0  \0 001
+0000220   \0  \0  \0 001 004   k   e   y   4 006   v   a   l   u   e   4
+0000240    d 240 344   {   M  \0 001 006  \0  \0  \0  \0  \0  \0  \0 005
+0000260   \0  \0  \0 001 004   k   e   y   5 006   v   a   l   u   e   5
+0000300  001 004   k   e   y   6 006   v   a   l   u   e   6 001 004   k
+0000320    e   y   7 006   v   a   l   u   e   7 001 004   k   e   y   8
+0000340  006   v   a   l   u   e   8 001 004   k   e   y   9 006   v   a
+0000360    l   u   e   9   ! 233 277 371 022  \0 001  \v  \0  \0  \0  \0
+0000400   \0  \0  \0 001  \0  \0  \0  \0 004   k   e   y   2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;取得するにはkeyを指定して&lt;code&gt;Get()&lt;/code&gt;したり、Iteratorを使う。
+IteratorはSeekしたり、StartやLimitを設定したり、Prefixを指定して取ってくることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// get
+fmt.Println(&amp;quot;-- get --&amp;quot;)
+for i := 0; i &amp;lt; 10; i++ {
+    var data []byte
+    if data, err = db.Get([]byte(fmt.Sprintf(&amp;quot;key%d&amp;quot;, i)), nil); err != nil {
+        fmt.Printf(&amp;quot;key%d: %s\n&amp;quot;, i, err.Error())
+    } else {
+        fmt.Printf(&amp;quot;key%d: %s\n&amp;quot;, i, string(data))
+    }
+}
+
+// iterate
+fmt.Println(&amp;quot;-- iterate --&amp;quot;)
+iter := db.NewIterator(nil, nil)
+for iter.Next() {
+    key := iter.Key()
+    value := iter.Value()
+    fmt.Printf(&amp;quot;%s: %s\n&amp;quot;, string(key), string(value))
+}
+iter.Release()
+if err = iter.Error(); err != nil {
+    panic(err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- get --
+key0: value0
+key1: value1
+key2: leveldb: not found
+key3: value3
+key4: value4
+key5: value5
+key6: value6
+key7: value7
+key8: value8
+key9: value9
+-- iterate --
+key0: value0
+key1: value1
+key3: value3
+key4: value4
+key5: value5
+key6: value6
+key7: value7
+key8: value8
+key9: value9
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

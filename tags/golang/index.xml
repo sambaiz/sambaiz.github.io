@@ -2,12 +2,2509 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>sambaiz.net</title>
-    <link>http://sambaiz.net/tags/golang/</link>
+    <link>http://sambaiz.net/tags/golang/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
-    <rights>(C) 2016</rights>
-    <updated>2016-08-15 04:07:00 &#43;0900 JST</updated>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
+    
+      
+        <item>
+          <title>godocのメモ</title>
+          <link>http://sambaiz.net/article/91/</link>
+          <pubDate>Wed, 05 Apr 2017 22:11:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/91/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://godoc.org/golang.org/x/tools/cmd/godoc&#34;&gt;https://godoc.org/golang.org/x/tools/cmd/godoc&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;コメントからドキュメントを生成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ godoc cmd/fmt Printf
+func Printf(format string, a ...interface{}) (n int, err error)
+    Printf formats according to a format specifier and writes to standard
+    output. It returns the number of bytes written and any write error
+    encountered.
+
+$ godoc -src cmd/fmt Printf
+// Printf formats according to a format specifier and writes to standard output.
+// It returns the number of bytes written and any write error encountered.
+func Printf(format string, a ...interface{}) (n int, err error) {
+    return Fprintf(os.Stdout, format, a...)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;記述対象の要素の名前から始まる、完全な文として&lt;a href=&#34;https://blog.golang.org/godoc-documenting-go-code&#34;&gt;コメントを書く&lt;/a&gt;。
+インデントすれば整形した文になり、&lt;code&gt;Bug(ユーザー名):&lt;/code&gt;から始めればバグセクションにまとめられる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// foo bar package
+package foo
+
+import &amp;quot;fmt&amp;quot;
+
+// Hoge returns &amp;quot;HOGE (input num)&amp;quot; string.
+//   Hoge
+//   Fuga
+//   Piyo
+// BUG(sambaiz): when passed 2, it panic.
+func Hoge(num int) string {
+	if num == 2 {
+		panic(&amp;quot;AAAAAAAAHHHH&amp;quot;)
+	}
+	return fuga(&amp;quot;HOGE&amp;quot;, num)
+}
+
+// returns &amp;quot;(keyword) (num)&amp;quot; string
+func fuga(keyword string, num int) string {
+	return fmt.Sprintf(&amp;quot;%s %d&amp;quot;, keyword, num)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://golang.org/pkg/testing/#hdr-Examples&#34;&gt;例&lt;/a&gt;を&lt;code&gt;ExampleXXX&lt;/code&gt;のような関数に書いておくと、これもドキュメントに追加される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package foo
+
+import (
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;testing&amp;quot;
+)
+
+func TestHoge(t *testing.T){
+	...
+}
+
+func ExampleHoge() {
+	fmt.Println(Hoge(1))
+	// Output: HOGE 1
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Webサーバーを立ち上げてブラウザで確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ godoc -http=:6060 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じでfooパッケージのドキュメントが表示される。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://localhost:6060/pkg/github.com/sambaiz/godoctest/foo/&#34;&gt;http://localhost:6060/pkg/github.com/sambaiz/godoctest/foo/&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/91_godoc.png&#34; alt=&#34;godoc&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>一定間隔でjsonデータを作って送り続けるCLIツールを作った</title>
+          <link>http://sambaiz.net/article/76/</link>
+          <pubDate>Sat, 04 Mar 2017 23:18:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/76/</guid>
+          <description>&lt;p&gt;Elasticsearchにリアルタイムなテストデータを投入するために、一定間隔でjsonを作って送り続けるCLIツールを作った。Go製。
+&lt;a href=&#34;https://github.com/urfave/cli&#34;&gt;urfave/cli&lt;/a&gt;を使った。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/sendjson&#34;&gt;sambaiz/sendjson&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;こんなindexにデータを入れてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -XPUT &#39;http://localhost:9200/hoge&#39; -d&#39;
+{
+  &amp;quot;mappings&amp;quot;: {
+    &amp;quot;test_type&amp;quot;: { 
+      &amp;quot;_all&amp;quot;:       { &amp;quot;enabled&amp;quot;: false  }, 
+      &amp;quot;properties&amp;quot;: { 
+        &amp;quot;os_name&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;keyword&amp;quot; },
+        &amp;quot;score&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;byte&amp;quot; },
+        &amp;quot;@timestamp&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;date&amp;quot;, &amp;quot;format&amp;quot;: &amp;quot;epoch_second&amp;quot; }
+      }
+    }
+  }
+}
+&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じでキーに対してtypeと入る値を定義するとそれっぽいデータができて送られていく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go install github.com/sambaiz/sendjson
+$ sendjson --interval 0.5s --duration 10s --url http://localhost:9200/hoge/test_type &#39;
+{
+    &amp;quot;os_name&amp;quot;: {&amp;quot;type&amp;quot;: &amp;quot;string&amp;quot;, &amp;quot;or&amp;quot;: [&amp;quot;windows&amp;quot;, &amp;quot;mac&amp;quot;, &amp;quot;linux&amp;quot;, &amp;quot;ios&amp;quot;, &amp;quot;android&amp;quot;]},
+    &amp;quot;score&amp;quot;:  {&amp;quot;type&amp;quot;: &amp;quot;integer&amp;quot;, &amp;quot;min&amp;quot;: 0, &amp;quot;max&amp;quot;: 100},
+    &amp;quot;@timestamp&amp;quot;: {&amp;quot;type&amp;quot;: &amp;quot;time&amp;quot;, &amp;quot;time_format&amp;quot;: &amp;quot;unix_epoch&amp;quot;}
+}&#39;
+
+{&amp;quot;@timestamp&amp;quot;:1488635130,&amp;quot;os_name&amp;quot;:&amp;quot;linux&amp;quot;,&amp;quot;score&amp;quot;:82}
+{&amp;quot;@timestamp&amp;quot;:1488635130,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:9}
+{&amp;quot;@timestamp&amp;quot;:1488635131,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:73}
+{&amp;quot;@timestamp&amp;quot;:1488635131,&amp;quot;os_name&amp;quot;:&amp;quot;ios&amp;quot;,&amp;quot;score&amp;quot;:50}
+{&amp;quot;@timestamp&amp;quot;:1488635132,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:69}
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんと入っていることを確認。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl http://localhost:9200/hoge/_search | jq
+{
+  &amp;quot;took&amp;quot;: 2,
+  &amp;quot;timed_out&amp;quot;: false,
+  &amp;quot;_shards&amp;quot;: {
+    &amp;quot;total&amp;quot;: 5,
+    &amp;quot;successful&amp;quot;: 5,
+    &amp;quot;failed&amp;quot;: 0
+  },
+  &amp;quot;hits&amp;quot;: {
+    &amp;quot;total&amp;quot;: 29,
+    &amp;quot;max_score&amp;quot;: 1,
+    &amp;quot;hits&amp;quot;: [
+      {
+        &amp;quot;_index&amp;quot;: &amp;quot;hoge&amp;quot;,
+        &amp;quot;_type&amp;quot;: &amp;quot;test_type&amp;quot;,
+        &amp;quot;_id&amp;quot;: &amp;quot;AVqZpCjjFTc9Q_rmmMn7&amp;quot;,
+        &amp;quot;_score&amp;quot;: 1,
+        &amp;quot;_source&amp;quot;: {
+          &amp;quot;@timestamp&amp;quot;: 1488636356,
+          &amp;quot;os_name&amp;quot;: &amp;quot;android&amp;quot;,
+          &amp;quot;score&amp;quot;: 38
+        }
+      },
+      {
+        &amp;quot;_index&amp;quot;: &amp;quot;hoge&amp;quot;,
+        &amp;quot;_type&amp;quot;: &amp;quot;test_type&amp;quot;,
+        &amp;quot;_id&amp;quot;: &amp;quot;AVqZpE-kFTc9Q_rmmMoN&amp;quot;,
+        &amp;quot;_score&amp;quot;: 1,
+        &amp;quot;_source&amp;quot;: {
+          &amp;quot;@timestamp&amp;quot;: 1488636366,
+          &amp;quot;os_name&amp;quot;: &amp;quot;android&amp;quot;,
+          &amp;quot;score&amp;quot;: 87
+        }
+      },
+      ...
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Goroutineの数をworkerで抑制する</title>
+          <link>http://sambaiz.net/article/74/</link>
+          <pubDate>Mon, 27 Feb 2017 23:10:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/74/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/61/&#34;&gt;Goのnet/httpとKeep-Alive - sambaiz.net&lt;/a&gt;でやったように、
+あるエンドポイントに連続してGoroutineでリクエストを投げると、リクエスト数を増やしたときにタイムアウトが頻発するようになった。&lt;/p&gt;
+
+&lt;p&gt;まず、2000リクエストを投げてみた結果。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[RESULT] request: 2000, ok: 2000, ng: 0, time(ms) 138
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一応全部捌けてはいるけど、おおよそ同時にリクエストを送っているのにタイムアウト(100ms)時間を超えてしまっている。これをさらに3000に増やしてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[RESULT] request: 3000, ok: 13, ng: 2987, time(ms) 372
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ほぼ全滅してしまった・・・。時間もおかしいのでGoroutineでの処理に遅延が発生しているようだ。
+そこで、都度Goroutineを生成してリクエストを投げるのではなく、
+一定数のWorkerに処理させることで、同時に作られるGoroutineの数を抑制する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Req struct {
+	Okch chan int
+	Ngch chan int
+}
+
+func startWorker(ctx context.Context, num int) (requestch chan *Req) {
+
+	requestch = make(chan *Req)
+
+	for i := 0; i &amp;lt; num; i++ {
+		go func() {
+			for {
+				select {
+				case req := &amp;lt;-requestch:
+					request(req.Okch, req.Ngch)
+				case &amp;lt;-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	return
+}
+
+func main(){
+    ...
+    ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	requestch := startWorker(ctx, 1000)
+
+    requestch &amp;lt;- req
+    ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果、すべてのリクエストをタイムアウトせずに送れるようになった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 157
+[RESULT] request: 5000, ok: 5000, ng: 0, time(ms) 239
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上のコードではWorkerを作るにあたって単純にWorkerの数分goroutineを生成して共通のチャネルに入ってきたものを読んで処理させているが、
+以下の記事のようにDispatcherを用意してWorkerPool(chan chan Job)からWorkerのjobChannel(chan Job)を取り出して送る方法も紹介されていたので
+これとも比較してみた。今回は入力するチャネルだけ分けて終了方法はStartで渡したcontextに一任しているので上の方法とさほど変わらず、むしろ冗長に見えるが、
+実際はWorkerそれぞれがquitするチャネルなどを持っていて、独立して終了させることができるため、Workerの数を動的にコントロールしやすいのが特長だと思う。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://marcio.io/2015/07/handling-1-million-requests-per-minute-with-golang/&#34;&gt;Handling 1 Million Requests per Minute with Go  · marcio.io&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Dispatcher struct{
+	Requestch chan *Req
+	workerPool chan chan *Req
+	workerNum int
+}
+
+func NewDispatcher(workerNum int) *Dispatcher{
+	return &amp;amp;Dispatcher{
+		Requestch: make(chan *Req),
+		workerPool: make(chan chan *Req, workerNum),
+		workerNum: workerNum,
+	}
+}
+
+
+func (d *Dispatcher) Start(ctx context.Context) error{
+	poolLength := len(d.workerPool)
+	if poolLength != 0{
+		return errors.New(&amp;quot;already started&amp;quot;)
+	}
+	for i := 0; i &amp;lt; d.workerNum; i++{
+		startWorker(ctx, 1, d.workerPool)
+	}
+
+	go d.dispatch(ctx)
+
+	return nil
+}
+
+func (d *Dispatcher) dispatch(ctx context.Context){
+	for{
+		select{
+		case req := &amp;lt;- d.Requestch:
+            // workerPoolからchanを取り出しreqを入れる
+			worker := &amp;lt;- d.workerPool
+			worker &amp;lt;- req
+		case &amp;lt;-ctx.Done():
+			return 
+		}
+	}
+}
+
+func startWorker(ctx context.Context, num int, workerPool chan chan *Req) {
+
+	requestch := make(chan *Req)
+
+	for i := 0; i &amp;lt; num; i++ {
+		go func() {
+			for {
+                // workerPoolにchanを入れる(終わったらまだ戻る)
+				workerPool &amp;lt;- requestch
+				select {
+				case req := &amp;lt;-requestch:
+					request(req.Okch, req.Ngch)
+				case &amp;lt;-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	return
+}
+
+func main(){
+    ...
+    dispatcher := NewDispatcher(1000)
+	if err := dispatcher.Start(ctx); err != nil{
+		panic(err)
+	}
+
+    dispatcher.requestch &amp;lt;- req
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ほとんど変わらず。WorkerPoolからチャネルを取り出す分、わずかに遅いかな。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 169
+[RESULT] request: 5000, ok: 5000, ng: 0, time(ms) 246
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する</title>
+          <link>http://sambaiz.net/article/66/</link>
+          <pubDate>Sun, 19 Feb 2017 23:55:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/66/</guid>
+          <description>
+
+&lt;h2 id=&#34;fluentdのmonitor-agent-http-docs-fluentd-org-v0-12-articles-monitoring&#34;&gt;&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/monitoring&#34;&gt;fluentdのmonitor_agent&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;メトリクスをjsonで返すAPIを提供する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type monitor_agent
+  bind 0.0.0.0
+  port 24220
+&amp;lt;/source&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl localhost:24220/api/plugins.json | jq
+{
+  &amp;quot;plugins&amp;quot;: [
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590d8c250&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;input&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;forward&amp;quot;,
+      &amp;quot;config&amp;quot;: {
+        &amp;quot;@type&amp;quot;: &amp;quot;forward&amp;quot;,
+        &amp;quot;port&amp;quot;: &amp;quot;24222&amp;quot;,
+        &amp;quot;bind&amp;quot;: &amp;quot;0.0.0.0&amp;quot;
+      },
+      &amp;quot;output_plugin&amp;quot;: false,
+      &amp;quot;retry_count&amp;quot;: null
+    },
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590d894c4&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;input&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;monitor_agent&amp;quot;,
+      &amp;quot;config&amp;quot;: {
+        &amp;quot;@type&amp;quot;: &amp;quot;monitor_agent&amp;quot;,
+        &amp;quot;bind&amp;quot;: &amp;quot;0.0.0.0&amp;quot;,
+        &amp;quot;port&amp;quot;: &amp;quot;24220&amp;quot;
+      },
+      &amp;quot;output_plugin&amp;quot;: false,
+      &amp;quot;retry_count&amp;quot;: null
+    },
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590dc1f2c&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;,
+      &amp;quot;config&amp;quot;: {
+        &amp;quot;@type&amp;quot;: &amp;quot;file&amp;quot;,
+        &amp;quot;path&amp;quot;: &amp;quot;/var/log/td-agent/hoge.log&amp;quot;,
+        &amp;quot;buffer_path&amp;quot;: &amp;quot;/var/log/td-agent/hoge.log.*&amp;quot;
+      },
+      &amp;quot;output_plugin&amp;quot;: true,
+      &amp;quot;buffer_queue_length&amp;quot;: 0,
+      &amp;quot;buffer_total_queued_size&amp;quot;: 0,
+      &amp;quot;retry_count&amp;quot;: 0
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをもとにStackdriverで異常を検知できるようにする。&lt;/p&gt;
+
+&lt;h2 id=&#34;google-stackdriver-https-cloud-google-com-stackdriver&#34;&gt;&lt;a href=&#34;https://cloud.google.com/stackdriver/&#34;&gt;Google Stackdriver&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;GoogleがStackdriverを買収して改造したもの。GCPだけではなくAWSのリソースも監視できる。
+まだBeta。&lt;/p&gt;
+
+&lt;h2 id=&#34;ec2インスタンスを監視する-https-cloud-google-com-monitoring-quickstart-aws-configure-sd-acct&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/quickstart-aws#configure-sd-acct&#34;&gt;EC2インスタンスを監視する&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;GCPのメニューのSTACKDRIVER -&amp;gt; モニタリングで、プロジェクトを指定してStackdriverアカウントを作成する。&lt;/p&gt;
+
+&lt;p&gt;今回はEC2で動いているfluentdを監視するので指示に従ってクロスアカウントアクセスのロールを作成、
+Role ARNを入力してAWSアカウントと接続すると、
+StackdriverのResouces-&amp;gt;InstancesでCPUの使用率などは確認できるが、
+EC2にAgentを入れると詳細な情報を取得できる。&lt;/p&gt;
+
+&lt;p&gt;GCPのメニューのサービスアカウントから接続したAWSアカウントを選択し、
+Project-&amp;gt;編集者とLogging-&amp;gt;ログ書き込みロールのサービスアカウントを作成する。
+新しい秘密鍵の提供にチェックを入れて、JSONのキーをダウンロードする。
+これをEC2の&lt;code&gt;/etc/google/auth/application_default_credentials.json&lt;/code&gt;に置いて
+&lt;code&gt;chown root:root&lt;/code&gt;、&lt;code&gt;chmod 400&lt;/code&gt;する。&lt;/p&gt;
+
+&lt;p&gt;Monitoring AgentとLogging Agentをインストールし、
+&lt;code&gt;stackdriver-collectd&lt;/code&gt;と&lt;code&gt;google-fluentd&lt;/code&gt;のプロセスがあれば正常。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;curl -O https://repo.stackdriver.com/stack-install.sh
+sudo bash stack-install.sh --write-gcm
+
+curl -sSO https://dl.google.com/cloudagents/install-logging-agent.sh
+sudo bash install-logging-agent.sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;メモリの使用量やTCPコネクション数などがとれていることを確認する。
+Googleのドキュメントには見つからなかったけど、
+旧Stackdriverと同様、&lt;code&gt;stackdriver_monitor: false&lt;/code&gt;のタグを付けると
+&lt;a href=&#34;https://support.stackdriver.com/customer/portal/articles/1491785-collecting-data-from-specific-resources-only&#34;&gt;監視対象から外れる&lt;/a&gt;
+っぽい。&lt;/p&gt;
+
+&lt;h2 id=&#34;カスタムメトリクスを送る-https-cloud-google-com-monitoring-custom-metrics&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/&#34;&gt;カスタムメトリクスを送る&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;MetricDescriptorを作成し、これにTimeSeriesデータを書き込んでいく。&lt;/p&gt;
+
+&lt;h3 id=&#34;metricdescriptorの作成-https-cloud-google-com-monitoring-custom-metrics-creating-metrics-monitoring-create-metric-protocol&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-create-metric-protocol&#34;&gt;MetricDescriptorの作成&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors&#34;&gt;MetricDescriptor&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;typeは&lt;code&gt;custom.googleapis.com/&lt;/code&gt;
+から&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#custom_metric_names&#34;&gt;始める&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors#MetricKind&#34;&gt;metricKind&lt;/a&gt;
+にはGAUGEのほかに変化量をとるDELTA、累積するCUMULATIVEを指定できる。&lt;/p&gt;
+
+&lt;p&gt;labelはフィルタリングのためのもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;name&amp;quot;: &amp;quot;&amp;quot;,
+  &amp;quot;description&amp;quot;: &amp;quot;fluentd buffer_queue_length&amp;quot;,
+  &amp;quot;displayName&amp;quot;: &amp;quot;fluentd-buffer_queue_length&amp;quot;,
+  &amp;quot;type&amp;quot;: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
+  &amp;quot;metricKind&amp;quot;: &amp;quot;GAUGE&amp;quot;,
+  &amp;quot;valueType&amp;quot;: &amp;quot;INT64&amp;quot;,
+  &amp;quot;labels&amp;quot;: [
+    {
+      &amp;quot;key&amp;quot;: &amp;quot;plugin_type&amp;quot;,
+      &amp;quot;valueType&amp;quot;: &amp;quot;STRING&amp;quot;,
+      &amp;quot;description&amp;quot;: &amp;quot;The type of the plugin&amp;quot;
+    },
+  ],
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをGoで登録する。&lt;/p&gt;
+
+&lt;p&gt;gcpのほうのprojectでProject-&amp;gt;編集者のサービスアカウントを作成してパスを
+環境変数&lt;code&gt;GOOGLE_APPLICATION_CREDENTIALS&lt;/code&gt;に入れて
+&lt;a href=&#34;https://developers.google.com/identity/protocols/application-default-credentials&#34;&gt;Default Credential&lt;/a&gt;
+にする。&lt;/p&gt;
+
+&lt;p&gt;必要なパッケージをgo get。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get google.golang.org/api/monitoring/v3
+$ go get golang.org/x/oauth2/google
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;func main() {
+	ctx := context.Background()
+	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
+	if err != nil {
+		panic(err)
+	}
+	client, err := monitoring.New(httpClient)
+	if err != nil {
+		panic(err)
+	}
+
+	var (
+		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
+		name = &amp;quot;projects/*****&amp;quot;
+
+		requestBody = &amp;amp;monitoring.MetricDescriptor{
+			Description: &amp;quot;fluentd buffer_queue_length&amp;quot;,
+			DisplayName: &amp;quot;fluentd-buffer_queue_length&amp;quot;,
+			Type:        &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
+			MetricKind:  &amp;quot;GAUGE&amp;quot;,
+			ValueType:   &amp;quot;INT64&amp;quot;,
+			Labels: []*monitoring.LabelDescriptor{
+				&amp;amp;monitoring.LabelDescriptor{
+					Key:         &amp;quot;plugin_type&amp;quot;,
+					ValueType:   &amp;quot;STRING&amp;quot;,
+					Description: &amp;quot;The type of the plugin&amp;quot;,
+				},
+			},
+		}
+	)
+
+	response, err := client.Projects.MetricDescriptors.Create(name, requestBody).Context(ctx).Do()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(&amp;quot;done&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;登録されたことをlistで確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;response, err := client.Projects.MetricDescriptors.List(name).Context(ctx).Do()
+if err != nil {
+  panic(err)
+}
+
+for _, v := range response.MetricDescriptors {
+  fmt.Println(v.DisplayName)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;API Request Count
+Agent Memory Usage
+Stream Space Used
+...
+fluentd-buffer_queue_length
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;timeseriesの書き込み-https-cloud-google-com-monitoring-custom-metrics-creating-metrics-monitoring-write-timeseries-protocol&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-write-timeseries-protocol&#34;&gt;TimeSeriesの書き込み&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TimeSeries&#34;&gt;TimeSeries&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;metricのtypeはMetricDescriptorのtypeと対応する。
+pointsのendTimeはRFC3339のUTC文字列で渡す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+ &amp;quot;timeSeries&amp;quot;: [
+  {
+   &amp;quot;metric&amp;quot;: {
+    &amp;quot;type&amp;quot;: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
+    &amp;quot;labels&amp;quot;: {
+     &amp;quot;plugin_type&amp;quot;: &amp;quot;file&amp;quot;
+    }
+   },
+   &amp;quot;resource&amp;quot;: {
+    &amp;quot;type&amp;quot;: &amp;quot;aws_ec2_instance&amp;quot;,
+    &amp;quot;labels&amp;quot;: {
+     &amp;quot;project_id&amp;quot;: &amp;quot;*****&amp;quot;,
+     &amp;quot;instance_id&amp;quot;: &amp;quot;*****&amp;quot;,
+     &amp;quot;region&amp;quot;: &amp;quot;aws:ap-northeast-1&amp;quot;,
+     &amp;quot;aws_account&amp;quot;: &amp;quot;*****&amp;quot;
+    }
+   },
+   &amp;quot;points&amp;quot;: [
+    {
+     &amp;quot;interval&amp;quot;: {
+      &amp;quot;endTime&amp;quot;: &amp;quot;2016-06-01T10:00:00-04:00&amp;quot;
+     },
+     &amp;quot;value&amp;quot;: {
+      &amp;quot;int64Value&amp;quot;: 0
+     }
+    }
+   ]
+  }
+ ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;resourceのtypeは
+&lt;a href=&#34;https://cloud.google.com/logging/docs/reference/v2/rest/v2/monitoredResourceDescriptors/list#MonitoredResourceDescriptor&#34;&gt;MonitoredResourceDescriptor&lt;/a&gt;
+と対応していて、
+&lt;a href=&#34;https://cloud.google.com/logging/docs/reference/v2/rest/v2/monitoredResourceDescriptors/list&#34;&gt;list&lt;/a&gt;で確認できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+ &amp;quot;resourceDescriptors&amp;quot;: [
+   {
+   &amp;quot;type&amp;quot;: &amp;quot;aws_ec2_instance&amp;quot;,
+   &amp;quot;displayName&amp;quot;: &amp;quot;Amazon EC2 Instance&amp;quot;,
+   &amp;quot;description&amp;quot;: &amp;quot;A VM instance in Amazon EC2.&amp;quot;,
+   &amp;quot;labels&amp;quot;: [
+    {
+     &amp;quot;key&amp;quot;: &amp;quot;project_id&amp;quot;,
+     &amp;quot;description&amp;quot;: &amp;quot;The identifier of the GCP project under which data is stored for the AWS account specified in the aws_account label (e.g., my-project).&amp;quot;
+    },
+    {
+     &amp;quot;key&amp;quot;: &amp;quot;instance_id&amp;quot;,
+     &amp;quot;description&amp;quot;: &amp;quot;The VM instance identifier assigned by AWS.&amp;quot;
+    },
+    {
+     &amp;quot;key&amp;quot;: &amp;quot;region&amp;quot;,
+     &amp;quot;description&amp;quot;: &amp;quot;The AWS region in which the VM is running. Supported AWS region values are listed by service at http://docs.aws.amazon.com/general/latest/gr/rande.html. The value supplied for this label must be prefixed with &#39;aws:&#39; (for example, &#39;aws:us-east-1&#39; is a valid value while &#39;us-east-1&#39; is not).&amp;quot;
+    },
+    {
+     &amp;quot;key&amp;quot;: &amp;quot;aws_account&amp;quot;,
+     &amp;quot;description&amp;quot;: &amp;quot;The AWS account number under which the VM is running.&amp;quot;
+    }
+   ]
+  },
+  ...
+ ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;書くコード。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func writeFluentdBufferQueueLength() error {
+	ctx := context.Background()
+	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
+	if err != nil {
+		return err
+	}
+	client, err := monitoring.New(httpClient)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	resource := &amp;amp;monitoring.MonitoredResource{
+		Type: &amp;quot;aws_ec2_instance&amp;quot;,
+		Labels: map[string]string{
+			&amp;quot;project_id&amp;quot;:  &amp;quot;*****&amp;quot;,
+			&amp;quot;instance_id&amp;quot;: &amp;quot;*****&amp;quot;,
+			&amp;quot;region&amp;quot;:      &amp;quot;aws:ap-northeast-1&amp;quot;,
+			&amp;quot;aws_account&amp;quot;: &amp;quot;*****&amp;quot;,
+		},
+	}
+
+	metrics, err := fetchFluentdMetrics()
+	if err != nil {
+		return err
+	}
+
+	timeSeries := []*monitoring.TimeSeries{}
+
+	for _, v := range metrics.Plugins {
+		if v.OutputPlugin {
+
+			fmt.Printf(&amp;quot;send %s\n&amp;quot;, v.Type)
+
+			timeSeries = append(
+				timeSeries,
+				&amp;amp;monitoring.TimeSeries{
+					Metric: &amp;amp;monitoring.Metric{
+						Type: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
+						Labels: map[string]string{
+							&amp;quot;plugin_type&amp;quot;: v.Type,
+						},
+					},
+					Resource: resource,
+					Points: []*monitoring.Point{
+						&amp;amp;monitoring.Point{
+							Interval: &amp;amp;monitoring.TimeInterval{
+								EndTime: now,
+							},
+							Value: &amp;amp;monitoring.TypedValue{
+								Int64Value: int64p(v.BufferQueueLength),
+							},
+						},
+					},
+				},
+			)
+		}
+	}
+
+	var (
+		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
+		name = &amp;quot;projects/try-stackdriver-159110&amp;quot;
+
+		requestBody = &amp;amp;monitoring.CreateTimeSeriesRequest{
+			TimeSeries: timeSeries,
+		}
+	)
+
+	_, err = client.Projects.TimeSeries.Create(name, requestBody).Context(ctx).Do()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(&amp;quot;done&amp;quot;)
+
+	return nil
+}
+
+const fluentdMonitorEndpoint = &amp;quot;http://localhost:24220/api/plugins.json&amp;quot;
+
+type fluentdMetrics struct {
+	Plugins []fluentdMetricsPlugin `json:&amp;quot;plugins&amp;quot;`
+}
+type fluentdMetricsPlugin struct {
+	Type              string `json:&amp;quot;type&amp;quot;`
+	OutputPlugin      bool   `json:&amp;quot;output_plugin&amp;quot;`
+	BufferQueueLength int64  `json:&amp;quot;buffer_queue_length&amp;quot;`
+}
+
+// monitor_agentからfluentdのメトリクスを取得する
+func fetchFluentdMetrics() (*fluentdMetrics, error) {
+
+	resp, err := http.Get(fluentdMonitorEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var ret fluentdMetrics
+
+	if err := json.Unmarshal(body, &amp;amp;ret); err != nil {
+		return nil, err
+	}
+
+	return &amp;amp;ret, nil
+}
+
+// int64 -&amp;gt; *int64
+func int64p(n int64) *int64 {
+	return &amp;amp;n
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;a href=&#34;https://github.com/jasonlvhit/gocron&#34;&gt;gocron&lt;/a&gt;などで定期的に実行させる。&lt;/p&gt;
+
+&lt;p&gt;読むコード。確認用。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func readFluentdBufferQueueLength() error {
+	ctx := context.Background()
+	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
+	if err != nil {
+		return err
+	}
+	client, err := monitoring.New(httpClient)
+	if err != nil {
+		return err
+	}
+
+	var (
+		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
+		name = &amp;quot;projects/*****&amp;quot;
+	)
+
+	start := time.Now().Add(time.Hour * -3).UTC().Format(time.RFC3339)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	filter := &amp;quot;metric.type = \&amp;quot;custom.googleapis.com/fluentd/buffer_queue_length\&amp;quot;&amp;quot;
+	resp, err := client.Projects.TimeSeries.List(name).
+		IntervalStartTime(start).
+		IntervalEndTime(now).
+		Filter(filter).Context(ctx).Do()
+	if err != nil {
+		return err
+	}
+
+	for _, v := range resp.TimeSeries {
+		fmt.Println(v.Metric.Type)
+		for _, p := range v.Points {
+			fmt.Println(*(p.Value.Int64Value))
+		}
+	}
+
+	return nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんと届いていれば
+Resource-&amp;gt;Metrics Explorerでもcustom/fluentd/buffer_queue_lengthを確認できる。&lt;/p&gt;
+
+&lt;p&gt;これでAlertを設定できるようになった。TargetのResource TypeはCustom Metrics。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/66.png&#34; alt=&#34;Alertの設定&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Goのselectの中断処理(close, context)</title>
+          <link>http://sambaiz.net/article/65/</link>
+          <pubDate>Thu, 16 Feb 2017 20:15:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/65/</guid>
+          <description>
+
+&lt;h2 id=&#34;close-chan&#34;&gt;close(chan)&lt;/h2&gt;
+
+&lt;p&gt;closeしたチャネルを読むとゼロ値になるので、selectで待っているやつにまとめて送れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func main() {
+	done := make(chan bool)
+
+	wg := new(sync.WaitGroup)
+
+	waitTillDone(wg, done)
+	waitTillDone(wg, done)
+
+    // こんなことしなくていい
+	// done &amp;lt;- true
+	// done &amp;lt;- true
+
+	close(done)
+
+	wg.Wait()
+}
+
+func waitTillDone(wg *sync.WaitGroup, done &amp;lt;-chan bool) {
+	wg.Add(1)
+	go func() {
+		select {
+		case v := &amp;lt;-done:
+			fmt.Println(v) // false (ゼロ値)
+			wg.Done()
+		}
+	}()
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;context-https-godoc-org-golang-org-x-net-context&#34;&gt;&lt;a href=&#34;https://godoc.org/golang.org/x/net/context&#34;&gt;context&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;key-valueの値を渡せるほかにキャンセルやタイムアウトの仕組みをもつ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ctx := context.Background() // empty context
+ctx, cancel = context.WithCancel(ctx)
+ctx, cancel = context.WithDeadline(ctx, time.Now().Add(time.Second * 10))
+ctx, cancel = context.WithTimeout(ctx, time.Second * 10)
+ctx = context.WithValue(ctx, key, value)
+ctx.Value(key).(Data)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さっきdoneで待ってたところを&lt;code&gt;ctx.Done()&lt;/code&gt;にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func main() {
+	finished := make(chan interface{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // キャンセルしないとリークする
+
+	go func() {
+		if err := f1(ctx); err != nil {
+			fmt.Printf(&amp;quot;main: %s\n&amp;quot;, err)
+		} else {
+			fmt.Println(&amp;quot;ok&amp;quot;)
+		}
+		close(finished)
+	}()
+
+	fmt.Println(&amp;quot;I will cancel!&amp;quot;)
+	cancel()
+
+	select {
+	case &amp;lt;-finished:
+		fmt.Println(&amp;quot;finished&amp;quot;)
+	}
+}
+
+func f1(ctx context.Context) error {
+	f2(ctx)
+	select {
+	case &amp;lt;-ctx.Done():
+		fmt.Printf(&amp;quot;f1: %s\n&amp;quot;, ctx.Err())
+		return ctx.Err()
+	}
+}
+
+func f2(ctx context.Context) error {
+	select {
+	case &amp;lt;-ctx.Done():
+		fmt.Printf(&amp;quot;f2: %s\n&amp;quot;, ctx.Err())
+		return ctx.Err()
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;I will cancel!
+f2: context canceled
+f1: context canceled
+main: context canceled
+finished
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちなみに、key-valueを受けわたすために使う場合は
+type-safeにするために
+NewContextで値を詰めて、FromContextで値を取り出すということがコメントに書いてある。
+また、Contextはctxという名前で第一引数として渡す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type User struct {
+	name string
+}
+
+type key int
+
+var userKey key = 0
+
+func NewContext(ctx context.Context, u *User) context.Context {
+	return context.WithValue(ctx, userKey, u)
+}
+
+func FromContext(ctx context.Context) (*User, bool) {
+	u, ok := ctx.Value(userKey).(*User)
+	return u, ok
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://blog.golang.org/pipelines&#34;&gt;Go Concurrency Patterns: Pipelines and cancellation - The Go Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://deeeet.com/writing/2016/07/22/context/&#34;&gt;Go1.7のcontextパッケージ | SOTA&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>GoでDynamoDBを使う</title>
+          <link>http://sambaiz.net/article/63/</link>
+          <pubDate>Sun, 12 Feb 2017 23:15:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/63/</guid>
+          <description>
+
+&lt;h2 id=&#34;テーブルを作成する&#34;&gt;テーブルを作成する&lt;/h2&gt;
+
+&lt;h3 id=&#34;プライマリキー&#34;&gt;プライマリキー&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/GuidelinesForTables.html&#34;&gt;テーブルの操作のガイドライン - Amazon DynamoDB&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;プライマリキーとしてパーティションキー(ハッシュキー)とオプションのソートキー(レンジキー)を設定する。
+DynamoDBはこのパーティションキーに基づいて、複数のパーティションに分散して保存する。
+テーブルにプロビジョニングされたスループット性能はパーティション間で均等に使われるので、
+ソートキーを設定する場合にこれを最大限に活用するためには、
+あるパーティションにリクエストが集中しないよう、パーティションキーに特定の値ばかり集中しないようなフィールドを
+選ぶ必要がある。&lt;/p&gt;
+
+&lt;h3 id=&#34;セカンダリインデックス&#34;&gt;セカンダリインデックス&lt;/h3&gt;
+
+&lt;p&gt;パーティションキーのグローバルセカンダリインデックス(GSI)と
+ソートキーのローカルセカンダリインデックス(LSI)がある。
+射影されるフィールドを選択でき、ここに含まれないフィールドは返さない。
+ただし、すべてをインデックスに書き込むのはコストが高いのでなるべく絞る。&lt;/p&gt;
+
+&lt;h3 id=&#34;キャパシティユニット-http-docs-aws-amazon-com-ja-jp-amazondynamodb-latest-developerguide-limits-html-limits-capacity-units-provisioned-throughpu&#34;&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/Limits.html#limits-capacity-units-provisioned-throughpu&#34;&gt;キャパシティユニット&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;1読み込みキャパシティユニット: 4kbを超えないデータを1秒に1~2回(整合性による)読み込める&lt;/li&gt;
+&lt;li&gt;1書き込みキャパシティユニット: 1kbを超えないデータを1秒に1回書き込める&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ユニットに応じて1時間あたりで&lt;a href=&#34;https://aws.amazon.com/jp/dynamodb/pricing/&#34;&gt;課金&lt;/a&gt;される。&lt;/p&gt;
+
+&lt;p&gt;未使用のキャパシティがある場合、最大5分保持して&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/GuidelinesForTables.html#GuidelinesForTables.Bursting&#34;&gt;バーストに備えてくれる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;読み書きする&#34;&gt;読み書きする&lt;/h2&gt;
+
+&lt;p&gt;aws-sdk-goを直接使ってもいいけど、簡単に扱えるラッパー
+&lt;a href=&#34;https://github.com/guregu/dynamo&#34;&gt;guregu/dynamo&lt;/a&gt;
+を使うことにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Data struct {
+	ID   int64 `dynamo:&amp;quot;id&amp;quot;`
+	Name string
+	Age  int
+}
+
+db := dynamo.New(session.New(), &amp;amp;aws.Config{Region: aws.String(&amp;quot;ap-northeast-1&amp;quot;)})
+table := db.Table(&amp;quot;testtable&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;create-update&#34;&gt;Create &amp;amp; Update&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;d := Data{ID: 1, Name: &amp;quot;hogefuga&amp;quot;, Age: 123}
+if err := table.Put(d).Run(); err != nil {
+    return err
+}
+
+if err := table.Update(&amp;quot;id&amp;quot;, 1).Set(&amp;quot;name&amp;quot;, &amp;quot;fugafuga&amp;quot;).Run(); err != nil {
+    return err
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;get&#34;&gt;Get&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;var data Data
+// 結果整合性がある読み込み(1秒に2回/ユニット)　.Consistent(true)で強い整合性のある読み込み(1秒に1回/ユニット)にできる
+if err := table.Get(&amp;quot;id&amp;quot;, 1).One(&amp;amp;data); err != nil {
+    return err
+}
+fmt.Println(data)
+
+if err := table.Get(&amp;quot;id&amp;quot;, 2).One(&amp;amp;data); err != nil {
+    return err // dynamo: no item found
+}
+fmt.Println(data)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/AmazonWebServicesJapan/20150805-aws-blackbeltdynamodb&#34;&gt;AWS Black Belt Tech シリーズ 2015 - Amazon DynamoDB&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Goのnet/httpとKeep-Alive</title>
+          <link>http://sambaiz.net/article/61/</link>
+          <pubDate>Tue, 07 Feb 2017 22:42:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/61/</guid>
+          <description>
+
+&lt;p&gt;Keep-AliveするとTCPコネクションを使い回し、名前解決やコネクション(3 way handshake)を毎回行わなくてよくなる。
+Goの&lt;code&gt;net/http&lt;/code&gt;ではデフォルトでKeep-Aliveが
+&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L129&#34;&gt;有効になっている&lt;/a&gt;が、
+全体と同一ホストでそれぞれKeep-Aliveするコネクション数が制限される。
+これらの値は&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L36&#34;&gt;Client&lt;/a&gt;のTransportが持っていて、
+これがnullだと&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/transport.go#L39&#34;&gt;DefaultTransport&lt;/a&gt;が参照されるので、意識しなければこの値が使われる。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L143&#34;&gt;MaxIdleConns&lt;/a&gt;: DefaultTransportでは&lt;a href=&#34;https://github.com/golang/go/blob/master/src/net/http/transport.go#L46&#34;&gt;100になっている&lt;/a&gt;。0にすると無制限。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L148&#34;&gt;MaxIdleConnsPerHost&lt;/a&gt;: &lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L54&#34;&gt;デフォルト値は2&lt;/a&gt;。0にするとデフォルト値が使われる。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;同一のホストに同時にたくさんリクエストする場合、2だとほとんど意味を持たない。これを増やして比較してみた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;io/ioutil&amp;quot;
+	&amp;quot;net/http&amp;quot;
+	&amp;quot;time&amp;quot;
+)
+
+var client = http.Client{
+	Timeout: time.Millisecond * 100,
+}
+
+const TOTAL_REQUEST_NUM = 3000
+const TARGET_URL = &amp;quot;*****&amp;quot;
+
+func main() {
+
+	http.DefaultTransport.(*http.Transport).MaxIdleConns = 0
+	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 3000
+
+	okChan := make(chan int, TOTAL_REQUEST_NUM)
+	ngChan := make(chan int, TOTAL_REQUEST_NUM)
+
+	var okCount = 0
+	var ngCount = 0
+
+	// connect and keep-alive
+	for i := 0; i &amp;lt; TOTAL_REQUEST_NUM; i++ {
+		go request(okChan, ngChan)
+	}
+
+	for {
+		select {
+		case &amp;lt;-okChan:
+			okCount++
+		case &amp;lt;-ngChan:
+			ngCount++
+		}
+
+		if okCount+ngCount == TOTAL_REQUEST_NUM {
+			break
+		}
+	}
+
+	okCount = 0
+	ngCount = 0
+
+	startNs := time.Now().UnixNano()
+
+	for i := 0; i &amp;lt; TOTAL_REQUEST_NUM; i++ {
+		go request(okChan, ngChan)
+	}
+
+	for {
+		select {
+		case &amp;lt;-okChan:
+			okCount++
+		case &amp;lt;-ngChan:
+			ngCount++
+		}
+
+		if okCount+ngCount == TOTAL_REQUEST_NUM {
+			break
+		}
+	}
+
+	endNs := time.Now().UnixNano()
+
+	fmt.Printf(&amp;quot;[RESULT] request: %d, ok: %d, ng: %d, time(ms) %d\n&amp;quot;,
+		TOTAL_REQUEST_NUM, okCount, ngCount, (endNs-startNs)/(1000*1000))
+}
+
+func request(okch chan int, ngch chan int) {
+	req, err := http.NewRequest(&amp;quot;GET&amp;quot;, TARGET_URL, nil)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err.Error())
+		ngch &amp;lt;- 1
+		return
+	}
+	defer resp.Body.Close()
+
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println(err.Error())
+		ngch &amp;lt;- 1
+		return
+	}
+
+	okch &amp;lt;- 1
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;p&gt;デフォルト設定: &lt;code&gt;[RESULT] request: 3000, ok: 530, ng: 2470, time(ms) 173&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;MaxIdleConnsPerHostを3000に: &lt;code&gt;[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 88&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;全てのリクエストが時間内に捌けるようになったので効果があったようだ。&lt;/p&gt;
+
+&lt;p&gt;ただ、このコードのようにgoroutineを無尽蔵に生成すると、限界を超えたときにタイムアウトが頻発してしまうので注意。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/74&#34;&gt;Goroutineの数をworkerで抑制する - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ちなみに、&lt;a href=&#34;https://github.com/tcnksm/go-httpstat&#34;&gt;tcnksm/go-httpstat&lt;/a&gt;でnet/http/httptraceすると各処理にかかっている時間が分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;req, err := http.NewRequest(&amp;quot;GET&amp;quot;, TARGET_URL, nil)
+if err != nil {
+	panic(err.Error())
+}
+
+result := new(httpstat.Result)
+ctx := httpstat.WithHTTPStat(req.Context(), result)
+req = req.WithContext(ctx)
+
+resp, err := client.Do(req)
+if err != nil {
+	fmt.Println(err.Error())
+	ngch &amp;lt;- 1
+	return
+}
+defer resp.Body.Close()
+
+_, err = ioutil.ReadAll(resp.Body)
+if err != nil {
+	fmt.Println(err.Error())
+	ngch &amp;lt;- 1
+	return
+}
+
+result.End(time.Now())
+fmt.Printf(&amp;quot;%+v\n&amp;quot;, result)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;Start Transfer:   85 ms
+Total:            86 ms
+
+DNS lookup:           0 ms
+TCP connection:       0 ms
+TLS handshake:        0 ms
+Server processing:   64 ms
+Content transfer:     1 ms
+
+Name Lookup:       0 ms
+Connect:           0 ms
+Pre Transfer:      0 ms
+Start Transfer:   64 ms
+Total:            65 ms
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/&#34;&gt;Re:golang の http.Client を速くする - Shogo&amp;rsquo;s Blog&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Goのnet/http.Client.Doの内部実装をたどったメモ</title>
+          <link>http://sambaiz.net/article/53/</link>
+          <pubDate>Mon, 30 Jan 2017 20:55:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/53/</guid>
+          <description>
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+        &amp;quot;fmt&amp;quot;
+        &amp;quot;net/http&amp;quot;
+        &amp;quot;io/ioutil&amp;quot;
+)
+
+var client = http.Client{}
+
+func main() {
+
+        req, err := http.NewRequest(&amp;quot;GET&amp;quot;, &amp;quot;http://example.com&amp;quot;, nil)
+        if err != nil{
+                panic(err)
+        }
+
+        resp, err := client.Do(req)
+        if err != nil{
+                panic(err)
+        }
+        defer resp.Body.Close()
+
+        body, err := ioutil.ReadAll(resp.Body)
+        if err != nil{
+                panic(err)
+        }
+
+        fmt.Println(string(body))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;client&#34;&gt;Client&lt;/h3&gt;
+
+&lt;p&gt;TransportがTCPコネクションをキャッシュするのでClientは使い回すべき。複数のgoroutineでコンカレントに使っても大丈夫。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L36&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L36&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Client struct {
+
+        // nilならDefaultTransportが使われる        
+    	Transport RoundTripper
+
+        // nilなら10回で止まる
+        CheckRedirect func(req *Request, via []*Request) error
+
+        // nilならcookieは無視される
+        Jar CookieJar
+
+        Timeout time.Duration
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;MaxIdleConnsとは別に、ホストごとの制限がある。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/61/&#34;&gt;Goのnet/httpとKeep-Alive - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L39&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L39&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var DefaultTransport RoundTripper = &amp;amp;Transport{
+	Proxy: ProxyFromEnvironment,
+	DialContext: (&amp;amp;net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+		DualStack: true,
+	}).DialContext,
+	MaxIdleConns:          100,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
+const DefaultMaxIdleConnsPerHost = 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;request&#34;&gt;Request&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/request.go#L690&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/request.go#L690&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
+    ...
+    
+    u, err := url.Parse(urlStr)
+    
+    ...
+    
+    rc, ok := body.(io.ReadCloser)
+    req := &amp;amp;Request{
+            Method:     method,
+            URL:        u,
+            Proto:      &amp;quot;HTTP/1.1&amp;quot;,
+            ProtoMajor: 1,
+            ProtoMinor: 1,
+            Header:     make(Header),
+            Body:       rc,
+            Host:       u.Host,
+        }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;do&#34;&gt;Do&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L181&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L181&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Requestを渡してResponseを受け取る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (c *Client) Do(req *Request) (*Response, error) {
+    method := valueOrDefault(req.Method, &amp;quot;GET&amp;quot;)
+    if method == &amp;quot;GET&amp;quot; || method == &amp;quot;HEAD&amp;quot; {
+        return c.doFollowingRedirects(req, shouldRedirectGet)
+    }
+    if method == &amp;quot;POST&amp;quot; || method == &amp;quot;PUT&amp;quot; {
+        return c.doFollowingRedirects(req, shouldRedirectPost)
+    }
+    return c.send(req, c.deadline())
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dofollowingredirects&#34;&gt;doFollowingRedirects&lt;/h3&gt;
+
+&lt;p&gt;リクエストを送り、リダイレクトする場合はして、そうでない場合はレスポンスを返す。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L440&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L440&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (c *Client) doFollowingRedirects(req *Request, shouldRedirect func(int) bool) (*Response, error) {
+    ...
+
+    for{
+
+        ...
+        
+        if resp, err = c.send(req, deadline); err != nil {
+            if !deadline.IsZero() &amp;amp;&amp;amp; !time.Now().Before(deadline) {
+                err = &amp;amp;httpError{
+                    err:     err.Error() + &amp;quot; (Client.Timeout exceeded while awaiting headers)&amp;quot;,
+                    timeout: true,
+                }
+            }
+            return nil, uerr(err)
+        }
+
+        if !shouldRedirect(resp.StatusCode) {
+            return resp, nil
+        }
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;send&#34;&gt;send&lt;/h3&gt;
+
+&lt;p&gt;ClientのTransportのRoundTripを呼ぶ。ここからはTransport(RoundTripper)の仕事。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L140&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L140&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (c *Client) send(req *Request, deadline time.Time) (*Response, error) {
+    
+    ...
+    
+    resp, err := send(req, c.transport(), deadline)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L208&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L208&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func send(ireq *Request, rt RoundTripper, deadline time.Time) (*Response, error) {
+   
+    ...
+    
+    resp, err := rt.RoundTrip(req)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;roundtrip&#34;&gt;RoundTrip&lt;/h3&gt;
+
+&lt;p&gt;チャネルを通して接続先とやりとりする。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L319&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L319&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (t *Transport) RoundTrip(req *Request) (*Response, error) {
+    
+    ...
+    
+    treq := &amp;amp;transportRequest{Request: req, trace: trace}
+    
+    ...
+	
+    cm, err := t.connectMethodForRequest(treq)
+    pconn, err := t.getConn(treq, cm)
+   
+    ...
+    
+    resp, err = pconn.roundTrip(treq)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;writeとreadを同時に行っているのはサーバーがbodyのすべてを読む前にレスポンスを返すときのため。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L1823&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L1823&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err error) {
+    
+    ...
+    
+    pc.writech &amp;lt;- writeRequest{req, writeErrCh, continueCh} // pc.writeLoopで読まれる
+
+    resc := make(chan responseAndError)
+	pc.reqch &amp;lt;- requestAndChan{ // pc.readLoopで読まれる
+		req:        req.Request,
+		ch:         resc,
+		addedGzip:  requestedGzip,
+		continueCh: continueCh,
+		callerGone: gone,
+	}
+    var re responseAndError
+    
+    ...
+    
+    case re = &amp;lt;-resc: // pc.readLoopで書き込まれる
+		re.err = pc.mapRoundTripErrorFromReadLoop(req.Request, startBytesWritten, re.err)
+		break WaitResponse
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;pconn-getconn-dialconn&#34;&gt;pconn.getConn/dialConn&lt;/h3&gt;
+
+&lt;p&gt;接続し、チャネルを読むループ(readLoop, writeLoop)を回す。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L865&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L865&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (t *Transport) getConn(treq *transportRequest, cm connectMethod) (*persistConn, error) {
+    ...
+    type dialRes struct {
+		pc  *persistConn
+		err error
+	}
+    dialc := make(chan dialRes)
+    
+    ...
+    
+    go func() {
+		pc, err := t.dialConn(ctx, cm)
+		dialc &amp;lt;- dialRes{pc, err}
+	}()
+    
+    ...
+    
+    select {
+	case v := &amp;lt;-dialc:
+        if v.pc != nil {
+            
+            ...
+			
+            return v.pc, nil
+        }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L967&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L967&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (*persistConn, error) {
+    pconn := &amp;amp;persistConn{
+		t:             t,
+		cacheKey:      cm.key(),
+		reqch:         make(chan requestAndChan, 1), // roundTripで書かれて、readLoopで読まれる
+		writech:       make(chan writeRequest, 1), // roundTripで書かれて、writeLoopで読まれる
+		closech:       make(chan struct{}),
+		writeErrCh:    make(chan error, 1),
+		writeLoopDone: make(chan struct{}),
+	}
+
+    ...
+    
+    conn, err := t.dial(ctx, &amp;quot;tcp&amp;quot;, cm.addr())
+	pconn.conn = conn
+    
+    ...
+    
+    go pconn.readLoop()
+	go pconn.writeLoop()
+	return pconn, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ライセンス&#34;&gt;ライセンス&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;Copyright (c) 2009 The Go Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+&amp;quot;AS IS&amp;quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Goのinterface/structの埋め込み</title>
+          <link>http://sambaiz.net/article/50/</link>
+          <pubDate>Wed, 18 Jan 2017 01:39:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/50/</guid>
+          <description>
+
+&lt;p&gt;Goには継承が存在しない。その代わりstructを埋め込み、委譲することができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://golang.org/doc/effective_go.html#embedding&#34;&gt;https://golang.org/doc/effective_go.html#embedding&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;挙動&#34;&gt;挙動&lt;/h2&gt;
+
+&lt;h3 id=&#34;interfaceにinterfaceを埋め込む&#34;&gt;interfaceにinterfaceを埋め込む&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;type I interface {
+	Hoge()
+}
+
+type J interface {
+	Fuga()
+}
+
+type K interface {
+	I
+	J
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;インタフェースKはIとJを合わせたものになる。IとJに重複する関数がある場合はエラーになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type L struct {
+}
+
+func (l L) Hoge() {
+	fmt.Println(&amp;quot;hoge&amp;quot;)
+}
+func (l L) Fuga() {
+	fmt.Println(&amp;quot;fuga&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;var k K
+k = L{}
+k.Hoge()
+k.Fuga()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;structにinterfaceを埋め込む&#34;&gt;structにinterfaceを埋め込む&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;type K interface {
+	Hoge()
+	Fuga()
+}
+
+type M struct {
+	K
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;埋め込むと&lt;code&gt;m.Hoge()&lt;/code&gt;のように透過的にKを扱うことができるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;m := M{L{}}
+m.Hoge()
+// m.K.Hoge() これでも呼べる
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;埋め込まないとこうなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type M struct {
+	k K
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;m := M{L{}}
+m.k.Hoge()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;structにstructを埋め込む&#34;&gt;structにstructを埋め込む&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;type A struct {
+	name string
+}
+
+type B struct {
+	A
+}
+
+func (a A) hoge() {
+	fmt.Println(&amp;quot;hoge&amp;quot;, a.name)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上と同様、&lt;code&gt;b.name&lt;/code&gt;や、&lt;code&gt;b.hoge()&lt;/code&gt;のように扱える。
+Aの関数も呼べて一見継承しているように見えるが、実際はAへの委譲となる。なのでhogeのレシーバーはA。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;b := B{}
+b.name = &amp;quot;a&amp;quot;
+// b = B{A{name: &amp;quot;a&amp;quot;}} 
+b.hoge()
+// b.A.hoge()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;また、Bにもhogeを実装すると、&lt;code&gt;b.hoge()&lt;/code&gt;でこちらが呼ばれることになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (b B) hoge() {
+	fmt.Println(&amp;quot;fuga&amp;quot;, b.name)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;b := B{}
+b.name = &amp;quot;piyo&amp;quot;
+b.hoge() // =&amp;gt; fuga piyo
+b.A.hoge() // =&amp;gt; hoge piyo
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;継承との違い&#34;&gt;継承との違い&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;type A struct {
+	name string
+}
+
+type B struct {
+	A
+}
+
+func (a A) hoge() {
+	fmt.Println(&amp;quot;hoge&amp;quot;, a.name)
+}
+
+func (a A) fuga() {
+	a.hoge()
+}
+
+// override?
+func (b B) hoge() {
+	fmt.Println(&amp;quot;fuga&amp;quot;, b.name)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;もし、BがAを継承しているとするとb.fuga()内でhoge()を呼ぶと、オーバーライドした、Bをレシーバーとするhoge()が呼ばれ、&amp;rdquo;fuga&amp;rdquo;が出力されるはずだ。
+しかし、fuga()のレシーバーはAなので、呼ばれるのはAをレシーバーとする方のhoge()となり、&amp;rdquo;hoge&amp;rdquo;が出力される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;b := B{}
+b.name = &amp;quot;piyo&amp;quot;
+b.fuga() // =&amp;gt; hoge piyo
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;また、type Aの変数にBを代入することもできない。&lt;/p&gt;
+
+&lt;h2 id=&#34;用途を探る&#34;&gt;用途を探る&lt;/h2&gt;
+
+&lt;h3 id=&#34;interfaceのデフォルト実装&#34;&gt;interfaceのデフォルト実装&lt;/h3&gt;
+
+&lt;p&gt;interfaceのデフォルトの実装を用意したstructを埋めることで、各structでは差分だけを実装すればいいようにできる。
+ただデフォルト実装が他のデフォルト実装の関数を呼んでいる場合、呼び先の関数だけ実装しても元々の関数の動作は変わらないので注意。
+レシーバーを意識する必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Student interface {
+	Plus(x int, y int) int
+	Minus(x int, y int) int
+}
+
+type defaultStudent struct{}
+
+func (defaultStudent) Plus(x int, y int) int {
+	return x + y
+}
+
+func (defaultStudent) Minus(x int, y int) int {
+	return x - y
+}
+
+type BadStudent struct {
+	defaultStudent
+}
+
+func (BadStudent) Minus(x int, y int) int {
+	return 0
+}
+
+type GeniusStudent struct {
+	defaultStudent
+}
+
+func (GeniusStudent) Plus(x int, y int) int {
+	if ans, err := strconv.Atoi(fmt.Sprintf(&amp;quot;%d%d&amp;quot;, x, y)); err != nil {
+		fmt.Errorf(&amp;quot;genius student fails to %d + %d&amp;quot;, x, y)
+		return 0
+	} else {
+		return ans
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;publicな機能の追加&#34;&gt;Publicな機能の追加&lt;/h3&gt;
+
+&lt;p&gt;Publicな関数を提供するstructを埋め込み、それを直接外からも呼べるようにする。&lt;/p&gt;
+
+&lt;p&gt;試しに、&lt;code&gt;sync.RWMutex()&lt;/code&gt;を埋め込んでみた。これはゼロ値でロックしていない状態なので初期化する必要はない。
+一見良さそうに見えるが、この例だとLockとUnlockは内側でのみ呼ぶことを想定していて、外からうっかり呼んでしまうとおかしなことになってしまうだめな例。まあでもこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Twin struct {
+	num     int
+	sameNum int
+	sync.RWMutex
+}
+
+func (l *Twin) Set(n int) {
+	l.Lock()
+	l.num = n
+	l.sameNum = n
+	l.Unlock()
+}
+
+func (l *Twin) Check() (ok bool) {
+	l.RLock()
+	ok = l.num == l.sameNum
+	l.RUnlock()
+	return
+}
+
+func main() {
+
+	twin := new(Twin)
+
+	for i := 0; i &amp;lt; 1000; i++ {
+		go twin.Set(i)
+		if !twin.Check() {
+			panic(&amp;quot;broken&amp;quot;)
+		}
+	}
+
+	fmt.Println(&amp;quot;success&amp;quot;)
+
+	twin.Unlock() // panic!
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;privateな共通処理をまとめる&#34;&gt;Privateな共通処理をまとめる&lt;/h3&gt;
+
+&lt;p&gt;privateな共通処理を埋め込むことでDRYに書けるように試みる。&lt;/p&gt;
+
+&lt;p&gt;まず、状態を持たないような処理の場合。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (defaultStudent) hoge() bool {
+	return true
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これはパッケージが適切に切られていれば&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func hoge() bool {
+	return true
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と変わらず、埋め込む必要はないと思う。埋め込むとレシーバーから補完が効いて探しやすいかもしれないけれど。&lt;/p&gt;
+
+&lt;p&gt;一方、状態を持つような処理の場合。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (n defaultStudent) counter() int {
+    n.counter += 1
+    return n.counter
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これは埋め込むか、明示的にフィールドを持つかのどちらかになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type BadStudent struct {
+	defaultStudent
+}
+
+or 
+
+type BadStudent struct {
+	d defaultStudent
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回の場合、defaultStudentにPublicなデフォルト実装があってそれを使うので埋め込んだ方が自然なような気もするけど、
+そうでなければ埋め込まない方が移譲していることが分かりやすいと思う。せいぜい数文字増えるだけだし。&lt;/p&gt;
+
+&lt;p&gt;埋め込みは便利だけど、継承ではないことを理解して使おう。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/sonatard/items/2b4b70694fd680f6297c&#34;&gt;オブジェクト指向言語としてGolangをやろうとするとハマる点を整理してみる - Qiita&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Goのpanicとrecover</title>
+          <link>http://sambaiz.net/article/49/</link>
+          <pubDate>Tue, 17 Jan 2017 23:58:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/49/</guid>
+          <description>
+
+&lt;h2 id=&#34;panic&#34;&gt;panic&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://golang.org/pkg/builtin/#panic&#34;&gt;https://golang.org/pkg/builtin/#panic&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;panicは現在のgoroutineの通常の実行を停止する組み込み関数。
+&lt;a href=&#34;https://github.com/golang/go/blob/b2a3b54b9520ce869d79ac8bce836a540ba45d09/src/runtime/panic.go#L26&#34;&gt;index out of range&lt;/a&gt;や
+&lt;a href=&#34;https://github.com/golang/go/blob/b2a3b54b9520ce869d79ac8bce836a540ba45d09/src/runtime/panic.go#L61&#34;&gt;invalid memory address or nil pointer dereference&lt;/a&gt;
+のときなどでも呼ばれる。&lt;/p&gt;
+
+&lt;p&gt;deferを実行して呼び出し元に戻り、panicの実行-&amp;gt;deferの実行-&amp;gt;呼び出し元に戻る、を繰り返して
+最後まで戻ったらプログラムを終了し、panicに渡した引数と共にエラーをレポートする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func main() {
+	a()
+}
+
+func a() {
+	defer fmt.Println(&amp;quot;a&amp;quot;)
+	b()
+	fmt.Println(&amp;quot;a2&amp;quot;)
+}
+
+func b() {
+	defer fmt.Println(&amp;quot;b1&amp;quot;)
+	panic(&amp;quot;b2&amp;quot;)
+	defer fmt.Println(&amp;quot;b3&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;b1
+a
+panic: b2
+
+goroutine 1 [running]:
+panic(0x89840, 0xc42000a2c0)
+	/*****/libexec/src/runtime/panic.go:500 +0x1a1
+main.b()
+	/*****/main.go:19 +0x107
+main.a()
+	/*****/main.go:13 +0xce
+main.main()
+	/*****/main.go:8 +0x14
+exit status 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;recover&#34;&gt;recover&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://golang.org/pkg/builtin/#recover&#34;&gt;https://golang.org/pkg/builtin/#recover&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;deferで呼ぶことによってpanicを停止させることができる組み込み関数。
+panicの引数に渡した値を取得できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func main() {
+	fmt.Println(a())
+	fmt.Println(&amp;quot;main&amp;quot;)
+}
+
+func a() (ret string) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(&amp;quot;recover -&amp;gt;&amp;quot;, err)
+			ret = &amp;quot;panicked&amp;quot;
+		}
+	}()
+	b()
+	fmt.Println(&amp;quot;a2&amp;quot;)
+	return &amp;quot;ok&amp;quot;
+}
+
+func b() {
+	defer fmt.Println(&amp;quot;b1&amp;quot;)
+	panic(&amp;quot;b2&amp;quot;)
+	defer fmt.Println(&amp;quot;b3&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;b1
+recover -&amp;gt; b2
+panicked
+main
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;通常はpanicもrecoverもあまり使わず、errorを返すことでハンドリングする。&lt;/p&gt;
+
+&lt;p&gt;ではどんな時に使われるかというと、例えばWebフレームワーク&lt;a href=&#34;https://github.com/labstack/echo&#34;&gt;echo&lt;/a&gt;のRecover middlewareは
+panicをrecoverしてinternal server errorとしてレスポンスを返すようにしている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/labstack/echo/blob/a96c564fc34b3fcbc5a1a67eeb9402243cdac6b2/middleware/recover.go#L66&#34;&gt;https://github.com/labstack/echo/blob/a96c564fc34b3fcbc5a1a67eeb9402243cdac6b2/middleware/recover.go#L66&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/labstack/echo/blob/54fb1015c1a51aed1c8e5ef6bf9e643b1a079acb/context.go#L525&#34;&gt;https://github.com/labstack/echo/blob/54fb1015c1a51aed1c8e5ef6bf9e643b1a079acb/context.go#L525&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/labstack/echo/blob/b2c623b07dd1362011f2677147ffbbe48ea3b178/echo.go#L284&#34;&gt;https://github.com/labstack/echo/blob/b2c623b07dd1362011f2677147ffbbe48ea3b178/echo.go#L284&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func main() {
+        // Echo instance
+        e := echo.New()
+
+        // Middleware
+        e.Use(middleware.Logger())
+        e.Use(middleware.Recover())
+
+        // Route =&amp;gt; handler
+        e.GET(&amp;quot;/&amp;quot;, func(c echo.Context) error {
+                panic(&amp;quot;fail&amp;quot;)
+                return c.String(http.StatusOK, &amp;quot;Hello, World!\n&amp;quot;)
+        })
+
+        // Start server
+        e.Logger.Fatal(e.Start(&amp;quot;:1323&amp;quot;))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;{&amp;quot;message&amp;quot;:&amp;quot;Internal Server Error&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ではRecover middlewareを使わなかったらアプリケーションが終了するかというと、
+net/httpのserveでもrecoverしてるのでここでひっかかる(レスポンスは返らない)。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/b2a3b54b9520ce869d79ac8bce836a540ba45d09/src/net/http/server.go#L2625&#34;&gt;https://github.com/golang/go/blob/b2a3b54b9520ce869d79ac8bce836a540ba45d09/src/net/http/server.go#L2625&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/b2a3b54b9520ce869d79ac8bce836a540ba45d09/src/net/http/server.go#L1718&#34;&gt;https://github.com/golang/go/blob/b2a3b54b9520ce869d79ac8bce836a540ba45d09/src/net/http/server.go#L1718&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;echo: http: panic serving [::1]:53992: AA
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://blog.golang.org/defer-panic-and-recover&#34;&gt;Defer, Panic, and Recover - The Go Blog&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる</title>
+          <link>http://sambaiz.net/article/47/</link>
+          <pubDate>Wed, 04 Jan 2017 23:58:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/47/</guid>
+          <description>&lt;p&gt;この関数のベンチマークを取る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package cal
+
+import (
+	&amp;quot;math/big&amp;quot;
+)
+
+var cache = map[int]*big.Int{}
+
+func resetCache() {
+	cache = map[int]*big.Int{}
+}
+
+func Fibonacci(n int) *big.Int {
+
+	if c := cache[n]; c != nil {
+		return c
+	}
+
+	ret := new(big.Int)
+	before := big.NewInt(1)
+	for i := 1; i &amp;lt; n; i++ {
+		tmp := new(big.Int).Add(ret, before)
+		before = ret
+		ret = tmp
+		cache[i] = ret
+	}
+	cache[n] = ret
+	return ret
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;引数にtesting.Bを取る、Benchmarkから始まる関数を書いて、b.N回ループさせる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package cal
+
+import (
+	&amp;quot;math/big&amp;quot;
+	&amp;quot;testing&amp;quot;
+)
+
+func TestFibonacci(t *testing.T) {
+	if f := Fibonacci(10); f.String() != big.NewInt(34).String() {
+		t.Errorf(&amp;quot;%d != %d (expected)&amp;quot;, f, big.NewInt(34))
+	}
+}
+
+func BenchmarkFibonacci(b *testing.B) {
+	for i := 0; i &amp;lt; b.N; i++ {
+		b.StopTimer()
+		resetCache()
+		b.StartTimer()
+		Fibonacci(100)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;code&gt;go test -bench&lt;/code&gt;で実行するとベンチマークが取れる。さらに&lt;code&gt;-benchmem&lt;/code&gt;を付けるとメモリアロケーションの情報も出る。
+また、&lt;code&gt;-cpuprofile&lt;/code&gt;でCPUのプロファイルを出力し、pprocに渡すことでどの部分で時間がかかっているかを調べることができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://golang.org/cmd/go/#hdr-Description_of_testing_flags&#34;&gt;https://golang.org/cmd/go/#hdr-Description_of_testing_flags&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go test -bench Fibonacci -benchmem -o pprof/test.bin  -cpuprofile pprof/cpu.out ./cal
+BenchmarkFibonacci-4   	   50000	     32788 ns/op	   13344 B/op	     211 allocs/op
+PASS
+ok  	github.com/sambaiz/try-pprof/cal	3.406s
+
+$ go tool pprof --text pprof/test.bin pprof/cpu.out
+3.80s of 3.83s total (99.22%)
+Dropped 17 nodes (cum &amp;lt;= 0.02s)
+      flat  flat%   sum%        cum   cum%
+     2.31s 60.31% 60.31%      2.31s 60.31%  runtime.mach_semaphore_signal
+     0.38s  9.92% 70.23%      0.38s  9.92%  runtime.mach_semaphore_timedwait
+     0.32s  8.36% 78.59%      0.32s  8.36%  runtime.mach_semaphore_wait
+     0.27s  7.05% 85.64%      0.27s  7.05%  runtime.usleep
+     0.14s  3.66% 89.30%      0.14s  3.66%  runtime.deductSweepCredit
+     0.09s  2.35% 91.64%      0.28s  7.31%  runtime.mallocgc
+     0.04s  1.04% 92.69%      0.14s  3.66%  runtime.mapassign1
+     0.04s  1.04% 93.73%      0.05s  1.31%  runtime.updatememstats
+     0.03s  0.78% 94.52%      0.13s  3.39%  math/big.nat.add
+     0.03s  0.78% 95.30%      0.03s  0.78%  runtime.aeshash64
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;graphvizをインストールすることでsvgのグラフを出すこともできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install graphviz
+$ go tool pprof --svg pprof/test.bin pprof/cpu.out &amp;gt; pprof/test.svg
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/47.png&#34; alt=&#34;svgで出力したもの&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>GoogleのkvsライブラリLevelDBを使う</title>
+          <link>http://sambaiz.net/article/45/</link>
+          <pubDate>Sat, 24 Dec 2016 21:18:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/45/</guid>
+          <description>
+
+&lt;h2 id=&#34;leveldbとは&#34;&gt;LevelDBとは&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/google/leveldb&#34;&gt;https://github.com/google/leveldb&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Googleが作った高速なkey-valueストレージライブラリ。&lt;/p&gt;
+
+&lt;p&gt;ChromeのIndexedDBや&lt;a href=&#34;https://prometheus.io/docs/operating/storage/&#34;&gt;prometheus&lt;/a&gt;などで使われている。&lt;/p&gt;
+
+&lt;h3 id=&#34;特徴-https-github-com-google-leveldb-features&#34;&gt;&lt;a href=&#34;https://github.com/google/leveldb#features&#34;&gt;特徴&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Keyと任意のバイト配列のValue&lt;/li&gt;
+&lt;li&gt;データはKeyでソートされる。ソートのための比較関数はオーバーライドできる。&lt;/li&gt;
+&lt;li&gt;基本的な操作はPut, Get, Delete。&lt;/li&gt;
+&lt;li&gt;複数の変更を一つのatomicなバッチで行える&lt;/li&gt;
+&lt;li&gt;一環したデータのビューを取得するために、一時的なスナップショットを作成できる&lt;/li&gt;
+&lt;li&gt;データを前にも後ろにもイテレーションできる&lt;/li&gt;
+&lt;li&gt;データは&lt;a href=&#34;http://google.github.io/snappy/&#34;&gt;Snappy compression library&lt;/a&gt;で自動で圧縮される。&lt;/li&gt;
+&lt;li&gt;ファイルシステムの操作など外部のアクティビティを仮想的なインタフェースを通して行うので、OSとのやりとりをカスタマイズできる。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;制限-https-github-com-google-leveldb-limitations&#34;&gt;&lt;a href=&#34;https://github.com/google/leveldb#limitations&#34;&gt;制限&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SQLデータベースではない。リレーショナルなデータモデルは持てないし、SQLやインデックスにも対応していない。&lt;/li&gt;
+&lt;li&gt;一度に一つのプロセスしかDBにアクセスできない。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;キャッシュ-https-rawgit-com-google-leveldb-master-doc-index-html&#34;&gt;&lt;a href=&#34;https://rawgit.com/google/leveldb/master/doc/index.html&#34;&gt;キャッシュ&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;DBはファイルシステムのディレクトリに対応する名前を持ち、内容はそのディレクトリに保存される。&lt;/li&gt;
+&lt;li&gt;各ファイルには圧縮したブロックが保存され、良く使うものについては非圧縮のブロックがキャッシュされる。&lt;/li&gt;
+&lt;li&gt;ソートして隣接するキーは通常、同じブロックに配置される。ディスク転送とキャッシュはブロック単位。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;フィルタ&#34;&gt;フィルタ&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Getの際、不要なデータを読まなくていいようにフィルタ(Bloom Filter)を用いることができる。&lt;/li&gt;
+&lt;li&gt;独自の比較関数(末尾のスペースを無視するなど)を使う場合、Bloom Filterを使うことができないことがあるので、その場合は独自のフィルタが必要。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;レベル-https-rawgit-com-google-leveldb-master-doc-impl-html&#34;&gt;&lt;a href=&#34;https://rawgit.com/google/leveldb/master/doc/impl.html&#34;&gt;レベル&lt;/a&gt;&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;最近の更新はログファイルに保存される。これが決められたサイズ(デフォルトでは約4MB)に達すると、sorted table(sst)に変換され、新しいログファイルが生成される。&lt;/li&gt;
+&lt;li&gt;現在のログファイルのコピーがメモリ(memtable)にも乗って読み取りで参照される。&lt;/li&gt;
+&lt;li&gt;sstはキーによってソートされたエントリーを保存する。エントリーはキーの値か、削除マーカー。&lt;/li&gt;
+&lt;li&gt;sstはレベルによってまとめられる。ログファイルから変換されると、特別なyoungレベル(level-0とも呼ばれる)に配置される。&lt;/li&gt;
+&lt;li&gt;youngファイルの数があるしきい値(現在4つ)を超えると全てのyoungファイルを全てのlevel-1ファイルとマージし、新しいlevel-1ファイルを生成する(2MBごとに1ファイル)。&lt;/li&gt;
+&lt;li&gt;youngレベルのファイルにはキーが重複していることがある。しかし、他のレベルでは重複しないキーの範囲がある。&lt;/li&gt;
+&lt;li&gt;level-L(L&amp;gt;=1)のファイルの合計サイズが&lt;code&gt;10^L MB&lt;/code&gt;を超えたとき、level-Lのファイルと、level-(L+1)の全てのファイルをマージし、新しいlevel-(L+1)ファイルを生成する。&lt;/li&gt;
+&lt;li&gt;これによって、バルク読み込み/書き込みのみを使い、コストが高いシークを最小限にして、youngレベルから大きいレベルに更新を徐々にマイグレーションすることができる。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;動かしてみる&#34;&gt;動かしてみる&lt;/h2&gt;
+
+&lt;p&gt;LevelDBのgo実装。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/syndtr/goleveldb&#34;&gt;syndtr/goleveldb&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get github.com/syndtr/goleveldb/leveldb
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まずDBを開く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// open
+db, err := leveldb.OpenFile(&amp;quot;/Users/sambaiz/leveldb&amp;quot;, nil)
+defer db.Close()
+if err != nil {
+    panic(err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;普通に5個(key0~4)、バッチで5個(key5~9)のデータを入れて、そのうち一つを消す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// put
+for i := 0; i &amp;lt; 5; i++ {
+    if err = db.Put([]byte(fmt.Sprintf(&amp;quot;key%d&amp;quot;, i)), []byte(fmt.Sprintf(&amp;quot;value%d&amp;quot;, i)), nil); err != nil {
+        panic(err)
+    }
+}
+
+// batch
+batch := new(leveldb.Batch)
+for i := 5; i &amp;lt; 10; i++ {
+    batch.Put([]byte(fmt.Sprintf(&amp;quot;key%d&amp;quot;, i)), []byte(fmt.Sprintf(&amp;quot;value%d&amp;quot;, i)))
+}
+if err = db.Write(batch, nil); err != nil{
+    panic(err)
+}
+
+// delete
+if err = db.Delete([]byte(&amp;quot;key2&amp;quot;), nil); err != nil {
+    panic(err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この時点でこんなファイルが生成され、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls
+000001.log	CURRENT		LOCK		LOG		MANIFEST-000000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;000001.logの中身はこんな感じになっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ od -c 000001.log 
+0000000    Z 221   @ 300 031  \0 001 001  \0  \0  \0  \0  \0  \0  \0 001
+0000020   \0  \0  \0 001 004   k   e   y   0 006   v   a   l   u   e   0
+0000040    o 037   = 373 031  \0 001 002  \0  \0  \0  \0  \0  \0  \0 001
+0000060   \0  \0  \0 001 004   k   e   y   1 006   v   a   l   u   e   1
+0000100  256 343   &amp;gt; 311 031  \0 001 003  \0  \0  \0  \0  \0  \0  \0 001
+0000120   \0  \0  \0 001 004   k   e   y   2 006   v   a   l   u   e   2
+0000140    = 006 330 341 031  \0 001 004  \0  \0  \0  \0  \0  \0  \0 001
+0000160   \0  \0  \0 001 004   k   e   y   3 006   v   a   l   u   e   3
+0000200  002 005   4 016 031  \0 001 005  \0  \0  \0  \0  \0  \0  \0 001
+0000220   \0  \0  \0 001 004   k   e   y   4 006   v   a   l   u   e   4
+0000240    d 240 344   {   M  \0 001 006  \0  \0  \0  \0  \0  \0  \0 005
+0000260   \0  \0  \0 001 004   k   e   y   5 006   v   a   l   u   e   5
+0000300  001 004   k   e   y   6 006   v   a   l   u   e   6 001 004   k
+0000320    e   y   7 006   v   a   l   u   e   7 001 004   k   e   y   8
+0000340  006   v   a   l   u   e   8 001 004   k   e   y   9 006   v   a
+0000360    l   u   e   9   ! 233 277 371 022  \0 001  \v  \0  \0  \0  \0
+0000400   \0  \0  \0 001  \0  \0  \0  \0 004   k   e   y   2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;取得するにはkeyを指定して&lt;code&gt;Get()&lt;/code&gt;したり、Iteratorを使う。
+IteratorはSeekしたり、StartやLimitを設定したり、Prefixを指定して取ってくることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// get
+fmt.Println(&amp;quot;-- get --&amp;quot;)
+for i := 0; i &amp;lt; 10; i++ {
+    var data []byte
+    if data, err = db.Get([]byte(fmt.Sprintf(&amp;quot;key%d&amp;quot;, i)), nil); err != nil {
+        fmt.Printf(&amp;quot;key%d: %s\n&amp;quot;, i, err.Error())
+    } else {
+        fmt.Printf(&amp;quot;key%d: %s\n&amp;quot;, i, string(data))
+    }
+}
+
+// iterate
+fmt.Println(&amp;quot;-- iterate --&amp;quot;)
+iter := db.NewIterator(nil, nil)
+for iter.Next() {
+    key := iter.Key()
+    value := iter.Value()
+    fmt.Printf(&amp;quot;%s: %s\n&amp;quot;, string(key), string(value))
+}
+iter.Release()
+if err = iter.Error(); err != nil {
+    panic(err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- get --
+key0: value0
+key1: value1
+key2: leveldb: not found
+key3: value3
+key4: value4
+key5: value5
+key6: value6
+key7: value7
+key8: value8
+key9: value9
+-- iterate --
+key0: value0
+key1: value1
+key3: value3
+key4: value4
+key5: value5
+key6: value6
+key7: value7
+key8: value8
+key9: value9
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>gvmでGoのバージョン管理</title>
+          <link>http://sambaiz.net/article/44/</link>
+          <pubDate>Tue, 20 Dec 2016 20:52:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/44/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/moovweb/gvm&#34;&gt;moovweb/gvm&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;必要なものはREADMEを見て入れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ bash &amp;lt; &amp;lt;(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
+$ source ${HOME}/.gvm/scripts/gvm
+$ gvm install go1.7 -B
+$ gvm use go1.7
+$ go version
+go version go1.7 linux/amd64
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;$GOPATH&lt;/code&gt;と&lt;code&gt;$GOROOT&lt;/code&gt;が書き変わる(&lt;code&gt;${HOME}/.gvm/pkgsets/go1.7/global/&lt;/code&gt;)ので注意。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>aws-sdk-goでs3にput/get</title>
+          <link>http://sambaiz.net/article/38/</link>
+          <pubDate>Wed, 30 Nov 2016 20:29:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/38/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/aws/aws-sdk-go&#34;&gt;aws-sdk-go&lt;/a&gt;でS3にputしてgetする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;bytes&amp;quot;
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;github.com/aws/aws-sdk-go/aws&amp;quot;
+	&amp;quot;github.com/aws/aws-sdk-go/aws/session&amp;quot;
+	&amp;quot;github.com/aws/aws-sdk-go/service/s3&amp;quot;
+)
+
+const REGION = &amp;quot;ap-northeast-1&amp;quot;
+const BUCKET_NAME = &amp;quot;faweijojio4f3e4&amp;quot;
+
+func main() {
+
+	sess, err := session.NewSession(aws.NewConfig().WithRegion(REGION))
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	svc := s3.New(sess)
+
+	// put
+	data := []byte(&amp;quot;BBBBBB&amp;quot;)
+	key := &amp;quot;AAA.txt&amp;quot;
+
+	params := &amp;amp;s3.PutObjectInput{
+		Bucket:        aws.String(BUCKET_NAME),
+		Key:           aws.String(key),
+		Body:          bytes.NewReader(data),
+		ContentLength: aws.Int64(int64(len(data))),
+		ContentType:   aws.String(&amp;quot;text/plain&amp;quot;),
+	}
+	if _, err = svc.PutObject(params); err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	// bucket list
+	keys := []string{}
+	err = svc.ListObjectsPages(&amp;amp;s3.ListObjectsInput{
+		Bucket: aws.String(BUCKET_NAME),
+	}, func(p *s3.ListObjectsOutput, last bool) (shouldContinue bool) {
+		for _, obj := range p.Contents {
+			keys = append(keys, *obj.Key)
+			fmt.Println(*obj.Key)
+		}
+		return true
+	})
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	// get
+	resp, err2 := svc.GetObject(&amp;amp;s3.GetObjectInput{
+		Bucket: aws.String(BUCKET_NAME),
+		Key:    aws.String(keys[0]),
+	})
+	if err2 != nil {
+		fmt.Println(err2.Error())
+		return
+	}
+
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
+	fmt.Println(keys[0] + &amp;quot; -&amp;gt; &amp;quot; + buf.String())
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ AWS_ACCESS_KEY_ID=**** AWS_SECRET_ACCESS_KEY=**** go run main.go
+AAA.txt
+bbbb.txt
+AAA.txt -&amp;gt; BBBBBB
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Goでstructをリフレクションしてcsvを出力する</title>
+          <link>http://sambaiz.net/article/37/</link>
+          <pubDate>Mon, 28 Nov 2016 21:29:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/37/</guid>
+          <description>&lt;p&gt;こんなstructとデータがあったら、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type Result struct{
+ Name string `col:&amp;quot;who&amp;quot;`
+ Point int
+}
+
+x := Result{&amp;quot;sam&amp;quot;, 100}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;フィールド名と、値、タグはrefrectで取れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;x := Result{&amp;quot;sam&amp;quot;, 100}
+v := reflect.ValueOf(x)
+fmt.Println(v.Type().Field(0).Name) // -&amp;gt; Name
+fmt.Println(v.Type().Field(1).Name) // -&amp;gt; Point
+fmt.Println(v.Field(0).Interface()) // -&amp;gt; sam
+fmt.Println(v.Field(1).Interface()) // -&amp;gt; 100
+fmt.Println(v.Type().Field(0).Tag.Get(&amp;quot;col&amp;quot;)) // -&amp;gt; who
+fmt.Println(v.Type().Field(1).Tag.Get(&amp;quot;col&amp;quot;)) // -&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これらをencoding/csvで書く。&lt;/p&gt;
+
+&lt;p&gt;ただ、引数を&lt;code&gt;[]interface{}&lt;/code&gt;にすると&lt;a href=&#34;https://golang.org/doc/faq#convert_slice_of_interface&#34;&gt;interface{}のスライスしか渡せない&lt;/a&gt;ので、
+一旦&lt;code&gt;interface{}&lt;/code&gt;で受け取ってスライスにする。このときにもrefrectを使っている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;encoding/csv&amp;quot;
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;os&amp;quot;
+	&amp;quot;reflect&amp;quot;
+	&amp;quot;strings&amp;quot;
+)
+
+type Result struct {
+	Name  string `col:&amp;quot;who&amp;quot;`
+	Point int
+	Age   int `col:&amp;quot;-&amp;quot;` // ignore
+}
+
+const COLTAG = &amp;quot;col&amp;quot;
+
+func main() {
+
+	x := []Result{Result{&amp;quot;sam&amp;quot;, 100, 24}, Result{&amp;quot;tom&amp;quot;, 0, 100025}}
+
+	file, err := os.OpenFile(&amp;quot;aaaa.csv&amp;quot;, os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	WriteCSV(file, x)
+}
+
+// Convert interface{} to []interface{}
+func toSlice(src interface{}) []interface{} {
+
+	ret := []interface{}{}
+
+	if v := reflect.ValueOf(src); v.Kind() == reflect.Slice {
+		for i := 0; i &amp;lt; v.Len(); i++ {
+			ret = append(ret, v.Index(i).Interface())
+		}
+	} else {
+		ret = append(ret, v.Interface())
+	}
+
+	return ret
+}
+
+// Generate csv rows including header from interface{} slice or object
+func genRows(src interface{}) [][]string {
+
+	sl := toSlice(src)
+	rows := make([][]string, 1)
+	ignoreColIndex := map[int]bool{}
+
+	for n, d := range sl {
+		rows = append(rows, []string{})
+		v := reflect.ValueOf(d)
+
+		for i := 0; i &amp;lt; v.NumField(); i++ {
+			if n == 0 {
+				// Header
+				colName := v.Type().Field(i).Tag.Get(COLTAG)
+				if colName == &amp;quot;&amp;quot; {
+					colName = strings.ToLower(v.Type().Field(i).Name)
+				} else if colName == &amp;quot;-&amp;quot; {
+					ignoreColIndex[i] = true
+					continue
+				}
+				rows[0] = append(rows[0], colName)
+			}
+
+			if !ignoreColIndex[i] {
+				rows[len(rows)-1] = append(rows[len(rows)-1], fmt.Sprint(v.Field(i).Interface()))
+			}
+		}
+	}
+	return rows
+}
+
+// Write csv file to path
+func WriteCSV(file *os.File, data interface{}) {
+	rows := genRows(data)
+
+	writer := csv.NewWriter(file)
+	for _, row := range rows {
+		writer.Write(row)
+	}
+	writer.Flush()
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;who,point
+sam,100
+tom,0
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>

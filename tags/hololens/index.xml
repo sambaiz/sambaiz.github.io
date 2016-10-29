@@ -1,0 +1,1057 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/hololens/index.xml</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
+
+    
+      
+        <item>
+          <title>HoloLensのSharing</title>
+          <link>http://sambaiz.net/article/88/</link>
+          <pubDate>Sat, 25 Mar 2017 22:20:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/88/</guid>
+          <description>
+
+&lt;ul&gt;
+&lt;li&gt;HoloToolkit-Unity v1.5.5.0&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;サーバー&#34;&gt;サーバー&lt;/h2&gt;
+
+&lt;p&gt;SharingService.exeを
+&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/tree/v1.5.5.0/External/HoloToolkit/Sharing/Server&#34;&gt;ここ&lt;/a&gt;
+からとってきて実行する。開発に使っているHoloToolkitと同じリリースバージョンのものを使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; SharingService.exe -local
+...
+SharingService: Listening for session list connections on port 20602 of all network devices of the local machine.
+SharingService: Local IP addresses are:
+SharingService:         xxx.xxx.xxx.xxx
+SharingService: Created Session &amp;quot;Default&amp;quot; with ID 0 on port 20601
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今日のTokyo Hololens Meetup Vol.2の開発者セッションで、
+ちょうどSharingの話があったのだけれど、残念ながら先着順で出遅れて聞けなかった。&lt;/p&gt;
+
+&lt;p&gt;Tweetを見る限りだとカスタマイズできず、スケーリングできないSharingService.exeは使わずに
+&lt;a href=&#34;https://github.com/neuecc/MagicOnion&#34;&gt;MagicOnion&lt;/a&gt;というのを自前で作ったらしい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://togetter.com/li/1094037&#34;&gt;Tokyo Hololens MeetuUp Vol.2 Session5 #HoloLensJP #TMCN - Togetterまとめ&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;クライアント-https-github-com-microsoft-holotoolkit-unity-blob-v1-5-5-0-assets-holotoolkit-sharing&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/v1.5.5.0/Assets/HoloToolkit/Sharing&#34;&gt;クライアント&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;Assets/HoloToolkit/Sharing/Tests&lt;/code&gt;のSceneで試してみる。&lt;/p&gt;
+
+&lt;p&gt;以下のcapabilitiesを設定し、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SpatialPerception&lt;/li&gt;
+&lt;li&gt;InternetClient&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;SharingのServer Addressを設定してビルド。ほかにはこんな設定がある。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/v1.5.5.0/Assets/HoloToolkit/Sharing/Scripts/SharingStage.cs#L15&#34;&gt;Client Role&lt;/a&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Primary: 直接セッションサーバーに接続し、セッションを管理する&lt;/li&gt;
+&lt;li&gt;Secondary: Primaryクライアントに接続して、セッション管理は任せる&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+&lt;li&gt;Server Address&lt;/li&gt;
+&lt;li&gt;Port&lt;/li&gt;
+&lt;li&gt;Auto Discover Server&lt;/li&gt;
+&lt;li&gt;Session Name&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;起動して以下のようなエラーが出たらSharingService.exeがHoloToolkitのバージョンと合っていない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;List Server Handshake Failed: Invalid schema version.
+Expected: 17, got 15
+Please sync to latest XTools
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;接続と離脱のメッセージはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SharingService: User UnknownUser at address xxx.xxx.xxx.xxx joined session Default
+SharingService: User UnknownUser left session Default
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;2つ以上クライアントを立ち上げると、他のクライアントの、球からの相対的な頭の位置にCubeが映った。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/88-sharing.jpg&#34; alt=&#34;他のクライアントの頭の位置にCubeがある&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;が、球の場所が空間に対して同期されない・・・。&lt;/p&gt;
+
+&lt;p&gt;原因を探るために、
+TestsのSceneと同様に、SharingのPrefabにCustomMessage.csを、
+適当なGameObjectにImportExportAnchorManager.csとRemoteHeadManager.csと
+目印になるオブジェクトを追加し、
+ImportExportAnchorManager.csにこんな感じのを追加してcurrentStateを表示してみた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public GameObject statusText;
+private void Update()
+{
+    statusText.GetComponent&amp;lt;TextMesh&amp;gt;().text = currentState.ToString();
+    ...
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果、起動してからまだReady状態になっていなかったことが分かった。
+少し待ってみるといろんな状態を経て、Ready状態になると、
+目印のオブジェクトが物理的に同じところに移動し、頭の位置も正しいところに移動した。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/88-sharing2.png&#34; alt=&#34;Sharingしている状態&#34; /&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;なにをやっているか見ていく。&lt;/p&gt;
+
+&lt;p&gt;まずは拾えるevent。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/83/&#34;&gt;C#のdelegateとevent - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;sharingsessiontracker-https-github-com-microsoft-holotoolkit-unity-blob-v1-5-5-0-assets-holotoolkit-sharing-scripts-sharingsessiontracker-cs&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/v1.5.5.0/Assets/HoloToolkit/Sharing/Scripts/SharingSessionTracker.cs&#34;&gt;SharingSessionTracker&lt;/a&gt;&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;public event EventHandler&lt;SessionJoinedEventArgs&gt; SessionJoined;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;ユーザーがセッションに入ったとき。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public class SessionJoinedEventArgs : EventArgs
+{
+    public User joiningUser;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;public event EventHandler&lt;SessionLeftEventArgs&gt; SessionLeft;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;セッションから出たとき。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public class SessionLeftEventArgs : EventArgs
+{
+    public long exitingUserId;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;sharingstage-https-github-com-microsoft-holotoolkit-unity-blob-v1-5-5-0-assets-holotoolkit-sharing-scripts-sharingstage-cs&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/v1.5.5.0/Assets/HoloToolkit/Sharing/Scripts/SharingStage.cs&#34;&gt;SharingStage&lt;/a&gt;&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;public event EventHandler SharingManagerConnected;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;SharingManagerが接続されたとき。ArgsはEmpty。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;connectedEvent(this, EventArgs.Empty);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;これらのeventをsubscribeしているTestsの中のコード。&lt;/p&gt;
+
+&lt;h2 id=&#34;custommessages-https-github-com-microsoft-holotoolkit-unity-blob-v1-5-5-0-assets-holotoolkit-sharing-tests-custommessages-cs&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/v1.5.5.0/Assets/HoloToolkit/Sharing/Tests/CustomMessages.cs&#34;&gt;CustomMessages&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;データを送受信するところ。&lt;/p&gt;
+
+&lt;h3 id=&#34;初期化-https-github-com-microsoft-holotoolkit-unity-blob-v1-5-5-0-assets-holotoolkit-sharing-tests-custommessages-cs-l57&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/v1.5.5.0/Assets/HoloToolkit/Sharing/Tests/CustomMessages.cs#L57&#34;&gt;初期化&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;SharingManagerが接続されたら初期化がはじまる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;void Start()
+{
+    SharingStage.Instance.SharingManagerConnected += SharingManagerConnected;
+}
+
+private void SharingManagerConnected(object sender, EventArgs e)
+{
+    InitializeMessageHandlers();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まず、ServerとのConnectionを取得し、Messageを受信したときのeventをsubscribeしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SharingStage sharingStage = SharingStage.Instance;
+serverConnection = sharingStage.Manager.GetServerConnection();
+connectionAdapter = new NetworkConnectionAdapter();
+connectionAdapter.MessageReceivedCallback += OnMessageReceived;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それから自分自身のユーザーIDも保存してある。これはMessageを送るときに使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;localUserID = SharingStage.Instance.Manager.GetLocalUser().GetID();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最後に&lt;code&gt;MessageHandlers&lt;/code&gt;にnullを詰めて終わり。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;for (byte index = (byte)TestMessageID.HeadTransform; index &amp;lt; (byte)TestMessageID.Max; index++)
+{
+    if (MessageHandlers.ContainsKey((TestMessageID)index) == false)
+    {
+        MessageHandlers.Add((TestMessageID)index, null);
+    }
+
+    serverConnection.AddListener(index, connectionAdapter);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;後からこういう風にhandlerを設定している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CustomMessages.Instance.MessageHandlers[CustomMessages.TestMessageID.HeadTransform] = this.UpdateHeadTransform;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;受信&#34;&gt;受信&lt;/h3&gt;
+
+&lt;p&gt;messageTypeに対応したhandlerに渡す。初期状態では全てnullなので何もしない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;void OnMessageReceived(NetworkConnection connection, NetworkInMessage msg)
+{
+    byte messageType = msg.ReadByte();
+    MessageCallback messageHandler = MessageHandlers[(TestMessageID)messageType];
+    if (messageHandler != null)
+    {
+        messageHandler(msg);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;送信&#34;&gt;送信&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;CustomMessages.Instance.SendStageTransform(transform.localPosition, transform.localRotation);
+CustomMessages.Instance.SendHeadTransform(headPosition, headRotation);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じにBroadcastしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void SendHeadTransform(Vector3 position, Quaternion rotation)
+{
+    // If we are connected to a session, broadcast our head info
+    if (serverConnection != null &amp;amp;&amp;amp; serverConnection.IsConnected())
+    {
+        // Create an outgoing network message to contain all the info we want to send
+        NetworkOutMessage msg = CreateMessage((byte)TestMessageID.HeadTransform);
+
+        AppendTransform(msg, position, rotation);
+
+        // Send the message as a broadcast, which will cause the server to forward it to all other users in the session.
+        serverConnection.Broadcast(
+            msg,
+            MessagePriority.Immediate,
+            MessageReliability.UnreliableSequenced,
+            MessageChannel.Avatar);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;importexportanchormanager-https-github-com-microsoft-holotoolkit-unity-blob-v1-5-5-0-assets-holotoolkit-sharing-tests-importexportanchormanager-cs&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/v1.5.5.0/Assets/HoloToolkit/Sharing/Tests/ImportExportAnchorManager.cs&#34;&gt;ImportExportAnchorManager&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;オブジェクトのpositionを物理的に固定する&lt;a href=&#34;https://docs.unity3d.com/ScriptReference/VR.WSA.WorldAnchor.html&#34;&gt;WorldAnchor&lt;/a&gt;を共有する。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;currentState&lt;/code&gt;は最初&lt;code&gt;AnchorStore_Initializing&lt;/code&gt;で、
+&lt;code&gt;anchorStore&lt;/code&gt;が取得できたら&lt;code&gt;AnchorStore_Initialized&lt;/code&gt;になる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private ImportExportState currentState = ImportExportState.Start;
+
+// インスタンスがロードされたときに呼ばれる。コンストラクターの代わり
+protected override void Awake()
+{
+    base.Awake();
+    Debug.Log(&amp;quot;Import Export Manager starting&amp;quot;);
+    // We need to get our local anchor store started up.
+    currentState = ImportExportState.AnchorStore_Initializing;
+    WorldAnchorStore.GetAsync(AnchorStoreReady);
+}
+
+private void AnchorStoreReady(WorldAnchorStore store)
+{
+    anchorStore = store;
+    currentState = ImportExportState.AnchorStore_Initialized;
+}
+
+private void Start()
+{
+    SharingStage.Instance.SharingManagerConnected += SharingManagerConnected;
+    SharingSessionTracker.Instance.SessionJoined += Instance_SessionJoined;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SharingManagerが接続されたら、RoomManagerのインスタンスを取得して、
+Anchorのダウンロードとアップロードしたときのeventをsubscribeしている。&lt;/p&gt;
+
+&lt;p&gt;Uploaded時は&lt;code&gt;currentState&lt;/code&gt;を&lt;code&gt;Ready&lt;/code&gt;にし、
+Downloaded時は&lt;code&gt;rawAnchorData&lt;/code&gt;に保存し、&lt;code&gt;currentState&lt;/code&gt;を&lt;code&gt;DataReady&lt;/code&gt;にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void SharingManagerConnected(object sender, EventArgs e)
+{
+    // Setup the room manager callbacks.
+    roomManager = SharingStage.Instance.Manager.GetRoomManager();
+    roomManagerCallbacks = new RoomManagerAdapter();
+
+    roomManagerCallbacks.AnchorsDownloadedEvent += RoomManagerCallbacks_AnchorsDownloaded;
+    roomManagerCallbacks.AnchorUploadedEvent += RoomManagerCallbacks_AnchorUploaded;
+    roomManager.AddListener(roomManagerCallbacks);
+}
+
+private void RoomManagerCallbacks_AnchorUploaded(bool successful, XString failureReason)
+{
+    if (successful)
+    {
+        currentState = ImportExportState.Ready;
+    }
+    else
+    {
+        Debug.Log(&amp;quot;Upload failed &amp;quot; + failureReason);
+        currentState = ImportExportState.Failed;
+    }
+}
+
+private byte[] rawAnchorData = null;
+
+private void RoomManagerCallbacks_AnchorsDownloaded(bool successful, AnchorDownloadRequest request, XString failureReason)
+{
+    // If we downloaded anchor data successfully we should import the data.
+    if (successful)
+    {
+        int datasize = request.GetDataSize();
+        Debug.Log(datasize + &amp;quot; bytes &amp;quot;);
+        rawAnchorData = new byte[datasize];
+
+        request.GetData(rawAnchorData, datasize);
+        currentState = ImportExportState.DataReady;
+    }
+    else
+    {
+        // If we failed, we can ask for the data again.
+        Debug.Log(&amp;quot;Anchor DL failed &amp;quot; + failureReason);
+        MakeAnchorDataRequest();
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SessionJoin時には、&lt;code&gt;sharingServiceReady&lt;/code&gt;をtrueにする。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;InitRoomApi()&lt;/code&gt;では&lt;code&gt;currentRoom&lt;/code&gt;にJoin(あるいは新しく作る)し、Roomを代入している。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;currentState&lt;/code&gt;は新しくRoomを作った場合&lt;code&gt;InitialAnchorRequired&lt;/code&gt;で、すでにあるRoomに入った場合&lt;code&gt;RoomApiInitialized&lt;/code&gt;になる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private bool sharingServiceReady = false;
+private Room currentRoom;
+
+private void Instance_SessionJoined(object sender, SharingSessionTracker.SessionJoinedEventArgs e)
+{
+    SharingSessionTracker.Instance.SessionJoined -= Instance_SessionJoined;
+
+    // ほかの処理が落ち着くまで5秒待って実行する
+    Invoke(&amp;quot;MarkSharingServiceReady&amp;quot;, 5);
+}
+
+private void MarkSharingServiceReady()
+{
+    sharingServiceReady = true;
+
+#if UNITY_EDITOR || UNITY_STANDALONE
+    InitRoomApi();
+#endif
+}
+
+private void InitRoomApi()
+{
+    if (roomManager.GetRoomCount() == 0)
+    {
+        if (LocalUserHasLowestUserId())
+        {
+            Debug.Log(&amp;quot;Creating room &amp;quot;);            
+            currentRoom = roomManager.CreateRoom(new XString(&amp;quot;DefaultRoom&amp;quot;), roomID, false);
+            currentState = ImportExportState.InitialAnchorRequired;
+        }
+    }
+    else
+    {
+        Debug.Log(&amp;quot;Joining room &amp;quot;);
+        currentRoom = roomManager.GetRoom(0);
+        roomManager.JoinRoom(currentRoom);
+        currentState = ImportExportState.RoomApiInitialized;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Update。ここで&lt;code&gt;currentState&lt;/code&gt;を見ている。ここまでの&lt;code&gt;currentState&lt;/code&gt;をまとめると、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;AnchorStore_Initializing: 初期状態&lt;/li&gt;
+&lt;li&gt;AnchorStore_Initialized: AnchorStore取得完了&lt;/li&gt;
+&lt;li&gt;InitialAnchorRequired: 新しくRoomを作った(のでWorldAnchorを生成する)&lt;/li&gt;
+&lt;li&gt;RoomApiInitialized: すでにあるRoomに入った&lt;/li&gt;
+&lt;li&gt;Ready: Upload完了&lt;/li&gt;
+&lt;li&gt;DataReady: Download完了&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;こんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void Update()
+{
+    switch (currentState)
+    {
+        case ImportExportState.AnchorStore_Initialized:
+            if (sharingServiceReady)
+            {
+                InitRoomApi();
+            }
+            break;
+        case ImportExportState.RoomApiInitialized:
+            StartAnchorProcess();
+            break;
+        case ImportExportState.DataReady:
+            // DataReady is set when the anchor download completes.
+            currentState = ImportExportState.Importing;
+            WorldAnchorTransferBatch.ImportAsync(rawAnchorData, ImportComplete);
+            break;
+        case ImportExportState.InitialAnchorRequired:
+            currentState = ImportExportState.CreatingInitialAnchor;
+            CreateAnchorLocally();
+            break;
+        case ImportExportState.ReadyToExportInitialAnchor:
+            // We&#39;ve created an anchor locally and it is ready to export.
+            currentState = ImportExportState.UploadingInitialAnchor;
+            Export();
+            break;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Roomを新しく作ったならWorldAnchorを作成する必要がある。
+&lt;a href=&#34;https://docs.unity3d.com/ScriptReference/VR.WSA.WorldAnchor-isLocated.html&#34;&gt;isLocated&lt;/a&gt;がtrueになったら
+&lt;code&gt;OnTrackingChanged_InitialAnchor&lt;/code&gt;にし、AnchorをUploadする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void CreateAnchorLocally()
+{
+    WorldAnchor anchor = GetComponent&amp;lt;WorldAnchor&amp;gt;();
+    if (anchor == null)
+    {
+        anchor = gameObject.AddComponent&amp;lt;WorldAnchor&amp;gt;();
+    }
+
+    if (anchor.isLocated)
+    {
+        currentState = ImportExportState.ReadyToExportInitialAnchor;
+    }
+    else
+    {
+        anchor.OnTrackingChanged += Anchor_OnTrackingChanged_InitialAnchor;
+    }
+}
+
+private void Anchor_OnTrackingChanged_InitialAnchor(WorldAnchor self, bool located)
+{
+    if (located)
+    {
+        Debug.Log(&amp;quot;Found anchor, ready to export&amp;quot;);
+        currentState = ImportExportState.ReadyToExportInitialAnchor;
+    }
+    else
+    {
+        Debug.Log(&amp;quot;Failed to locate local anchor (super bad!)&amp;quot;);
+        currentState = ImportExportState.Failed;
+    }
+
+    self.OnTrackingChanged -= Anchor_OnTrackingChanged_InitialAnchor;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;anchorStore&lt;/code&gt;に保存して、SerializeしてUploadする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void Export()
+{
+    WorldAnchor anchor = GetComponent&amp;lt;WorldAnchor&amp;gt;();
+
+    string guidString = Guid.NewGuid().ToString();
+    exportingAnchorName = guidString;
+
+    // Save the anchor to our local anchor store.
+    if (anchorStore.Save(exportingAnchorName, anchor))
+    {
+        sharedAnchorInterface = new WorldAnchorTransferBatch();
+        sharedAnchorInterface.AddWorldAnchor(guidString, anchor);
+        WorldAnchorTransferBatch.ExportAsync(sharedAnchorInterface, WriteBuffer, ExportComplete);
+    }
+    else
+    {
+        Debug.Log(&amp;quot;This anchor didn&#39;t work, trying again&amp;quot;);
+        currentState = ImportExportState.InitialAnchorRequired;
+    }
+}
+
+public void ExportComplete(SerializationCompletionReason status)
+{
+    if (status == SerializationCompletionReason.Succeeded &amp;amp;&amp;amp; exportingAnchorBytes.Count &amp;gt; minTrustworthySerializedAnchorDataSize)
+    {
+        Debug.Log(&amp;quot;Uploading anchor: &amp;quot; + exportingAnchorName);
+        roomManager.UploadAnchor(
+            currentRoom,
+            new XString(exportingAnchorName),
+            exportingAnchorBytes.ToArray(),
+            exportingAnchorBytes.Count);
+    }
+    else
+    {
+        Debug.Log(&amp;quot;This anchor didn&#39;t work, trying again&amp;quot;);
+        currentState = ImportExportState.InitialAnchorRequired;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;もしすでにあるRoomにJoinしている(&lt;code&gt;RoomApiInitialized&lt;/code&gt;)なら、Anchorをダウンロードし始め、&lt;code&gt;DataRequested&lt;/code&gt;になる。
+ダウンロードしたら&lt;code&gt;DataReady&lt;/code&gt;になって、AnchorデータをImportする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void StartAnchorProcess()
+{
+    // First, are there any anchors in this room?
+    int anchorCount = currentRoom.GetAnchorCount();
+
+    // If there are anchors, we should attach to the first one.
+    if (anchorCount &amp;gt; 0)
+    {
+        // Extract the name of the anchor.
+        XString storedAnchorString = currentRoom.GetAnchorName(0);
+        string storedAnchorName = storedAnchorString.GetString();
+
+        // Attempt to attach to the anchor in our local anchor store.
+        if (AttachToCachedAnchor(storedAnchorName) == false)
+        {
+            MakeAnchorDataRequest();
+        }
+    }
+}
+
+private void MakeAnchorDataRequest()
+{
+    if (roomManager.DownloadAnchor(currentRoom, currentRoom.GetAnchorName(0)))
+    {
+        currentState = ImportExportState.DataRequested;
+    }
+    else
+    {
+        Debug.Log(&amp;quot;Couldn&#39;t make the download request.&amp;quot;);
+        currentState = ImportExportState.Failed;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Import完了したら&lt;code&gt;anchorStore&lt;/code&gt;に保存し、&lt;code&gt;Ready&lt;/code&gt;にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void ImportComplete(SerializationCompletionReason status, WorldAnchorTransferBatch wat)
+{
+    if (status == SerializationCompletionReason.Succeeded &amp;amp;&amp;amp; wat.GetAllIds().Length &amp;gt; 0)
+    {
+        Debug.Log(&amp;quot;Import complete&amp;quot;);
+
+        string first = wat.GetAllIds()[0];
+        Debug.Log(&amp;quot;Anchor name: &amp;quot; + first);
+
+        WorldAnchor anchor = wat.LockObject(first, gameObject);
+        anchorStore.Save(first, anchor);
+        currentState = ImportExportState.Ready;
+    }
+    else
+    {
+        Debug.Log(&amp;quot;Import fail&amp;quot;);
+        currentState = ImportExportState.DataReady;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;remoteheadmanager-https-github-com-microsoft-holotoolkit-unity-blob-v1-5-5-0-assets-holotoolkit-sharing-tests-remoteheadmanager-cs&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/v1.5.5.0/Assets/HoloToolkit/Sharing/Tests/RemoteHeadManager.cs&#34;&gt;RemoteHeadManager&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;他のユーザーの頭の位置にオブジェクトを表示させる。&lt;/p&gt;
+
+&lt;p&gt;受信時のhandlerを設定し、eventをsubscribeする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;void Start()
+{
+    CustomMessages.Instance.MessageHandlers[CustomMessages.TestMessageID.HeadTransform] = this.UpdateHeadTransform;
+
+    SharingSessionTracker.Instance.SessionJoined += Instance_SessionJoined;
+    SharingSessionTracker.Instance.SessionLeft += Instance_SessionLeft;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;joinしたのが自分自身じゃないかチェック。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void Instance_SessionJoined(object sender, SharingSessionTracker.SessionJoinedEventArgs e)
+{
+    if (e.joiningUser.GetID() != SharingStage.Instance.Manager.GetLocalUser().GetID())
+    {
+        GetRemoteHeadInfo(e.joiningUser.GetID());
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;remoteHeads&lt;/code&gt;になければ、HeadObjectを作成し、追加する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public RemoteHeadInfo GetRemoteHeadInfo(long userID)
+{
+    RemoteHeadInfo headInfo;
+
+    // Get the head info if its already in the list, otherwise add it
+    if (!this.remoteHeads.TryGetValue(userID, out headInfo))
+    {
+        headInfo = new RemoteHeadInfo();
+        headInfo.UserID = userID;
+        headInfo.HeadObject = CreateRemoteHead();
+
+        this.remoteHeads.Add(userID, headInfo);
+    }
+
+    return headInfo;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Sessionから離れたときはオブジェクトを削除し、remoteHeadsから取り除く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;private void Instance_SessionLeft(object sender, SharingSessionTracker.SessionLeftEventArgs e)
+{
+    if (e.exitingUserId != SharingStage.Instance.Manager.GetLocalUser().GetID())
+    {
+        RemoveRemoteHead(this.remoteHeads[e.exitingUserId].HeadObject);
+        this.remoteHeads.Remove(e.exitingUserId);
+    }
+}
+
+void RemoveRemoteHead(GameObject remoteHeadObject)
+{
+    DestroyImmediate(remoteHeadObject);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;受信時のhandlerではMessageからpositionとquarternionを取得し、オブジェクトの位置を動かしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;void UpdateHeadTransform(NetworkInMessage msg)
+{
+    // Parse the message
+    long userID = msg.ReadInt64();
+
+    Vector3 headPos = CustomMessages.Instance.ReadVector3(msg);
+
+    Quaternion headRot = CustomMessages.Instance.ReadQuaternion(msg);
+
+    RemoteHeadInfo headInfo = GetRemoteHeadInfo(userID);
+    headInfo.HeadObject.transform.localPosition = headPos;
+    headInfo.HeadObject.transform.localRotation = headRot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;自分の頭の位置はUpdate()で送信している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;void Update()
+{
+    // Grab the current head transform and broadcast it to all the other users in the session
+    Transform headTransform = Camera.main.transform;
+
+    // Transform the head position and rotation from world space into local space
+    Vector3 headPosition = this.transform.InverseTransformPoint(headTransform.position);
+    Quaternion headRotation = Quaternion.Inverse(this.transform.rotation) * headTransform.rotation;
+
+    CustomMessages.Instance.SendHeadTransform(headPosition, headRotation);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ライセンス&#34;&gt;ライセンス&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;MIT License
+
+Copyright (c) 2016 Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the &amp;quot;Software&amp;quot;), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &amp;quot;AS IS&amp;quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>HoloLensでGaze, Click, Hold, Voiceイベントを拾う</title>
+          <link>http://sambaiz.net/article/57/</link>
+          <pubDate>Sun, 05 Feb 2017 20:01:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/57/</guid>
+          <description>
+
+&lt;p&gt;こんなの。SparitalMappingを有効にしているので球が床で止まっている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/57.png&#34; alt=&#34;こんなの&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://youtu.be/wQLn_SO9Ics&#34;&gt;動画&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity&#34;&gt;HoloToolKit&lt;/a&gt;
+のインタフェースを実装することでイベントを拾えるようになっている。&lt;/p&gt;
+
+&lt;h2 id=&#34;ifocusable&#34;&gt;IFocusable&lt;/h2&gt;
+
+&lt;p&gt;Gazeしたとき。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void OnFocusEnter（）
+{
+    gazing = true;
+}
+
+public void OnFocusExit()
+{
+    gazing = false;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;iinputclickhandler&#34;&gt;IInputClickHandler&lt;/h2&gt;
+
+&lt;p&gt;クリックしたとき。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void OnInputClicked(InputEventData eventData)
+{
+    if (!clicked)
+    {
+        clicked = true;
+        clickedRotationFrame = 0;
+    }
+    countUp();
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;iholdhandler&#34;&gt;IHoldHandler&lt;/h2&gt;
+
+&lt;p&gt;Hold(指を下げたまま維持する)したとき。
+指を上げたときがCompletedで、Objectを外れたときCanceledになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void OnHoldStarted(HoldEventData eventData)
+{
+    holding = true;
+    clicked = true;
+}
+
+public void OnHoldCompleted(HoldEventData eventData)
+{
+    holding = false;
+}
+
+public void OnHoldCanceled(HoldEventData eventData)
+{
+    holding = false;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ispeechhandler&#34;&gt;ISpeechHandler&lt;/h2&gt;
+
+&lt;p&gt;声の入力。
+InspectorからSpeech Input Source(Script)を追加して反応するキーワードを設定して使う。
+MicrophoneのCapabilitiesが必要。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void OnSpeechKeywordRecognized(SpeechKeywordRecognizedEventData eventData)
+{
+    switch (eventData.RecognizedText)
+    {
+        case &amp;quot;reset&amp;quot;:
+            count = 0;
+            num.GetComponent&amp;lt;TextMesh&amp;gt;().text = count.ToString();
+            break;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;全体。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;using System;
+using HoloToolkit.Unity.InputModule;
+using UnityEngine;
+
+public class CounterCube : MonoBehaviour, IFocusable, IInputClickHandler, IHoldHandler, ISpeechHandler
+{
+    // rotate ANIMATION_FRAME * ANIMATION_PER_FRAME degrees
+    private const int ANIMATION_FRAME = 30;
+    private const float ANIMATION_ROTATE_PER_FRAME = 60f / ANIMATION_FRAME;
+
+    public GameObject cube;
+    public GameObject num;
+
+    private int count = 0;
+
+    private bool gazing = false;
+    private bool clicked = false;
+    private int clickedRotationFrame = 0;
+    private bool holding = false;
+	
+	// Update is called once per frame
+	void Update ()
+    {
+        if(clicked)
+        {
+            if(clickedRotationFrame &amp;lt; ANIMATION_FRAME)
+            {
+                clickedRotationFrame++;
+                cube.transform.localRotation = Quaternion.Euler(clickedRotationFrame * ANIMATION_ROTATE_PER_FRAME, clickedRotationFrame * ANIMATION_ROTATE_PER_FRAME, 0);
+            }
+            else if (holding)
+            {
+                // continue to count up
+                clickedRotationFrame = 0;
+                countUp();
+            }
+            else
+            {
+                clicked = false;
+            }
+
+        }
+
+        if (holding)
+        {
+            cube.GetComponent&amp;lt;Renderer&amp;gt;().material.color = Color.green;
+        }
+        else if (gazing)
+        {
+            cube.GetComponent&amp;lt;Renderer&amp;gt;().material.color = Color.blue;
+        }
+        else
+        {
+            cube.GetComponent&amp;lt;Renderer&amp;gt;().material.color = Color.gray;
+        }
+    }
+
+    public void OnFocusEnter()
+    {
+        gazing = true;
+    }
+
+    public void OnFocusExit()
+    {
+        gazing = false;
+    }
+
+    public void OnInputClicked(InputEventData eventData)
+    {
+        if (!clicked)
+        {
+            clicked = true;
+            clickedRotationFrame = 0;
+        }
+        countUp();
+    }
+
+    public void OnHoldStarted(HoldEventData eventData)
+    {
+        holding = true;
+        clicked = true;
+    }
+
+    public void OnHoldCompleted(HoldEventData eventData)
+    {
+        holding = false;
+    }
+
+    public void OnHoldCanceled(HoldEventData eventData)
+    {
+        holding = false;
+    }
+
+    private void countUp()
+    {
+        num.GetComponent&amp;lt;TextMesh&amp;gt;().text = (++count).ToString();
+        var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sphere.transform.position = transform.position;
+        sphere.transform.localScale = Vector3.one * 0.1f;
+        sphere.AddComponent&amp;lt;Rigidbody&amp;gt;();
+    }
+
+    public void OnSpeechKeywordRecognized(SpeechKeywordRecognizedEventData eventData)
+    {
+        switch (eventData.RecognizedText)
+        {
+            case &amp;quot;reset&amp;quot;:
+                count = 0;
+                num.GetComponent&amp;lt;TextMesh&amp;gt;().text = count.ToString();
+                break;
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>HoloLensの開発を始める</title>
+          <link>http://sambaiz.net/article/56/</link>
+          <pubDate>Sat, 04 Feb 2017 21:28:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/56/</guid>
+          <description>
+
+&lt;h2 id=&#34;hololensでのアプリケーション&#34;&gt;HoloLensでのアプリケーション&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/app_model&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/app_model&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ある点を見るGazeと指で選択するGesture、声で入力するVoiceで操作する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/hololens_shell_overview&#34;&gt;HoloLens shell&lt;/a&gt;
+では壁などにタイルを配置することでアプリケーションが起動する。&lt;/p&gt;
+
+&lt;p&gt;一度に動くアプリケーションは一つ。
+他にアクティブなアプリケーションがあれば中断され、タイルは最後の状態のスクリーンショットになる。
+タイルを削除するとプロセスが終了する。&lt;/p&gt;
+
+&lt;p&gt;Viewには空間全体を使うHolographic Viewと、通常のウィンドウのような2D Viewがある。&lt;/p&gt;
+
+&lt;h2 id=&#34;開発を始める&#34;&gt;開発を始める&lt;/h2&gt;
+
+&lt;p&gt;Unityを使ってHolographic Viewのアプリケーションを開発する。&lt;/p&gt;
+
+&lt;p&gt;必要なツールをインストールする。エミュレーターは空きメモリが2GB以上ないと立ち上がらない。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/install_the_tools&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/install_the_tools&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;チュートリアル&#34;&gt;チュートリアル&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/holograms_100&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/holograms_100&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;QualityのところでWindows Storeのマークがなかったら、
+UnityのFile-&amp;gt;Build SettingsからWindows Storeモジュールをダウンロードする。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/holograms_101e&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/holograms_101e&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;エミュレーターはWASDキーで移動してカーソルキーで向きを変え、エンターキーで選択できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/56-hololens.PNG&#34; alt=&#34;エミュレーターで実行した画面&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;エミュレーターで動かしてみる&#34;&gt;エミュレーターで動かしてみる&lt;/h2&gt;
+
+&lt;p&gt;UnityProjectを作成してHolograms 100のように設定していく。&lt;/p&gt;
+
+&lt;p&gt;まずはCamera。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Position: (0,0,0)&lt;/li&gt;
+&lt;li&gt;Clear Flags: Solid Color&lt;/li&gt;
+&lt;li&gt;Background: (0,0,0,0)&lt;/li&gt;
+&lt;li&gt;Clipping Planes Near: 0.85&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;とりあえず動くことを確認するため適当なオブジェクトを置いてビルドしてみる。&lt;/p&gt;
+
+&lt;p&gt;Edit-&amp;gt;Project Settings-&amp;gt;QualityでWindows StoreをFastestにする。&lt;/p&gt;
+
+&lt;p&gt;Build Settings-&amp;gt;Windows Storeで&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;SDK: Universal: 10&lt;/li&gt;
+&lt;li&gt;Target device: HoloLens&lt;/li&gt;
+&lt;li&gt;UWP Build Type: D3D&lt;/li&gt;
+&lt;li&gt;Unity C# Projectにチェック&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;にする。&lt;/p&gt;
+
+&lt;p&gt;BuildSettingsにあるPlayer Settingsボタンを押して
+Other SettingsのVirtual Reality Supportedにチェックを入れ、
+SDKsにWindows Holographicが出るのを確認する。&lt;/p&gt;
+
+&lt;p&gt;あとはBuild SettingsでAdd Open ScenesしてBuild。適当なディレクトリを作って選ぶとUWPのVSプロジェクトができるので
+上のところでRelease,x86,HoloLens Emulatrorにしてデバッグメニューからデバッグなしで開始する。
+エミュレーターが立ち上がって置いたオブジェクトが見えたらうまくいっている。&lt;/p&gt;
+
+&lt;h3 id=&#34;uwp-ユニバーサル-windows-プラットフォーム-とは-https-docs-microsoft-com-ja-jp-windows-uwp-get-started-universal-application-platform-guide&#34;&gt;&lt;a href=&#34;https://docs.microsoft.com/ja-jp/windows/uwp/get-started/universal-application-platform-guide&#34;&gt;UWP(ユニバーサル Windows プラットフォーム)とは&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;Windows 8でWindowsランタイム(WinRT)として導入された、
+PCだけではなく、タブレット、Xbox、HoloLensなど、様々なWindowsデバイス共通のアプリプラットフォーム。&lt;/p&gt;
+
+&lt;p&gt;PCではデスクトップデバイスファミリ、タブレットではモバイルデバイスファミリといったような、デバイスファミリに基づいたOSが実行される。
+UWPアプリでは、共通のWinRT APIだけではなく各デバイスファミリ固有のAPIも呼び出すこともでき、
+アプリのターゲットとするデバイスファミリを選択することができる。&lt;/p&gt;
+
+&lt;h2 id=&#34;holotoolkitを使う&#34;&gt;HoloToolKitを使う&lt;/h2&gt;
+
+&lt;p&gt;実装やビルドを楽にするやつ。上のような初期設定はやらなくていい。&lt;/p&gt;
+
+&lt;h3 id=&#34;準備&#34;&gt;準備&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/master/GettingStarted.md&#34;&gt;https://github.com/Microsoft/HoloToolkit-Unity/blob/master/GettingStarted.md&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/releases&#34;&gt;ここ&lt;/a&gt;からunitypackageをダウンロードして
+UnityのAssetsメニューからインポートする。&lt;/p&gt;
+
+&lt;p&gt;HoloToolKitメニューができるのでConfigureする。&lt;/p&gt;
+
+&lt;p&gt;Main CameraとDirectional Lightを消して
+&lt;code&gt;HoloToolkit/Input/Prefabs/HoloLensCamera.prefab&lt;/code&gt;と、
+&lt;code&gt;HoloToolkit/Input/Prefabs/Cursor/DefaultCursor.prefab&lt;/code&gt;を置く。&lt;/p&gt;
+
+&lt;p&gt;Create Emptyして&amp;rdquo;Managers&amp;rdquo;にリネームし、この中に
+&lt;code&gt;HoloToolkit/Input/Prefabs/InputManager.prefab&lt;/code&gt;を入れる。&lt;/p&gt;
+
+&lt;p&gt;Managersの中にUI -&amp;gt; EventSystemを作成する。&lt;/p&gt;
+
+&lt;p&gt;SparitalMappingする場合は、
+&lt;code&gt;HoloToolkit/SpartialMapping/Prefabs/SpartialMapping.prefab&lt;/code&gt;をMangersに入れて
+Editor -&amp;gt;　Project Settings -&amp;gt;　PlayerのPublishing Settingsから
+SpartialPerceptionにチェックを入れる。&lt;/p&gt;
+
+&lt;p&gt;HoloToolkitメニューからBuild Window -&amp;gt; Build Visual Studio SLNで
+ビルドし、Open SLNでVisual Studioが立ち上がる。
+ビルドの際にクラッシュしたらWindows Storeモジュールが入っているか確認する。&lt;/p&gt;
+
+&lt;h2 id=&#34;実機での実行&#34;&gt;実機での実行&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/Using_Visual_Studio.html#deploying_an_app_over_wi-fi&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/Using_Visual_Studio.html#deploying_an_app_over_wi-fi&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Visual StudioでDeviceをHoloLens EmulatorからRemote Deviceに変更する。
+HoloLensのIPアドレスはSettings -&amp;gt; Network &amp;amp; Internet -&amp;gt; Advanced Optionで確認して、
+認証モードはユニバーサルにしてデバッグなしで開始する。&lt;/p&gt;
+
+&lt;p&gt;PINコードを要求されるので、Settings -&amp;gt;Update &amp;amp; Security -&amp;gt; For developersから
+Developer modeをonにし、その下のPaired devicesで表示されるPINコードを入力する。&lt;/p&gt;
+
+&lt;h2 id=&#34;スクリーンショットの撮り方&#34;&gt;スクリーンショットの撮り方&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/using_mixed_reality_capture&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/using_mixed_reality_capture&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;カメラで撮れる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/56-hololens2.jpg&#34; alt=&#34;実機で実行した画面&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;windows-device-portal&#34;&gt;Windows Device Portal&lt;/h2&gt;
+
+&lt;p&gt;PCのブラウザからいろいろできるツール。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/Using_the_Windows_Device_Portal.html#mixed_reality_capture&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/Using_the_Windows_Device_Portal.html#mixed_reality_capture&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Settings -&amp;gt;Update &amp;amp; Security -&amp;gt; For developersからDevice Portalをonにすると
+&lt;a href=&#34;https://HoloLensのIPアドレス&#34;&gt;https://HoloLensのIPアドレス&lt;/a&gt;
+でアクセスできる。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

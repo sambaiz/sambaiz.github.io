@@ -1,0 +1,1228 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/fluentd/index.xml</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
+
+    
+      
+        <item>
+          <title>FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ</title>
+          <link>http://sambaiz.net/article/84/</link>
+          <pubDate>Wed, 15 Mar 2017 23:00:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/84/</guid>
+          <description>
+
+&lt;h2 id=&#34;kpl-kinesis-producer-library-とは&#34;&gt;KPL(Kinesis Producer Library)とは&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/streams/latest/dev/developing-producers-with-kpl.html&#34;&gt;Developing Amazon Kinesis Streams Producers Using the Amazon Kinesis Producer Library - Amazon Kinesis Streams&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Kinesisに送るとき、自動リトライしてくれたり、レコードをまとめてスループットを向上してくれたりするアプリケーション。Protobufを使っている。
+普通に送るとどんなに小さくてもシャード*1000レコード/秒しか最大でPUTできないのを、KPLを使ってまとめることで増やすことができる。&lt;/p&gt;
+
+&lt;h2 id=&#34;fluentdで送る&#34;&gt;fluentdで送る&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;で&lt;code&gt;kinesis_producer&lt;/code&gt;を指定するとKPLを使って送信する。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;&amp;lt;kinesis_producer&amp;gt;&lt;/code&gt;の中にKPLの設定を書くことができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;kinesis_producer&amp;gt;
+    record_max_buffered_time 10
+&amp;lt;/kinesis_producer&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L239&#34;&gt;record_max_bufferd_time&lt;/a&gt;
+はバッファされたレコードが送られるまでの最大時間(ms)。デフォルトは100ms。この時間が経つか、他のリミットに当たったらレコードは送られる。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L30&#34;&gt;AggregationMaxCount&lt;/a&gt;: 一つのレコードにまとめる最大レコード数&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L44&#34;&gt;AggregationMaxSize&lt;/a&gt;: まとめたレコードの最大バイト数&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L54&#34;&gt;CollectionMaxCount&lt;/a&gt;: PutRecordsで送る最大アイテム数&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L67&#34;&gt;CollectionMaxSize&lt;/a&gt;: PutRecordsで送るデータ量&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;CloudWatchに送る&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L158&#34;&gt;metrics_level&lt;/a&gt;はデフォルトでdetailedになっていて、
+コンソールのメトリクスからstream名で検索すると
+&lt;code&gt;KinesisProducerLibrary&lt;/code&gt;に&lt;code&gt;UserRecordsPerKinesisRecord&lt;/code&gt;や、&lt;code&gt;UserRecordsDataPut&lt;/code&gt;、&lt;code&gt;BufferingTime&lt;/code&gt;、&lt;code&gt;RequestTime&lt;/code&gt;などいろいろ表示される。&lt;/p&gt;
+
+&lt;p&gt;とりあえず試しにこんな設定で送ってみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;match hoge.log&amp;gt;
+  @type kinesis_producer
+  region ap-northeast-1
+  stream_name teststream
+  include_time_key true
+
+  flush_interval 1
+  buffer_chunk_limit 1m
+  try_flush_interval 0.1
+  queued_chunk_flush_interval 0.01
+  num_threads 15
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;lambdaで読む&#34;&gt;Lambdaで読む&lt;/h2&gt;
+
+&lt;p&gt;まとめられたレコードを&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation&#34;&gt;kinesis-aggregation&lt;/a&gt;で分解して読む。
+今回は&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation/tree/master/node&#34;&gt;Node.js&lt;/a&gt;でやる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install --save aws-kinesis-agg
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;注意する必要があるのは&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation/issues/16&#34;&gt;ドキュメントの情報が古く&lt;/a&gt;て、
+関数の引数が足りないこと。第二引数のcomputeChecksumsが抜けているので気付かないと一つずつずれていくことになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;;
+
+const agg = require(&#39;aws-kinesis-agg&#39;);
+
+exports.handler = (event, context, callback) =&amp;gt; {
+    Promise.all(
+        event.Records.map(
+            (record) =&amp;gt; deaggregate(record)
+        )
+    ).then(
+        (records) =&amp;gt; {
+            // LambdaのNode.jsはまだ4.3なのでSpread operatorが使えない・・・
+            // const message = `${[].concat(...records).length} came in`; 
+            let sumCount = 0;
+            records.forEach((r) =&amp;gt; sumCount += r.length);
+            const message = `${records.length} aggregated records and ${sumCount} records come in`; 
+            console.log(message);
+            callback(null, message);
+        },
+        (err) =&amp;gt; callback(err)
+    );
+};
+
+function deaggregate(record){
+    return new Promise((resolve, reject) =&amp;gt; {
+        agg.deaggregateSync(record.kinesis, true, (err, userRecords) =&amp;gt; {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(userRecords);
+            }
+        });
+    });
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;175レコードが10レコードにまとめられた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;10 aggregated records and 175 records come in
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/high-throughput-messaging-system-with-kinesis-kpl-fluentd-lambda/&#34;&gt;Kinesis Producer Library(KPL)とfluentdとLambdaを連携してKinesisのスループットを上げる ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する</title>
+          <link>http://sambaiz.net/article/73/</link>
+          <pubDate>Sun, 26 Feb 2017 18:56:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/73/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;でKinesis Streamsに送り、Lambdaで読んでS3に保存する。
+要するにFirehoseのようなことをやりたいのだけれどTokyoリージョンにまだ来ないので自分でやる。&lt;/p&gt;
+
+&lt;h2 id=&#34;fluentdで送る&#34;&gt;fluentdで送る&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ td-agent-gem install fluent-plugin-kinesis
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;try_flush_interval&lt;/code&gt;と&lt;code&gt;queued_chunk_flush_interval&lt;/code&gt;はドキュメントには載っていないが、
+以下のページによるとそれぞれqueueに次のchunkがないときとあるときのflushする間隔。
+いずれもデフォルトは1だが、これを減らすことでもっと頻繁に吐き出されるようになるらしい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sonots/fluentd-scr/blob/master/02_out_forward_buffered.md&#34;&gt;Fluentd の out_forward と BufferedOutput&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;あとシャードに振り分けるための&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis#partition_key&#34;&gt;partition_key&lt;/a&gt;
+を指定できる。デフォルトはランダム。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type tail
+  path /var/log/td-agent/hoge.log
+  pos_file /etc/td-agent/log.pos
+  tag hoge.log
+  format json
+
+  time_key timestamp
+  # 2017-01-01T01:01:01+0900
+  time_format %Y-%m-%dT%H:%M:%S%z
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match hoge.log&amp;gt;
+  @type kinesis_streams
+  region ap-northeast-1
+  stream_name teststream
+  include_time_key true
+
+  flush_interval 1
+  buffer_chunk_limit 1m
+  try_flush_interval 0.1
+  queued_chunk_flush_interval 0.01
+  num_threads 15
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;いくつか送ってみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;for i in `seq 1 1000`
+do
+  echo &#39;{&amp;quot;hoge&amp;quot;: &amp;quot;fuga&amp;quot;, &amp;quot;timestamp&amp;quot;: &amp;quot;2017-01-01T01:01:01+0900&amp;quot;}&#39; &amp;gt;&amp;gt; /var/log/td-agent/hoge.log
+done
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;kinesisのシャードが足りないと詰まってしまうので注意。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/84/&#34;&gt;FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;lambdaで読む&#34;&gt;Lambdaで読む&lt;/h2&gt;
+
+&lt;p&gt;Lambdaのトリガーの設定でKinesisを選ぶと、バッチサイズや開始位置を設定できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/73-lambda-kinesis.png&#34; alt=&#34;トリガーの設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;コードはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;;
+
+const zlib = require(&#39;zlib&#39;);
+const aws = require(&#39;aws-sdk&#39;);
+const s3 = new aws.S3({ apiVersion: &#39;2006-03-01&#39; });
+const BUCKET_NAME = process.env.BUCKET_NAME; // 環境変数で設定する
+
+exports.handler = (event, context, callback) =&amp;gt; {
+
+    const data = event.Records.map((record) =&amp;gt; new Buffer(record.kinesis.data, &#39;base64&#39;).toString()).join(&amp;quot;\n&amp;quot;);
+    const key = new Date().toISOString();
+    
+    putS3(key, data, true).then(
+        (data) =&amp;gt; callback(null, `Successfully processed ${event.Records.length} records.`),
+        (err) =&amp;gt; callback(err, null)
+    );
+};
+
+function putS3(key, data, gzip){    
+    return new Promise((resolve, reject) =&amp;gt; {
+        
+        const params = {
+            Bucket: BUCKET_NAME,
+            Key: key
+        };
+
+        if(gzip){
+            params.Body = zlib.gzipSync(data);
+            params.ContentEncoding = &amp;quot;gzip&amp;quot;;
+        }else{
+            params.Body = data;
+        }
+        
+        s3.putObject(params, (err, data) =&amp;gt; {
+            if (err) reject(err);
+            else resolve(data);
+        });
+    });
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;トリガーを有効にするとイベントが発火してS3に保存されるようになった。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する</title>
+          <link>http://sambaiz.net/article/66/</link>
+          <pubDate>Sun, 19 Feb 2017 23:55:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/66/</guid>
+          <description>
+
+&lt;h2 id=&#34;fluentdのmonitor-agent-http-docs-fluentd-org-v0-12-articles-monitoring&#34;&gt;&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/monitoring&#34;&gt;fluentdのmonitor_agent&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;メトリクスをjsonで返すAPIを提供する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type monitor_agent
+  bind 0.0.0.0
+  port 24220
+&amp;lt;/source&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl localhost:24220/api/plugins.json | jq
+{
+  &amp;quot;plugins&amp;quot;: [
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590d8c250&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;input&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;forward&amp;quot;,
+      &amp;quot;config&amp;quot;: {
+        &amp;quot;@type&amp;quot;: &amp;quot;forward&amp;quot;,
+        &amp;quot;port&amp;quot;: &amp;quot;24222&amp;quot;,
+        &amp;quot;bind&amp;quot;: &amp;quot;0.0.0.0&amp;quot;
+      },
+      &amp;quot;output_plugin&amp;quot;: false,
+      &amp;quot;retry_count&amp;quot;: null
+    },
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590d894c4&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;input&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;monitor_agent&amp;quot;,
+      &amp;quot;config&amp;quot;: {
+        &amp;quot;@type&amp;quot;: &amp;quot;monitor_agent&amp;quot;,
+        &amp;quot;bind&amp;quot;: &amp;quot;0.0.0.0&amp;quot;,
+        &amp;quot;port&amp;quot;: &amp;quot;24220&amp;quot;
+      },
+      &amp;quot;output_plugin&amp;quot;: false,
+      &amp;quot;retry_count&amp;quot;: null
+    },
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590dc1f2c&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;,
+      &amp;quot;config&amp;quot;: {
+        &amp;quot;@type&amp;quot;: &amp;quot;file&amp;quot;,
+        &amp;quot;path&amp;quot;: &amp;quot;/var/log/td-agent/hoge.log&amp;quot;,
+        &amp;quot;buffer_path&amp;quot;: &amp;quot;/var/log/td-agent/hoge.log.*&amp;quot;
+      },
+      &amp;quot;output_plugin&amp;quot;: true,
+      &amp;quot;buffer_queue_length&amp;quot;: 0,
+      &amp;quot;buffer_total_queued_size&amp;quot;: 0,
+      &amp;quot;retry_count&amp;quot;: 0
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをもとにStackdriverで異常を検知できるようにする。&lt;/p&gt;
+
+&lt;h2 id=&#34;google-stackdriver-https-cloud-google-com-stackdriver&#34;&gt;&lt;a href=&#34;https://cloud.google.com/stackdriver/&#34;&gt;Google Stackdriver&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;GoogleがStackdriverを買収して改造したもの。GCPだけではなくAWSのリソースも監視できる。
+まだBeta。&lt;/p&gt;
+
+&lt;h2 id=&#34;ec2インスタンスを監視する-https-cloud-google-com-monitoring-quickstart-aws-configure-sd-acct&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/quickstart-aws#configure-sd-acct&#34;&gt;EC2インスタンスを監視する&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;GCPのメニューのSTACKDRIVER -&amp;gt; モニタリングで、プロジェクトを指定してStackdriverアカウントを作成する。&lt;/p&gt;
+
+&lt;p&gt;今回はEC2で動いているfluentdを監視するので指示に従ってクロスアカウントアクセスのロールを作成、
+Role ARNを入力してAWSアカウントと接続すると、
+StackdriverのResouces-&amp;gt;InstancesでCPUの使用率などは確認できるが、
+EC2にAgentを入れると詳細な情報を取得できる。&lt;/p&gt;
+
+&lt;p&gt;GCPのメニューのサービスアカウントから接続したAWSアカウントを選択し、
+Project-&amp;gt;編集者とLogging-&amp;gt;ログ書き込みロールのサービスアカウントを作成する。
+新しい秘密鍵の提供にチェックを入れて、JSONのキーをダウンロードする。
+これをEC2の&lt;code&gt;/etc/google/auth/application_default_credentials.json&lt;/code&gt;に置いて
+&lt;code&gt;chown root:root&lt;/code&gt;、&lt;code&gt;chmod 400&lt;/code&gt;する。&lt;/p&gt;
+
+&lt;p&gt;Monitoring AgentとLogging Agentをインストールし、
+&lt;code&gt;stackdriver-collectd&lt;/code&gt;と&lt;code&gt;google-fluentd&lt;/code&gt;のプロセスがあれば正常。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;curl -O https://repo.stackdriver.com/stack-install.sh
+sudo bash stack-install.sh --write-gcm
+
+curl -sSO https://dl.google.com/cloudagents/install-logging-agent.sh
+sudo bash install-logging-agent.sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;メモリの使用量やTCPコネクション数などがとれていることを確認する。
+Googleのドキュメントには見つからなかったけど、
+旧Stackdriverと同様、&lt;code&gt;stackdriver_monitor: false&lt;/code&gt;のタグを付けると
+&lt;a href=&#34;https://support.stackdriver.com/customer/portal/articles/1491785-collecting-data-from-specific-resources-only&#34;&gt;監視対象から外れる&lt;/a&gt;
+っぽい。&lt;/p&gt;
+
+&lt;h2 id=&#34;カスタムメトリクスを送る-https-cloud-google-com-monitoring-custom-metrics&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/&#34;&gt;カスタムメトリクスを送る&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;MetricDescriptorを作成し、これにTimeSeriesデータを書き込んでいく。&lt;/p&gt;
+
+&lt;h3 id=&#34;metricdescriptorの作成-https-cloud-google-com-monitoring-custom-metrics-creating-metrics-monitoring-create-metric-protocol&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-create-metric-protocol&#34;&gt;MetricDescriptorの作成&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors&#34;&gt;MetricDescriptor&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;typeは&lt;code&gt;custom.googleapis.com/&lt;/code&gt;
+から&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#custom_metric_names&#34;&gt;始める&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors#MetricKind&#34;&gt;metricKind&lt;/a&gt;
+にはGAUGEのほかに変化量をとるDELTA、累積するCUMULATIVEを指定できる。&lt;/p&gt;
+
+&lt;p&gt;labelはフィルタリングのためのもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;name&amp;quot;: &amp;quot;&amp;quot;,
+  &amp;quot;description&amp;quot;: &amp;quot;fluentd buffer_queue_length&amp;quot;,
+  &amp;quot;displayName&amp;quot;: &amp;quot;fluentd-buffer_queue_length&amp;quot;,
+  &amp;quot;type&amp;quot;: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
+  &amp;quot;metricKind&amp;quot;: &amp;quot;GAUGE&amp;quot;,
+  &amp;quot;valueType&amp;quot;: &amp;quot;INT64&amp;quot;,
+  &amp;quot;labels&amp;quot;: [
+    {
+      &amp;quot;key&amp;quot;: &amp;quot;plugin_type&amp;quot;,
+      &amp;quot;valueType&amp;quot;: &amp;quot;STRING&amp;quot;,
+      &amp;quot;description&amp;quot;: &amp;quot;The type of the plugin&amp;quot;
+    },
+  ],
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをGoで登録する。&lt;/p&gt;
+
+&lt;p&gt;gcpのほうのprojectでProject-&amp;gt;編集者のサービスアカウントを作成してパスを
+環境変数&lt;code&gt;GOOGLE_APPLICATION_CREDENTIALS&lt;/code&gt;に入れて
+&lt;a href=&#34;https://developers.google.com/identity/protocols/application-default-credentials&#34;&gt;Default Credential&lt;/a&gt;
+にする。&lt;/p&gt;
+
+&lt;p&gt;必要なパッケージをgo get。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get google.golang.org/api/monitoring/v3
+$ go get golang.org/x/oauth2/google
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;func main() {
+	ctx := context.Background()
+	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
+	if err != nil {
+		panic(err)
+	}
+	client, err := monitoring.New(httpClient)
+	if err != nil {
+		panic(err)
+	}
+
+	var (
+		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
+		name = &amp;quot;projects/*****&amp;quot;
+
+		requestBody = &amp;amp;monitoring.MetricDescriptor{
+			Description: &amp;quot;fluentd buffer_queue_length&amp;quot;,
+			DisplayName: &amp;quot;fluentd-buffer_queue_length&amp;quot;,
+			Type:        &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
+			MetricKind:  &amp;quot;GAUGE&amp;quot;,
+			ValueType:   &amp;quot;INT64&amp;quot;,
+			Labels: []*monitoring.LabelDescriptor{
+				&amp;amp;monitoring.LabelDescriptor{
+					Key:         &amp;quot;plugin_type&amp;quot;,
+					ValueType:   &amp;quot;STRING&amp;quot;,
+					Description: &amp;quot;The type of the plugin&amp;quot;,
+				},
+			},
+		}
+	)
+
+	response, err := client.Projects.MetricDescriptors.Create(name, requestBody).Context(ctx).Do()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(&amp;quot;done&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;登録されたことをlistで確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;response, err := client.Projects.MetricDescriptors.List(name).Context(ctx).Do()
+if err != nil {
+  panic(err)
+}
+
+for _, v := range response.MetricDescriptors {
+  fmt.Println(v.DisplayName)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;API Request Count
+Agent Memory Usage
+Stream Space Used
+...
+fluentd-buffer_queue_length
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;timeseriesの書き込み-https-cloud-google-com-monitoring-custom-metrics-creating-metrics-monitoring-write-timeseries-protocol&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-write-timeseries-protocol&#34;&gt;TimeSeriesの書き込み&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TimeSeries&#34;&gt;TimeSeries&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;metricのtypeはMetricDescriptorのtypeと対応する。
+pointsのendTimeはRFC3339のUTC文字列で渡す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+ &amp;quot;timeSeries&amp;quot;: [
+  {
+   &amp;quot;metric&amp;quot;: {
+    &amp;quot;type&amp;quot;: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
+    &amp;quot;labels&amp;quot;: {
+     &amp;quot;plugin_type&amp;quot;: &amp;quot;file&amp;quot;
+    }
+   },
+   &amp;quot;resource&amp;quot;: {
+    &amp;quot;type&amp;quot;: &amp;quot;aws_ec2_instance&amp;quot;,
+    &amp;quot;labels&amp;quot;: {
+     &amp;quot;project_id&amp;quot;: &amp;quot;*****&amp;quot;,
+     &amp;quot;instance_id&amp;quot;: &amp;quot;*****&amp;quot;,
+     &amp;quot;region&amp;quot;: &amp;quot;aws:ap-northeast-1&amp;quot;,
+     &amp;quot;aws_account&amp;quot;: &amp;quot;*****&amp;quot;
+    }
+   },
+   &amp;quot;points&amp;quot;: [
+    {
+     &amp;quot;interval&amp;quot;: {
+      &amp;quot;endTime&amp;quot;: &amp;quot;2016-06-01T10:00:00-04:00&amp;quot;
+     },
+     &amp;quot;value&amp;quot;: {
+      &amp;quot;int64Value&amp;quot;: 0
+     }
+    }
+   ]
+  }
+ ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;resourceのtypeは
+&lt;a href=&#34;https://cloud.google.com/logging/docs/reference/v2/rest/v2/monitoredResourceDescriptors/list#MonitoredResourceDescriptor&#34;&gt;MonitoredResourceDescriptor&lt;/a&gt;
+と対応していて、
+&lt;a href=&#34;https://cloud.google.com/logging/docs/reference/v2/rest/v2/monitoredResourceDescriptors/list&#34;&gt;list&lt;/a&gt;で確認できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+ &amp;quot;resourceDescriptors&amp;quot;: [
+   {
+   &amp;quot;type&amp;quot;: &amp;quot;aws_ec2_instance&amp;quot;,
+   &amp;quot;displayName&amp;quot;: &amp;quot;Amazon EC2 Instance&amp;quot;,
+   &amp;quot;description&amp;quot;: &amp;quot;A VM instance in Amazon EC2.&amp;quot;,
+   &amp;quot;labels&amp;quot;: [
+    {
+     &amp;quot;key&amp;quot;: &amp;quot;project_id&amp;quot;,
+     &amp;quot;description&amp;quot;: &amp;quot;The identifier of the GCP project under which data is stored for the AWS account specified in the aws_account label (e.g., my-project).&amp;quot;
+    },
+    {
+     &amp;quot;key&amp;quot;: &amp;quot;instance_id&amp;quot;,
+     &amp;quot;description&amp;quot;: &amp;quot;The VM instance identifier assigned by AWS.&amp;quot;
+    },
+    {
+     &amp;quot;key&amp;quot;: &amp;quot;region&amp;quot;,
+     &amp;quot;description&amp;quot;: &amp;quot;The AWS region in which the VM is running. Supported AWS region values are listed by service at http://docs.aws.amazon.com/general/latest/gr/rande.html. The value supplied for this label must be prefixed with &#39;aws:&#39; (for example, &#39;aws:us-east-1&#39; is a valid value while &#39;us-east-1&#39; is not).&amp;quot;
+    },
+    {
+     &amp;quot;key&amp;quot;: &amp;quot;aws_account&amp;quot;,
+     &amp;quot;description&amp;quot;: &amp;quot;The AWS account number under which the VM is running.&amp;quot;
+    }
+   ]
+  },
+  ...
+ ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;書くコード。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func writeFluentdBufferQueueLength() error {
+	ctx := context.Background()
+	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
+	if err != nil {
+		return err
+	}
+	client, err := monitoring.New(httpClient)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	resource := &amp;amp;monitoring.MonitoredResource{
+		Type: &amp;quot;aws_ec2_instance&amp;quot;,
+		Labels: map[string]string{
+			&amp;quot;project_id&amp;quot;:  &amp;quot;*****&amp;quot;,
+			&amp;quot;instance_id&amp;quot;: &amp;quot;*****&amp;quot;,
+			&amp;quot;region&amp;quot;:      &amp;quot;aws:ap-northeast-1&amp;quot;,
+			&amp;quot;aws_account&amp;quot;: &amp;quot;*****&amp;quot;,
+		},
+	}
+
+	metrics, err := fetchFluentdMetrics()
+	if err != nil {
+		return err
+	}
+
+	timeSeries := []*monitoring.TimeSeries{}
+
+	for _, v := range metrics.Plugins {
+		if v.OutputPlugin {
+
+			fmt.Printf(&amp;quot;send %s\n&amp;quot;, v.Type)
+
+			timeSeries = append(
+				timeSeries,
+				&amp;amp;monitoring.TimeSeries{
+					Metric: &amp;amp;monitoring.Metric{
+						Type: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
+						Labels: map[string]string{
+							&amp;quot;plugin_type&amp;quot;: v.Type,
+						},
+					},
+					Resource: resource,
+					Points: []*monitoring.Point{
+						&amp;amp;monitoring.Point{
+							Interval: &amp;amp;monitoring.TimeInterval{
+								EndTime: now,
+							},
+							Value: &amp;amp;monitoring.TypedValue{
+								Int64Value: int64p(v.BufferQueueLength),
+							},
+						},
+					},
+				},
+			)
+		}
+	}
+
+	var (
+		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
+		name = &amp;quot;projects/try-stackdriver-159110&amp;quot;
+
+		requestBody = &amp;amp;monitoring.CreateTimeSeriesRequest{
+			TimeSeries: timeSeries,
+		}
+	)
+
+	_, err = client.Projects.TimeSeries.Create(name, requestBody).Context(ctx).Do()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(&amp;quot;done&amp;quot;)
+
+	return nil
+}
+
+const fluentdMonitorEndpoint = &amp;quot;http://localhost:24220/api/plugins.json&amp;quot;
+
+type fluentdMetrics struct {
+	Plugins []fluentdMetricsPlugin `json:&amp;quot;plugins&amp;quot;`
+}
+type fluentdMetricsPlugin struct {
+	Type              string `json:&amp;quot;type&amp;quot;`
+	OutputPlugin      bool   `json:&amp;quot;output_plugin&amp;quot;`
+	BufferQueueLength int64  `json:&amp;quot;buffer_queue_length&amp;quot;`
+}
+
+// monitor_agentからfluentdのメトリクスを取得する
+func fetchFluentdMetrics() (*fluentdMetrics, error) {
+
+	resp, err := http.Get(fluentdMonitorEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var ret fluentdMetrics
+
+	if err := json.Unmarshal(body, &amp;amp;ret); err != nil {
+		return nil, err
+	}
+
+	return &amp;amp;ret, nil
+}
+
+// int64 -&amp;gt; *int64
+func int64p(n int64) *int64 {
+	return &amp;amp;n
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;a href=&#34;https://github.com/jasonlvhit/gocron&#34;&gt;gocron&lt;/a&gt;などで定期的に実行させる。&lt;/p&gt;
+
+&lt;p&gt;読むコード。確認用。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func readFluentdBufferQueueLength() error {
+	ctx := context.Background()
+	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
+	if err != nil {
+		return err
+	}
+	client, err := monitoring.New(httpClient)
+	if err != nil {
+		return err
+	}
+
+	var (
+		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
+		name = &amp;quot;projects/*****&amp;quot;
+	)
+
+	start := time.Now().Add(time.Hour * -3).UTC().Format(time.RFC3339)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	filter := &amp;quot;metric.type = \&amp;quot;custom.googleapis.com/fluentd/buffer_queue_length\&amp;quot;&amp;quot;
+	resp, err := client.Projects.TimeSeries.List(name).
+		IntervalStartTime(start).
+		IntervalEndTime(now).
+		Filter(filter).Context(ctx).Do()
+	if err != nil {
+		return err
+	}
+
+	for _, v := range resp.TimeSeries {
+		fmt.Println(v.Metric.Type)
+		for _, p := range v.Points {
+			fmt.Println(*(p.Value.Int64Value))
+		}
+	}
+
+	return nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんと届いていれば
+Resource-&amp;gt;Metrics Explorerでもcustom/fluentd/buffer_queue_lengthを確認できる。&lt;/p&gt;
+
+&lt;p&gt;これでAlertを設定できるようになった。TargetのResource TypeはCustom Metrics。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/66.png&#34; alt=&#34;Alertの設定&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentd自身のログを拾う</title>
+          <link>http://sambaiz.net/article/64/</link>
+          <pubDate>Tue, 14 Feb 2017 21:15:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/64/</guid>
+          <description>
+
+&lt;p&gt;fluentdは自身のログも&lt;code&gt;fluent.error&lt;/code&gt;のようなタグでイベントとして流す。&lt;/p&gt;
+
+&lt;p&gt;バッファを0にして意図的にエラーを発生させてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type forward
+  port 24224
+  bind 0.0.0.0
+&amp;lt;/source&amp;gt;
+
+# throw away
+&amp;lt;match fluent.info&amp;gt;
+  @type null
+&amp;lt;/match&amp;gt;
+
+&amp;lt;match fluent.**&amp;gt;
+  @type stdout
+&amp;lt;/match&amp;gt;
+
+# error!
+&amp;lt;match **&amp;gt;
+  @type file
+  path /var/log/td-agent/hoge.log
+  buffer_chunk_limit 0
+  buffer_queue_limit 0
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると、こんなのがtd-agent.logに出力される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;fluent.error: {&amp;quot;error&amp;quot;:&amp;quot;#&amp;lt;Fluent::BufferQueueLimitError: queue size exceeds limit&amp;gt;&amp;quot;,&amp;quot;error_class&amp;quot;:&amp;quot;Fluent::BufferQueueLimitError&amp;quot;,&amp;quot;message&amp;quot;:&amp;quot;forward error error=#&amp;lt;Fluent::BufferQueueLimitError: queue size exceeds limit&amp;gt; error_class=Fluent::BufferQueueLimitError&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ただ、これだとaggregatorに集めたときにどのサーバーのfluentdに問題が発生してるのか分からない。
+そこでホスト名を追加する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/55/&#34;&gt;fluentdのrecord_transformerでログを加工する - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;filter fluent.**&amp;gt;
+  @type record_transformer
+  enable_ruby
+
+  &amp;lt;record&amp;gt;
+    hostname &amp;quot;#{Socket.gethostname}&amp;quot;
+    tag ${tag}
+  &amp;lt;/record&amp;gt;
+&amp;lt;/filter&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;fluent.error: {&amp;quot;error&amp;quot;:&amp;quot;#&amp;lt;Fluent::BufferQueueLimitError: queue size exceeds limit&amp;gt;&amp;quot;,&amp;quot;error_class&amp;quot;:&amp;quot;Fluent::BufferQueueLimitError&amp;quot;,&amp;quot;message&amp;quot;:&amp;quot;forward error error=#&amp;lt;Fluent::BufferQueueLimitError: queue size exceeds limit&amp;gt; error_class=Fluent::BufferQueueLimitError&amp;quot;,
+&amp;quot;hostname&amp;quot;:&amp;quot;*****&amp;quot;,&amp;quot;tag&amp;quot;:&amp;quot;fluent.error&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://chopl.in/post/2013/04/27/fluentd_internal_log/&#34;&gt;fluentd自身のログにまつわるノウハウ - still deeper&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentdのrecord_transformerでログを加工する</title>
+          <link>http://sambaiz.net/article/55/</link>
+          <pubDate>Fri, 03 Feb 2017 21:14:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/55/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/filter_record_transformer&#34;&gt;http://docs.fluentd.org/v0.12/articles/filter_record_transformer&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;追加したり、編集したり、削除したりできるフィルタ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type forward
+  port 24224
+  bind 0.0.0.0
+&amp;lt;/source&amp;gt;
+
+&amp;lt;filter hoge.log&amp;gt;
+  @type record_transformer
+  enable_ruby
+  auto_typecast true
+  remove_keys b,d
+
+  &amp;lt;record&amp;gt;
+    what_is_tag ${tag}
+    what_is_a ${record[&amp;quot;a&amp;quot;]}
+    what_is_c_of_b_add_1 ${record[&amp;quot;b&amp;quot;][&amp;quot;c&amp;quot;] + 1}
+  &amp;lt;/record&amp;gt;
+&amp;lt;/filter&amp;gt;
+
+&amp;lt;match hoge.log&amp;gt;
+  @type stdout
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この例だとタグを値に持つ&amp;rdquo;what_is_tag&amp;rdquo;、aを値に持つ&amp;rdquo;what_is_a&amp;rdquo;、b.cの値に1を足す&amp;rdquo;what_is_c_of_b_add_1&amp;rdquo;が追加され、
+bとdが削除される。一旦まっさらにして入れるものだけを指定することもできる。&lt;/p&gt;
+
+&lt;p&gt;auto_typecastをtrueにしないと&amp;rdquo;what_is_c_of_b_add_1&amp;rdquo;の値がstringになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;a&amp;quot;: &amp;quot;hoge&amp;quot;, &amp;quot;b&amp;quot;: {&amp;quot;c&amp;quot;: 1}, &amp;quot;d&amp;quot;: &amp;quot;fuga&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat hoge.log
+$ tail /var/log/td-agent/td-agent.log
+hoge.log: {&amp;quot;a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_tag&amp;quot;:&amp;quot;hoge.log&amp;quot;,&amp;quot;what_is_a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_c_of_b_add_1&amp;quot;:2}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;エラーが起きるとnullになるが、それ以外の処理はされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;a&amp;quot;: &amp;quot;hoge&amp;quot;, &amp;quot;b&amp;quot;: {&amp;quot;c&amp;quot;: &amp;quot;error!&amp;quot;}, &amp;quot;d&amp;quot;: &amp;quot;fuga&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat hoge.log
+$ tail /var/log/td-agent/td-agent.log
+[warn]: failed to expand `record[&amp;quot;b&amp;quot;][&amp;quot;c&amp;quot;] + 1` error_class=TypeError error=&amp;quot;no implicit conversion of Fixnum into String&amp;quot;
+...
+hoge.log: {&amp;quot;a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_tag&amp;quot;:&amp;quot;hoge.log&amp;quot;,&amp;quot;what_is_a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_c_of_b_add_1&amp;quot;:null}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;フィルタ適用前と後をそれぞれoutputしてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;match hoge.log&amp;gt;
+  @type copy
+
+  &amp;lt;store&amp;gt;
+    @type stdout
+  &amp;lt;/store&amp;gt;
+ 
+  &amp;lt;store&amp;gt;
+    @type relabel
+    @label @fuga
+  &amp;lt;/store&amp;gt;
+&amp;lt;/match&amp;gt;
+
+&amp;lt;label @fuga&amp;gt;
+  &amp;lt;filter hoge.log&amp;gt;
+    @type record_transformer
+    enable_ruby
+    auto_typecast true
+    remove_keys b,d
+  
+    &amp;lt;record&amp;gt;
+      what_is_tag ${tag}
+      what_is_a ${record[&amp;quot;a&amp;quot;]}
+      what_is_c_of_b_add_1 ${record[&amp;quot;b&amp;quot;][&amp;quot;c&amp;quot;] + 1}
+    &amp;lt;/record&amp;gt;
+  &amp;lt;/filter&amp;gt;
+
+  &amp;lt;match hoge.log&amp;gt;
+    @type stdout
+  &amp;lt;/match&amp;gt;
+&amp;lt;/label&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;hoge.log: {&amp;quot;a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;b&amp;quot;:{&amp;quot;c&amp;quot;:1},&amp;quot;d&amp;quot;:&amp;quot;fuga&amp;quot;}
+hoge.log: {&amp;quot;a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_tag&amp;quot;:&amp;quot;hoge.log&amp;quot;,&amp;quot;what_is_a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_c_of_b_add_1&amp;quot;:2}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentdでElasticsearchに送る</title>
+          <link>http://sambaiz.net/article/54/</link>
+          <pubDate>Wed, 01 Feb 2017 21:51:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/54/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/uken/fluent-plugin-elasticsearch&#34;&gt;uken/fluent-plugin-elasticsearch&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;必要なものをいれていく。Amazon LinuxのAMIから。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Failed to build gem native extension.&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum install -y ruby-devel
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;serverengine requires Ruby version &amp;gt;= 2.1.0.&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/rbenv/rbenv&#34;&gt;rbenv&lt;/a&gt;でバージョンを上げる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/rbenv/rbenv.git ~/.rbenv
+$ cd ~/.rbenv &amp;amp;&amp;amp; src/configure &amp;amp;&amp;amp; make -C src
+$ echo &#39;export PATH=&amp;quot;$HOME/.rbenv/bin:$PATH&amp;quot;&#39; &amp;gt;&amp;gt; ~/.bash_profile
+$ ~/.rbenv/bin/rbenv init
+$ echo &#39;eval &amp;quot;$(rbenv init -)&amp;quot;&#39; &amp;gt;&amp;gt; ~/.bash_profile
+$ source ~/.bash_profile
+$ git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ rbenv -v
+rbenv 1.1.0-2-g4f8925a
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Ruby install aborted due to missing extensions&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum install -y openssl-devel readline-devel zlib-devel
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ rbenv install -l
+1.8.5-p113
+1.8.5-p114
+1.8.5-p115
+...
+
+$ rbenv install 2.4.0
+$ rbenv global 2.4.0
+$ ruby -v
+ruby 2.4.0p0 (2016-12-24 revision 57164) [x86_64-linux]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ td-agent-gem install fluent-plugin-elasticsearch
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;td-agent.confはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type forward
+  port 24224
+  bind 0.0.0.0
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match hoge.log&amp;gt;
+  @type elasticsearch
+  host *****
+  port 9200
+  index_name test_index
+  type_name test_type
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;a&amp;quot;: &amp;quot;b&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat hoge.log
+$ curl *****:9200/test_index/test_type/_search?pretty
+{
+  &amp;quot;took&amp;quot; : 2,
+  &amp;quot;timed_out&amp;quot; : false,
+  &amp;quot;_shards&amp;quot; : {
+    &amp;quot;total&amp;quot; : 5,
+    &amp;quot;successful&amp;quot; : 5,
+    &amp;quot;failed&amp;quot; : 0
+  },
+  &amp;quot;hits&amp;quot; : {
+    &amp;quot;total&amp;quot; : 1,
+    &amp;quot;max_score&amp;quot; : 1.0,
+    &amp;quot;hits&amp;quot; : [
+      {
+        &amp;quot;_index&amp;quot; : &amp;quot;test_index&amp;quot;,
+        &amp;quot;_type&amp;quot; : &amp;quot;test_type&amp;quot;,
+        &amp;quot;_id&amp;quot; : &amp;quot;AVn5puy79PEDL_x5e_u3&amp;quot;,
+        &amp;quot;_score&amp;quot; : 1.0,
+        &amp;quot;_source&amp;quot; : {
+          &amp;quot;a&amp;quot; : &amp;quot;b&amp;quot;
+        }
+      }
+    ]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;logstash formatでも入れてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type forward
+  port 24224
+  bind 0.0.0.0
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match hoge.log&amp;gt;
+  @type elasticsearch
+  host *****
+  port 9200
+  logstash_format true
+  logstash_prefix aaaa
+  type_name test_type
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;a&amp;quot;: &amp;quot;b&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat hoge.log
+$ curl *****:9200/aaaa-2017.02.02/_search?pretty
+{
+  &amp;quot;took&amp;quot; : 1,
+  &amp;quot;timed_out&amp;quot; : false,
+  &amp;quot;_shards&amp;quot; : {
+    &amp;quot;total&amp;quot; : 5,
+    &amp;quot;successful&amp;quot; : 5,
+    &amp;quot;failed&amp;quot; : 0
+  },
+  &amp;quot;hits&amp;quot; : {
+    &amp;quot;total&amp;quot; : 1,
+    &amp;quot;max_score&amp;quot; : 1.0,
+    &amp;quot;hits&amp;quot; : [
+      {
+        &amp;quot;_index&amp;quot; : &amp;quot;aaaa-2017.02.02&amp;quot;,
+        &amp;quot;_type&amp;quot; : &amp;quot;test_type&amp;quot;,
+        &amp;quot;_id&amp;quot; : &amp;quot;AVn_FyQP7q9Gyu5HC4Mq&amp;quot;,
+        &amp;quot;_score&amp;quot; : 1.0,
+        &amp;quot;_source&amp;quot; : {
+          &amp;quot;a&amp;quot; : &amp;quot;b&amp;quot;,
+          &amp;quot;@timestamp&amp;quot; : &amp;quot;2017-02-02T22:49:33+09:00&amp;quot;
+        }
+      }
+    ]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;forwardと同じく
+&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/buffer-plugin-overview&#34;&gt;Buffered Output plugin&lt;/a&gt;を
+&lt;a href=&#34;https://github.com/uken/fluent-plugin-elasticsearch#buffered-output-options&#34;&gt;継承しているので&lt;/a&gt;
+buffer_typeのデフォルトはmemory。必要ならfileにする。いずれにせよスパイクなどでbuffer_queue_limitを超えないように余裕をもっておく。
+また、buffer_chunk_limitがElasticsearchのhttp.max_content_length(デフォルト100mb)を超えないようにする。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentdのforward</title>
+          <link>http://sambaiz.net/article/51/</link>
+          <pubDate>Wed, 25 Jan 2017 22:25:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/51/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://docs.fluentd.org/articles/high-availability#network-topology&#34;&gt;td-agent間でログをやりとりするとき&lt;/a&gt;
+に使われるforwardについて。内部では&lt;a href=&#34;http://docs.fluentd.org/articles/in_forward#protocol&#34;&gt;MessagePackを使っている&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;forward-input&#34;&gt;forward input&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.fluentd.org/articles/in_forward&#34;&gt;http://docs.fluentd.org/articles/in_forward&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;受け取る側。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type forward
+  port 24224
+  bind 0.0.0.0
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match **&amp;gt;
+  @type stdout
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;/etc/init.d/td-agent restart&lt;/code&gt;してfluent-catで送ってみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;hoge&amp;quot;: &amp;quot;fuga&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat -h xx.xx.xx.xx test.tag
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;/var/log/td-agent/td-agent.log&lt;/code&gt;に出力される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;test.tag: {&amp;quot;hoge&amp;quot;:&amp;quot;fuga&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;forward-output&#34;&gt;forward output&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.fluentd.org/articles/out_forward&#34;&gt;http://docs.fluentd.org/articles/out_forward&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.fluentd.org/articles/buffer-plugin-overview&#34;&gt;http://docs.fluentd.org/articles/buffer-plugin-overview&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;送る側。&lt;/p&gt;
+
+&lt;p&gt;ポートはデフォルトで24224で、イベントの送信にTCPを、heartbeatにUDP(heartbeat_typeで変えられる)を使う。&lt;/p&gt;
+
+&lt;p&gt;flush_intervalははデフォルトで&lt;a href=&#34;http://docs.fluentd.org/articles/out_forward#flushinterval&#34;&gt;60秒&lt;/a&gt;。
+確認のときは短くしておくと分かりやすい。
+buffer_queueの一番上のチャンクがこの時間経過するか、サイズがbuffer_chunk_limitを超えると、一番下のチャンクが書き込まれ、新しいチャンクがpushされる。
+chunkの数がbuffer_queue_limitに到達してしまうと新しいイベントは破棄されてしまうので
+リソースを圧迫(buffer_chunk_limit * buffer_queue_limit)しない程度に十分大きな数にしておき、
+スパイクや障害時に備えておく。
+buffer_typeはデフォルトがmemory。fileだと&lt;a href=&#34;http://docs.fluentd.org/articles/out_forward#flushatshutdown&#34;&gt;flush_at_shutdownのデフォルトがfalse&lt;/a&gt;なので注意。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type forward
+  port 24224
+  bind 0.0.0.0
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match **&amp;gt;
+  @type forward
+
+  flush_interval 1s
+
+  buffer_type file
+  buffer_path /var/log/td-agent/forward-buf
+  flush_at_shutdown true
+  buffer_chunk_limit 256m
+
+  &amp;lt;server&amp;gt;
+    name log_server
+    host xx.xx.xx.xx
+    port 24224
+  &amp;lt;/server&amp;gt;
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;冗長化&#34;&gt;冗長化&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://docs.fluentd.org/articles/out_forward#ltservergt-at-least-one-is-required&#34;&gt;server&lt;/a&gt;は複数書くことができ、
+それぞれにweight(デフォルトは60)を設定したり、
+&lt;a href=&#34;http://docs.fluentd.org/articles/out_forward#standby&#34;&gt;standby&lt;/a&gt;を付けることでActive-Standbyの構成にすることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type forward
+  port 24224
+  bind 0.0.0.0
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match **&amp;gt;
+  @type forward
+
+  ...
+
+  &amp;lt;server&amp;gt;
+    name log_server
+    host xx.xx.xx.xx
+    port 24224
+    weight 60
+  &amp;lt;/server&amp;gt;
+
+  &amp;lt;server&amp;gt;
+    name log_server2
+    host yy.yy.yy.yy
+    port 24224
+    weight 60
+  &amp;lt;/server&amp;gt;
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;片方のサーバーをtd-agentをstopしてstartしてみるとこんなログが出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;detached forwarding server &#39;log_server2&#39; host=&amp;quot;yy.yy.yy.yy&amp;quot; port=24224 phi=16.06814271743242 phi_threshold=16
+recovered forwarding server &#39;log_server2&#39; host=&amp;quot;yy.yy.yy.yy&amp;quot; port=24224
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちなみにtd-agentはrootで動かしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /etc/sysconfig/td-agent 
+TD_AGENT_USER=root
+TD_AGENT_GROUP=root
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>td-agentをビルドしてfluentdのバージョンを上げる</title>
+          <link>http://sambaiz.net/article/32/</link>
+          <pubDate>Sun, 06 Nov 2016 11:17:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/32/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;$td-agent --version
+td-agent 0.12.26
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;td-agentって書いてあるけど、これがfluentdのバージョンらしい。&lt;/p&gt;
+
+&lt;p&gt;fluentdはv0.14から&lt;a href=&#34;http://www.fluentd.org/blog/fluentd-v0.14.0-has-been-released&#34;&gt;ナノ秒で時間を持つようになった。&lt;/a&gt;
+ただ、現行のtd-agent(v2.3.2)は上の通り古いバージョンを使っている。
+0.14になる&lt;a href=&#34;https://github.com/treasure-data/omnibus-td-agent/tree/td-agent-3&#34;&gt;td-agent-3&lt;/a&gt;はまだリリースされていないので、
+自分でfluentdを&lt;a href=&#34;https://github.com/fluent/fluentd/releases/tag/v0.14.8&#34;&gt;v0.14.8&lt;/a&gt;に上げてビルドすることにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM ubuntu:14.04
+
+WORKDIR /tmp
+
+RUN apt-get update &amp;amp;&amp;amp; \
+    apt-get install -y git software-properties-common build-essential curl &amp;amp;&amp;amp; \
+    add-apt-repository -y ppa:brightbox/ruby-ng &amp;amp;&amp;amp; \
+    apt-get update &amp;amp;&amp;amp; \
+    apt-get install -y ruby2.3 ruby2.3-dev &amp;amp;&amp;amp; \
+    gem install bundler &amp;amp;&amp;amp; \
+    git clone https://github.com/treasure-data/omnibus-td-agent
+
+WORKDIR /tmp/omnibus-td-agent
+
+RUN sed -ie &amp;quot;s/^default_version.*$/default_version &#39;3d1dd53f31d1fe49508f230a71a2b4c2ceb20f47&#39;/&amp;quot; config/software/fluentd.rb &amp;amp;&amp;amp; \
+    sed -ie &amp;quot;s/^license_file.*$/license_file &#39;LICENSE&#39;/&amp;quot; config/projects/td-agent2.rb &amp;amp;&amp;amp; \
+    bundle install --binstubs &amp;amp;&amp;amp; \
+    bin/gem_downloader core_gems.rb &amp;amp;&amp;amp; \
+    bin/gem_downloader plugin_gems.rb &amp;amp;&amp;amp; \
+    bin/gem_downloader ui_gems.rb &amp;amp;&amp;amp; \
+    git config --global user.email &amp;quot;root@example.com&amp;quot; &amp;amp;&amp;amp; \
+    mkdir -p /opt/td-agent /var/cache/omnibus &amp;amp;&amp;amp; \
+    bin/omnibus build td-agent2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;config/projects/td-agent2.rb&lt;/code&gt;を書き換えているのは、ビルド時に&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;/var/lib/gems/2.3.0/gems/omnibus-5.5.0/lib/omnibus/licensing.rb:223:in `read&#39;: No such file or directory @ rb_sysopen - /tmp/omnibus-td-agent/https://raw.githubusercontent.com/treasure-data/omnibus-td-agent/master/LICENSE (Errno::ENOENT)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんなエラーが出たため。&lt;a href=&#34;https://github.com/chef/omnibus/blob/v5.5.0/lib/omnibus/licensing.rb#L223&#34;&gt;licensing.rb&lt;/a&gt;を見てみたところ、相対パスを想定しているようだった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;g++: internal compiler error: Killed (program cc1plus)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;が出たらメモリが足りないかもしれない。&lt;/p&gt;
+
+&lt;p&gt;ビルドが成功したらpkgにdebが出来ている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker cp &amp;lt;Container ID&amp;gt;:/tmp/omnibus-td-agent/pkg/td-agent_2.3.3-0_amd64.deb .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ dpkg -i td-agent_2.3.3-0_amd64.deb
+$ td-agent --version
+td-agent 0.14.8
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

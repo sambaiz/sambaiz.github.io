@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/video/index.xml</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
+
+    
+      
+        <item>
+          <title>mp4をエンコードしてMPEG-DASHにして再生する</title>
+          <link>http://sambaiz.net/article/30/</link>
+          <pubDate>Sun, 30 Oct 2016 23:51:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/30/</guid>
+          <description>
+
+&lt;h2 id=&#34;mpeg-dashとは&#34;&gt;MPEG-DASHとは&lt;/h2&gt;
+
+&lt;p&gt;HTTPで動画をストリーミングするための規格。似たようなのにAppleの独自規格であるHLSなどがある。&lt;/p&gt;
+
+&lt;p&gt;サーバーはMPD(Media Presentation Description)ファイルと、セグメントに分けられた動画や音声ファイルを持っていて、
+クライアントはMPDファイルをリクエストし、この内容をもとにセグメントをリクエストしていく。&lt;/p&gt;
+
+&lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://ffmpeg.org/ffmpeg.html&#34;&gt;ffmpeg&lt;/a&gt;と
+&lt;a href=&#34;https://gpac.wp.mines-telecom.fr/mp4box/&#34;&gt;MP4Box&lt;/a&gt;を使うので、これらを実行できるようにする。
+Docker上で実行することもできて、その場合は以下のようにエイリアスを付けると便利。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ alias ffmpeg=&#39;docker run --rm -v `pwd`:/tmp/workdir jrottenberg/ffmpeg&#39;
+$ alias MP4Box=&#39;docker run --rm -v `pwd`:/work sambaiz/mp4box&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;エンコード&#34;&gt;エンコード&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ffmpeg -i input.mp4 -vcodec libx264 -vb 448k -r 30 -x264opts no-scenecut -g 15 -acodec libfaac -ac 2 -ab 128k -frag_duration 5000000 -movflags empty_moov output.mp4
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;オプションの意味は多分こんな感じ。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-vcodec libx264&lt;/code&gt;: 動画を&lt;a href=&#34;https://ja.wikipedia.org/wiki/H.264&#34;&gt;H.264&lt;/a&gt;にエンコードする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-vb 448k&lt;/code&gt;: 動画のビットレート(bps)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-r 30&lt;/code&gt;: 動画のフレームレート(fps)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-x264opts no-scenecut&lt;/code&gt;: キーフレームの間隔を動画の内容によらず固定にする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-g 15&lt;/code&gt;: キープレームの間隔。フレームレート(&lt;code&gt;-r&lt;/code&gt;) * フラグメントの時間(&lt;code&gt;-frag_duration&lt;/code&gt;) / キーフレームの間隔(&lt;code&gt;-g&lt;/code&gt;)が整数になるようにする。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-acodec libfaac&lt;/code&gt;: 音声を&lt;a href=&#34;https://ja.wikipedia.org/wiki/AAC&#34;&gt;AAC&lt;/a&gt;にエンコードする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-ac 2&lt;/code&gt;: 音声チャンネル数2(ステレオ)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-ab 128k&lt;/code&gt;: 音声のビットレート(bps)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-frag_duration 5000000&lt;/code&gt;: フラグメント(セグメント)の時間(μs)。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-movflags empty_moov&lt;/code&gt;: 頭にmdat atom(データが含まれる)なしで、moov atom(メタ情報が含まれている)を書き始めるらしい。これがにしないとMP4Boxに入れるときに失敗した。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;$ MP4Box -info -v input.mp4
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;...
+[iso file] Current top box start before parsing 0
+[iso file] Read Box type ftyp size 24 start 0
+[iso file] Current top box start before parsing 24
+[iso file] Read Box type free size 8 start 24
+[iso file] Current top box start before parsing 32
+[iso file] Read Box type mdat size 5216803 start 32 &amp;lt;--
+[iso file] Current top box start before parsing 5216835
+[iso file] Read Box type moov size 13332 start 5216835 &amp;lt;--
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ MP4Box -info -v output.mp4
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;[iso file] Current top box start before parsing 0
+[iso file] Read Box type ftyp size 36 start 0
+[iso file] Current top box start before parsing 36
+[iso file] Read Box type moov size 1186 start 36 &amp;lt;--
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;mpeg-dashにする&#34;&gt;MPEG-DASHにする&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ MP4Box -dash 5000 output.mp4
+$ ls
+input.mp4 output.mp4 output_dash.mpd output_dashinit.mp4
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;-dash&lt;/code&gt;はセグメントの時間。ただ、このmpdだと&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Multiplexed representations are intentionally not supported, as they are not compliant with the DASH-AVC/264 guidelines
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;と出てしまい再生できない。中を見てみると、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;Representation id=&amp;quot;1&amp;quot; mimeType=&amp;quot;video/mp4&amp;quot; codecs=&amp;quot;avc1.64000d,mp4a.40.2&amp;quot; width=&amp;quot;320&amp;quot; height=&amp;quot;240&amp;quot; frameRate=&amp;quot;30&amp;quot; sar=&amp;quot;1:1&amp;quot; audioSamplingRate=&amp;quot;44100&amp;quot; startWithSAP=&amp;quot;1&amp;quot; bandwidth=&amp;quot;564201&amp;quot;&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;となっていて、動画と音声が一つのRepresentationになっているのがまずそうだったので、動画と音声を分けて実行した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ MP4Box -dash 5000 output.mp4#video output.mp4#audio
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果、できたmpdがこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;?xml version=&amp;quot;1.0&amp;quot;?&amp;gt;
+&amp;lt;!-- MPD file Generated with GPAC version 0.6.1-rev14-g8eb0297-master  at 2016-10-30T14:47:02.962Z--&amp;gt;
+&amp;lt;MPD xmlns=&amp;quot;urn:mpeg:dash:schema:mpd:2011&amp;quot; minBufferTime=&amp;quot;PT1.500S&amp;quot; type=&amp;quot;static&amp;quot; mediaPresentationDuration=&amp;quot;PT0H0M21.545S&amp;quot; maxSegmentDuration=&amp;quot;PT0H0M10.000S&amp;quot; profiles=&amp;quot;urn:mpeg:dash:profile:full:2011&amp;quot;&amp;gt;
+ &amp;lt;ProgramInformation moreInformationURL=&amp;quot;http://gpac.sourceforge.net&amp;quot;&amp;gt;
+  &amp;lt;Title&amp;gt;output_dash.mpd generated by GPAC&amp;lt;/Title&amp;gt;
+ &amp;lt;/ProgramInformation&amp;gt;
+
+ &amp;lt;Period duration=&amp;quot;PT0H0M21.545S&amp;quot;&amp;gt;
+  &amp;lt;AdaptationSet segmentAlignment=&amp;quot;true&amp;quot; maxWidth=&amp;quot;320&amp;quot; maxHeight=&amp;quot;240&amp;quot; maxFrameRate=&amp;quot;30&amp;quot; par=&amp;quot;4:3&amp;quot; lang=&amp;quot;eng&amp;quot;&amp;gt;
+   &amp;lt;Representation id=&amp;quot;1&amp;quot; mimeType=&amp;quot;video/mp4&amp;quot; codecs=&amp;quot;avc3.64000d&amp;quot; width=&amp;quot;320&amp;quot; height=&amp;quot;240&amp;quot; frameRate=&amp;quot;30&amp;quot; sar=&amp;quot;1:1&amp;quot; startWithSAP=&amp;quot;1&amp;quot; bandwidth=&amp;quot;437781&amp;quot;&amp;gt;
+    &amp;lt;BaseURL&amp;gt;output_track1_dashinit.mp4&amp;lt;/BaseURL&amp;gt;
+    &amp;lt;SegmentList timescale=&amp;quot;15360&amp;quot; duration=&amp;quot;153600&amp;quot;&amp;gt;
+     &amp;lt;Initialization range=&amp;quot;0-1128&amp;quot;/&amp;gt;
+      &amp;lt;SegmentURL mediaRange=&amp;quot;1129-556172&amp;quot; indexRange=&amp;quot;1129-1172&amp;quot;/&amp;gt;
+      &amp;lt;SegmentURL mediaRange=&amp;quot;556173-1134265&amp;quot; indexRange=&amp;quot;556173-556216&amp;quot;/&amp;gt;
+      &amp;lt;SegmentURL mediaRange=&amp;quot;1134266-1172888&amp;quot; indexRange=&amp;quot;1134266-1134309&amp;quot;/&amp;gt;
+    &amp;lt;/SegmentList&amp;gt;
+   &amp;lt;/Representation&amp;gt;
+  &amp;lt;/AdaptationSet&amp;gt;
+  &amp;lt;AdaptationSet segmentAlignment=&amp;quot;true&amp;quot; lang=&amp;quot;eng&amp;quot;&amp;gt;
+   &amp;lt;Representation id=&amp;quot;2&amp;quot; mimeType=&amp;quot;audio/mp4&amp;quot; codecs=&amp;quot;mp4a.40.2&amp;quot; audioSamplingRate=&amp;quot;44100&amp;quot; startWithSAP=&amp;quot;1&amp;quot; bandwidth=&amp;quot;129622&amp;quot;&amp;gt;
+    &amp;lt;AudioChannelConfiguration schemeIdUri=&amp;quot;urn:mpeg:dash:23003:3:audio_channel_configuration:2011&amp;quot; value=&amp;quot;2&amp;quot;/&amp;gt;
+    &amp;lt;BaseURL&amp;gt;output_track2_dashinit.mp4&amp;lt;/BaseURL&amp;gt;
+    &amp;lt;SegmentList timescale=&amp;quot;44100&amp;quot; duration=&amp;quot;441000&amp;quot;&amp;gt;
+     &amp;lt;Initialization range=&amp;quot;0-1060&amp;quot;/&amp;gt;
+      &amp;lt;SegmentURL mediaRange=&amp;quot;1061-163674&amp;quot; indexRange=&amp;quot;1061-1104&amp;quot;/&amp;gt;
+      &amp;lt;SegmentURL mediaRange=&amp;quot;163675-326023&amp;quot; indexRange=&amp;quot;163675-163718&amp;quot;/&amp;gt;
+      &amp;lt;SegmentURL mediaRange=&amp;quot;326024-349091&amp;quot; indexRange=&amp;quot;326024-326067&amp;quot;/&amp;gt;
+    &amp;lt;/SegmentList&amp;gt;
+   &amp;lt;/Representation&amp;gt;
+  &amp;lt;/AdaptationSet&amp;gt;
+ &amp;lt;/Period&amp;gt;
+&amp;lt;/MPD&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;再生する&#34;&gt;再生する&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/Dash-Industry-Forum/dash.js&#34;&gt;dash.js&lt;/a&gt;を使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;html&amp;gt;
+  &amp;lt;head&amp;gt;
+     &amp;lt;script src=&amp;quot;http://cdn.dashjs.org/latest/dash.all.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+     &amp;lt;style&amp;gt;
+         video {
+             width: 640px;
+             height: 360px;
+          }
+     &amp;lt;/style&amp;gt;
+  &amp;lt;/head&amp;gt;
+  &amp;lt;body&amp;gt;
+     &amp;lt;div&amp;gt;
+         &amp;lt;video data-dashjs-player autoplay src=&amp;quot;http://localhost:8080/output_dash.mpd&amp;quot; controls&amp;gt;&amp;lt;/video&amp;gt;
+     &amp;lt;/div&amp;gt;
+  &amp;lt;/body&amp;gt;
+&amp;lt;/html&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ローカルでサーバーを立ち上げる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var static = require(&#39;node-static&#39;);
+
+var fileServer = new static.Server(&#39;./public&#39;);
+
+require(&#39;http&#39;).createServer(function (request, response) {
+    request.addListener(&#39;end&#39;, function () {
+        fileServer.serve(request, response);
+    }).resume();
+}).listen(8080);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.jstage.jst.go.jp/article/itej/67/2/67_109/_pdf&#34;&gt;次世代動画配信技術「MPEG-DASH」技術概要と標準化・関連技術動向&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/tomoyukilabs/items/c4eb7a829baac880797c&#34;&gt;FFmpegでHTML5 readyな動画ファイルを作成 (MP4, WebM) - Qiita&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://yebisupress.dac.co.jp/2015/11/04/profile%EF%BC%9Fatom%EF%BC%9Fmp4%E3%81%AE%E3%82%88%E3%81%8F%E3%82%8F%E3%81%8B%E3%82%89%E3%81%AA%E3%81%84%E3%81%82%E3%82%8C%E3%81%93%E3%82%8C%EF%BC%88atom%E7%B7%A8/&#34;&gt;profile？atom？mp4のよくわからないあれこれ（atom編)&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

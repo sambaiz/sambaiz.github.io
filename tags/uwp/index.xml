@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz.net</title>
+    <link>http://sambaiz.net/tags/uwp/index.xml</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
+
+    
+      
+        <item>
+          <title>UWPでBLEデバイスとペアリングして値を取得する</title>
+          <link>http://sambaiz.net/article/101/</link>
+          <pubDate>Sat, 13 May 2017 10:57:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/101/</guid>
+          <description>
+
+&lt;h2 id=&#34;bleデバイスを見つける-https-github-com-microsoft-windows-universal-samples-blob-dev-samples-bluetoothleclient-cs-scenario1-discoverserver-xaml-cs&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/Windows-universal-samples/blob/dev/Samples/BluetoothLEClient/cs/Scenario1_DiscoverServer.xaml.cs&#34;&gt;BLEデバイスを見つける&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;CreateWatcher&lt;/code&gt;にBluetooth LEプロトコルの&lt;a href=&#34;https://docs.microsoft.com/ja-jp/windows/uwp/devices-sensors/aep-service-class-ids&#34;&gt;AEP(Association EndPoint)サービスクラスID&lt;/a&gt;と
+requestPropaertiesで必要なデバイス情報を渡している。
+最後の&lt;code&gt;AssociationEndpoint&lt;/code&gt;は&lt;code&gt;System.Devices.Aep.ProtocolId&lt;/code&gt;のAepと&lt;a href=&#34;https://docs.microsoft.com/ja-jp/windows/uwp/devices-sensors/enumerate-devices-over-a-network&#34;&gt;対応している&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;using Windows.Devices.Enumeration;
+
+string[] requestedProperties = { &amp;quot;System.Devices.Aep.DeviceAddress&amp;quot;, &amp;quot;System.Devices.Aep.IsConnected&amp;quot; };
+
+deviceWatcher = DeviceInformation.CreateWatcher(
+                        &amp;quot;(System.Devices.Aep.ProtocolId:=\&amp;quot;{bb7bb05e-5972-42b5-94fc-76eaa7084d49}\&amp;quot;)&amp;quot;,
+                        requestedProperties,
+                        DeviceInformationKind.AssociationEndpoint);
+
+deviceWatcher.Start();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;deviceWatcher.Added += DeviceWatcher_Added;
+deviceWatcher.Removed += DeviceWatcher_Removed;
+deviceWatcher.Updated += DeviceWatcher_Updated;
+/*
+deviceWatcher.EnumerationCompleted += DeviceWatcher_EnumerationCompleted;
+deviceWatcher.Stopped += DeviceWatcher_Stopped;
+*/
+
+Dictionary&amp;lt;string, DeviceInformation&amp;gt; deviceInfos = new Dictionary&amp;lt;string, DeviceInformation&amp;gt;();
+
+private void DeviceWatcher_Added(DeviceWatcher sender, DeviceInformation deviceInfo)
+{
+
+    if (sender == deviceWatcher)
+    {
+        if (deviceInfo.Name != string.Empty)
+        {
+            deviceInfos.Add(deviceInfo.Id, deviceInfo);   
+        }
+    }
+}
+
+private void DeviceWatcher_Updated(DeviceWatcher sender, DeviceInformationUpdate deviceInfoUpdate)
+{
+    if (sender == deviceWatcher)
+    {
+        deviceInfos[deviceInfoUpdate.id].Update(deviceInfoUpdate);
+    }
+}
+
+ private void DeviceWatcher_Removed(DeviceWatcher sender, DeviceInformationUpdate deviceInfoUpdate)
+{
+    if (sender == deviceWatcher)
+    {
+        deviceInfos.Remove(deviceInfoUpdate.id);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ペアリング&#34;&gt;ペアリング&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;DevicePairingResult result = await deviceInfo.Pairing.PairAsync();
+if (result.Status == DevicePairingResultStatus.Paired || result.Status == DevicePairingResultStatus.AlreadyPaired){
+    // success
+} else{
+    // fail
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんなウィンドウが出てくる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/101.png&#34; alt=&#34;ペアリング確認&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;serviceのcharacteristicを取得する-https-docs-microsoft-com-ja-jp-windows-uwp-devices-sensors-gatt-scenarios&#34;&gt;&lt;a href=&#34;https://docs.microsoft.com/ja-jp/windows/uwp/devices-sensors/gatt-scenarios&#34;&gt;serviceのcharacteristicを取得する&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;ペアリングしたらこんな感じで値を取得する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var services = await BluetoothLEDevice.FromIdAsync(deviceInfo.id)
+
+var service = services.GetGattService(SERVICE_UUID)
+
+var characteristics = service.GetCharacteristics(CHARACTERISIC_UUID);
+
+characteristics[0].ValueChanged += characteristicChanged;
+
+await characteristics[0].WriteClientCharacteristicConfigurationDescriptorAsync(
+    GattClientCharacteristicConfigurationDescriptorValue.Notify
+);
+
+void characteristicChanged(
+    GattCharacteristic sender,
+    GattValueChangedEventArgs eventArgs
+){
+    byte[] data = new byte[eventArgs.CharacteristicValue.Length];
+    Streams.DataReader.FromBuffer(eventArgs.CharacteristicValue).ReadBytes(data);
+    var str = System.Text.Encoding.ASCII.GetString(data)
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

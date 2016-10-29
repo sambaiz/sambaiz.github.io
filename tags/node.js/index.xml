@@ -2,26 +2,510 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>sambaiz.net</title>
-    <link>http://sambaiz.net/tags/node/index.js/</link>
+    <link>http://sambaiz.net/tags/node.js/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
-    <rights>(C) 2016</rights>
-    <updated>2016-07-15 19:20:00 &#43;0900 JST</updated>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
     
       
         <item>
-          <title>nでNode.jsのバージョン管理</title>
+          <title>Node.jsのStream API</title>
+          <link>http://sambaiz.net/article/96/</link>
+          <pubDate>Sat, 22 Apr 2017 19:06:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/96/</guid>
+          <description>
+
+&lt;h2 id=&#34;stream-apiとは-https-nodejs-org-docs-v7-9-0-api-stream-html&#34;&gt;&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html&#34;&gt;Stream APIとは&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;NodeでStreamデータを扱うためのもの。
+例えばサイズが大きいファイルの入出力をStreamとして扱うことでバッファを最小限にできる。&lt;/p&gt;
+
+&lt;p&gt;Streamは&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/events.html&#34;&gt;EventEmitter&lt;/a&gt;で、
+Readable streamやWritable stream、ReadableとWritableを合わせたDuplex streamと
+Readしたものを加工してWriteするTransform streamの種類があり、
+それぞれ特定の関数が&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_api_for_stream_implementers&#34;&gt;実装&lt;/a&gt;されている必要がある。&lt;/p&gt;
+
+&lt;h2 id=&#34;readable-stream-https-nodejs-org-docs-v7-9-0-api-stream-html-stream-readable-streams&#34;&gt;&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_readable_streams&#34;&gt;Readable stream&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Readable streamには&lt;code&gt;flowing&lt;/code&gt;と&lt;code&gt;paused&lt;/code&gt;の
+&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_two_modes&#34;&gt;二つのモード&lt;/a&gt;がある。
+最初は&lt;code&gt;paused&lt;/code&gt;モードで、readableになってからread()することで読むことができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+let readable = fs.createReadStream(&#39;sample.txt&#39;);
+var i = 0;
+readable.on(&#39;readable&#39;, () =&amp;gt; {
+  let chunk;
+  while (null !== (chunk = readable.read(10))) {
+    console.log(`${i++}: ${chunk}`);
+  }
+});
+dable.on(&#39;end&#39;, () =&amp;gt; {
+  console.log(&#39;end&#39;);
+});
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat sample.txt
+abcdefghijklmnopqrstuvwxyz
+1234567890
+あいうえお
+
+$ node main.js
+0: abcdefghij
+1: klmnopqrst
+2: uvwxyz
+123
+3: 4567890
+あい
+4: うえお
+
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;dataのイベントハンドラーを追加するか、後で書くpipeを使うと&lt;code&gt;flowing&lt;/code&gt;モードになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+let readable = fs.createReadStream(&#39;sample.txt&#39;);
+var i = 0;
+readable.on(&#39;data&#39;, (chunk) =&amp;gt; {
+  console.log(`${i++}: ${chunk}`);
+});
+readable.on(&#39;end&#39;, () =&amp;gt; {
+  console.log(&#39;end&#39;);
+});
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;0: abcdefghijklmnopqrstuvwxyz
+1234567890
+あいうえお
+
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;エラーハンドリングはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+let readable = fs.createReadStream(&#39;error.txt&#39;);
+readable.on(&#39;data&#39;, (chunk) =&amp;gt; {
+  console.log(`${i++}: ${chunk}`);
+});
+readable.on(&#39;error&#39;, (error) =&amp;gt; {
+  console.log(error);
+});
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ node main.js
+{ Error: ENOENT: no such file or directory, open &#39;error.txt&#39;
+    at Error (native) errno: -2, code: &#39;ENOENT&#39;, syscall: &#39;open&#39;, path: &#39;error.txt&#39; }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;実装-https-nodejs-org-docs-v7-9-0-api-stream-html-stream-implementing-a-readable-stream&#34;&gt;&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_implementing_a_readable_stream&#34;&gt;実装&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;実装する関数は&lt;code&gt;_read&lt;/code&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const Readable = require(&#39;stream&#39;).Readable;
+
+class Random extends Readable {
+  constructor(opt) {
+    super(opt); 
+  }
+  
+  _read() {
+    
+    // error handling
+    // if(err){ 
+    //   this.emit(&#39;error&#39;, err)
+    //   return
+    // }
+    
+    this.push(Math.random()+&#39;&#39;);
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;writable-stream-https-nodejs-org-docs-v7-9-0-api-stream-html-stream-class-stream-writable&#34;&gt;&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_class_stream_writable&#34;&gt;Writable stream&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;output.txtに出力するWritable stream。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;let writable = fs.createWriteStream(&#39;output.txt&#39;)
+
+writable.write(&#39;hoge\n&#39;);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat output.txt
+hoge
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;入力の流量が多く、Writable streamのバッファが&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_constructor_new_stream_writable_options&#34;&gt;highWaterMark&lt;/a&gt;を超えてしまうと、write()はfalseを返す。そのまま書き込み続けるとメモリを食いつぶしてしまうので、
+全てのバッファが捌けて&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_event_drain&#34;&gt;drain&lt;/a&gt;イベントが発行されるまで書き込みを止めてback-pressureとする必要がある。
+ただし、pipeを使う場合このあたりはやってくれるので、あまり気にすることはない。&lt;/p&gt;
+
+&lt;h3 id=&#34;実装-https-nodejs-org-docs-v7-9-0-api-stream-html-stream-implementing-a-writable-stream&#34;&gt;&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_implementing_a_writable_stream&#34;&gt;実装&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;実装する関数は&lt;code&gt;_write&lt;/code&gt;と、バッファされているchunkをまとめて扱うなら&lt;code&gt;_writev&lt;/code&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const Writable = require(&#39;stream&#39;).Writable;
+
+class DummyWritable extends Writable {
+  constructor(opt) {
+    super(opt);
+  }
+
+  _write(chunk, encoding, callback) {
+    const chunkStr = chunk.toString()
+    if (chunkStr == &#39;this is error&#39;) {
+      callback(new Error(&#39;chunk is invalid&#39;));
+    } else {
+      console.log(chunkStr);
+      callback();
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;pipe-https-nodejs-org-docs-v7-9-0-api-stream-html-stream-readable-pipe-destination-options&#34;&gt;&lt;a href=&#34;https://nodejs.org/docs/v7.9.0/api/stream.html#stream_readable_pipe_destination_options&#34;&gt;pipe&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Readable streamをWritable streamとつなげる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+let readable = fs.createReadStream(&#39;sample.txt&#39;);
+let writable = fs.createWriteStream(&#39;output.txt&#39;);
+readable.pipe(writable);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat output.txt
+abcdefghijklmnopqrstuvwxyz
+1234567890
+あいうえお
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;注意すべきなのは、pipeしたものをまとめてエラーハンドリングすることはできないこと。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+let readable = fs.createReadStream(&#39;error.txt&#39;);
+let writable = fs.createWriteStream(&#39;output.txt&#39;);
+let piped = readable.pipe(writable);
+
+piped.on(&#39;error&#39;, (error) =&amp;gt; {
+  console.log(error);
+});
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;events.js:160
+      throw er; // Unhandled &#39;error&#39; event
+      ^
+
+Error: ENOENT: no such file or directory, open &#39;error.txt&#39;
+    at Error (native)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;面倒だけど、毎度エラーハンドリングする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+let readable = fs.createReadStream(&#39;error.txt&#39;);
+let writable = fs.createWriteStream(&#39;output.txt&#39;);
+const errorHandling = (err) =&amp;gt; { console.log(err) }
+let piped = readable.on(&#39;error&#39;, errorHandling).pipe(writable);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pipeを組み合わせると、こんな風にcsvをfetchして加工し、文字コードを変えて出力するといったこともStreamでできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fetch = require(&#39;node-fetch&#39;);
+const Iconv = require(&#39;iconv&#39;).Iconv;
+const iconv = new Iconv(&#39;UTF-8&#39;, &#39;SHIFT_JIS//IGNORE&#39;);
+const csv = require(&#39;csv&#39;);
+const fs = require(&#39;fs&#39;);
+
+const errorHandling = (err) =&amp;gt; { console.log(err); };
+
+const outputFile = fs.createWriteStream(&#39;output.csv&#39;);
+
+fetch(&#39;http://example.com/test.csv&#39;).then((res) =&amp;gt; {
+
+  res.body
+  .pipe(csv.parse({columns : true}))
+  .on(&#39;error&#39;, errorHandling)
+  .pipe(csv.transform(function(record){
+    if(record[&#39;hoge&#39;] &amp;lt; 100000){
+      return null;
+    }
+    return record;
+  }))
+  .on(&#39;error&#39;, errorHandling)
+  .pipe(csv.stringify({header: true}))
+  .on(&#39;error&#39;, errorHandling)
+  .pipe(iconv)
+  .on(&#39;error&#39;, errorHandling)
+  .pipe(outputFile)
+  .on(&#39;error&#39;, errorHandling);
+
+}).then(() =&amp;gt; console.log(&amp;quot;done&amp;quot;)).catch((err) =&amp;gt; console.log(err));
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pipeではないけど、readlineのcreateInterfaceに入力と出力のStreamを渡すと、
+行ごとに処理することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+const readline = require(&#39;readline&#39;);
+
+let readable = fs.createReadStream(&#39;sample.txt&#39;);
+const rl = readline.createInterface({
+  input: readable,
+  output: process.stdout
+});
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;abcdefghijklmnopqrstuvwxyz
+1234567890
+あいうえお
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;rxjsで扱う&#34;&gt;RxJSで扱う&lt;/h2&gt;
+
+&lt;p&gt;StreamはEventEmitterなのでRxJSのfromEvent()でObservableとして扱うこともできる。ただし&lt;a href=&#34;https://github.com/ReactiveX/rxjs&#34;&gt;v5&lt;/a&gt;にはpipeがない(v4には&lt;a href=&#34;https://github.com/Reactive-Extensions/RxJS/blob/8fa95ac884181fb6cbff8ce7c1d669ffb190f5e4/src/core/linq/observable/pipe.js#L6&#34;&gt;ある&lt;/a&gt;)ので、pipeする場合は自分でSubscribeしてwriteする必要がありそう。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/85/&#34;&gt;RxJSでRxをはじめる - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+const Rx = require(&#39;rxjs/Rx&#39;);
+const writable = fs.createWriteStream(&#39;output.txt&#39;)
+
+Rx.Observable.fromEvent(process.stdin, &#39;data&#39;)
+.map((v) =&amp;gt; `- ${v}`)
+.subscribe((v) =&amp;gt; write(v));
+
+function write(v){
+  // TODO: back-pressure
+  writable.write(v);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ node main.js 
+aiueo
+kakikukeko
+^C
+
+$ cat output.txt 
+- aiueo
+- kakikukeko
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Nightmareでブラウザでの操作を自動化する</title>
+          <link>http://sambaiz.net/article/90/</link>
+          <pubDate>Wed, 29 Mar 2017 23:18:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/90/</guid>
+          <description>&lt;p&gt;最近、&lt;a href=&#34;http://postwash.net/&#34;&gt;POSTWASH&lt;/a&gt;という洗濯代行サービスを使っている。
+専用のカバンに詰めて集荷にきた人に渡すと、きれいに畳まれた洗濯ものが届く便利なサービスだ。
+注文時にはWebのフォームから集荷、配達時間や支払い方法などを選ぶ必要があるんだけど、毎週のことなのでこれを自動化してみる。&lt;/p&gt;
+
+&lt;p&gt;ブラウザの操作を自動化するのに&lt;a href=&#34;https://github.com/segmentio/nightmare&#34;&gt;Nightmare&lt;/a&gt;を使う。
+&lt;a href=&#34;https://electron.atom.io/&#34;&gt;Electron&lt;/a&gt;を使っていて、&lt;a href=&#34;http://phantomjs.org/&#34;&gt;PahntomJS&lt;/a&gt;より2倍くらい速く、簡潔に書ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install nightmare
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Nightmare()&lt;/code&gt;の引数に&lt;code&gt;show: true&lt;/code&gt;を渡すとウィンドウが開いて実行し始める。
+これで確認画面までいくのであとは注文ボタンを押すだけ。
+ウィンドウが閉じないように最後に&lt;code&gt;nightmare.end()&lt;/code&gt;を呼んでいない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const co = require(&#39;co&#39;);
+const moment = require(&#39;moment&#39;)
+const jst = +9
+const Nightmare = require(&#39;nightmare&#39;);		
+const nightmare = Nightmare({ 
+  show: true,
+  waitTimeout: 3000,
+  gotoTimeout: 3000
+});
+const loginID = process.env.LOGIN_ID;
+const loginPassword = process.env.LOGIN_PASSWORD;
+
+moment.locale(&#39;ja&#39;);
+const now = moment().utcOffset(jst)
+const dayAfterTomorrow = now.add(2, &#39;days&#39;).format(&amp;quot;YYYY年M月D日(ddd)&amp;quot;);
+const nextWeek = now.add(7, &#39;days&#39;).format(&amp;quot;YYYY年M月D日(ddd)&amp;quot;)
+console.log(`${dayAfterTomorrow}~${nextWeek}`);
+
+// IDとパスワードを入れてログイン
+const login = () =&amp;gt; nightmare
+  .goto(&#39;https://sv359.xserver.jp/~postwash/postwash.net/accounts/&#39;)
+  .type(&#39;#loginid&#39;, loginID)
+  .insert(&#39;#loginpw&#39;, loginPassword) // .insert() is faster than .type() but does not trigger the keyboard events.
+  .click(&#39;#submit&#39;)
+  .wait(&#39;#yokoso&#39;)
+  .evaluate(() =&amp;gt; document.querySelector(&#39;#yokoso h5&#39;).textContent);
+
+// 注文フォームを埋めていく
+const order = () =&amp;gt; nightmare
+  .goto(&#39;https://sv359.xserver.jp/~postwash/postwash.net/mypage/order.html&#39;)
+  .wait(&#39;#item\\[4\\]&#39;)
+  .check(&#39;#item\\[4\\]&#39;)
+  .insert(&#39;#itemnum\\[4\\]&#39;, &#39;1&#39;)
+  .select(&#39;#pickup_date_request&#39;, dayAfterTomorrow)
+  .select(&#39;#pickup_time_request&#39;, &#39;午前中（8時～12時）&#39;)
+  .wait(500) // #delivery_date_request が切り替わってしまうので少し待つ
+  .select(&#39;#delivery_date_request&#39;, nextWeek)
+  .select(&#39;#delivery_time_request&#39;, &#39;午前中（8時～12時）&#39;)
+  .select(&#39;#payment&#39;, &#39;代金引換&#39;)
+  .check(&#39;#agreement&#39;)
+  .click(&#39;#submit&#39;)
+
+co(function *(){
+    yield login().then(
+        (result) =&amp;gt; console.log(result), // ようこそ
+        (err) =&amp;gt; console.log(err)
+    );
+    yield order();
+    // yield nightmare.end();
+});
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Node.jsでの文字コードの変換</title>
+          <link>http://sambaiz.net/article/89/</link>
+          <pubDate>Tue, 28 Mar 2017 21:36:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/89/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/bnoordhuis/node-iconv&#34;&gt;node-iconv&lt;/a&gt;を使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install iconv
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;SHIFT_JISからUTF-8への変換はこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const Iconv  = require(&#39;iconv&#39;).Iconv;
+
+const before = new Buffer([
+    0x8b, 0x8d, 
+    0x8e, 0x4d, 
+    0x26,
+    0x82, 0xb2,
+    0x94, 0xd1
+]);
+
+const iconv = new Iconv(&#39;SHIFT_JIS&#39;, &#39;UTF-8&#39;);
+console.log(`before: ${before.toString(&#39;hex&#39;)} ${before.toString()}`)
+const after = iconv.convert(before);
+console.log(`after:  ${after.toString(&#39;hex&#39;)} ${after.toString()}`);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;before: 8b8d8e4d2682b294d1 ���M&amp;amp;����
+after:  e7899be79abf26e38194e9a3af 牛皿&amp;amp;ご飯
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;文字コードによっては変換後に表せないことがある。
+例えば、UTF-8からSHIFT_JISへの変換でサロゲートペア🍚を渡すと変換できず、エラーになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;throw errnoException(&#39;EILSEQ&#39;, &#39;Illegal character sequence.&#39;);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;//IGNORE&lt;/code&gt;を&lt;a href=&#34;https://www.npmjs.com/package/iconv#dealing-with-untranslatable-characters&#34;&gt;付ける&lt;/a&gt;ことで
+そのような文字があった場合でもエラーにしないようにできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const Iconv  = require(&#39;iconv&#39;).Iconv;
+
+const before = &amp;quot;牛皿&amp;amp;🍚&amp;quot;;
+
+const iconv = new Iconv(&#39;UTF-8&#39;, &#39;SHIFT_JIS//IGNORE&#39;);
+console.log(`before: ${new Buffer(before).toString(&#39;hex&#39;)} ${before.toString()}`)
+const conv = iconv.convert(before);
+const iconv2 = new Iconv(&#39;SHIFT_JIS&#39;, &#39;UTF-8&#39;);
+const after = iconv2.convert(conv);
+console.log(`after:  ${after.toString(&#39;hex&#39;)} ${after.toString()}`);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;変換できないものは無視される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;before: e7899be79abf26f09f8d9a 牛皿&amp;amp;🍚
+after:  e7899be79abf26 牛皿&amp;amp;
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Node.jsでDateを任意のフォーマットの文字列にする</title>
+          <link>http://sambaiz.net/article/79/</link>
+          <pubDate>Mon, 06 Mar 2017 20:18:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/79/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;http://momentjs.com/&#34;&gt;Moment.js&lt;/a&gt;を使う。
+相対時間(&lt;code&gt;5 years ago&lt;/code&gt;)を出したり、日付の計算(&lt;code&gt;add(3, &#39;days&#39;)&lt;/code&gt;)もできる便利なライブラリ。
+ブラウザでも使える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install moment
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;const moment = require(&#39;moment&#39;)
+const jst = +9
+let now = moment().utcOffset(jst).format(&amp;quot;YYYY-MM-DD HH:mm:ss.SSSZ&amp;quot;);
+console.log(now);
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Node.jsのバージョン管理</title>
           <link>http://sambaiz.net/article/8/</link>
           <pubDate>Fri, 15 Jul 2016 19:20:00 &#43;0900</pubDate>
           <author></author>
           <guid>http://sambaiz.net/article/8/</guid>
-          <description>&lt;p&gt;Nodeのバージョンを上げようと思って調べてみたら&lt;a href=&#34;https://github.com/tj/n&#34;&gt;n&lt;/a&gt;という
-バージョン管理ツールがあったので使ってみた。&lt;/p&gt;
+          <description>
+
+&lt;h2 id=&#34;nvm-https-github-com-creationix-nvm&#34;&gt;&lt;a href=&#34;https://github.com/creationix/nvm&#34;&gt;nvm&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;大体これを使っておけばよさそう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.1/install.sh | bash
+$ nvm install node
+$ node -v
+v7.7.2
+
+$ nvm install 6
+$ node -v
+v6.10.0
+
+$ nvm ls
+        v6.10.0
+-&amp;gt;       v7.7.2
+default -&amp;gt; node (-&amp;gt; v7.7.2)
+node -&amp;gt; stable (-&amp;gt; v7.7.2) (default)
+stable -&amp;gt; 7.7 (-&amp;gt; v7.7.2) (default)
+iojs -&amp;gt; N/A (default)
+lts/* -&amp;gt; lts/boron (-&amp;gt; v6.10.0)
+lts/argon -&amp;gt; v4.8.0 (-&amp;gt; N/A)
+lts/boron -&amp;gt; v6.10.0
+
+$ nvm use node
+Now using node v7.7.2 (npm v4.1.2)
+
+$ nvm use 6
+Now using node v6.10.0 (npm v3.10.10)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;n-https-github-com-tj-n&#34;&gt;&lt;a href=&#34;https://github.com/tj/n&#34;&gt;n&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;すでにnodeが入っているならこっちを使うこともできる。&lt;/p&gt;
 
 &lt;p&gt;&lt;code&gt;n latest&lt;/code&gt;, &lt;code&gt;n stable&lt;/code&gt;, &lt;code&gt;n lts&lt;/code&gt;でバージョンが切り替わる。
 バージョンを指定する場合、&lt;code&gt;n &amp;lt;version&amp;gt;&lt;/code&gt;でインストールし、&lt;code&gt;n&lt;/code&gt;でインストールされているバージョンの一覧から選択できる。
-バージョンの削除は&lt;code&gt;n - &amp;lt;version&amp;gt;&lt;/code&gt;。簡単だ。&lt;/p&gt;
+バージョンの削除は&lt;code&gt;n - &amp;lt;version&amp;gt;&lt;/code&gt;。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm install -g n
 $ n stable
