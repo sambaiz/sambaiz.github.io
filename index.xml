@@ -6,8 +6,458 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-05-17 23:34:00 -0700 PDT</updated>
+    <updated>2017-05-27 16:35:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる</title>
+          <link>http://sambaiz.net/article/104/</link>
+          <pubDate>Sat, 27 May 2017 16:35:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/104/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap&#34;&gt;https://github.com/uber-go/zap&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get -u go.uber.org/zap
+$ go get -u gopkg.in/natefinch/lumberjack.v2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;速さの秘訣&#34;&gt;速さの秘訣&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://techblog.ca-reward.co.jp/2016/06/post-33.html&#34;&gt;Go言語のLogger「zap」は何故高速に構造化されたログを出力する事が出来るのか｜株式会社CAリワード&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;reflectionとallocationの回避。&lt;/p&gt;
+
+&lt;p&gt;一度allocateしたBufferやEncoderは
+&lt;a href=&#34;https://golang.org/pkg/sync/#Pool&#34;&gt;sync.Pool&lt;/a&gt;で使い回している。
+このPoolはまさにallocateされたアイテムを再利用するためのもので、GCの負担を緩和させることができる。
+Poolのアイテムは勝手に削除されることがあり、もし参照しか持っていなかったらそのままdeallocateされる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34&#34;&gt;https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func NewPool() Pool {
+	return Pool{p: &amp;amp;sync.Pool{
+		New: func() interface{} {
+			return &amp;amp;Buffer{bs: make([]byte, 0, _size)}
+		},
+	}}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;使い方&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;現状ドキュメントが乏しいのでコードから探っていく必要がある。
+まずはQuick Startから。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;zap.NewProduction()&lt;/code&gt;は&lt;code&gt;NewProductionConfig().Build(options...)&lt;/code&gt;の&lt;a href=&#34;https://github.com/uber-go/zap/blob/master/logger.go#L87&#34;&gt;ショートカット&lt;/a&gt;。
+ConfigをBuildしてLoggerを取得し、InfoやErrorで書く流れ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;logger, _ := zap.NewProduction()
+defer logger.Sync()
+logger.Info(&amp;quot;Hoge&amp;quot;,
+  // Structured context as strongly-typed Field values.
+  zap.Int(&amp;quot;attempt&amp;quot;, 3),
+  zap.Duration(&amp;quot;backoff&amp;quot;, time.Second),
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;{&amp;quot;level&amp;quot;:&amp;quot;info&amp;quot;,&amp;quot;ts&amp;quot;:1495870212.3378785,&amp;quot;caller&amp;quot;:&amp;quot;zap-log/main.go:36&amp;quot;,&amp;quot;msg&amp;quot;:&amp;quot;Hoge&amp;quot;,&amp;quot;attempt&amp;quot;:3,&amp;quot;backoff&amp;quot;:1}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;NewProductionConfig()&lt;/code&gt;の内容はこんな感じ。ここからOutputPathを書き換えるとファイルに出力されるようにできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;config := zap.Config{
+    Level:       zap.NewAtomicLevelAt(zap.ErrorLevel),
+    Development: false,
+    Sampling: &amp;amp;zap.SamplingConfig{
+        Initial:    100,
+        Thereafter: 100,
+    },
+    Encoding: &amp;quot;json&amp;quot;,
+    EncoderConfig: zapcore.EncoderConfig{
+        TimeKey:        &amp;quot;ts&amp;quot;,
+        LevelKey:       &amp;quot;level&amp;quot;,
+        NameKey:        &amp;quot;logger&amp;quot;,
+        CallerKey:      &amp;quot;caller&amp;quot;,
+        MessageKey:     &amp;quot;msg&amp;quot;,
+        StacktraceKey:  &amp;quot;stacktrace&amp;quot;,
+        LineEnding:     zapcore.DefaultLineEnding,
+        EncodeLevel:    zapcore.LowercaseLevelEncoder,
+        EncodeTime:     zapcore.EpochTimeEncoder,
+        EncodeDuration: zapcore.SecondsDurationEncoder,
+        EncodeCaller:   zapcore.ShortCallerEncoder,
+    },
+    OutputPaths:      []string{&amp;quot;stderr&amp;quot;},
+    ErrorOutputPaths: []string{&amp;quot;stderr&amp;quot;},
+}
+config.OutputPaths = []string{&amp;quot;./aaaa.log&amp;quot;}
+logger, _ = config.Build()
+defer logger.Sync()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Buildの引数にも渡せるOptionというのは&lt;code&gt;apply(logger)&lt;/code&gt;でloggerを操作するインタフェース。
+&lt;a href=&#34;https://github.com/uber-go/zap/blob/74ca5ef91c08e5eafb5ab9739df05d66f1b5d8da/options.go#L55&#34;&gt;zap.Fields&lt;/a&gt;は
+フィールドを追加するもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;logger = logger.WithOptions(zap.Fields(zap.String(&amp;quot;hoge&amp;quot;, &amp;quot;fuga&amp;quot;)))
+defer logger.Sync()
+logger.Error(&amp;quot;aaa&amp;quot;,
+    zap.String(&amp;quot;eee&amp;quot;, &amp;quot;eee&amp;quot;),
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap/blob/v1.4.0/config.go#L154&#34;&gt;Build&lt;/a&gt;の実装をみると、
+中では&lt;code&gt;zapcore.NewCore(enc, sink, cfg.Level)&lt;/code&gt;とOptionを引数として取る&lt;code&gt;New()&lt;/code&gt;でloggerを生成している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;enc, err := cfg.buildEncoder()
+if err != nil {
+    return nil, err
+}
+
+sink, errSink, err := cfg.openSinks()
+if err != nil {
+    return nil, err
+}
+
+log := New(
+    zapcore.NewCore(enc, sink, cfg.Level),
+    cfg.buildOptions(errSink)...,
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このsinkは&lt;code&gt;io.Writer&lt;/code&gt;をwrapした&lt;a href=&#34;https://github.com/uber-go/zap/blob/179e456766f6ba6d1006f432f90d52ecb6296e84/zapcore/write_syncer.go#L32&#34;&gt;WriteSyncer&lt;/a&gt;
+で、&lt;code&gt;AddSync(w io.Writer)&lt;/code&gt;で変換できる。
+これに&lt;a href=&#34;https://github.com/natefinch/lumberjack&#34;&gt;lumberjack&lt;/a&gt;を渡してやるとrotateできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;config := zap.NewProductionConfig()
+enc := zapcore.NewJSONEncoder(config.EncoderConfig)
+sink := zapcore.AddSync(
+    &amp;amp;lumberjack.Logger{
+        Filename:   &amp;quot;./aaaa.log&amp;quot;,
+        MaxSize:    500, // megabytes
+        MaxBackups: 3,
+        MaxAge:     28, //days
+    },
+)
+logger := zap.New(
+    zapcore.NewCore(enc, sink, config.Level),
+)
+defer logger.Sync()
+logger.Error(&amp;quot;aaa&amp;quot;,
+    zap.String(&amp;quot;eeef&amp;quot;, &amp;quot;eefe&amp;quot;),
+)
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>夜のNY郊外を無一文で彷徨い、Google I/OとMaker Faire Bay Areaに行ってきた</title>
+          <link>http://sambaiz.net/article/103/</link>
+          <pubDate>Mon, 22 May 2017 23:44:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/103/</guid>
+          <description>
+
+&lt;p&gt;Googleが毎年やっているイベント、Google I/Oのチケットが当たったのでアメリカに行ってきた。
+海外に行くのはこれが3回目でアメリカははじめて。一人での海外もはじめて。&lt;/p&gt;
+
+&lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;チケットが当たってからExpediaで航空券やホテルを取った。航空券の流れで保険にも加入した。
+アメリカの医療費は相当高いそうなので何かしらの保険に入っておかないと不安だ。&lt;/p&gt;
+
+&lt;p&gt;会期中は会場近辺のサンフランシスコ/マウンテンビューのホテルがとんでもなく値上がりしている模様。
+多分通常の倍ぐらいにはなっているので早めに取っておくとよいと思われる。&lt;/p&gt;
+
+&lt;p&gt;GoogleI/Oは週末にかけての3日間だったので、その前の週末から出発し、前半はニューヨークに行くことにして、
+マンハッタンに宿を取った。&lt;/p&gt;
+
+&lt;p&gt;アメリカに入国するのには&lt;a href=&#34;https://esta.cbp.dhs.gov/esta/application.html&#34;&gt;ESTA&lt;/a&gt;を申請する必要がある。
+申請自体は72時間以内に通るのだけど、パスポート番号が必要がなので持っていなければ先に作っておく必要がある。
+ESTAが通っていないと本当に入れないらしい。怖い。&lt;/p&gt;
+
+&lt;p&gt;現地での通信手段はT-mobileの&lt;a href=&#34;https://prepaid-phones.t-mobile.com/prepaid-international-tourist-plan&#34;&gt;Tourist plan&lt;/a&gt;($30プリペイドでSIM+2GB LTE+国内通話+SMS)
+を購入することにした。
+日本にはsimを送ってくれないので現地で調達する必要がある。モバイルルータはちょっと高いような気がして借りなかった。&lt;/p&gt;
+
+&lt;p&gt;あとは英語力をなんとかしようと付け焼刃でDMM英会話をはじめてみたが、準備期間が短すぎたかなと思う。&lt;/p&gt;
+
+&lt;h2 id=&#34;出国&#34;&gt;出国&lt;/h2&gt;
+
+&lt;p&gt;チェックインの締め切りが出発の1時間前だったので、
+余裕を持って2時間前ぐらいには着くはずだったんだけど、こんなときに限って財布を落とすわ成田エクスプレスは突然運休するわで大ピンチ。
+日暮里から京急のスカイライナーに乗ってスーツケースをかついで走ってなんとか飛行機には間に合ったが、
+両替などする時間はなく、財布に1000円しか入っていない状態で出発することになってしまった。&lt;/p&gt;
+
+&lt;p&gt;距離にして11000km、12時間のフライトの末、ニューヨークのジョン・F・ケネディ国際空港(JFK)に到着。
+時差で-13時間になるため出発よりも早い時刻に到着することになって得した気分だ。
+ついにアメリカに来た。&lt;/p&gt;
+
+&lt;h2 id=&#34;ニューヨーク&#34;&gt;ニューヨーク&lt;/h2&gt;
+
+&lt;p&gt;当初はニューヨーク観光しつつ、アムトラック(電車)でワシントンD.C.にも行っちゃおうかと考えてチケットまで買っていた。
+しかし現実は厳しい。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;現地に到着し、通信手段を調達するためT-mobileのショップに向かおうとしたが、肝心のショップの場所がわからない。
+もちろん日本のsimカードはすでに機能停止しているので空港のWifiで調べたところ、そこから一番近いところでも数km離れていることがわかった。
+タイムズスクエアの近くにはあるようだったので、まずはなんとかしてホテルに向かうことにしたが、
+JFKからマンハッタンまでは直線距離で20km以上離れている。ホテルの送迎サービスはなかった。
+それでもGoogle mapに従って、途中free wifiを乗り継いでいけばこのときはなんとかなるかなと思っていた。&lt;/p&gt;
+
+&lt;p&gt;空港から電車で行こうと思っていたところ、うかつにも謎タクシーに誘導されて乗ってしまった。
+47ドルでホテルまで行ってくれると思いきや、それはJamaica駅までの料金で、ホテルまでは100ドルという。調べていた相場の倍だ。
+傷口を広げないようJamaicaで降ろしてもらうことにした。
+乗る前に現金はないからクレジットカードで払う旨を伝えたのだけど、
+支払いの段になってクレジットカードの機械が壊れたから現金でと言い出して困った。なにせ1ドルも持っていないのだから。
+近くのATMで現金を下ろすよう言われたのでクレジットカードを入れたのだけれど
+2枚ともアウト。そこからどうやって払うんだって問いつめられるもののどうしようもない。
+結局解放してもらえたが、初っ端からほとんど心が折れてしまって国に帰りたかった。&lt;/p&gt;
+
+&lt;p&gt;それでもなんとかしてホテルにはたどり着かなくてはならないので、LIRRという電車でJamaicaからWoodside駅に向かった。
+空港で調べたGoogle mapの経路に出たからそうしたのだけど、
+マンハッタンにあるハブ駅、Pensilvania(Penn) stationまで行くほうが行き先表示に出ているので分かりやすかった。
+改札はなくて切符は車内で確認される。&lt;/p&gt;
+
+&lt;p&gt;案内の人に聞いて電車に乗ったんだけど、切符の確認の際にこの電車ではないと言われる。
+乗り間違えると、引き返すためにホームで割と長く待つことになる。5月も半ばなのに白い息が出るぐらい寒い。
+Googleで調べようにも、駅にあるWifiはどうも契約していないと使えなさそうなものしかなかった。
+地下鉄にはfree wifiが通っていたが、それも全ての駅で使えるというわけではなさそうだった。&lt;/p&gt;
+
+&lt;p&gt;Woodsideからは地下鉄に乗るのだけれど、この券売機がなぜかクレジットカードのPINをうけつけてくれずチケットを買えなかった。
+カードが止まったかと思い、しょうがないので6kmほど歩いてマンハッタンまで向かうことにした。雨が降っていて、寒くて泣きたくなった。
+空港でマップのデータを読んでいたのでGPSと合わせればオフラインでも自分の位置はわかるのが唯一の救いだ。
+電話もなかったので、道中あったスタバなどのfree wifiを外から使わせてもらって、
+家族に連絡をとって日本からクレジットカード会社に問い合わせてもらったが、
+本人からの連絡じゃないとだめとのことでどうしようもなかった。&lt;/p&gt;
+
+&lt;p&gt;マンハッタンに行くためにはイースト川を越える必要があったので、
+地図上で橋になっているところを順番に見てまわったが、車や電車でないとだめなところばかりで暗雲がただこめる。
+あとから調べたら、マンハッタンの南側、ブルックリンとマンハッタン橋は歩いて渡れたらしい。
+あの向こうがマンハッタンなのになと沿岸を眺めながら、この時点で夜中の0時を回っていて、野宿の可能性を考え始める。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-manhattan.jpg&#34; alt=&#34;マンハッタンを眺める&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;途方に暮れて彷徨っていたところ、歩いていたおじさんとたまたま目が合って、
+お金がなくて電車には乗れないんだけど、徒歩でマンハッタンに渡る方法はあるか聞いたら、
+なんと地下鉄の駅まで案内してくれて運賃を出してくれた。
+お礼するために連絡先を聞こうとしたのにすぐいなくなってしまわれた。命の恩人だ。&lt;/p&gt;
+
+&lt;p&gt;なんとかホテルに到着し、電話を借りてカード会社に連絡したところ、
+カードは普通に使える状態で電車の明細はこちらには届いていない、キャッシングは枠がないからできない、
+というまさかの事実が発覚した。
+カードが使えるとはいえ現金がないと困ることが分かったので、キャッシング枠の審査を急いでもらうよう頼んでみた。&lt;/p&gt;
+
+&lt;p&gt;もはや遠出する気が全くなくなったのでアムトラックのチケットをキャンセルしようと思ったら、システムメンテナンスでできずに諦める。
+雨の中歩き回ったのでスーツケースの中の服はほとんどびしょ濡れだった。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;次の日は昼をまわったころ目覚めて、だらだらして風呂に入ってT-mobileのショップに向かってsimを購入。
+設定は向こうの人がやってくれるので、言語を英語にしておくとスムーズだ。
+念願の通信手段を得て、Google mapがいつでも使えるようになった。つまり無敵。
+とはいえ、いまだ現金がないのでマンハッタンの中で過ごすことにした。&lt;/p&gt;
+
+&lt;p&gt;マンハッタンは高いビルが多く、GPSが大きくずれる。縦横のStreetとAvenueに番号が振られているのでそれに従うと動きやすかった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-stav.jpg&#34; alt=&#34;StreetとAvenueの表示&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Shake Shackのハンバーガーを食べて、チェルシーマーケットでロブスターを食べた。これでもsmall。
+身はぎっしり入っていてレモンをかけて食べるとおいしい。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-bigebi.jpg&#34; alt=&#34;チェルシーマーケットのロブスター&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;それと、なぜかカードが使えなかった地下鉄に再チャレンジしてみた。
+問題になったのはこういう券売機。クレジットカードを抜き差し(dip)してPINを入力する。やっぱり買えない。
+いろいろ試して見たところPINを入力せずにENTERだけ押したら買えることがわかった。意味わからん・・・。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-ny-subway-machine.jpg&#34; alt=&#34;NYの地下鉄の券売機&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;夜にキャッシングができるようになったのでタクシードライバーに連絡をとって代金を支払って2日目も終わり。
+3日目は空港に向かう日なので、これがNY滞在の全て。次来るときはもう少しなんとかしたい。&lt;/p&gt;
+
+&lt;p&gt;到着はJFKだったけど、出発はニューアーク・リバティー空港(EWR)からで、Penn stationからNJ TRANSIT(電車)一本で行ける。
+Penn stationは上にも書いたとおりハブ駅で、アムトラック、LIRR、NJ TRANSITの駅が入っている。
+ワシントンD.C.に行くときもこの駅から出るはずだった。
+最初、画面にTrack(ホーム)が書いてなくてちょっと焦ったが、STATUSがBOARDINGになると表示される。&lt;/p&gt;
+
+&lt;p&gt;EWRの飲食店にはタブレットが置いてあって、そこで注文しカードを通すと注文される。現金は使えない。
+最初にboarding passのバーコードをかざすと乗る便の情報が表示されるので乗り遅れる心配がない。乗り遅れるどころか2時間遅延してたけど。
+終わったらtabをcloseする。チップの割合も選択できるようになっている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-ewr.jpg&#34; alt=&#34;EWRの飲食店のタブレット&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;ここから西海岸、サンフランシスコへ。
+国内ながら3時間の時差があって、6時間のフライトなのに3時間しか進まない。&lt;/p&gt;
+
+&lt;h2 id=&#34;googlei-o&#34;&gt;GoogleI/O&lt;/h2&gt;
+
+&lt;p&gt;I/Oに参加する同僚2人と合流した。一人でないのは心強い限りだ。&lt;/p&gt;
+
+&lt;p&gt;GoogleI/O自体は3日間なのだけれど、前日に登録ができ、先着順でKeynoteの前の方の席が割り当てられる。
+今年の会場は去年と同じマウンテンビューのShoreline Amphitheatreというところで、Googleの近くにある。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-shoreline.jpg&#34; alt=&#34;Shoreline Amphitheatre&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;サンフランシスコからもサンノゼからもそれなりに離れていて、最寄りの電車の駅も少し離れているので、バスか車で来ることになると思う。
+同僚がレンタカーを借りてくれていたのでそれで向かったが、フリーウェイの、特に出口が渋滞して結構時間がかかる。
+駐車場が一杯なのではないか心配していたけど、普通の駐車場の他に滅茶苦茶広いオーバーフロー駐車場があるので問題なかった。
+どこまで駐車場なのかわからないぐらい広い。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-parking.jpg&#34; alt=&#34;オーバーフロー駐車場&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;受付を済ませると首からかけるバッジと、水筒、日焼け止め、Tシャツ、サングラスがもらえた。
+会場は基本屋外なのでかなり実用的なセットだ。一方夜は相当寒いので上着を持っていったほうがよい。
+バッジはNFCタグになっていて、セッション予約の確認に使われる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-ioset.jpg&#34; alt=&#34;もらったもの&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;ついでに近くのGoogleも見にいってきた。ショップがある。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-google.jpg&#34; alt=&#34;Google&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;その後サンフランシスコ市内の北、フィッシャーマンズワーフのBOUDINという店でパンの器のクラムチャウダーを食べた。
+おいしかった。海の方を眺めるとアルカトラズが見える。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-boudin.jpg&#34; alt=&#34;クラムチャウダー&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;夜はIntel&amp;rsquo;s Google I/O Day Zero Partyという非公式の前夜祭みたいなのに行ってきた。
+I/Oに比べると規模はそんなに大きくはないけど、それでも多くの人が集まっていて、日本勢にも出会った。
+飲み放題食べ放題で、IntelやGoogleのテクノロジーに絡んだデモが行われている。
+体験したりしてトークンを集めることで賞品と交換でき、アンドロイドのTシャツをもらった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-zero-day.jpg&#34; alt=&#34;アンドロイドのTシャツ&#34; /&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;Keynoteは一番広いアンフィシアターで行われ、内側の椅子エリアと外側の芝のエリアがある。
+遅れてしまったため芝エリアしか入れなくて午前中はそこで聞くことしたら、暑いけど寝転がりながら聞くことができるので案外悪くなかった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-keynote.jpg&#34; alt=&#34;芝席&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;食事は指定の場所で配られているので取っていって適当な場所で食べる。
+朝食も含めて食事や飲み物やお菓子は全て提供されるが、朝食は数がそんなに多くないのか、遅い時間に行くとなくなっていることがあった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-food.jpg&#34; alt=&#34;食事のリスト&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;午後のDeveloper Keynoteでは主な新機能などがざっくり発表されて、What&amp;rsquo;s newなどのセッションではそれが詳細に説明されたりする形になっている。&lt;/p&gt;
+
+&lt;p&gt;Androidは、GooglePlay Protectや、地味に長いブート時間が2倍速くなったりするAndroid Oが発表された。あと、嬉しそうにもう一つあるよって言い出して
+何かなと思ったらKotlin公式サポート。Android勢歓喜。よかったね。&lt;/p&gt;
+
+&lt;p&gt;Daydream(VR)はスマホ不要のStandaloneヘッドセットと、位置トラッキングのWorldSense。
+Tango(AR)はGPSに対して、室内で位置を知ることができるVPS(Visual Positioning Service)というのが発表されていた。これを使うと店内でナビできるすごく便利そうなやつだ。
+VR/ARは教育分野、&lt;a href=&#34;https://edu.google.com/expeditions/&#34;&gt;Google Expeditions&lt;/a&gt;でも使われているらしい。
+ARで教室に火山や竜巻を出したりできる。後のセッションで言っていたのは、どこにでもVRで行って何でもARで見れるだったかな。&lt;/p&gt;
+
+&lt;p&gt;あとはGoogle photoのサジェスト機能や、なんかすごいGoogle lensなどなど。
+Keynoteを通して、Googleっていろんなことをやっていて、世界が便利になるイメージが湧いた。&lt;/p&gt;
+
+&lt;p&gt;最後に突然のGoogle Home+GCPクレジット配布の発表。うれしい。
+日本での発売も発表されたが、一足早く手に入れることができた。何か作ってみたい。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-home.jpg&#34; alt=&#34;Google Home&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Keynoteが終わると並行してセッション、展示やオフィスアワーなどが行われる。
+セッションは1時間区切りになっていて、移動の時間が用意されていないように見えるが、
+実際は30~40分ほどで終わるので一杯に入れても問題はない。
+ただ、一日中ずっとセッションを聞いているというのも疲れるので、
+割とみんなその辺りにある椅子や芝生に座ったり寝転がったりしてPCを開いてたり、歓談してたりする。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-relax.jpg&#34; alt=&#34;会場風景&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;セッションはAR(Tango)/VR(Daydream)、Firebase、Android Thingsなどいろいろな種類のを聞きにいった。
+全てのセッションはライブストリーミングされているので日本でも聞けるけど、
+現地だと会場の雰囲気を楽しめるのはもちろん、しなかったけどセッションの後やオフィスアワーで質問したりすることができる。
+次来るときは質問できるぐらい使い込んでいきたい。&lt;/p&gt;
+
+&lt;p&gt;Firebaseもいくつか機能追加があって、そのうちの一つがPhone number auth。早速ためしてみた。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/102/&#34;&gt;io17で発表されたFirebaseのphone number authをwebで試してみた&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;AndroidThingsはIoTのためのOS。
+Androidのエコシステムに乗れることと、プロトタイプから本番までのスケーリングしやすさ、セキュリティが特長として挙げられていた。
+せっかくなのでcodelabsで触ってきた。codelabsでは、Googleのテクノロジーのチュートリアルのコースを質問しながら進められる。
+Android端末など必要な機材は用意されているので、それらを持っていなくても問題ない。IoTはなかなかの人気コンテンツで2時間待つことになった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-codelabs.jpg&#34; alt=&#34;IOT codelab&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;コースを最後まで終えるとAndroid Things対応のハードウェアセットがもらえた。
+codelabsはwebに&lt;a href=&#34;https://codelabs.developers.google.com/io2017&#34;&gt;公開されている&lt;/a&gt;ので家でも試すことができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-iot-omiyage.jpg&#34; alt=&#34;IOTおみやげ&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;1,2日目のセッションが終わるとAfter Hourというパーティーがある。
+朝から夜まで楽しめる、とても良いイベントだった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-party.jpg&#34; alt=&#34;After Hour&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;maker-faire-bay-area&#34;&gt;Maker Faire Bay Area&lt;/h2&gt;
+
+&lt;p&gt;Google I/Oが終わった翌日、同僚を空港で見送ってSan mateoで行われるMaker Faire Bay Areaにいってきた。&lt;/p&gt;
+
+&lt;p&gt;Maker Faireは、ものづくりが好きな人たちが集まり、作ったものを展示発表したり体験したりするお祭り。
+このBay Areaからはじまり、世界中に広がっている。
+東京でも行われているんだけど、行ったことがないためこれが初参加。&lt;/p&gt;
+
+&lt;p&gt;空港から会場のSan Mateo Event Centerまではバス(SamTrans)で向かった。
+運賃は現金で払うこともできるけど、Clipperという日本のSuicaみたいなやつがあると便利。空港のInformationで買えた。
+バスの運賃は2ドルちょっと。&lt;/p&gt;
+
+&lt;p&gt;バス停は柱の上の方にある行き先が書いてある札が目印。待合所があるところもあれば、ただの柱にくっついているところもあってちょっと気づきにくい。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-busstop.jpg&#34; alt=&#34;バス停&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;乗ったらClipperをピッとやって席に座り、降りたければ黄色い紐を引くとSTOP REQUESTEDされる。
+バス停に近づいても特にアナウンスなく通過してしまうのでGPSの位置を注意して見ていた。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-stop-requested.jpg&#34; alt=&#34;STOP REUESTEDの紐&#34; /&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;会場はとても広い。何も考えずにうろうろしていたのだけど、あとでマップを見返したら、見てない場所とかがあったりしたので、最初にマップで行く場所に目星をつけておいたほうがよいと思う。
+展示のジャンルごとにテントがあって、ほかにはアクティビティやステージ、食べ物の屋台、体験コーナーなどがある。
+屋台は基本現金払いだけど、ATMが会場内にもある。
+子供連れもたくさんいて、大人子供ともに楽しめるイベントになっていた。&lt;/p&gt;
+
+&lt;p&gt;展示物は、子供が作ったものから、こんなの個人で作れるのかというようなものまで、ジャンルも電子工作からガーデニングまでいろいろ。
+日本から出している人もいて、ロボットのところにデイリーポータルZや個人のブースがいくつかあった。&lt;/p&gt;
+
+&lt;p&gt;すごい勢いで燃えながら回転する球。日本だと消防法的にまずそう。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-burning.jpg&#34; alt=&#34;燃える球&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;自転車をこいで電力を賄うステージ。ステージもいくつかあって、他では化学の実験をやっていた。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-you-are-the-power.jpg&#34; alt=&#34;YOU ARE THE POWER!&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;アクティビティをやるには自己責任的な誓約書にサインしてリストバンドをもらう必要がある。
+これは音楽に合わせて対応するところを踏んだり引いたりするゲーム。アクションは5つしかないんだけど、なかなか難しかった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-make-act.jpg&#34; alt=&#34;音ゲー&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;ドローンレースをやっているテントもあった。モニターにはドローン視点の映像が流れていて迫力がある。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-drone.jpg&#34; alt=&#34;ドローンレース&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;R2D2がいた。もちろん動く。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/104-r2d2.jpg&#34; alt=&#34;R2D2&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;せっかくAndroid Thingsのハードウェアも手に入ったことだし、何か作って出展してみたい。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;これでアメリカでの予定も終わり。
+9日間ながら内容が濃い滞在だった。また行きたい。&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -51,9 +501,9 @@ ui.start(&#39;#firebaseui-auth-container&#39;, uiConfig);
 
 &lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/102-1.png&#34; alt=&#34;ボタン&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;電話番号とCAPCHAが入り、&lt;/p&gt;
+&lt;p&gt;電話番号とCAPTCHAが入り、&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/102-2.png&#34; alt=&#34;電話番号とCAPCHA&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/102-2.png&#34; alt=&#34;電話番号とCAPTCHA&#34; /&gt;&lt;/p&gt;
 
 &lt;p&gt;SMSに書かれた番号を入力すると認証される。&lt;/p&gt;
 
@@ -7168,485 +7618,6 @@ hoge.log: {&amp;quot;a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_tag&
 
 &lt;pre&gt;&lt;code&gt;hoge.log: {&amp;quot;a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;b&amp;quot;:{&amp;quot;c&amp;quot;:1},&amp;quot;d&amp;quot;:&amp;quot;fuga&amp;quot;}
 hoge.log: {&amp;quot;a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_tag&amp;quot;:&amp;quot;hoge.log&amp;quot;,&amp;quot;what_is_a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_c_of_b_add_1&amp;quot;:2}
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>fluentdでElasticsearchに送る</title>
-          <link>http://sambaiz.net/article/54/</link>
-          <pubDate>Wed, 01 Feb 2017 21:51:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/54/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/uken/fluent-plugin-elasticsearch&#34;&gt;uken/fluent-plugin-elasticsearch&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;必要なものをいれていく。Amazon LinuxのAMIから。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;Failed to build gem native extension.&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;pre&gt;&lt;code&gt;$ yum install -y ruby-devel
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;serverengine requires Ruby version &amp;gt;= 2.1.0.&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/rbenv/rbenv&#34;&gt;rbenv&lt;/a&gt;でバージョンを上げる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/rbenv/rbenv.git ~/.rbenv
-$ cd ~/.rbenv &amp;amp;&amp;amp; src/configure &amp;amp;&amp;amp; make -C src
-$ echo &#39;export PATH=&amp;quot;$HOME/.rbenv/bin:$PATH&amp;quot;&#39; &amp;gt;&amp;gt; ~/.bash_profile
-$ ~/.rbenv/bin/rbenv init
-$ echo &#39;eval &amp;quot;$(rbenv init -)&amp;quot;&#39; &amp;gt;&amp;gt; ~/.bash_profile
-$ source ~/.bash_profile
-$ git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rbenv -v
-rbenv 1.1.0-2-g4f8925a
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;Ruby install aborted due to missing extensions&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;pre&gt;&lt;code&gt;$ yum install -y openssl-devel readline-devel zlib-devel
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ rbenv install -l
-1.8.5-p113
-1.8.5-p114
-1.8.5-p115
-...
-
-$ rbenv install 2.4.0
-$ rbenv global 2.4.0
-$ ruby -v
-ruby 2.4.0p0 (2016-12-24 revision 57164) [x86_64-linux]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ td-agent-gem install fluent-plugin-elasticsearch
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;td-agent.confはこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
-  @type forward
-  port 24224
-  bind 0.0.0.0
-&amp;lt;/source&amp;gt;
-
-&amp;lt;match hoge.log&amp;gt;
-  @type elasticsearch
-  host *****
-  port 9200
-  index_name test_index
-  type_name test_type
-&amp;lt;/match&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;a&amp;quot;: &amp;quot;b&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat hoge.log
-$ curl *****:9200/test_index/test_type/_search?pretty
-{
-  &amp;quot;took&amp;quot; : 2,
-  &amp;quot;timed_out&amp;quot; : false,
-  &amp;quot;_shards&amp;quot; : {
-    &amp;quot;total&amp;quot; : 5,
-    &amp;quot;successful&amp;quot; : 5,
-    &amp;quot;failed&amp;quot; : 0
-  },
-  &amp;quot;hits&amp;quot; : {
-    &amp;quot;total&amp;quot; : 1,
-    &amp;quot;max_score&amp;quot; : 1.0,
-    &amp;quot;hits&amp;quot; : [
-      {
-        &amp;quot;_index&amp;quot; : &amp;quot;test_index&amp;quot;,
-        &amp;quot;_type&amp;quot; : &amp;quot;test_type&amp;quot;,
-        &amp;quot;_id&amp;quot; : &amp;quot;AVn5puy79PEDL_x5e_u3&amp;quot;,
-        &amp;quot;_score&amp;quot; : 1.0,
-        &amp;quot;_source&amp;quot; : {
-          &amp;quot;a&amp;quot; : &amp;quot;b&amp;quot;
-        }
-      }
-    ]
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;logstash formatでも入れてみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
-  @type forward
-  port 24224
-  bind 0.0.0.0
-&amp;lt;/source&amp;gt;
-
-&amp;lt;match hoge.log&amp;gt;
-  @type elasticsearch
-  host *****
-  port 9200
-  logstash_format true
-  logstash_prefix aaaa
-  type_name test_type
-&amp;lt;/match&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;a&amp;quot;: &amp;quot;b&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat hoge.log
-$ curl *****:9200/aaaa-2017.02.02/_search?pretty
-{
-  &amp;quot;took&amp;quot; : 1,
-  &amp;quot;timed_out&amp;quot; : false,
-  &amp;quot;_shards&amp;quot; : {
-    &amp;quot;total&amp;quot; : 5,
-    &amp;quot;successful&amp;quot; : 5,
-    &amp;quot;failed&amp;quot; : 0
-  },
-  &amp;quot;hits&amp;quot; : {
-    &amp;quot;total&amp;quot; : 1,
-    &amp;quot;max_score&amp;quot; : 1.0,
-    &amp;quot;hits&amp;quot; : [
-      {
-        &amp;quot;_index&amp;quot; : &amp;quot;aaaa-2017.02.02&amp;quot;,
-        &amp;quot;_type&amp;quot; : &amp;quot;test_type&amp;quot;,
-        &amp;quot;_id&amp;quot; : &amp;quot;AVn_FyQP7q9Gyu5HC4Mq&amp;quot;,
-        &amp;quot;_score&amp;quot; : 1.0,
-        &amp;quot;_source&amp;quot; : {
-          &amp;quot;a&amp;quot; : &amp;quot;b&amp;quot;,
-          &amp;quot;@timestamp&amp;quot; : &amp;quot;2017-02-02T22:49:33+09:00&amp;quot;
-        }
-      }
-    ]
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;forwardと同じく
-&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/buffer-plugin-overview&#34;&gt;Buffered Output plugin&lt;/a&gt;を
-&lt;a href=&#34;https://github.com/uken/fluent-plugin-elasticsearch#buffered-output-options&#34;&gt;継承しているので&lt;/a&gt;
-buffer_typeのデフォルトはmemory。必要ならfileにする。いずれにせよスパイクなどでbuffer_queue_limitを超えないように余裕をもっておく。
-また、buffer_chunk_limitがElasticsearchのhttp.max_content_length(デフォルト100mb)を超えないようにする。&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>Goのnet/http.Client.Doの内部実装をたどったメモ</title>
-          <link>http://sambaiz.net/article/53/</link>
-          <pubDate>Mon, 30 Jan 2017 20:55:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/53/</guid>
-          <description>
-
-&lt;pre&gt;&lt;code&gt;package main
-
-import (
-        &amp;quot;fmt&amp;quot;
-        &amp;quot;net/http&amp;quot;
-        &amp;quot;io/ioutil&amp;quot;
-)
-
-var client = http.Client{}
-
-func main() {
-
-        req, err := http.NewRequest(&amp;quot;GET&amp;quot;, &amp;quot;http://example.com&amp;quot;, nil)
-        if err != nil{
-                panic(err)
-        }
-
-        resp, err := client.Do(req)
-        if err != nil{
-                panic(err)
-        }
-        defer resp.Body.Close()
-
-        body, err := ioutil.ReadAll(resp.Body)
-        if err != nil{
-                panic(err)
-        }
-
-        fmt.Println(string(body))
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;client&#34;&gt;Client&lt;/h3&gt;
-
-&lt;p&gt;TransportがTCPコネクションをキャッシュするのでClientは使い回すべき。複数のgoroutineでコンカレントに使っても大丈夫。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L36&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L36&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;type Client struct {
-
-        // nilならDefaultTransportが使われる        
-    	Transport RoundTripper
-
-        // nilなら10回で止まる
-        CheckRedirect func(req *Request, via []*Request) error
-
-        // nilならcookieは無視される
-        Jar CookieJar
-
-        Timeout time.Duration
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;MaxIdleConnsとは別に、ホストごとの制限がある。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/61/&#34;&gt;Goのnet/httpとKeep-Alive - sambaiz.net&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L39&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L39&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;var DefaultTransport RoundTripper = &amp;amp;Transport{
-	Proxy: ProxyFromEnvironment,
-	DialContext: (&amp;amp;net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-		DualStack: true,
-	}).DialContext,
-	MaxIdleConns:          100,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 1 * time.Second,
-}
-
-const DefaultMaxIdleConnsPerHost = 2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;request&#34;&gt;Request&lt;/h3&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/request.go#L690&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/request.go#L690&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
-    ...
-    
-    u, err := url.Parse(urlStr)
-    
-    ...
-    
-    rc, ok := body.(io.ReadCloser)
-    req := &amp;amp;Request{
-            Method:     method,
-            URL:        u,
-            Proto:      &amp;quot;HTTP/1.1&amp;quot;,
-            ProtoMajor: 1,
-            ProtoMinor: 1,
-            Header:     make(Header),
-            Body:       rc,
-            Host:       u.Host,
-        }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;do&#34;&gt;Do&lt;/h3&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L181&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L181&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;Requestを渡してResponseを受け取る。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func (c *Client) Do(req *Request) (*Response, error) {
-    method := valueOrDefault(req.Method, &amp;quot;GET&amp;quot;)
-    if method == &amp;quot;GET&amp;quot; || method == &amp;quot;HEAD&amp;quot; {
-        return c.doFollowingRedirects(req, shouldRedirectGet)
-    }
-    if method == &amp;quot;POST&amp;quot; || method == &amp;quot;PUT&amp;quot; {
-        return c.doFollowingRedirects(req, shouldRedirectPost)
-    }
-    return c.send(req, c.deadline())
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;dofollowingredirects&#34;&gt;doFollowingRedirects&lt;/h3&gt;
-
-&lt;p&gt;リクエストを送り、リダイレクトする場合はして、そうでない場合はレスポンスを返す。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L440&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L440&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func (c *Client) doFollowingRedirects(req *Request, shouldRedirect func(int) bool) (*Response, error) {
-    ...
-
-    for{
-
-        ...
-        
-        if resp, err = c.send(req, deadline); err != nil {
-            if !deadline.IsZero() &amp;amp;&amp;amp; !time.Now().Before(deadline) {
-                err = &amp;amp;httpError{
-                    err:     err.Error() + &amp;quot; (Client.Timeout exceeded while awaiting headers)&amp;quot;,
-                    timeout: true,
-                }
-            }
-            return nil, uerr(err)
-        }
-
-        if !shouldRedirect(resp.StatusCode) {
-            return resp, nil
-        }
-    }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;send&#34;&gt;send&lt;/h3&gt;
-
-&lt;p&gt;ClientのTransportのRoundTripを呼ぶ。ここからはTransport(RoundTripper)の仕事。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L140&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L140&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func (c *Client) send(req *Request, deadline time.Time) (*Response, error) {
-    
-    ...
-    
-    resp, err := send(req, c.transport(), deadline)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L208&#34;&gt;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L208&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func send(ireq *Request, rt RoundTripper, deadline time.Time) (*Response, error) {
-   
-    ...
-    
-    resp, err := rt.RoundTrip(req)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;roundtrip&#34;&gt;RoundTrip&lt;/h3&gt;
-
-&lt;p&gt;チャネルを通して接続先とやりとりする。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L319&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L319&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func (t *Transport) RoundTrip(req *Request) (*Response, error) {
-    
-    ...
-    
-    treq := &amp;amp;transportRequest{Request: req, trace: trace}
-    
-    ...
-	
-    cm, err := t.connectMethodForRequest(treq)
-    pconn, err := t.getConn(treq, cm)
-   
-    ...
-    
-    resp, err = pconn.roundTrip(treq)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;writeとreadを同時に行っているのはサーバーがbodyのすべてを読む前にレスポンスを返すときのため。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L1823&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L1823&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err error) {
-    
-    ...
-    
-    pc.writech &amp;lt;- writeRequest{req, writeErrCh, continueCh} // pc.writeLoopで読まれる
-
-    resc := make(chan responseAndError)
-	pc.reqch &amp;lt;- requestAndChan{ // pc.readLoopで読まれる
-		req:        req.Request,
-		ch:         resc,
-		addedGzip:  requestedGzip,
-		continueCh: continueCh,
-		callerGone: gone,
-	}
-    var re responseAndError
-    
-    ...
-    
-    case re = &amp;lt;-resc: // pc.readLoopで書き込まれる
-		re.err = pc.mapRoundTripErrorFromReadLoop(req.Request, startBytesWritten, re.err)
-		break WaitResponse
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;pconn-getconn-dialconn&#34;&gt;pconn.getConn/dialConn&lt;/h3&gt;
-
-&lt;p&gt;接続し、チャネルを読むループ(readLoop, writeLoop)を回す。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L865&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L865&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func (t *Transport) getConn(treq *transportRequest, cm connectMethod) (*persistConn, error) {
-    ...
-    type dialRes struct {
-		pc  *persistConn
-		err error
-	}
-    dialc := make(chan dialRes)
-    
-    ...
-    
-    go func() {
-		pc, err := t.dialConn(ctx, cm)
-		dialc &amp;lt;- dialRes{pc, err}
-	}()
-    
-    ...
-    
-    select {
-	case v := &amp;lt;-dialc:
-        if v.pc != nil {
-            
-            ...
-			
-            return v.pc, nil
-        }
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L967&#34;&gt;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L967&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (*persistConn, error) {
-    pconn := &amp;amp;persistConn{
-		t:             t,
-		cacheKey:      cm.key(),
-		reqch:         make(chan requestAndChan, 1), // roundTripで書かれて、readLoopで読まれる
-		writech:       make(chan writeRequest, 1), // roundTripで書かれて、writeLoopで読まれる
-		closech:       make(chan struct{}),
-		writeErrCh:    make(chan error, 1),
-		writeLoopDone: make(chan struct{}),
-	}
-
-    ...
-    
-    conn, err := t.dial(ctx, &amp;quot;tcp&amp;quot;, cm.addr())
-	pconn.conn = conn
-    
-    ...
-    
-    go pconn.readLoop()
-	go pconn.writeLoop()
-	return pconn, nil
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;ライセンス&#34;&gt;ライセンス&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;Copyright (c) 2009 The Go Authors. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-   * Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
-   * Redistributions in binary form must reproduce the above
-copyright notice, this list of conditions and the following disclaimer
-in the documentation and/or other materials provided with the
-distribution.
-   * Neither the name of Google Inc. nor the names of its
-contributors may be used to endorse or promote products derived from
-this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-&amp;quot;AS IS&amp;quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 &lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>

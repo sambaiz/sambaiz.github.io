@@ -11,6 +11,150 @@
     
       
         <item>
+          <title>Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる</title>
+          <link>http://sambaiz.net/article/104/</link>
+          <pubDate>Sat, 27 May 2017 16:35:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/104/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap&#34;&gt;https://github.com/uber-go/zap&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get -u go.uber.org/zap
+$ go get -u gopkg.in/natefinch/lumberjack.v2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;速さの秘訣&#34;&gt;速さの秘訣&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://techblog.ca-reward.co.jp/2016/06/post-33.html&#34;&gt;Go言語のLogger「zap」は何故高速に構造化されたログを出力する事が出来るのか｜株式会社CAリワード&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;reflectionとallocationの回避。&lt;/p&gt;
+
+&lt;p&gt;一度allocateしたBufferやEncoderは
+&lt;a href=&#34;https://golang.org/pkg/sync/#Pool&#34;&gt;sync.Pool&lt;/a&gt;で使い回している。
+このPoolはまさにallocateされたアイテムを再利用するためのもので、GCの負担を緩和させることができる。
+Poolのアイテムは勝手に削除されることがあり、もし参照しか持っていなかったらそのままdeallocateされる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34&#34;&gt;https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func NewPool() Pool {
+	return Pool{p: &amp;amp;sync.Pool{
+		New: func() interface{} {
+			return &amp;amp;Buffer{bs: make([]byte, 0, _size)}
+		},
+	}}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;使い方&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;p&gt;現状ドキュメントが乏しいのでコードから探っていく必要がある。
+まずはQuick Startから。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;zap.NewProduction()&lt;/code&gt;は&lt;code&gt;NewProductionConfig().Build(options...)&lt;/code&gt;の&lt;a href=&#34;https://github.com/uber-go/zap/blob/master/logger.go#L87&#34;&gt;ショートカット&lt;/a&gt;。
+ConfigをBuildしてLoggerを取得し、InfoやErrorで書く流れ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;logger, _ := zap.NewProduction()
+defer logger.Sync()
+logger.Info(&amp;quot;Hoge&amp;quot;,
+  // Structured context as strongly-typed Field values.
+  zap.Int(&amp;quot;attempt&amp;quot;, 3),
+  zap.Duration(&amp;quot;backoff&amp;quot;, time.Second),
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;{&amp;quot;level&amp;quot;:&amp;quot;info&amp;quot;,&amp;quot;ts&amp;quot;:1495870212.3378785,&amp;quot;caller&amp;quot;:&amp;quot;zap-log/main.go:36&amp;quot;,&amp;quot;msg&amp;quot;:&amp;quot;Hoge&amp;quot;,&amp;quot;attempt&amp;quot;:3,&amp;quot;backoff&amp;quot;:1}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;NewProductionConfig()&lt;/code&gt;の内容はこんな感じ。ここからOutputPathを書き換えるとファイルに出力されるようにできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;config := zap.Config{
+    Level:       zap.NewAtomicLevelAt(zap.ErrorLevel),
+    Development: false,
+    Sampling: &amp;amp;zap.SamplingConfig{
+        Initial:    100,
+        Thereafter: 100,
+    },
+    Encoding: &amp;quot;json&amp;quot;,
+    EncoderConfig: zapcore.EncoderConfig{
+        TimeKey:        &amp;quot;ts&amp;quot;,
+        LevelKey:       &amp;quot;level&amp;quot;,
+        NameKey:        &amp;quot;logger&amp;quot;,
+        CallerKey:      &amp;quot;caller&amp;quot;,
+        MessageKey:     &amp;quot;msg&amp;quot;,
+        StacktraceKey:  &amp;quot;stacktrace&amp;quot;,
+        LineEnding:     zapcore.DefaultLineEnding,
+        EncodeLevel:    zapcore.LowercaseLevelEncoder,
+        EncodeTime:     zapcore.EpochTimeEncoder,
+        EncodeDuration: zapcore.SecondsDurationEncoder,
+        EncodeCaller:   zapcore.ShortCallerEncoder,
+    },
+    OutputPaths:      []string{&amp;quot;stderr&amp;quot;},
+    ErrorOutputPaths: []string{&amp;quot;stderr&amp;quot;},
+}
+config.OutputPaths = []string{&amp;quot;./aaaa.log&amp;quot;}
+logger, _ = config.Build()
+defer logger.Sync()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Buildの引数にも渡せるOptionというのは&lt;code&gt;apply(logger)&lt;/code&gt;でloggerを操作するインタフェース。
+&lt;a href=&#34;https://github.com/uber-go/zap/blob/74ca5ef91c08e5eafb5ab9739df05d66f1b5d8da/options.go#L55&#34;&gt;zap.Fields&lt;/a&gt;は
+フィールドを追加するもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;logger = logger.WithOptions(zap.Fields(zap.String(&amp;quot;hoge&amp;quot;, &amp;quot;fuga&amp;quot;)))
+defer logger.Sync()
+logger.Error(&amp;quot;aaa&amp;quot;,
+    zap.String(&amp;quot;eee&amp;quot;, &amp;quot;eee&amp;quot;),
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap/blob/v1.4.0/config.go#L154&#34;&gt;Build&lt;/a&gt;の実装をみると、
+中では&lt;code&gt;zapcore.NewCore(enc, sink, cfg.Level)&lt;/code&gt;とOptionを引数として取る&lt;code&gt;New()&lt;/code&gt;でloggerを生成している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;enc, err := cfg.buildEncoder()
+if err != nil {
+    return nil, err
+}
+
+sink, errSink, err := cfg.openSinks()
+if err != nil {
+    return nil, err
+}
+
+log := New(
+    zapcore.NewCore(enc, sink, cfg.Level),
+    cfg.buildOptions(errSink)...,
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このsinkは&lt;code&gt;io.Writer&lt;/code&gt;をwrapした&lt;a href=&#34;https://github.com/uber-go/zap/blob/179e456766f6ba6d1006f432f90d52ecb6296e84/zapcore/write_syncer.go#L32&#34;&gt;WriteSyncer&lt;/a&gt;
+で、&lt;code&gt;AddSync(w io.Writer)&lt;/code&gt;で変換できる。
+これに&lt;a href=&#34;https://github.com/natefinch/lumberjack&#34;&gt;lumberjack&lt;/a&gt;を渡してやるとrotateできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;config := zap.NewProductionConfig()
+enc := zapcore.NewJSONEncoder(config.EncoderConfig)
+sink := zapcore.AddSync(
+    &amp;amp;lumberjack.Logger{
+        Filename:   &amp;quot;./aaaa.log&amp;quot;,
+        MaxSize:    500, // megabytes
+        MaxBackups: 3,
+        MaxAge:     28, //days
+    },
+)
+logger := zap.New(
+    zapcore.NewCore(enc, sink, config.Level),
+)
+defer logger.Sync()
+logger.Error(&amp;quot;aaa&amp;quot;,
+    zap.String(&amp;quot;eeef&amp;quot;, &amp;quot;eefe&amp;quot;),
+)
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>godocのメモ</title>
           <link>http://sambaiz.net/article/91/</link>
           <pubDate>Wed, 05 Apr 2017 22:11:00 &#43;0900</pubDate>
