@@ -6,8 +6,176 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-06-04 11:57:00 &#43;0900 JST</updated>
+    <updated>2017-06-04 23:50:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする</title>
+          <link>http://sambaiz.net/article/107/</link>
+          <pubDate>Sun, 04 Jun 2017 23:50:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/107/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;$ curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh
+$ td-agent --version
+td-agent 0.14.16
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;0.12系じゃない！？&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum list installed | grep td-agent
+td-agent.x86_64                       2.3.5-0.el2017               @treasuredata
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どうやら2.3.5では0.14系になってしまっているよう。
+そのあとにリリースされた2.3.5-1では直ってるみたいだけど、現時点ではrpmリポジトリに上がっていない。
+これって問題だと思うんだけど・・・。&lt;/p&gt;
+
+&lt;p&gt;しょうがないのでソースからビルドすることにした。
+いずれにせよ各環境で同じバージョンのビルドに合わせるべきだとは思う。
+Beanstalk環境の場合、AMIに固めていたとしても非Beanstalk AMIではyum updateされてしまうので注意が必要だ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/106/&#34;&gt;BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;前UbuntuでやったようにDockerでビルドする。今回はAmazon Linux向け。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/32/&#34;&gt;td-agentをビルドしてfluentdのバージョンを上げる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/&#34;&gt;https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM amazonlinux:2017.03
+
+WORKDIR /tmp
+
+RUN yum -y update &amp;amp;&amp;amp; \
+    yum groupinstall -y &amp;quot;Development Tools&amp;quot; &amp;amp;&amp;amp; \
+    yum install -y ruby23 ruby23-devel &amp;amp;&amp;amp; \
+    gem install bundler io-console &amp;amp;&amp;amp; \
+    git clone https://github.com/treasure-data/omnibus-td-agent
+
+WORKDIR /tmp/omnibus-td-agent
+
+RUN bundle install --binstubs &amp;amp;&amp;amp; \
+    bin/gem_downloader core_gems.rb &amp;amp;&amp;amp; \
+    bin/gem_downloader plugin_gems.rb &amp;amp;&amp;amp; \
+    bin/gem_downloader ui_gems.rb &amp;amp;&amp;amp; \
+    mkdir -p /opt/td-agent /var/cache/omnibus &amp;amp;&amp;amp; \
+    bin/omnibus build td-agent2 &amp;amp;&amp;amp; \
+    mv ./pkg/*.rpm /
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t amazon-linux-td-agent .
+$ docker run --name altd -itd amazon-linux-td-agent sh
+$ docker cp altd:/td-agent-2.3.5-1.el2017.x86_64.rpm .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとはこれをインストールする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum install -y redhat-lsb-core
+$ rpm -ivh td-agent-2.3.5-1.el2017.x86_64.rpm 
+$ td-agent --version
+td-agent 0.12.36
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因</title>
+          <link>http://sambaiz.net/article/106/</link>
+          <pubDate>Sun, 04 Jun 2017 23:40:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/106/</guid>
+          <description>
+
+&lt;h2 id=&#34;user-dataとは-http-docs-aws-amazon-com-ja-jp-awsec2-latest-userguide-user-data-html&#34;&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/user-data.html&#34;&gt;User-Dataとは&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;EC2インスタンス起動時に、シェルスクリプトを走らせたりcloud-initディレクティブを適用できる機能。
+コンソールではインスタンスの詳細の設定の、高度な詳細のところから設定できる。&lt;/p&gt;
+
+&lt;h2 id=&#34;beanstalkでのuser-data&#34;&gt;BeanstalkでのUser-Data&lt;/h2&gt;
+
+&lt;p&gt;実はBeanstalkでも使われていて、CloudFormationで設定されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;    /bin/bash /tmp/ebbootstrap.sh &amp;quot;,
+
+...
+
+&amp;quot;Fn::FindInMap&amp;quot;: [
+    &amp;quot;AWSEBOptions&amp;quot;,
+    &amp;quot;options&amp;quot;,
+    &amp;quot;UserDataScript&amp;quot;
+]
+&amp;quot; &amp;gt; /tmp/ebbootstrap.sh &amp;quot;,
+
+...
+
+&amp;quot;AWSEBOptions&amp;quot;: {
+    &amp;quot;options&amp;quot;: {
+        &amp;quot;UserDataScript&amp;quot;: &amp;quot;https://s3-ap-northeast-1.amazonaws.com/elasticbeanstalk-env-resources-ap-northeast-1/stalks/eb_node_js_4.0.1.90.2/lib/UserDataScript.sh&amp;quot;,
+        &amp;quot;guid&amp;quot;: &amp;quot;f08557fc43ac&amp;quot;,
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このshellの中では、時計を同期させたり、awsebユーザーを作成したりするほかに、
+非Beanstalk AMI(is_baked=false)ではyum updateが走るようになっている。
+そのため、AMIでのバージョンとBeanstalkで立ち上がったときのバージョンが異なることがある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;GUID=$7
+
+function update_yum_packages
+{
+  if is_baked update_yum_packages_$GUID; then
+    log yum update has already been done.
+  else
+    log Updating yum packages.
+    yum --exclude=aws-cfn-bootstrap update -y || echo Warning: cannot update yum packages. Continue...
+    mark_installed update_yum_packages_$GUID
+
+    # Update system-release RPM package will reset the .repo files
+    # Update the mirror list again after yum update
+    update_mirror_list
+
+    log Completed updating yum packages. 
+  fi
+}
+
+function is_baked
+{
+	if [[ -f /etc/elasticbeanstalk/baking_manifest/$1 ]]; then
+    true
+	else
+    false
+	fi
+}
+
+function mark_installed
+{
+    mkdir -p /etc/elasticbeanstalk/baking_manifest/
+    echo `date -u` &amp;gt; /etc/elasticbeanstalk/baking_manifest/$1-manifest
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Beanstalk AMIでのログ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /var/log/messages | grep yum
+[eb-cfn-init]: yum repo has already been locked to f08557fc43ac.
+[eb-cfn-init]: yum update has already been done.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;非Beanstalk AMIでのログ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /var/log/messages | grep yum
+[eb-cfn-init]: Completed yum repo version locking.
+[eb-cfn-init]: Updating yum packages.
+yum[1597]: Updated: *****
+...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -679,8 +847,6 @@ private void DeviceWatcher_Updated(DeviceWatcher sender, DeviceInformationUpdate
 
 &lt;h2 id=&#34;ペアリング&#34;&gt;ペアリング&lt;/h2&gt;
 
-&lt;p&gt;OSの設定からペアリングすることもできる。&lt;/p&gt;
-
 &lt;pre&gt;&lt;code&gt;DevicePairingResult result = await deviceInfo.Pairing.PairAsync();
 if (result.Status == DevicePairingResultStatus.Paired || result.Status == DevicePairingResultStatus.AlreadyPaired){
     // success
@@ -692,6 +858,8 @@ if (result.Status == DevicePairingResultStatus.Paired || result.Status == Device
 &lt;p&gt;こんなウィンドウが出てくる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/101.png&#34; alt=&#34;ペアリング確認&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;OSの設定からペアリングすることもできる。&lt;/p&gt;
 
 &lt;h2 id=&#34;serviceのcharacteristicを取得する&#34;&gt;serviceのcharacteristicを取得する&lt;/h2&gt;
 
@@ -7267,367 +7435,6 @@ $ df -h
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/imaifactory/ephemeral-ssd&#34;&gt;EC2のストレージどう使う? -Instance Storageを理解して高速IOを上手に活用!-&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>HoloLensでGaze, Click, Hold, Voiceイベントを拾う</title>
-          <link>http://sambaiz.net/article/57/</link>
-          <pubDate>Sun, 05 Feb 2017 20:01:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/57/</guid>
-          <description>
-
-&lt;p&gt;こんなの。SparitalMappingを有効にしているので球が床で止まっている。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/57.png&#34; alt=&#34;こんなの&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://youtu.be/wQLn_SO9Ics&#34;&gt;動画&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity&#34;&gt;HoloToolKit&lt;/a&gt;
-のインタフェースを実装することでイベントを拾えるようになっている。&lt;/p&gt;
-
-&lt;h2 id=&#34;ifocusable&#34;&gt;IFocusable&lt;/h2&gt;
-
-&lt;p&gt;Gazeしたとき。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;public void OnFocusEnter（）
-{
-    gazing = true;
-}
-
-public void OnFocusExit()
-{
-    gazing = false;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;iinputclickhandler&#34;&gt;IInputClickHandler&lt;/h2&gt;
-
-&lt;p&gt;クリックしたとき。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;public void OnInputClicked(InputEventData eventData)
-{
-    if (!clicked)
-    {
-        clicked = true;
-        clickedRotationFrame = 0;
-    }
-    countUp();
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;iholdhandler&#34;&gt;IHoldHandler&lt;/h2&gt;
-
-&lt;p&gt;Hold(指を下げたまま維持する)したとき。
-指を上げたときがCompletedで、Objectを外れたときCanceledになる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;public void OnHoldStarted(HoldEventData eventData)
-{
-    holding = true;
-    clicked = true;
-}
-
-public void OnHoldCompleted(HoldEventData eventData)
-{
-    holding = false;
-}
-
-public void OnHoldCanceled(HoldEventData eventData)
-{
-    holding = false;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;ispeechhandler&#34;&gt;ISpeechHandler&lt;/h2&gt;
-
-&lt;p&gt;声の入力。
-InspectorからSpeech Input Source(Script)を追加して反応するキーワードを設定して使う。
-MicrophoneのCapabilitiesが必要。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;public void OnSpeechKeywordRecognized(SpeechKeywordRecognizedEventData eventData)
-{
-    switch (eventData.RecognizedText)
-    {
-        case &amp;quot;reset&amp;quot;:
-            count = 0;
-            num.GetComponent&amp;lt;TextMesh&amp;gt;().text = count.ToString();
-            break;
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;全体。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;using System;
-using HoloToolkit.Unity.InputModule;
-using UnityEngine;
-
-public class CounterCube : MonoBehaviour, IFocusable, IInputClickHandler, IHoldHandler, ISpeechHandler
-{
-    // rotate ANIMATION_FRAME * ANIMATION_PER_FRAME degrees
-    private const int ANIMATION_FRAME = 30;
-    private const float ANIMATION_ROTATE_PER_FRAME = 60f / ANIMATION_FRAME;
-
-    public GameObject cube;
-    public GameObject num;
-
-    private int count = 0;
-
-    private bool gazing = false;
-    private bool clicked = false;
-    private int clickedRotationFrame = 0;
-    private bool holding = false;
-	
-	// Update is called once per frame
-	void Update ()
-    {
-        if(clicked)
-        {
-            if(clickedRotationFrame &amp;lt; ANIMATION_FRAME)
-            {
-                clickedRotationFrame++;
-                cube.transform.localRotation = Quaternion.Euler(clickedRotationFrame * ANIMATION_ROTATE_PER_FRAME, clickedRotationFrame * ANIMATION_ROTATE_PER_FRAME, 0);
-            }
-            else if (holding)
-            {
-                // continue to count up
-                clickedRotationFrame = 0;
-                countUp();
-            }
-            else
-            {
-                clicked = false;
-            }
-
-        }
-
-        if (holding)
-        {
-            cube.GetComponent&amp;lt;Renderer&amp;gt;().material.color = Color.green;
-        }
-        else if (gazing)
-        {
-            cube.GetComponent&amp;lt;Renderer&amp;gt;().material.color = Color.blue;
-        }
-        else
-        {
-            cube.GetComponent&amp;lt;Renderer&amp;gt;().material.color = Color.gray;
-        }
-    }
-
-    public void OnFocusEnter()
-    {
-        gazing = true;
-    }
-
-    public void OnFocusExit()
-    {
-        gazing = false;
-    }
-
-    public void OnInputClicked(InputEventData eventData)
-    {
-        if (!clicked)
-        {
-            clicked = true;
-            clickedRotationFrame = 0;
-        }
-        countUp();
-    }
-
-    public void OnHoldStarted(HoldEventData eventData)
-    {
-        holding = true;
-        clicked = true;
-    }
-
-    public void OnHoldCompleted(HoldEventData eventData)
-    {
-        holding = false;
-    }
-
-    public void OnHoldCanceled(HoldEventData eventData)
-    {
-        holding = false;
-    }
-
-    private void countUp()
-    {
-        num.GetComponent&amp;lt;TextMesh&amp;gt;().text = (++count).ToString();
-        var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.transform.position = transform.position;
-        sphere.transform.localScale = Vector3.one * 0.1f;
-        sphere.AddComponent&amp;lt;Rigidbody&amp;gt;();
-    }
-
-    public void OnSpeechKeywordRecognized(SpeechKeywordRecognizedEventData eventData)
-    {
-        switch (eventData.RecognizedText)
-        {
-            case &amp;quot;reset&amp;quot;:
-                count = 0;
-                num.GetComponent&amp;lt;TextMesh&amp;gt;().text = count.ToString();
-                break;
-        }
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>HoloLensの開発を始める</title>
-          <link>http://sambaiz.net/article/56/</link>
-          <pubDate>Sat, 04 Feb 2017 21:28:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/56/</guid>
-          <description>
-
-&lt;h2 id=&#34;hololensでのアプリケーション&#34;&gt;HoloLensでのアプリケーション&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/app_model&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/app_model&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;ある点を見るGazeと指で選択するGesture、声で入力するVoiceで操作する。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/hololens_shell_overview&#34;&gt;HoloLens shell&lt;/a&gt;
-では壁などにタイルを配置することでアプリケーションが起動する。&lt;/p&gt;
-
-&lt;p&gt;一度に動くアプリケーションは一つ。
-他にアクティブなアプリケーションがあれば中断され、タイルは最後の状態のスクリーンショットになる。
-タイルを削除するとプロセスが終了する。&lt;/p&gt;
-
-&lt;p&gt;Viewには空間全体を使うHolographic Viewと、通常のウィンドウのような2D Viewがある。&lt;/p&gt;
-
-&lt;h2 id=&#34;開発を始める&#34;&gt;開発を始める&lt;/h2&gt;
-
-&lt;p&gt;Unityを使ってHolographic Viewのアプリケーションを開発する。&lt;/p&gt;
-
-&lt;p&gt;必要なツールをインストールする。エミュレーターは空きメモリが2GB以上ないと立ち上がらない。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/install_the_tools&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/install_the_tools&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;チュートリアル&#34;&gt;チュートリアル&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/holograms_100&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/holograms_100&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;QualityのところでWindows Storeのマークがなかったら、
-UnityのFile-&amp;gt;Build SettingsからWindows Storeモジュールをダウンロードする。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/holograms_101e&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/holograms_101e&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;エミュレーターはWASDキーで移動してカーソルキーで向きを変え、エンターキーで選択できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/56-hololens.PNG&#34; alt=&#34;エミュレーターで実行した画面&#34; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;エミュレーターで動かしてみる&#34;&gt;エミュレーターで動かしてみる&lt;/h2&gt;
-
-&lt;p&gt;UnityProjectを作成してHolograms 100のように設定していく。&lt;/p&gt;
-
-&lt;p&gt;まずはCamera。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Position: (0,0,0)&lt;/li&gt;
-&lt;li&gt;Clear Flags: Solid Color&lt;/li&gt;
-&lt;li&gt;Background: (0,0,0,0)&lt;/li&gt;
-&lt;li&gt;Clipping Planes Near: 0.85&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;とりあえず動くことを確認するため適当なオブジェクトを置いてビルドしてみる。&lt;/p&gt;
-
-&lt;p&gt;Edit-&amp;gt;Project Settings-&amp;gt;QualityでWindows StoreをFastestにする。&lt;/p&gt;
-
-&lt;p&gt;Build Settings-&amp;gt;Windows Storeで&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;SDK: Universal: 10&lt;/li&gt;
-&lt;li&gt;Target device: HoloLens&lt;/li&gt;
-&lt;li&gt;UWP Build Type: D3D&lt;/li&gt;
-&lt;li&gt;Unity C# Projectにチェック&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;にする。&lt;/p&gt;
-
-&lt;p&gt;BuildSettingsにあるPlayer Settingsボタンを押して
-Other SettingsのVirtual Reality Supportedにチェックを入れ、
-SDKsにWindows Holographicが出るのを確認する。&lt;/p&gt;
-
-&lt;p&gt;あとはBuild SettingsでAdd Open ScenesしてBuild。適当なディレクトリを作って選ぶとUWPのVSプロジェクトができるので
-上のところでRelease,x86,HoloLens Emulatrorにしてデバッグメニューからデバッグなしで開始する。
-エミュレーターが立ち上がって置いたオブジェクトが見えたらうまくいっている。&lt;/p&gt;
-
-&lt;h3 id=&#34;uwp-ユニバーサル-windows-プラットフォーム-とは-https-docs-microsoft-com-ja-jp-windows-uwp-get-started-universal-application-platform-guide&#34;&gt;&lt;a href=&#34;https://docs.microsoft.com/ja-jp/windows/uwp/get-started/universal-application-platform-guide&#34;&gt;UWP(ユニバーサル Windows プラットフォーム)とは&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;Windows 8でWindowsランタイム(WinRT)として導入された、
-PCだけではなく、タブレット、Xbox、HoloLensなど、様々なWindowsデバイス共通のアプリプラットフォーム。&lt;/p&gt;
-
-&lt;p&gt;PCではデスクトップデバイスファミリ、タブレットではモバイルデバイスファミリといったような、デバイスファミリに基づいたOSが実行される。
-UWPアプリでは、共通のWinRT APIだけではなく各デバイスファミリ固有のAPIも呼び出すこともでき、
-アプリのターゲットとするデバイスファミリを選択することができる。&lt;/p&gt;
-
-&lt;h2 id=&#34;holotoolkitを使う&#34;&gt;HoloToolKitを使う&lt;/h2&gt;
-
-&lt;p&gt;実装やビルドを楽にするやつ。上のような初期設定はやらなくていい。&lt;/p&gt;
-
-&lt;h3 id=&#34;準備&#34;&gt;準備&lt;/h3&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/blob/master/GettingStarted.md&#34;&gt;https://github.com/Microsoft/HoloToolkit-Unity/blob/master/GettingStarted.md&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/Microsoft/HoloToolkit-Unity/releases&#34;&gt;ここ&lt;/a&gt;からunitypackageをダウンロードして
-UnityのAssetsメニューからインポートする。&lt;/p&gt;
-
-&lt;p&gt;HoloToolKitメニューができるのでConfigureする。&lt;/p&gt;
-
-&lt;p&gt;Main CameraとDirectional Lightを消して
-&lt;code&gt;HoloToolkit/Input/Prefabs/HoloLensCamera.prefab&lt;/code&gt;と、
-&lt;code&gt;HoloToolkit/Input/Prefabs/Cursor/DefaultCursor.prefab&lt;/code&gt;を置く。&lt;/p&gt;
-
-&lt;p&gt;Create Emptyして&amp;rdquo;Managers&amp;rdquo;にリネームし、この中に
-&lt;code&gt;HoloToolkit/Input/Prefabs/InputManager.prefab&lt;/code&gt;を入れる。&lt;/p&gt;
-
-&lt;p&gt;Managersの中にUI -&amp;gt; EventSystemを作成する。&lt;/p&gt;
-
-&lt;p&gt;SparitalMappingする場合は、
-&lt;code&gt;HoloToolkit/SpartialMapping/Prefabs/SpartialMapping.prefab&lt;/code&gt;をMangersに入れて
-Editor -&amp;gt;　Project Settings -&amp;gt;　PlayerのPublishing Settingsから
-SpartialPerceptionにチェックを入れる。&lt;/p&gt;
-
-&lt;p&gt;HoloToolkitメニューからBuild Window -&amp;gt; Build Visual Studio SLNで
-ビルドし、Open SLNでVisual Studioが立ち上がる。
-ビルドの際にクラッシュしたらWindows Storeモジュールが入っているか確認する。&lt;/p&gt;
-
-&lt;h2 id=&#34;実機での実行&#34;&gt;実機での実行&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/Using_Visual_Studio.html#deploying_an_app_over_wi-fi&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/Using_Visual_Studio.html#deploying_an_app_over_wi-fi&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;Visual StudioでDeviceをHoloLens EmulatorからRemote Deviceに変更する。
-HoloLensのIPアドレスはSettings -&amp;gt; Network &amp;amp; Internet -&amp;gt; Advanced Optionで確認して、
-認証モードはユニバーサルにしてデバッグなしで開始する。&lt;/p&gt;
-
-&lt;p&gt;PINコードを要求されるので、Settings -&amp;gt;Update &amp;amp; Security -&amp;gt; For developersから
-Developer modeをonにし、その下のPaired devicesで表示されるPINコードを入力する。&lt;/p&gt;
-
-&lt;h2 id=&#34;スクリーンショットの撮り方&#34;&gt;スクリーンショットの撮り方&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/using_mixed_reality_capture&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/using_mixed_reality_capture&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;カメラで撮れる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/56-hololens2.jpg&#34; alt=&#34;実機で実行した画面&#34; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;windows-device-portal&#34;&gt;Windows Device Portal&lt;/h2&gt;
-
-&lt;p&gt;PCのブラウザからいろいろできるツール。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://developer.microsoft.com/en-us/windows/holographic/Using_the_Windows_Device_Portal.html#mixed_reality_capture&#34;&gt;https://developer.microsoft.com/en-us/windows/holographic/Using_the_Windows_Device_Portal.html#mixed_reality_capture&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;Settings -&amp;gt;Update &amp;amp; Security -&amp;gt; For developersからDevice Portalをonにすると
-&lt;a href=&#34;https://HoloLensのIPアドレス&#34;&gt;https://HoloLensのIPアドレス&lt;/a&gt;
-でアクセスできる。&lt;/p&gt;
 </description>
         </item>
       

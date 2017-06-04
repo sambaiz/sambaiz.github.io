@@ -15,18 +15,56 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>Api - sambaiz-net</title>
-    <meta name="twitter:title" content="Api - sambaiz-net">
-    <meta property='og:title' content="Api - sambaiz-net">
+    <title>BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 - sambaiz-net</title>
+    <meta name="twitter:title" content="BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 - sambaiz-net">
+    <meta property='og:title' content="BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 - sambaiz-net">
     <meta property="og:type" content="article">
+    
+      <meta name="description" content="AMIとBeanstalkで立ち上がったインスタンスの違い">
+      <meta name="twitter:description" content="AMIとBeanstalkで立ち上がったインスタンスの違い">
     
     
 
-    <meta property="og:url" content="http://sambaiz.net/tags/api/">
+    <meta property="og:url" content="http://sambaiz.net/article/106/">
     <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
 
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"http:\/\/sambaiz.net\/"
+    },
+    "headline": "BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 | sambaiz-net ",
+    "datePublished": "2017-06-04T23:40:00JST",
+    "dateModified": "2017-06-04T23:40:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "http:\/\/sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "http:\/\/sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "http:\/\/sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "AMIとBeanstalkで立ち上がったインスタンスの違い"
+  }
+</script>
 </head>
 
 <body>
@@ -59,36 +97,105 @@
 
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">Api</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因</h1>
+          <p>(2017-06-04)</p>
+          
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="http://sambaiz.net/article/34/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-11-10</time>
-      </div>
-      <p class="article title">API BlueprintでAPI仕様を書く</p>
-    </div>
-  </article>
-</a>
+<h2 id="user-dataとは-http-docs-aws-amazon-com-ja-jp-awsec2-latest-userguide-user-data-html"><a href="http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/user-data.html">User-Dataとは</a></h2>
+
+<p>EC2インスタンス起動時に、シェルスクリプトを走らせたりcloud-initディレクティブを適用できる機能。
+コンソールではインスタンスの詳細の設定の、高度な詳細のところから設定できる。</p>
+
+<h2 id="beanstalkでのuser-data">BeanstalkでのUser-Data</h2>
+
+<p>実はBeanstalkでも使われていて、CloudFormationで設定されている。</p>
+
+<pre><code>&quot;    /bin/bash /tmp/ebbootstrap.sh &quot;,
+
+...
+
+&quot;Fn::FindInMap&quot;: [
+    &quot;AWSEBOptions&quot;,
+    &quot;options&quot;,
+    &quot;UserDataScript&quot;
+]
+&quot; &gt; /tmp/ebbootstrap.sh &quot;,
+
+...
+
+&quot;AWSEBOptions&quot;: {
+    &quot;options&quot;: {
+        &quot;UserDataScript&quot;: &quot;https://s3-ap-northeast-1.amazonaws.com/elasticbeanstalk-env-resources-ap-northeast-1/stalks/eb_node_js_4.0.1.90.2/lib/UserDataScript.sh&quot;,
+        &quot;guid&quot;: &quot;f08557fc43ac&quot;,
+    }
+}
+</code></pre>
+
+<p>このshellの中では、時計を同期させたり、awsebユーザーを作成したりするほかに、
+非Beanstalk AMI(is_baked=false)ではyum updateが走るようになっている。
+そのため、AMIでのバージョンとBeanstalkで立ち上がったときのバージョンが異なることがある。</p>
+
+<pre><code>GUID=$7
+
+function update_yum_packages
+{
+  if is_baked update_yum_packages_$GUID; then
+    log yum update has already been done.
+  else
+    log Updating yum packages.
+    yum --exclude=aws-cfn-bootstrap update -y || echo Warning: cannot update yum packages. Continue...
+    mark_installed update_yum_packages_$GUID
+
+    # Update system-release RPM package will reset the .repo files
+    # Update the mirror list again after yum update
+    update_mirror_list
+
+    log Completed updating yum packages. 
+  fi
+}
+
+function is_baked
+{
+	if [[ -f /etc/elasticbeanstalk/baking_manifest/$1 ]]; then
+    true
+	else
+    false
+	fi
+}
+
+function mark_installed
+{
+    mkdir -p /etc/elasticbeanstalk/baking_manifest/
+    echo `date -u` &gt; /etc/elasticbeanstalk/baking_manifest/$1-manifest
+}
+</code></pre>
+
+<p>Beanstalk AMIでのログ。</p>
+
+<pre><code>$ cat /var/log/messages | grep yum
+[eb-cfn-init]: yum repo has already been locked to f08557fc43ac.
+[eb-cfn-init]: yum update has already been done.
+</code></pre>
+
+<p>非Beanstalk AMIでのログ。</p>
+
+<pre><code>$ cat /var/log/messages | grep yum
+[eb-cfn-init]: Completed yum repo version locking.
+[eb-cfn-init]: Updating yum packages.
+yum[1597]: Updated: *****
+...
+</code></pre>
 
         </div>
-        
-      </div>
-
-      
-
-
+      </article>
     </div>
-
   </div>
-
 </div>
 
 </div> 

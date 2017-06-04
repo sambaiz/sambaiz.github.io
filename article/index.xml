@@ -6,8 +6,176 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-06-04 11:57:00 &#43;0900 JST</updated>
+    <updated>2017-06-04 23:50:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする</title>
+          <link>http://sambaiz.net/article/107/</link>
+          <pubDate>Sun, 04 Jun 2017 23:50:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/107/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;$ curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh
+$ td-agent --version
+td-agent 0.14.16
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;0.12系じゃない！？&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum list installed | grep td-agent
+td-agent.x86_64                       2.3.5-0.el2017               @treasuredata
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どうやら2.3.5では0.14系になってしまっているよう。
+そのあとにリリースされた2.3.5-1では直ってるみたいだけど、現時点ではrpmリポジトリに上がっていない。
+これって問題だと思うんだけど・・・。&lt;/p&gt;
+
+&lt;p&gt;しょうがないのでソースからビルドすることにした。
+いずれにせよ各環境で同じバージョンのビルドに合わせるべきだとは思う。
+Beanstalk環境の場合、AMIに固めていたとしても非Beanstalk AMIではyum updateされてしまうので注意が必要だ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/106/&#34;&gt;BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;前UbuntuでやったようにDockerでビルドする。今回はAmazon Linux向け。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/32/&#34;&gt;td-agentをビルドしてfluentdのバージョンを上げる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/&#34;&gt;https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM amazonlinux:2017.03
+
+WORKDIR /tmp
+
+RUN yum -y update &amp;amp;&amp;amp; \
+    yum groupinstall -y &amp;quot;Development Tools&amp;quot; &amp;amp;&amp;amp; \
+    yum install -y ruby23 ruby23-devel &amp;amp;&amp;amp; \
+    gem install bundler io-console &amp;amp;&amp;amp; \
+    git clone https://github.com/treasure-data/omnibus-td-agent
+
+WORKDIR /tmp/omnibus-td-agent
+
+RUN bundle install --binstubs &amp;amp;&amp;amp; \
+    bin/gem_downloader core_gems.rb &amp;amp;&amp;amp; \
+    bin/gem_downloader plugin_gems.rb &amp;amp;&amp;amp; \
+    bin/gem_downloader ui_gems.rb &amp;amp;&amp;amp; \
+    mkdir -p /opt/td-agent /var/cache/omnibus &amp;amp;&amp;amp; \
+    bin/omnibus build td-agent2 &amp;amp;&amp;amp; \
+    mv ./pkg/*.rpm /
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t amazon-linux-td-agent .
+$ docker run --name altd -itd amazon-linux-td-agent sh
+$ docker cp altd:/td-agent-2.3.5-1.el2017.x86_64.rpm .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとはこれをインストールする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum install -y redhat-lsb-core
+$ rpm -ivh td-agent-2.3.5-1.el2017.x86_64.rpm 
+$ td-agent --version
+td-agent 0.12.36
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因</title>
+          <link>http://sambaiz.net/article/106/</link>
+          <pubDate>Sun, 04 Jun 2017 23:40:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/106/</guid>
+          <description>
+
+&lt;h2 id=&#34;user-dataとは-http-docs-aws-amazon-com-ja-jp-awsec2-latest-userguide-user-data-html&#34;&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/user-data.html&#34;&gt;User-Dataとは&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;EC2インスタンス起動時に、シェルスクリプトを走らせたりcloud-initディレクティブを適用できる機能。
+コンソールではインスタンスの詳細の設定の、高度な詳細のところから設定できる。&lt;/p&gt;
+
+&lt;h2 id=&#34;beanstalkでのuser-data&#34;&gt;BeanstalkでのUser-Data&lt;/h2&gt;
+
+&lt;p&gt;実はBeanstalkでも使われていて、CloudFormationで設定されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;    /bin/bash /tmp/ebbootstrap.sh &amp;quot;,
+
+...
+
+&amp;quot;Fn::FindInMap&amp;quot;: [
+    &amp;quot;AWSEBOptions&amp;quot;,
+    &amp;quot;options&amp;quot;,
+    &amp;quot;UserDataScript&amp;quot;
+]
+&amp;quot; &amp;gt; /tmp/ebbootstrap.sh &amp;quot;,
+
+...
+
+&amp;quot;AWSEBOptions&amp;quot;: {
+    &amp;quot;options&amp;quot;: {
+        &amp;quot;UserDataScript&amp;quot;: &amp;quot;https://s3-ap-northeast-1.amazonaws.com/elasticbeanstalk-env-resources-ap-northeast-1/stalks/eb_node_js_4.0.1.90.2/lib/UserDataScript.sh&amp;quot;,
+        &amp;quot;guid&amp;quot;: &amp;quot;f08557fc43ac&amp;quot;,
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このshellの中では、時計を同期させたり、awsebユーザーを作成したりするほかに、
+非Beanstalk AMI(is_baked=false)ではyum updateが走るようになっている。
+そのため、AMIでのバージョンとBeanstalkで立ち上がったときのバージョンが異なることがある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;GUID=$7
+
+function update_yum_packages
+{
+  if is_baked update_yum_packages_$GUID; then
+    log yum update has already been done.
+  else
+    log Updating yum packages.
+    yum --exclude=aws-cfn-bootstrap update -y || echo Warning: cannot update yum packages. Continue...
+    mark_installed update_yum_packages_$GUID
+
+    # Update system-release RPM package will reset the .repo files
+    # Update the mirror list again after yum update
+    update_mirror_list
+
+    log Completed updating yum packages. 
+  fi
+}
+
+function is_baked
+{
+	if [[ -f /etc/elasticbeanstalk/baking_manifest/$1 ]]; then
+    true
+	else
+    false
+	fi
+}
+
+function mark_installed
+{
+    mkdir -p /etc/elasticbeanstalk/baking_manifest/
+    echo `date -u` &amp;gt; /etc/elasticbeanstalk/baking_manifest/$1-manifest
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Beanstalk AMIでのログ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /var/log/messages | grep yum
+[eb-cfn-init]: yum repo has already been locked to f08557fc43ac.
+[eb-cfn-init]: yum update has already been done.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;非Beanstalk AMIでのログ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /var/log/messages | grep yum
+[eb-cfn-init]: Completed yum repo version locking.
+[eb-cfn-init]: Updating yum packages.
+yum[1597]: Updated: *****
+...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -679,8 +847,6 @@ private void DeviceWatcher_Updated(DeviceWatcher sender, DeviceInformationUpdate
 
 &lt;h2 id=&#34;ペアリング&#34;&gt;ペアリング&lt;/h2&gt;
 
-&lt;p&gt;OSの設定からペアリングすることもできる。&lt;/p&gt;
-
 &lt;pre&gt;&lt;code&gt;DevicePairingResult result = await deviceInfo.Pairing.PairAsync();
 if (result.Status == DevicePairingResultStatus.Paired || result.Status == DevicePairingResultStatus.AlreadyPaired){
     // success
@@ -692,6 +858,8 @@ if (result.Status == DevicePairingResultStatus.Paired || result.Status == Device
 &lt;p&gt;こんなウィンドウが出てくる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/101.png&#34; alt=&#34;ペアリング確認&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;OSの設定からペアリングすることもできる。&lt;/p&gt;
 
 &lt;h2 id=&#34;serviceのcharacteristicを取得する&#34;&gt;serviceのcharacteristicを取得する&lt;/h2&gt;
 

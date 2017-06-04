@@ -11,6 +11,77 @@
     
       
         <item>
+          <title>td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする</title>
+          <link>http://sambaiz.net/article/107/</link>
+          <pubDate>Sun, 04 Jun 2017 23:50:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/107/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;$ curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh
+$ td-agent --version
+td-agent 0.14.16
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;0.12系じゃない！？&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum list installed | grep td-agent
+td-agent.x86_64                       2.3.5-0.el2017               @treasuredata
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どうやら2.3.5では0.14系になってしまっているよう。
+そのあとにリリースされた2.3.5-1では直ってるみたいだけど、現時点ではrpmリポジトリに上がっていない。
+これって問題だと思うんだけど・・・。&lt;/p&gt;
+
+&lt;p&gt;しょうがないのでソースからビルドすることにした。
+いずれにせよ各環境で同じバージョンのビルドに合わせるべきだとは思う。
+Beanstalk環境の場合、AMIに固めていたとしても非Beanstalk AMIではyum updateされてしまうので注意が必要だ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/106/&#34;&gt;BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;前UbuntuでやったようにDockerでビルドする。今回はAmazon Linux向け。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/32/&#34;&gt;td-agentをビルドしてfluentdのバージョンを上げる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/&#34;&gt;https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM amazonlinux:2017.03
+
+WORKDIR /tmp
+
+RUN yum -y update &amp;amp;&amp;amp; \
+    yum groupinstall -y &amp;quot;Development Tools&amp;quot; &amp;amp;&amp;amp; \
+    yum install -y ruby23 ruby23-devel &amp;amp;&amp;amp; \
+    gem install bundler io-console &amp;amp;&amp;amp; \
+    git clone https://github.com/treasure-data/omnibus-td-agent
+
+WORKDIR /tmp/omnibus-td-agent
+
+RUN bundle install --binstubs &amp;amp;&amp;amp; \
+    bin/gem_downloader core_gems.rb &amp;amp;&amp;amp; \
+    bin/gem_downloader plugin_gems.rb &amp;amp;&amp;amp; \
+    bin/gem_downloader ui_gems.rb &amp;amp;&amp;amp; \
+    mkdir -p /opt/td-agent /var/cache/omnibus &amp;amp;&amp;amp; \
+    bin/omnibus build td-agent2 &amp;amp;&amp;amp; \
+    mv ./pkg/*.rpm /
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t amazon-linux-td-agent .
+$ docker run --name altd -itd amazon-linux-td-agent sh
+$ docker cp altd:/td-agent-2.3.5-1.el2017.x86_64.rpm .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとはこれをインストールする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum install -y redhat-lsb-core
+$ rpm -ivh td-agent-2.3.5-1.el2017.x86_64.rpm 
+$ td-agent --version
+td-agent 0.12.36
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ</title>
           <link>http://sambaiz.net/article/84/</link>
           <pubDate>Wed, 15 Mar 2017 23:00:00 &#43;0900</pubDate>

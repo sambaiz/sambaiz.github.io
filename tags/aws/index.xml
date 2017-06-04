@@ -11,6 +11,103 @@
     
       
         <item>
+          <title>BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因</title>
+          <link>http://sambaiz.net/article/106/</link>
+          <pubDate>Sun, 04 Jun 2017 23:40:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/106/</guid>
+          <description>
+
+&lt;h2 id=&#34;user-dataとは-http-docs-aws-amazon-com-ja-jp-awsec2-latest-userguide-user-data-html&#34;&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/user-data.html&#34;&gt;User-Dataとは&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;EC2インスタンス起動時に、シェルスクリプトを走らせたりcloud-initディレクティブを適用できる機能。
+コンソールではインスタンスの詳細の設定の、高度な詳細のところから設定できる。&lt;/p&gt;
+
+&lt;h2 id=&#34;beanstalkでのuser-data&#34;&gt;BeanstalkでのUser-Data&lt;/h2&gt;
+
+&lt;p&gt;実はBeanstalkでも使われていて、CloudFormationで設定されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;    /bin/bash /tmp/ebbootstrap.sh &amp;quot;,
+
+...
+
+&amp;quot;Fn::FindInMap&amp;quot;: [
+    &amp;quot;AWSEBOptions&amp;quot;,
+    &amp;quot;options&amp;quot;,
+    &amp;quot;UserDataScript&amp;quot;
+]
+&amp;quot; &amp;gt; /tmp/ebbootstrap.sh &amp;quot;,
+
+...
+
+&amp;quot;AWSEBOptions&amp;quot;: {
+    &amp;quot;options&amp;quot;: {
+        &amp;quot;UserDataScript&amp;quot;: &amp;quot;https://s3-ap-northeast-1.amazonaws.com/elasticbeanstalk-env-resources-ap-northeast-1/stalks/eb_node_js_4.0.1.90.2/lib/UserDataScript.sh&amp;quot;,
+        &amp;quot;guid&amp;quot;: &amp;quot;f08557fc43ac&amp;quot;,
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このshellの中では、時計を同期させたり、awsebユーザーを作成したりするほかに、
+非Beanstalk AMI(is_baked=false)ではyum updateが走るようになっている。
+そのため、AMIでのバージョンとBeanstalkで立ち上がったときのバージョンが異なることがある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;GUID=$7
+
+function update_yum_packages
+{
+  if is_baked update_yum_packages_$GUID; then
+    log yum update has already been done.
+  else
+    log Updating yum packages.
+    yum --exclude=aws-cfn-bootstrap update -y || echo Warning: cannot update yum packages. Continue...
+    mark_installed update_yum_packages_$GUID
+
+    # Update system-release RPM package will reset the .repo files
+    # Update the mirror list again after yum update
+    update_mirror_list
+
+    log Completed updating yum packages. 
+  fi
+}
+
+function is_baked
+{
+	if [[ -f /etc/elasticbeanstalk/baking_manifest/$1 ]]; then
+    true
+	else
+    false
+	fi
+}
+
+function mark_installed
+{
+    mkdir -p /etc/elasticbeanstalk/baking_manifest/
+    echo `date -u` &amp;gt; /etc/elasticbeanstalk/baking_manifest/$1-manifest
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Beanstalk AMIでのログ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /var/log/messages | grep yum
+[eb-cfn-init]: yum repo has already been locked to f08557fc43ac.
+[eb-cfn-init]: yum update has already been done.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;非Beanstalk AMIでのログ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /var/log/messages | grep yum
+[eb-cfn-init]: Completed yum repo version locking.
+[eb-cfn-init]: Updating yum packages.
+yum[1597]: Updated: *****
+...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ</title>
           <link>http://sambaiz.net/article/84/</link>
           <pubDate>Wed, 15 Mar 2017 23:00:00 &#43;0900</pubDate>

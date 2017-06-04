@@ -15,18 +15,56 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>Api - sambaiz-net</title>
-    <meta name="twitter:title" content="Api - sambaiz-net">
-    <meta property='og:title' content="Api - sambaiz-net">
+    <title>td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする - sambaiz-net</title>
+    <meta name="twitter:title" content="td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする - sambaiz-net">
+    <meta property='og:title' content="td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする - sambaiz-net">
     <meta property="og:type" content="article">
+    
+      <meta name="description" content="Amazon Linux向けビルド">
+      <meta name="twitter:description" content="Amazon Linux向けビルド">
     
     
 
-    <meta property="og:url" content="http://sambaiz.net/tags/api/">
+    <meta property="og:url" content="http://sambaiz.net/article/107/">
     <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
 
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"http:\/\/sambaiz.net\/"
+    },
+    "headline": "td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする | sambaiz-net ",
+    "datePublished": "2017-06-04T23:50:00JST",
+    "dateModified": "2017-06-04T23:50:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "http:\/\/sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "http:\/\/sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "http:\/\/sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "Amazon Linux向けビルド"
+  }
+</script>
 </head>
 
 <body>
@@ -59,36 +97,79 @@
 
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">Api</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする</h1>
+          <p>(2017-06-04)</p>
+          <pre><code>$ curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh
+$ td-agent --version
+td-agent 0.14.16
+</code></pre>
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="http://sambaiz.net/article/34/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-11-10</time>
-      </div>
-      <p class="article title">API BlueprintでAPI仕様を書く</p>
-    </div>
-  </article>
-</a>
+<p>0.12系じゃない！？</p>
+
+<pre><code>$ yum list installed | grep td-agent
+td-agent.x86_64                       2.3.5-0.el2017               @treasuredata
+</code></pre>
+
+<p>どうやら2.3.5では0.14系になってしまっているよう。
+そのあとにリリースされた2.3.5-1では直ってるみたいだけど、現時点ではrpmリポジトリに上がっていない。
+これって問題だと思うんだけど・・・。</p>
+
+<p>しょうがないのでソースからビルドすることにした。
+いずれにせよ各環境で同じバージョンのビルドに合わせるべきだとは思う。
+Beanstalk環境の場合、AMIに固めていたとしても非Beanstalk AMIではyum updateされてしまうので注意が必要だ。</p>
+
+<p><a href="http://sambaiz.net/article/106/">BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 - sambaiz-net</a></p>
+
+<p>前UbuntuでやったようにDockerでビルドする。今回はAmazon Linux向け。</p>
+
+<p><a href="http://sambaiz.net/article/32/">td-agentをビルドしてfluentdのバージョンを上げる - sambaiz-net</a></p>
+
+<p><a href="https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/">https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/</a></p>
+
+<pre><code>FROM amazonlinux:2017.03
+
+WORKDIR /tmp
+
+RUN yum -y update &amp;&amp; \
+    yum groupinstall -y &quot;Development Tools&quot; &amp;&amp; \
+    yum install -y ruby23 ruby23-devel &amp;&amp; \
+    gem install bundler io-console &amp;&amp; \
+    git clone https://github.com/treasure-data/omnibus-td-agent
+
+WORKDIR /tmp/omnibus-td-agent
+
+RUN bundle install --binstubs &amp;&amp; \
+    bin/gem_downloader core_gems.rb &amp;&amp; \
+    bin/gem_downloader plugin_gems.rb &amp;&amp; \
+    bin/gem_downloader ui_gems.rb &amp;&amp; \
+    mkdir -p /opt/td-agent /var/cache/omnibus &amp;&amp; \
+    bin/omnibus build td-agent2 &amp;&amp; \
+    mv ./pkg/*.rpm /
+</code></pre>
+
+<pre><code>$ docker build -t amazon-linux-td-agent .
+$ docker run --name altd -itd amazon-linux-td-agent sh
+$ docker cp altd:/td-agent-2.3.5-1.el2017.x86_64.rpm .
+</code></pre>
+
+<p>あとはこれをインストールする。</p>
+
+<pre><code>$ yum install -y redhat-lsb-core
+$ rpm -ivh td-agent-2.3.5-1.el2017.x86_64.rpm 
+$ td-agent --version
+td-agent 0.12.36
+</code></pre>
 
         </div>
-        
-      </div>
-
-      
-
-
+      </article>
     </div>
-
   </div>
-
 </div>
 
 </div> 
