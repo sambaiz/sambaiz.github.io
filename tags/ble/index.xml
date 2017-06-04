@@ -1,13 +1,372 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz.net</title>
+    <title>sambaiz-net</title>
     <link>http://sambaiz.net/tags/ble/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
     <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
+    
+      
+        <item>
+          <title>Unity/UWPでBLEを扱うプラグインを作る</title>
+          <link>http://sambaiz.net/article/105/</link>
+          <pubDate>Sun, 04 Jun 2017 11:57:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/105/</guid>
+          <description>&lt;p&gt;コードは&lt;a href=&#34;https://github.com/sambaiz/UnityBLE_UWP&#34;&gt;ここ&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://blogs.msdn.microsoft.com/aonishi/2013/12/04/unity-on-windows-8-1/&#34;&gt;この動画&lt;/a&gt;の
+50:00あたりから説明があるように、
+ビルドされたWSAが読むUWPのdllのほかに、
+Unityエディタ上から読むための.NET Framework3.5のdllを用意する。
+こうすることで実行環境ごとの違いをUnityコード上で気にしなくてもよくなる。&lt;/p&gt;
+
+&lt;p&gt;新しいプロジェクトで&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;p&gt;Visual C# から.NET Framework 3.5にしてクラスライブラリ(.NET Framework)&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Visual C# -&amp;gt;　Windows -&amp;gt; ユニバーサルからクラスライブラリ(ユニバーサルWindows)&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;の2つのプロジェクトを同じソリューションに作成する。
+VS2017で.NET Frameworkのクラスライブラリプロジェクトを作成するためには
+Visual Studio Installerで.NET Coreのワークロードをインストールする必要がある。
+また、これとは別に動作確認用のUWPアプリケーションプロジェクトを作成した。&lt;/p&gt;
+
+&lt;p&gt;UWPの方のプロジェクトにあるClass1.csを削除し、追加 -&amp;gt; 既存の項目から、
+もう片方のClass1.csをリンクとして追加して、この共通のcsにUWPのコードを書いていくんだけど、
+そのまま書くと当然.NET Frameworkの方でビルドできないので
+実装部分を&lt;a href=&#34;https://docs.unity3d.com/Manual/PlatformDependentCompilation.html&#34;&gt;#if WINDOWS_UWP ~ #endif&lt;/a&gt;
+で囲む。UWPの方のプロジェクトにはプロパティ -&amp;gt; ビルドの条件付きコンパイルにWINDOWS_UWPが含まれているので有効になる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void Start()
+{
+#if WINDOWS_UWP
+    ...
+#endif
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;UWPでBLEを扱うのは前書いた通り。
+ただし、なぜかXAMLに依存しているようでD3Dビルドすると失敗する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/101&#34;&gt;UWPでBLEデバイスとペアリングして値を取得する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ビルドするとdllができるので.NET Frameworkの方をAssets/Pluginsに置いてInspectorからEditorにだけチェックを入れる。
+UWPの方は&lt;a href=&#34;https://docs.unity3d.com/Manual/PluginInspector.html&#34;&gt;Assets/Plugins/WSA&lt;/a&gt;に置くとWSA Playerにだけチェックが入る。&lt;/p&gt;
+
+&lt;p&gt;あとは普通にusingして使うだけ。Bluetoothのcapabilityを有効にするのを忘れずに。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;using UnityBLE;
+  
+public class BLE : MonoBehaviour {
+
+    string value = &amp;quot;no connection&amp;quot;;
+
+    public GameObject text;
+
+    private string serviceUUID = &amp;quot;***&amp;quot;;
+    private string characteristicUUID = &amp;quot;***&amp;quot;;
+
+    void Start() {
+        var ble = new UnityBLE.BLE();
+        ble.Start();
+        ble.DeviceAdded += (sender, obj) =&amp;gt; {
+            value = &amp;quot;DeviceID: &amp;quot; + obj.DeviceID;
+            ble.Listen(obj.DeviceID, serviceUUID, characteristicUUID);
+        };
+        ble.CharacteristicReceived += (sender, obj) =&amp;gt;
+        {
+            if (sender == ble)
+            {
+                if (obj.ex == null)
+                {
+                    value = Encoding.UTF8.GetString(obj.Value);
+                }
+                else
+                {
+                    value = obj.ex.Message;
+                }
+            }
+        };
+    }
+
+    void Update() {
+        text.GetComponent&amp;lt;TextMesh&amp;gt;().text = value;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>UnityでAndroidのBLEを使うネイティブプラグインを作る</title>
+          <link>http://sambaiz.net/article/27/</link>
+          <pubDate>Sun, 23 Oct 2016 20:39:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/27/</guid>
+          <description>
+
+&lt;p&gt;UnityからBLEを使うためのネイティブプラグインを作る。&lt;/p&gt;
+
+&lt;h2 id=&#34;android側&#34;&gt;Android側&lt;/h2&gt;
+
+&lt;p&gt;まず、Activityなしのプロジェクトを作って、New ModuleからAndroid Libraryを選択。
+これらのパッケージ名がUnityで使うものと被らないようにする。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;/Applications/Unity/PlaybackEngines/AndroidPlayer/Variations/mono/Release/Classes/classes.jar&lt;/code&gt;
+をModuleの方のlibsに置く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import com.unity3d.player.UnityPlayer;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このjarは元々のやつとかぶってしまうので除外(build.gradleに追加)&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;android.libraryVariants.all { variant -&amp;gt;
+    variant.outputs.each { output -&amp;gt;
+        output.packageLibrary.exclude(&#39;libs/classes.jar&#39;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Activiyは&lt;code&gt;UnityPlayer.currentActivity&lt;/code&gt;で取得でき、
+Unity側のメソッドを呼ぶのも
+&lt;code&gt;UnityPlayer.UnitySendMessage(mGameObjName, mCallBackName, new String(characteristic.getValue()));&lt;/code&gt;
+のようにできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public class BLE {
+
+    private final static String TAG = BLE.class.getSimpleName();
+    private static final int REQUEST_ENABLE_BT = 1;
+    private static final int MY_PERMISSION_RESPONSE = 2;
+
+    private static final String PERIPHERAL_LOCAL_NAME = &amp;quot;my-ble&amp;quot;;
+    private static final UUID PERIPHERAL_SERIVCE_UUID = UUID.fromString(&amp;quot;BF9CB85F-620C-4A67-BDD2-1A64213F74CA&amp;quot;);
+    private static final UUID PERIPHERAL_CHARACTERISTIC_UUID = UUID.fromString(&amp;quot;5F83E23F-BCA1-42B3-B6F2-EA82BE46A93D&amp;quot;);
+    private static final UUID CLIENT_CHARACTERISTIC_CONFIG = UUID.fromString(&amp;quot;00002902-0000-1000-8000-00805f9b34fb&amp;quot;);
+
+    private String mGameObjName;
+    private String mCallBackName;
+
+    private BluetoothAdapter mBluetoothAdapter;
+    private BluetoothGatt mBluetoothGatt;
+    private BluetoothGattCharacteristic mCharacteristic;
+    private Handler mHandler;
+
+    // Stops scanning after 30 seconds.
+    private static final long SCAN_PERIOD = 30000;
+
+    public BLE(String gameObjName, String callBackName) {
+
+        this.mGameObjName = gameObjName;
+        this.mCallBackName = callBackName;
+
+        mHandler = new Handler();
+
+        if (!UnityPlayer.currentActivity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            Toast.makeText(UnityPlayer.currentActivity, &amp;quot;BLEをサポートしていません&amp;quot;, Toast.LENGTH_SHORT).show();
+            UnityPlayer.currentActivity.finish();
+            return;
+        }
+
+        final BluetoothManager bluetoothManager =
+                (BluetoothManager) UnityPlayer.currentActivity.getSystemService(Context.BLUETOOTH_SERVICE);
+        mBluetoothAdapter = bluetoothManager.getAdapter();
+
+        if (mBluetoothAdapter == null) {
+            Toast.makeText(UnityPlayer.currentActivity, &amp;quot;Bluetoothをサポートしていません&amp;quot;, Toast.LENGTH_SHORT).show();
+            UnityPlayer.currentActivity.finish();
+            return;
+        }
+
+        onActive();
+    }
+
+    public void onActive() {
+        Log.d(TAG, &amp;quot;onActive&amp;quot;);
+        if (!mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            UnityPlayer.currentActivity.startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+
+        scanLeDevice(true);
+    }
+
+    public void onPause() {
+        Log.d(TAG, &amp;quot;onPause&amp;quot;);
+        scanLeDevice(false);
+
+        if(mCharacteristic != null){
+            mBluetoothGatt.setCharacteristicNotification(
+                    mCharacteristic,
+                    false
+            );
+        }
+
+        if(mBluetoothGatt != null) {
+            mBluetoothGatt.close();
+            mBluetoothGatt = null;
+        }
+    }
+
+    private void scanLeDevice(final boolean enable) {
+        if (enable) {
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                }
+            }, SCAN_PERIOD);
+
+            mBluetoothAdapter.startLeScan(mLeScanCallback);
+        } else {
+            mBluetoothAdapter.stopLeScan(mLeScanCallback);
+        }
+    }
+
+    private BluetoothAdapter.LeScanCallback mLeScanCallback =
+            new BluetoothAdapter.LeScanCallback() {
+
+                @Override
+                public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
+                    if(PERIPHERAL_LOCAL_NAME.equals(device.getName())){
+                        scanLeDevice(false);
+                        connect(device);
+                    }
+                }
+            };
+
+    private boolean connect(BluetoothDevice device) {
+        if (mBluetoothAdapter == null) {
+            Log.w(TAG, &amp;quot;BluetoothAdapter not initialized or unspecified address.&amp;quot;);
+            return false;
+        }
+
+        // Previously connected device.  Try to reconnect.
+        if (mBluetoothGatt != null) {
+            Log.d(TAG, &amp;quot;Trying to use an existing mBluetoothGatt for connection.&amp;quot;);
+            if (mBluetoothGatt.connect()) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        mBluetoothGatt = device.connectGatt(UnityPlayer.currentActivity, false, mGattCallback);
+        Log.d(TAG, &amp;quot;Trying to create a new connection.&amp;quot;);
+        return true;
+    }
+
+
+    private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
+        @Override
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+
+                scanLeDevice(false);
+                Log.i(TAG, &amp;quot;Connected to GATT server.&amp;quot;);
+                gatt.discoverServices();
+
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                Log.i(TAG, &amp;quot;Disconnected from GATT server.&amp;quot;);
+            } else{
+                Log.i(TAG, &amp;quot;onConnectionStateChange:&amp;quot; + newState);
+            }
+        }
+
+        @Override
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                mCharacteristic = gatt.getService(PERIPHERAL_SERIVCE_UUID).
+                        getCharacteristic(PERIPHERAL_CHARACTERISTIC_UUID);
+
+                gatt.setCharacteristicNotification(
+                        mCharacteristic,
+                        true
+                );
+                BluetoothGattDescriptor descriptor = mCharacteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG);
+                descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                mBluetoothGatt.writeDescriptor(descriptor);
+            } else {
+                Log.w(TAG, &amp;quot;onServicesDiscovered received: &amp;quot; + status);
+            }
+        }
+
+        @Override
+        public void onCharacteristicChanged(BluetoothGatt gatt,
+                                            BluetoothGattCharacteristic characteristic) {
+            UnityPlayer.UnitySendMessage(mGameObjName, mCallBackName, new String(characteristic.getValue()));
+        }
+    };
+
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Manifestに追加した分。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;uses-feature android:name=&amp;quot;android.hardware.bluetooth_le&amp;quot; android:required=&amp;quot;true&amp;quot;/&amp;gt;
+
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.BLUETOOTH&amp;quot; /&amp;gt;
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.BLUETOOTH_ADMIN&amp;quot; /&amp;gt;
+&amp;lt;uses-permission android:name=&amp;quot;android.permission.ACCESS_COARSE_LOCATION&amp;quot;/&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;できたらaarを生成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ./gradlew assembleRelease
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;build/outputs/aar/*-release.aar&lt;/code&gt;をUnityの&lt;code&gt;Assets/Plugins/Android/libs&lt;/code&gt;に置く。&lt;/p&gt;
+
+&lt;p&gt;あと、依存aarはこの中に含まれないようなのでそれもまとめてコピーする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;task copyLibs(type: Copy) {
+    from configurations.compile
+    into &#39;build/outputs/aar&#39;
+    exclude { details -&amp;gt; details.file.name.endsWith(&amp;quot;.jar&amp;quot;) }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Manifetstのmergeに失敗したのでSDKVersionを合わせる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;compileSdkVersion 22
+
+defaultConfig {
+    minSdkVersion 19
+    targetSdkVersion 22
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;unity側&#34;&gt;Unity側&lt;/h2&gt;
+
+&lt;p&gt;こんな感じでインスタンスを作り、
+&lt;a href=&#34;https://docs.unity3d.com/ja/current/ScriptReference/AndroidJavaObject.Call.html&#34;&gt;メソッドを呼べる&lt;/a&gt;。
+ただし、unity editor上では&lt;code&gt;Init&#39;d AndroidJavaClass with null ptr!&lt;/code&gt;のエラーが出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;plugin = new AndroidJavaObject(&amp;quot;net.sambaiz.unity_ble.BLE&amp;quot;, this.gameObject.name, &amp;quot;received&amp;quot;);
+
+void received(string message){
+	Debug.Log (&amp;quot;BLE:&amp;quot; + message);
+}
+
+void OnApplicationPause (bool pauseStatus)
+{
+	if (pauseStatus) {
+		plugin.Call (&amp;quot;onPause&amp;quot;);
+	} else {
+		plugin.Call (&amp;quot;onActive&amp;quot;);
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>

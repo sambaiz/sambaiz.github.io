@@ -1,13 +1,108 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz.net</title>
+    <title>sambaiz-net</title>
     <link>http://sambaiz.net/tags/hololens/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
     <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
+    
+      
+        <item>
+          <title>Unity/UWPでBLEを扱うプラグインを作る</title>
+          <link>http://sambaiz.net/article/105/</link>
+          <pubDate>Sun, 04 Jun 2017 11:57:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/105/</guid>
+          <description>&lt;p&gt;コードは&lt;a href=&#34;https://github.com/sambaiz/UnityBLE_UWP&#34;&gt;ここ&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://blogs.msdn.microsoft.com/aonishi/2013/12/04/unity-on-windows-8-1/&#34;&gt;この動画&lt;/a&gt;の
+50:00あたりから説明があるように、
+ビルドされたWSAが読むUWPのdllのほかに、
+Unityエディタ上から読むための.NET Framework3.5のdllを用意する。
+こうすることで実行環境ごとの違いをUnityコード上で気にしなくてもよくなる。&lt;/p&gt;
+
+&lt;p&gt;新しいプロジェクトで&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;p&gt;Visual C# から.NET Framework 3.5にしてクラスライブラリ(.NET Framework)&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Visual C# -&amp;gt;　Windows -&amp;gt; ユニバーサルからクラスライブラリ(ユニバーサルWindows)&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;の2つのプロジェクトを同じソリューションに作成する。
+VS2017で.NET Frameworkのクラスライブラリプロジェクトを作成するためには
+Visual Studio Installerで.NET Coreのワークロードをインストールする必要がある。
+また、これとは別に動作確認用のUWPアプリケーションプロジェクトを作成した。&lt;/p&gt;
+
+&lt;p&gt;UWPの方のプロジェクトにあるClass1.csを削除し、追加 -&amp;gt; 既存の項目から、
+もう片方のClass1.csをリンクとして追加して、この共通のcsにUWPのコードを書いていくんだけど、
+そのまま書くと当然.NET Frameworkの方でビルドできないので
+実装部分を&lt;a href=&#34;https://docs.unity3d.com/Manual/PlatformDependentCompilation.html&#34;&gt;#if WINDOWS_UWP ~ #endif&lt;/a&gt;
+で囲む。UWPの方のプロジェクトにはプロパティ -&amp;gt; ビルドの条件付きコンパイルにWINDOWS_UWPが含まれているので有効になる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public void Start()
+{
+#if WINDOWS_UWP
+    ...
+#endif
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;UWPでBLEを扱うのは前書いた通り。
+ただし、なぜかXAMLに依存しているようでD3Dビルドすると失敗する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/101&#34;&gt;UWPでBLEデバイスとペアリングして値を取得する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ビルドするとdllができるので.NET Frameworkの方をAssets/Pluginsに置いてInspectorからEditorにだけチェックを入れる。
+UWPの方は&lt;a href=&#34;https://docs.unity3d.com/Manual/PluginInspector.html&#34;&gt;Assets/Plugins/WSA&lt;/a&gt;に置くとWSA Playerにだけチェックが入る。&lt;/p&gt;
+
+&lt;p&gt;あとは普通にusingして使うだけ。Bluetoothのcapabilityを有効にするのを忘れずに。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;using UnityBLE;
+  
+public class BLE : MonoBehaviour {
+
+    string value = &amp;quot;no connection&amp;quot;;
+
+    public GameObject text;
+
+    private string serviceUUID = &amp;quot;***&amp;quot;;
+    private string characteristicUUID = &amp;quot;***&amp;quot;;
+
+    void Start() {
+        var ble = new UnityBLE.BLE();
+        ble.Start();
+        ble.DeviceAdded += (sender, obj) =&amp;gt; {
+            value = &amp;quot;DeviceID: &amp;quot; + obj.DeviceID;
+            ble.Listen(obj.DeviceID, serviceUUID, characteristicUUID);
+        };
+        ble.CharacteristicReceived += (sender, obj) =&amp;gt;
+        {
+            if (sender == ble)
+            {
+                if (obj.ex == null)
+                {
+                    value = Encoding.UTF8.GetString(obj.Value);
+                }
+                else
+                {
+                    value = obj.ex.Message;
+                }
+            }
+        };
+    }
+
+    void Update() {
+        text.GetComponent&amp;lt;TextMesh&amp;gt;().text = value;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
