@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.17" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+    <link rel="stylesheet" href="/css/slidebars.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="http://sambaiz.net/index.xml">
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@sambaiz">
+    
+    <title>fluentdでKinesis streamsに送るときの性能確認 - sambaiz-net</title>
+    <meta name="twitter:title" content="fluentdでKinesis streamsに送るときの性能確認 - sambaiz-net">
+    <meta property='og:title' content="fluentdでKinesis streamsに送るときの性能確認 - sambaiz-net">
+    <meta property="og:type" content="article">
+    
+      <meta name="description" content="buffer queue">
+      <meta name="twitter:description" content="buffer queue">
+    
+    
+
+    <meta property="og:url" content="http://sambaiz.net/article/108/">
+    <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
+    <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
+    <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"http:\/\/sambaiz.net\/"
+    },
+    "headline": "fluentdでKinesis streamsに送るときの性能確認 | sambaiz-net ",
+    "datePublished": "2017-06-05T23:48:00JST",
+    "dateModified": "2017-06-05T23:48:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "http:\/\/sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "http:\/\/sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "http:\/\/sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "buffer queue"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="http://sambaiz.net/tags/golang">golang</a></li><li><a href="http://sambaiz.net/tags/log">log</a></li><li><a href="http://sambaiz.net/tags/aws">aws</a></li><li><a href="http://sambaiz.net/tags/fluentd">fluentd</a></li><li><a href="http://sambaiz.net/tags/unity">unity</a></li><li><a href="http://sambaiz.net/tags/docker">docker</a></li><li><a href="http://sambaiz.net/tags/elasticsearch">elasticsearch</a></li><li><a href="http://sambaiz.net/tags/infra">infra</a></li><li><a href="http://sambaiz.net/tags/node.js">node.js</a></li><li><a href="http://sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="http://sambaiz.net/tags/ble">ble</a></li><li><a href="http://sambaiz.net/tags/gcp">gcp</a></li><li><a href="http://sambaiz.net/tags/hololens">hololens</a></li><li><a href="http://sambaiz.net/tags/k8s">k8s</a></li><li><a href="http://sambaiz.net/tags/android">android</a></li><li><a href="http://sambaiz.net/tags/angular">angular</a></li><li><a href="http://sambaiz.net/tags/cron">cron</a></li><li><a href="http://sambaiz.net/tags/linux">linux</a></li><li><a href="http://sambaiz.net/tags/mysql">mysql</a></li><li><a href="http://sambaiz.net/tags/web">web</a></li><li><a href="http://sambaiz.net/tags/.net">.net</a></li><li><a href="http://sambaiz.net/tags/firebase">firebase</a></li><li><a href="http://sambaiz.net/tags/javascript">javascript</a></li><li><a href="http://sambaiz.net/tags/product">product</a></li><li><a href="http://sambaiz.net/tags/react">react</a></li><li><a href="http://sambaiz.net/tags/uwp">uwp</a></li><li><a href="http://sambaiz.net/tags/vr">vr</a></li><li><a href="http://sambaiz.net/tags/api">api</a></li><li><a href="http://sambaiz.net/tags/csharp">csharp</a></li><li><a href="http://sambaiz.net/tags/css">css</a></li><li><a href="http://sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="http://sambaiz.net/tags/event">event</a></li><li><a href="http://sambaiz.net/tags/grpc">grpc</a></li><li><a href="http://sambaiz.net/tags/hugo">hugo</a></li><li><a href="http://sambaiz.net/tags/ios">ios</a></li><li><a href="http://sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="http://sambaiz.net/tags/jvm">jvm</a></li><li><a href="http://sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="http://sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="http://sambaiz.net/tags/oauth">oauth</a></li><li><a href="http://sambaiz.net/tags/rx">rx</a></li><li><a href="http://sambaiz.net/tags/rxjs">rxjs</a></li><li><a href="http://sambaiz.net/tags/server">server</a></li><li><a href="http://sambaiz.net/tags/video">video</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="http://sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="http://sambaiz.net/">sambaiz-net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+      </div>
+    </header>
+
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>fluentdでKinesis streamsに送るときの性能確認</h1>
+          <p>(2017-06-05)</p>
+          
+
+<h2 id="localでのstreamsとproducerのbenchmark">localでのstreamsとproducerのbenchmark</h2>
+
+<p><a href="https://github.com/awslabs/aws-fluent-plugin-kinesis">aws-fluent-plugin-kinesis</a>の
+<code>make benchmark</code>はlocalにDummyServerを<a href="https://github.com/awslabs/aws-fluent-plugin-kinesis/blob/v1.1.3/benchmark/task.rake#L18">立ち上げて</a>送っている。</p>
+
+<p>空でもいいのでroleをつけておく必要がある。</p>
+
+<pre><code>$ git clone https://github.com/awslabs/aws-fluent-plugin-kinesis.git
+$ cd aws-fluent-plugin-kinesis
+$ yum install -y ruby-devel gcc
+$ echo 'gem &quot;io-console&quot;' &gt;&gt; Gemfile
+$ make
+$ make benchmark
+</code></pre>
+
+<p>RATEを指定しなければデフォルトで<a href="https://github.com/awslabs/aws-fluent-plugin-kinesis/blob/v1.1.3/benchmark/task.rake#L19">秒間1000レコード</a>が送られる設定。
+fluentdを起動してから10秒後にプロセスをkillし、そのレコード数などを出力している。</p>
+
+<p>t2.microでデフォルト(RATE=1000)で実行した結果がこれ。
+固める分producerの方はややパフォーマンスが落ちる。</p>
+
+<pre><code>bundle exec rake benchmark TYPE=streams
+Results: requets: 20, raw_records: 9400, records: 9400
+bundle exec rake benchmark TYPE=producer
+Results: requets: 14, raw_records: 1005, records: 8900
+</code></pre>
+
+<p>RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。
+streamsだとシャードを増やしていく必要があるけど、producerの方は当分大丈夫そうだ。</p>
+
+<pre><code>bundle exec rake benchmark TYPE=streams
+Results: requets: 57, raw_records: 27600, records: 27600
+bundle exec rake benchmark TYPE=producer
+Results: requets: 12, raw_records: 241, records: 25200
+</code></pre>
+
+<p>RATE=10000のとき。raw_records, requestの圧縮率はさらに上がり、
+パフォーマンスの差が大きくなってきている。</p>
+
+<pre><code>bundle exec rake benchmark TYPE=streams
+Results: requets: 177, raw_records: 88000, records: 88000
+bundle exec rake benchmark TYPE=producer
+Results: requets: 26, raw_records: 385, records: 75000
+</code></pre>
+
+<h2 id="実際にkinesis-streamsに送ってみる">実際にkinesis streamsに送ってみる</h2>
+
+<p>ap-northeast-1でシャードは3のKinesis streamsにt2.microインスタンス1台から送る。</p>
+
+<pre><code>&lt;source&gt;
+  @type dummy
+  dummy {&quot;hello&quot;:&quot;world&quot;}
+  tag dummy
+  rate 1000
+&lt;/source&gt;
+
+&lt;source&gt;
+  @type monitor_agent
+  bind 0.0.0.0
+  port 24220
+&lt;/source&gt;
+
+&lt;match **&gt;
+  @type kinesis_streams
+  region ap-northeast-1
+  stream_name test
+
+  flush_interval 1
+  buffer_chunk_limit 1m
+  try_flush_interval 0.1
+  queued_chunk_flush_interval 0.01
+  num_threads 15
+&lt;/match&gt;
+</code></pre>
+
+<p>秒間3000まではほとんどキューにたまらず送れる。</p>
+
+<pre><code>$ curl localhost:24220/api/plugins.json | jq
+{
+  ...
+  &quot;plugins&quot;: [
+    {
+      &quot;plugin_id&quot;: &quot;object:3fc0dfac66a8&quot;,
+      &quot;plugin_category&quot;: &quot;output&quot;,
+      &quot;type&quot;: &quot;kinesis_streams&quot;,
+      ...
+      &quot;buffer_queue_length&quot;: 0,
+      &quot;buffer_total_queued_size&quot;: 17500,
+      &quot;retry_count&quot;: 0,
+      &quot;retry&quot;: {}
+    }
+  ]
+}
+</code></pre>
+
+<p>4000にするとキューに溜まり続け、そのうちretryが発生してしまう。</p>
+
+<pre><code>{
+  ...
+  &quot;plugins&quot;: [
+    {
+      &quot;plugin_id&quot;: &quot;object:3fc0dfac66a8&quot;,
+      &quot;plugin_category&quot;: &quot;output&quot;,
+      &quot;type&quot;: &quot;kinesis_streams&quot;,
+      ...
+     &quot;buffer_queue_length&quot;: 60,
+      &quot;buffer_total_queued_size&quot;: 56544178,
+      &quot;retry_count&quot;: 5,
+      &quot;retry&quot;: {
+        &quot;steps&quot;: 5,
+        &quot;next_time&quot;: &quot;2017-06-05 14:05:38 +0000&quot;
+      }
+  ]
+}
+</code></pre>
+
+<p>たしかにスループットが超過している。スペック通りだ。</p>
+
+<p><img src="http://sambaiz.net/images/108.png" alt="書き込みスループットの超過" /></p>
+
+<p>次に30シャードにしてみる。一度にシャード数は倍から半分にしかできないので作り直し。</p>
+
+<p>これに秒間30000を送ってみると、キューにいくらか溜まった。</p>
+
+<pre><code>{
+  ...
+  &quot;plugins&quot;: [
+    {
+      &quot;plugin_id&quot;: &quot;object:3fc0dfac66a8&quot;,
+      &quot;plugin_category&quot;: &quot;output&quot;,
+      &quot;type&quot;: &quot;kinesis_streams&quot;,
+      ...
+      &quot;buffer_queue_length&quot;: 7,
+      &quot;buffer_total_queued_size&quot;: 7752600,
+      &quot;retry_count&quot;: 0,
+      &quot;retry&quot;: {}
+  ]
+}
+</code></pre>
+
+<p>さらに倍にして60シャード。これに秒間60000で送ってみる。キューに溜まるものの増え続けはしないのでなんとか送れてそうだ。
+td-agentのプロセスがCPUを99%使っているので、このインスタンスではこの辺が限界かもしれない。</p>
+
+<pre><code>{
+  ...
+  &quot;plugins&quot;: [
+    {
+      &quot;plugin_id&quot;: &quot;object:3fc0dfac66a8&quot;,
+      &quot;plugin_category&quot;: &quot;output&quot;,
+      &quot;type&quot;: &quot;kinesis_streams&quot;,
+      ...
+      &quot;buffer_queue_length&quot;: 15,
+      &quot;buffer_total_queued_size&quot;: 16105807,
+      &quot;retry_count&quot;: 0,
+      &quot;retry&quot;: {}
+  ]
+}
+</code></pre>
+
+<p>ついでにus-east-1にも30シャードのStreamsを作成して30000送ってみたところ、キューに溜まる量が格段に増えた。
+早くFirehoseやAnalyticsが東京リージョンにも来てほしい。</p>
+
+<pre><code>{
+  ...
+  &quot;plugins&quot;: [
+    {
+      &quot;plugin_id&quot;: &quot;object:3fc0dfac66a8&quot;,
+      &quot;plugin_category&quot;: &quot;output&quot;,
+      &quot;type&quot;: &quot;kinesis_streams&quot;,
+      ...
+      &quot;buffer_queue_length&quot;: 50,
+      &quot;buffer_total_queued_size&quot;: 52432436,
+      &quot;retry_count&quot;: 0,
+      &quot;retry&quot;: {}
+  ]
+}
+</code></pre>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

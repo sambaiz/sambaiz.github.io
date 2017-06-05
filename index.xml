@@ -6,8 +6,198 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-06-04 23:50:00 &#43;0900 JST</updated>
+    <updated>2017-06-05 23:48:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>fluentdでKinesis streamsに送るときの性能確認</title>
+          <link>http://sambaiz.net/article/108/</link>
+          <pubDate>Mon, 05 Jun 2017 23:48:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/108/</guid>
+          <description>
+
+&lt;h2 id=&#34;localでのstreamsとproducerのbenchmark&#34;&gt;localでのstreamsとproducerのbenchmark&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;の
+&lt;code&gt;make benchmark&lt;/code&gt;はlocalにDummyServerを&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis/blob/v1.1.3/benchmark/task.rake#L18&#34;&gt;立ち上げて&lt;/a&gt;送っている。&lt;/p&gt;
+
+&lt;p&gt;空でもいいのでroleをつけておく必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/awslabs/aws-fluent-plugin-kinesis.git
+$ cd aws-fluent-plugin-kinesis
+$ yum install -y ruby-devel gcc
+$ echo &#39;gem &amp;quot;io-console&amp;quot;&#39; &amp;gt;&amp;gt; Gemfile
+$ make
+$ make benchmark
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;RATEを指定しなければデフォルトで&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis/blob/v1.1.3/benchmark/task.rake#L19&#34;&gt;秒間1000レコード&lt;/a&gt;が送られる設定。
+fluentdを起動してから10秒後にプロセスをkillし、そのレコード数などを出力している。&lt;/p&gt;
+
+&lt;p&gt;t2.microでデフォルト(RATE=1000)で実行した結果がこれ。
+固める分producerの方はややパフォーマンスが落ちる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
+Results: requets: 20, raw_records: 9400, records: 9400
+bundle exec rake benchmark TYPE=producer
+Results: requets: 14, raw_records: 1005, records: 8900
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。
+streamsだとシャードを増やしていく必要があるけど、producerの方は当分大丈夫そうだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
+Results: requets: 57, raw_records: 27600, records: 27600
+bundle exec rake benchmark TYPE=producer
+Results: requets: 12, raw_records: 241, records: 25200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;RATE=10000のとき。raw_records, requestの圧縮率はさらに上がり、
+パフォーマンスの差が大きくなってきている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
+Results: requets: 177, raw_records: 88000, records: 88000
+bundle exec rake benchmark TYPE=producer
+Results: requets: 26, raw_records: 385, records: 75000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;実際にkinesis-streamsに送ってみる&#34;&gt;実際にkinesis streamsに送ってみる&lt;/h2&gt;
+
+&lt;p&gt;ap-northeast-1でシャードは3のKinesis streamsにt2.microインスタンス1台から送る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type dummy
+  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+  tag dummy
+  rate 1000
+&amp;lt;/source&amp;gt;
+
+&amp;lt;source&amp;gt;
+  @type monitor_agent
+  bind 0.0.0.0
+  port 24220
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match **&amp;gt;
+  @type kinesis_streams
+  region ap-northeast-1
+  stream_name test
+
+  flush_interval 1
+  buffer_chunk_limit 1m
+  try_flush_interval 0.1
+  queued_chunk_flush_interval 0.01
+  num_threads 15
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;秒間3000まではほとんどキューにたまらず送れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl localhost:24220/api/plugins.json | jq
+{
+  ...
+  &amp;quot;plugins&amp;quot;: [
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
+      ...
+      &amp;quot;buffer_queue_length&amp;quot;: 0,
+      &amp;quot;buffer_total_queued_size&amp;quot;: 17500,
+      &amp;quot;retry_count&amp;quot;: 0,
+      &amp;quot;retry&amp;quot;: {}
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;4000にするとキューに溜まり続け、そのうちretryが発生してしまう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  ...
+  &amp;quot;plugins&amp;quot;: [
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
+      ...
+     &amp;quot;buffer_queue_length&amp;quot;: 60,
+      &amp;quot;buffer_total_queued_size&amp;quot;: 56544178,
+      &amp;quot;retry_count&amp;quot;: 5,
+      &amp;quot;retry&amp;quot;: {
+        &amp;quot;steps&amp;quot;: 5,
+        &amp;quot;next_time&amp;quot;: &amp;quot;2017-06-05 14:05:38 +0000&amp;quot;
+      }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;たしかにスループットが超過している。スペック通りだ。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/108.png&#34; alt=&#34;書き込みスループットの超過&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;次に30シャードにしてみる。一度にシャード数は倍から半分にしかできないので作り直し。&lt;/p&gt;
+
+&lt;p&gt;これに秒間30000を送ってみると、キューにいくらか溜まった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  ...
+  &amp;quot;plugins&amp;quot;: [
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
+      ...
+      &amp;quot;buffer_queue_length&amp;quot;: 7,
+      &amp;quot;buffer_total_queued_size&amp;quot;: 7752600,
+      &amp;quot;retry_count&amp;quot;: 0,
+      &amp;quot;retry&amp;quot;: {}
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さらに倍にして60シャード。これに秒間60000で送ってみる。キューに溜まるものの増え続けはしないのでなんとか送れてそうだ。
+td-agentのプロセスがCPUを99%使っているので、このインスタンスではこの辺が限界かもしれない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  ...
+  &amp;quot;plugins&amp;quot;: [
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
+      ...
+      &amp;quot;buffer_queue_length&amp;quot;: 15,
+      &amp;quot;buffer_total_queued_size&amp;quot;: 16105807,
+      &amp;quot;retry_count&amp;quot;: 0,
+      &amp;quot;retry&amp;quot;: {}
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ついでにus-east-1にも30シャードのStreamsを作成して30000送ってみたところ、キューに溜まる量が格段に増えた。
+早くFirehoseやAnalyticsが東京リージョンにも来てほしい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  ...
+  &amp;quot;plugins&amp;quot;: [
+    {
+      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
+      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
+      ...
+      &amp;quot;buffer_queue_length&amp;quot;: 50,
+      &amp;quot;buffer_total_queued_size&amp;quot;: 52432436,
+      &amp;quot;retry_count&amp;quot;: 0,
+      &amp;quot;retry&amp;quot;: {}
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -2964,7 +3154,9 @@ co(function *(){
           <pubDate>Tue, 28 Mar 2017 21:36:00 &#43;0900</pubDate>
           <author></author>
           <guid>http://sambaiz.net/article/89/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/bnoordhuis/node-iconv&#34;&gt;node-iconv&lt;/a&gt;を使う。&lt;/p&gt;
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/bnoordhuis/node-iconv&#34;&gt;node-iconv&lt;/a&gt;を使う。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm install iconv
 &lt;/code&gt;&lt;/pre&gt;
@@ -3017,6 +3209,26 @@ console.log(`after:  ${after.toString(&#39;hex&#39;)} ${after.toString()}`);
 &lt;pre&gt;&lt;code&gt;before: e7899be79abf26f09f8d9a 牛皿&amp;amp;🍚
 after:  e7899be79abf26 牛皿&amp;amp;
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;lambdaでは&#34;&gt;Lambdaでは&lt;/h2&gt;
+
+&lt;p&gt;Lambdaではインストールされているiconvコマンドを使うことができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;return new Promise((resolve, reject) =&amp;gt; {
+    let filePath = &amp;quot;/tmp/shiftjis&amp;quot;;
+    fs.writeFileSync(filePath, shiftjis);
+    var exec = require(&#39;child_process&#39;).exec;
+    var cmd = `iconv -c -f sjis -t utf-8 ${filePath}`;
+    var child = exec(cmd, (err, stdout, stderr) =&amp;gt; {
+      if (err) reject(err);
+      else resolve(stdout);
+    });
+});
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.bokukoko.info/entry/2015/08/30/AWS_Lambda%E5%86%85%E3%81%A7%E6%96%87%E5%AD%97%E3%82%B3%E3%83%BC%E3%83%89%E3%82%92%E5%A4%89%E6%8F%9B%E3%81%99%E3%82%8B%E6%96%B9%E6%B3%95&#34;&gt;AWS Lambda内で文字コードを変換する方法 - ボクココ&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
@@ -7360,81 +7572,6 @@ procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
 &lt;p&gt;&lt;a href=&#34;https://orebibou.com/2015/07/vmstat%E3%82%B3%E3%83%9E%E3%83%B3%E3%83%89%E3%81%A7%E8%A6%9A%E3%81%88%E3%81%A6%E3%81%8A%E3%81%8D%E3%81%9F%E3%81%84%E4%BD%BF%E3%81%84%E6%96%B98%E5%80%8B/&#34;&gt;vmstatコマンドで覚えておきたい使い方8個(+1個) | 俺的備忘録 〜なんかいろいろ〜&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://blogs.oracle.com/yappri/entry/vmstat&#34;&gt;vmstat コマンドの読み方 (やっぱり Sun がスキ！)&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>EC2のインスタンスストア</title>
-          <link>http://sambaiz.net/article/58/</link>
-          <pubDate>Mon, 06 Feb 2017 21:52:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/58/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/InstanceStorage.html&#34;&gt;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/InstanceStorage.html&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;EC2ではインスタンスタイプによってはEBSに加えてインスタンスストアが使える。しかも追加料金なし。
-対象はストレージが&amp;rdquo;EBSのみ&amp;rdquo;でないもの。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/ec2/instance-types/&#34;&gt;https://aws.amazon.com/jp/ec2/instance-types/&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;インスタンスストアはインスタンスが停止したり、障害が起きると消える一時ストレージ。再起動では消えない。
-ホストに物理的にアタッチされているので、バッファやキャッシュなどの頻繁に読み書きされ、消えてもいいデータに最適。
-他のインスタンスにアタッチすることはできない。容量や性能もインスタンスタイプに依存する。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/add-instance-store-volumes.html&#34;&gt;インスタンスストアボリュームの追加&lt;/a&gt;は
-インスタンスの起動時に、新しいボリュームを追加し、ボリュームタイプをインスタンスストアにすることで行うことができる。&lt;/p&gt;
-
-&lt;p&gt;今回はSSDストレージ1 x 4のm3.mediumで試す。これは4gbのボリュームが一つ追加できるという意味。&lt;/p&gt;
-
-&lt;p&gt;まずはインスタンスストアを追加してないインスタンス。
-lsblkというのはlist block devicesの略。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ df -h
-ファイルシス   サイズ  使用  残り 使用% マウント位置
-/dev/xvda1       7.8G  1.2G  6.6G   15% /
-...
-$ dd if=/dev/zero of=hoge bs=1M count=1000
-$ ls -sh
-合計 1001M
-1001M hoge
-
-$ df -h
-ファイルシス   サイズ  使用  残り 使用% マウント位置
-/dev/xvda1       7.8G  2.2G  5.6G   28% /
-...
-
-$ lsblk
-NAME    MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
-xvda    202:0    0   8G  0 disk 
-└─xvda1 202:1    0   8G  0 part /
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;それに対してインスタンスストア(/dev/xvdb)を追加したインスタンス。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ df -h
-ファイルシス   サイズ  使用  残り 使用% マウント位置
-/dev/xvda1       7.8G  1.2G  6.6G   15% /
-/dev/xvdb        4.0G   73M  3.7G    2% /media/ephemeral0
-
-$ lsblk
-NAME    MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
-xvda    202:0    0   8G  0 disk 
-└─xvda1 202:1    0   8G  0 part /
-xvdb    202:16   0   4G  0 disk /media/ephemeral0
-
-$ dd if=/dev/zero of=/media/ephemeral0/hoge bs=1M count=1000
-$ df -h
-ファイルシス   サイズ  使用  残り 使用% マウント位置
-/dev/xvda1       7.8G  1.2G  6.6G   15% /
-/dev/xvdb        4.0G  1.1G  2.7G   29% /media/ephemeral0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/imaifactory/ephemeral-ssd&#34;&gt;EC2のストレージどう使う? -Instance Storageを理解して高速IOを上手に活用!-&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
