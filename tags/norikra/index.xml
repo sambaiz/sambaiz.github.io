@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz-net</title>
+    <link>http://sambaiz.net/tags/norikra/index.xml</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
+
+    
+      
+        <item>
+          <title>NorikraとFluentdで流れてきたログをリアルタイムに集計する</title>
+          <link>http://sambaiz.net/article/109/</link>
+          <pubDate>Sat, 10 Jun 2017 12:00:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/109/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://norikra.github.io/&#34;&gt;Norikra&lt;/a&gt;はTD社の&lt;a href=&#34;https://github.com/tagomoris&#34;&gt;tagomoris&lt;/a&gt;氏が作った、
+スキーマレスのストリーミングデータを処理するOSS。&lt;/p&gt;
+
+&lt;p&gt;モチベーションとしてはfluentdでElasticsearchにログを送って可視化していたのだけど、
+流量が増えてきてピーク帯に耐えられなくなってしまったため、前もって集計してから送ることで流量を減らそうというもの。&lt;/p&gt;
+
+&lt;h2 id=&#34;norikraを立ち上げてクエリを実行する&#34;&gt;Norikraを立ち上げてクエリを実行する&lt;/h2&gt;
+
+&lt;p&gt;公式で紹介されているDockerイメージがあったのでこれで動かしてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run -e &amp;quot;TZ=Asia/Tokyo&amp;quot; -p 26578:26578 -p 26571:26571 -v `pwd`:/var/tmp/norikra:rw -d myfinder/docker-norikra norikra start --stats /var/tmp/norikra/stats.json -l /var/tmp/norikra 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;公式サイトの例に従ってクライアントからデータを入れてクエリを実行してみる。&lt;/p&gt;
+
+&lt;p&gt;まずはtargetをopenする。targetというのはスキーマレスのイベントストリームのこと。
+ここで定義したフィールドは必須になる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ norikra-client target open www path:string status:integer referer:string agent:string userid:integer
+$ norikra-client target list
+TARGET	AUTO_FIELD
+www	true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次にクエリを追加する。一見普通のSQLのように見えるけど、Norikraのコアエンジンで使われているOSSの
+&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E8%A4%87%E5%90%88%E3%82%A4%E3%83%99%E3%83%B3%E3%83%88%E5%87%A6%E7%90%86&#34;&gt;CEP&lt;/a&gt;
+(Complex event processing)エンジン、
+&lt;a href=&#34;http://www.espertech.com/products/esper.php&#34;&gt;Esper&lt;/a&gt;のクエリ、EPL(Event Processing Language)。
+ただしSELECTしか使えないのも含めてクエリにいくらかの制限がある。&lt;/p&gt;
+
+&lt;p&gt;このクエリでは&lt;code&gt;win:time_batch&lt;/code&gt;で10秒のWindowを定義し、eventをgroup byして、その数をeventとして出力する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ norikra-client query add www.toppageviews &#39;SELECT count(*) AS cnt FROM www.win:time_batch(10 sec) WHERE path=&amp;quot;/&amp;quot; AND status=200&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;eventを流す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/login&amp;quot;, &amp;quot;status&amp;quot;:301, &amp;quot;referer&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クエリの値をfetchする。送るのが遅くてgroup byされなかったけどこんな感じ。
+eventがこなかったはじめのWindowは0が出力されるが、それ以降のWindowでは出力されない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ norikra-client event fetch www.toppageviews
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/07 20:58:13&amp;quot;,&amp;quot;cnt&amp;quot;:0}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/07 21:42:33&amp;quot;,&amp;quot;cnt&amp;quot;:1}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/07 21:42:43&amp;quot;,&amp;quot;cnt&amp;quot;:0}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/07 21:43:13&amp;quot;,&amp;quot;cnt&amp;quot;:1}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/07 21:43:23&amp;quot;,&amp;quot;cnt&amp;quot;:0}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/07 21:43:33&amp;quot;,&amp;quot;cnt&amp;quot;:1}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとWeb-uiが用意されていて、クエリを追加したり、targetやクエリの一覧、メモリの使用量やサーバーログなどが取得できる。デフォルトでは26578ポート。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/109-norikra.png&#34; alt=&#34;web-ui&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;クエリ-epl-http-norikra-github-io-query-html&#34;&gt;&lt;a href=&#34;http://norikra.github.io/query.html&#34;&gt;クエリ(EPL)&lt;/a&gt;&lt;/h2&gt;
+
+&lt;h3 id=&#34;windowなし&#34;&gt;Windowなし&lt;/h3&gt;
+
+&lt;p&gt;上の例では&lt;code&gt;time_batch&lt;/code&gt;でWindowを定義したけど、定義しないクエリを追加してみる。
+以下のようなクエリを登録し、再びeventを流してfetchすると流した分が全てとれる。
+ただし、このようなクエリはfetchされないと大量のoutput eventが溜まる可能性がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SELECT path, status AS cnt FROM www WHERE path=&amp;quot;/&amp;quot; AND status=200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ norikra-client event fetch www.toppageviews-nowin
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/07 23:06:12&amp;quot;,&amp;quot;cnt&amp;quot;:200,&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/07 23:09:10&amp;quot;,&amp;quot;cnt&amp;quot;:200,&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;win-time-batch-http-www-espertech-com-esper-release-5-2-0-esper-reference-html-epl-views-html-view-win-time-batch&#34;&gt;&lt;a href=&#34;http://www.espertech.com/esper/release-5.2.0/esper-reference/html/epl-views.html#view-win-time-batch&#34;&gt;win:time_batch&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;10 sec&lt;/code&gt;のように秒以外にも&lt;code&gt;msec&lt;/code&gt;、&lt;code&gt;min&lt;/code&gt;、&lt;code&gt;hour&lt;/code&gt;、どう使うか想像できないけど&lt;code&gt;year&lt;/code&gt;まで指定でき、
+&lt;code&gt;10 minutes 30 seconds&lt;/code&gt;みたいに組み合わせることも&lt;a href=&#34;http://www.espertech.com/esper/release-5.2.0/esper-reference/html/epl_clauses.html#epl-syntax-time-periods&#34;&gt;できる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;また、第二引数にミリ秒を渡すと出力するタイミングを指定できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SELECT count(*) AS cnt FROM www.win:time_batch(1min, 0L) WHERE path=&amp;quot;/&amp;quot; AND status=200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ norikra-client event fetch www.toppageviews-tb-opts
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/08 00:43:00&amp;quot;,&amp;quot;cnt&amp;quot;:1}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;win-ext-timed-batch-http-www-espertech-com-esper-release-5-2-0-esper-reference-html-epl-views-html-view-win-ext-time-batch&#34;&gt;&lt;a href=&#34;http://www.espertech.com/esper/release-5.2.0/esper-reference/html/epl-views.html#view-win-ext-time-batch&#34;&gt;win:ext_timed_batch&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;来た時間ではなくフィールドのUNIXミリ秒を参照するWindow。時系列順にソートされている必要があって、
+tagomoris氏いわく&lt;a href=&#34;https://twitter.com/tagomoris/status/486851407140507648&#34;&gt;おすすめしない&lt;/a&gt;とのこと。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SELECT count(*) AS cnt FROM www.win:ext_timed_batch(timestamp, 1 min) WHERE path=&amp;quot;/&amp;quot; AND status=200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3, &amp;quot;timestamp&amp;quot;:1496852100000 }&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3, &amp;quot;timestamp&amp;quot;:1496852200000 }&#39; | norikra-client event send www
+$ norikra-client event fetch www.toppageviews-ext_timed
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/08 01:19:02&amp;quot;,&amp;quot;cnt&amp;quot;:2}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;win-length-batch-http-www-espertech-com-esper-release-5-2-0-esper-reference-html-epl-views-html-view-win-length-batch&#34;&gt;&lt;a href=&#34;http://www.espertech.com/esper/release-5.2.0/esper-reference/html/epl-views.html#view-win-length-batch&#34;&gt;win:length_batch&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;event数のWindow。毎回渡した数ずつ集計できると思いきや、数が集まらなければfetchできず、
+それ以上集まったらfetchできるようだ。使いづらいような気がする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SELECT avg(userid) as nosense FROM www.win:length_batch(2) WHERE path=&amp;quot;/&amp;quot; AND status=200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ norikra-client event fetch www.length-lenbat
+
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:1}&#39; | norikra-client event send www
+$ norikra-client event fetch www.length-lenbat
+
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:2}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:1}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ norikra-client event fetch www.length-lenbat
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/08 20:42:20&amp;quot;,&amp;quot;nosense&amp;quot;:2.0}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;win-length-http-www-espertech-com-esper-release-5-2-0-esper-reference-html-epl-views-html-view-win-length&#34;&gt;&lt;a href=&#34;http://www.espertech.com/esper/release-5.2.0/esper-reference/html/epl-views.html#view-win-length&#34;&gt;win:length&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;こっちは渡した数スライドして集計するもの。Windowなしのときと同様、大量に溜まる可能性がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SELECT avg(userid) as nosense FROM www.win:length(2) WHERE path=&amp;quot;/&amp;quot; AND status=200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:3}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:1}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:5}&#39; | norikra-client event send www
+$ echo &#39;{&amp;quot;path&amp;quot;:&amp;quot;/&amp;quot;, &amp;quot;status&amp;quot;:200, &amp;quot;referer&amp;quot;:&amp;quot;&amp;quot;, &amp;quot;agent&amp;quot;:&amp;quot;MSIE&amp;quot;, &amp;quot;userid&amp;quot;:4}&#39; | norikra-client event send www
+$ norikra-client event fetch www.length-len
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/08 20:58:11&amp;quot;,&amp;quot;nosense&amp;quot;:3.0}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/08 20:58:22&amp;quot;,&amp;quot;nosense&amp;quot;:2.0}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/08 20:58:32&amp;quot;,&amp;quot;nosense&amp;quot;:3.0}
+{&amp;quot;time&amp;quot;:&amp;quot;2017/06/08 20:58:45&amp;quot;,&amp;quot;nosense&amp;quot;:4.5}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;他にもいろいろあるし、JOINやサブクエリも使える。&lt;/p&gt;
+
+&lt;h2 id=&#34;fluentdとやり取りする&#34;&gt;fluentdとやり取りする&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/norikra/fluent-plugin-norikra&#34;&gt;fluent-plugin-norikra&lt;/a&gt;でNorikraサーバーにeventを送り、
+eventを受け取ってファイルに出力する。&lt;/p&gt;
+
+&lt;p&gt;c4.large(2コア,メモリ3.75GiB)でDockerでNorikraを立ち上げ、以下の設定でtd-agentを実行した。
+&lt;code&gt;auto_field&lt;/code&gt;は来たeventのフィールドを自動でtargetに登録するかの設定で、
+true(デフォルト)にするとどんなフィールドが来ているかNorikra上で確認することができる。
+falseにしてもクエリで使う分は自動で登録される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type dummy
+  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+  tag event.dummy
+  rate 1000
+&amp;lt;/source&amp;gt;
+   
+&amp;lt;match event.*&amp;gt;
+  @type   norikra
+  norikra localhost:26571
+  
+  remove_tag_prefix event # event.*の部分が
+  target_map_tag    yes   # targetになる
+
+  &amp;lt;default&amp;gt;
+    auto_field false 
+  &amp;lt;/default&amp;gt;
+&amp;lt;/match&amp;gt;
+
+&amp;lt;source&amp;gt;
+  @type   norikra
+  norikra localhost:26571
+  &amp;lt;fetch&amp;gt;
+    method   event
+    # norikra-client query add dummy_count_1sec &#39;SELECT COUNT(*) AS count FROM dummy.win:time_batch(1 sec)&#39;
+    target   dummy_count_1sec
+    tag      string data.dummy_count_1sec
+ #  tag      field FIELDNAME : tag by value with specified field name in output event
+    interval 1m
+  &amp;lt;/fetch&amp;gt;
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match data.*&amp;gt;
+  @type file
+  path /var/log/td-agent/dummy_count
+  time_slice_format %Y%m%d%H
+  time_slice_wait 10s
+  time_format %Y%m%dT%H%M%S%z
+  compress gzip
+  symlink_path /var/log/td-agent/dummy_count
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Norikraのスループットは以下の要素が影響する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;number of targets
+number of queries
+how complex queries are
+how complex UDFs are
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で、目安としてはこんな感じらしい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;10 queries
+2,000 events per seconds
+5% usage of 4core CPU
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;1target、単純な1クエリなら秒間10000送ってみても問題なさそうだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ tail -f dummy_count
+20170609T212717+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212718+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212719+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212720+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212721+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212722+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212723+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212724+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212725+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+20170609T212726+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt; PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND
+ 8256 root      20   0 1878m 249m  19m S 29.3  6.6   6:46.94 java
+ 9812 root      20   0  296m  68m 6288 S 20.0  1.8   2:38.08 ruby  
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;秒間40000送ってみるとカウントがおかしい。
+dummyの方の限界かと思ってnorikraを外してみたらおおよそ数が合ったので
+Norikraサーバーかやり取りの部分で処理が追いついていないようだ。
+一旦rateを下げてみたところ20000あたりを境目にこうなってしまった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ tail -f dummy_count
+20170609T222018+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:31248}
+20170609T222019+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:27468}
+20170609T222020+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:35309}
+20170609T222021+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:31944}
+20170609T222022+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:22805}
+20170609T222023+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:30716}
+20170609T222024+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:33617}
+20170609T222025+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:28740}
+20170609T222026+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:32058}
+20170609T222027+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:27253}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CPUの使用量をみてみると、ほぼ限界まで使用されていた。
+fluentdはrubyの&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%AD%E3%83%BC%E3%83%90%E3%83%AB%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%97%E3%83%AA%E3%82%BF%E3%83%AD%E3%83%83%E3%82%AF&#34;&gt;GIL&lt;/a&gt;
+(Global Interpreter Lock = GVL(Giant VM Lock))のため同時に&lt;a href=&#34;https://docs.ruby-lang.org/ja/2.3.0/doc/spec=2fthread.html&#34;&gt;1ネイティブスレッドしか動かせず&lt;/a&gt;、1コアしかCPUを使えないが、
+jrubyで動くNorikraは残りのコアを使うことができる。
+今回はtargetもクエリも一つだし、データ量も小さいためかメモリにはまだ余裕があった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt; PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND
+11378 root      20   0  350m 111m 6336 S 96.1  3.0   1:53.03 ruby
+8256 root      20   0 1892m 642m  19m S 84.2 17.1  34:36.38 java   
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;HEAP MEMORY USED: 244MB (55.8%), COMMITTED: 437MB, MAX: 437MBStorm
+NON-HEAP MEMORY USED: 51MB (23.8%), COMMITTED: 81MB, MAX: 214MB
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;1Gbps、1Mevent/sを超えるような高トラフィックではStormなどのフレームワークを使えとのこと。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>
