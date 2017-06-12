@@ -11,6 +11,126 @@
     
       
         <item>
+          <title>VSでのネイティブプラグインのビルドからUnityでのWSAのビルドまでをバッチでする</title>
+          <link>http://sambaiz.net/article/110/</link>
+          <pubDate>Tue, 13 Jun 2017 00:32:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/110/</guid>
+          <description>
+
+&lt;h2 id=&#34;vsでのネイティブプラグインのビルド&#34;&gt;VSでのネイティブプラグインのビルド&lt;/h2&gt;
+
+&lt;p&gt;VSが使っているビルドツール
+&lt;a href=&#34;https://docs.microsoft.com/ja-jp/visualstudio/msbuild/msbuild&#34;&gt;MSBuild&lt;/a&gt;を使う。
+VSのプロジェクトファイルにはMSBuildのXMLが含まれている。
+これ自体はVSに依存していないため、単体で動かすこともできる。&lt;/p&gt;
+
+&lt;p&gt;パスが通ってなかったらパスを通す。管理者権限が必要。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; MSBuild
+&#39;MSBuild&#39; は、内部コマンドまたは外部コマンド、
+操作可能なプログラムまたはバッチ ファイルとして認識されていません。
+
+&amp;gt;　SETX /M PATH &amp;quot;%PATH%;C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin&amp;quot;
+
+成功: 指定した値は保存されました。
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;別プロセスから適用されるので立ち上げ直すとパスが通っていることを確認できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; MSBuild /version
+Microsoft (R) Build Engine バージョン 15.1.1012.6693
+Copyright (C) Microsoft Corporation.All rights reserved.
+
+15.1.1012.6693
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ビルドして&lt;code&gt;Assets\Plugins&lt;/code&gt;に配置する。これは前作ったBLEのネイティブプラグインのもの。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/105/&#34;&gt;Unity/UWPでBLEを扱うプラグインを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; git clone git@github.com:sambaiz/UnityBLE_UWP.git
+&amp;gt; cd UnityBLE_UWP
+&amp;gt; MSBuild UnityBLE_UWP\UnityBLE_UWP.csproj /t:restore;build /p:Configuration=Release;Platform=&amp;quot;x86&amp;quot;
+&amp;gt; MSBuild UnityBLE_Editor\UnityBLE_Editor.csproj /t:restore;build /p:Configuration=Release
+&amp;gt; copy /Y UnityBLE_UWP\bin\x86\Release\UnityBLE_UWP.dll ..\Assets\Plugins\WSA
+&amp;gt; copy /Y UnityBLE_Editor\bin\Release\UnityBLE_Editor.dll ..\Assets\Plugins
+&amp;gt; cd ..
+&amp;gt; rmdir /S /Q UnityBLE_UWP
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんなエラーが出てきたらmscorlib.dllをインポートできていないのが原因のようで、
+restoreしたらうまくいった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;error CS0518: 定義済みの型 &#39;System.Object&#39; は定義、またはインポートされていません
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;unityでのwsaのビルド&#34;&gt;UnityでのWSAのビルド&lt;/h2&gt;
+
+&lt;p&gt;同様にUnityもパスが通ってなかったら通す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; Unity
+&#39;Unity&#39; は、内部コマンドまたは外部コマンド、
+操作可能なプログラムまたはバッチ ファイルとして認識されていません。
+
+&amp;gt;　SETX /M PATH &amp;quot;%PATH%;C:\Program Files\Unity\Editor&amp;quot;
+
+成功: 指定した値は保存されました。
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな
+&lt;a href=&#34;https://docs.unity3d.com/ja/current/ScriptReference/BuildPipeline.BuildPlayer.html&#34;&gt;スクリプト&lt;/a&gt;
+をAssets/Editorの中に置く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;using UnityEditor;
+
+public class Build {
+
+    static void PerformBuild()
+    {
+        string[] scenes = { &amp;quot;Assets/main.unity&amp;quot; };
+        BuildPipeline.BuildPlayer(scenes, &amp;quot;build&amp;quot;,
+            BuildTarget.WSAPlayer, BuildOptions.None);
+
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このstaticメソッドを&lt;a href=&#34;https://docs.unity3d.com/ja/540/Manual/CommandLineArguments.html&#34;&gt;executeMethod&lt;/a&gt;
+で渡してビルドする。Unityを開いたままだと失敗するので閉じる必要がある。&lt;/p&gt;
+
+&lt;p&gt;この例だとbuildディレクトリに出力される。もし出力されなかったらEditorログを見る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; Unity -quit -batchmode -executeMethod Build.PerformBuild
+&amp;gt; type C:\Users\(username)\AppData\Local\Unity\Editor\Editor.log
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;まとめたもの&#34;&gt;まとめたもの&lt;/h2&gt;
+
+&lt;p&gt;ということでこんなバッチをUnityプロジェクトの直下に置いておくことにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;git clone git@github.com:sambaiz/UnityBLE_UWP.git
+cd UnityBLE_UWP
+MSBuild UnityBLE_UWP\UnityBLE_UWP.csproj /t:restore;build /p:Configuration=Release;Platform=&amp;quot;x86&amp;quot;
+MSBuild UnityBLE_Editor\UnityBLE_Editor.csproj /t:restore;build /p:Configuration=Release
+copy /Y UnityBLE_UWP\bin\x86\Release\UnityBLE_UWP.dll ..\Assets\Plugins\WSA
+copy /Y UnityBLE_Editor\bin\Release\UnityBLE_Editor.dll ..\Assets\Plugins
+cd ..
+rmdir /S /Q UnityBLE_UWP
+
+rmdir /S /Q build
+Unity -quit -batchmode -executeMethod Build.PerformBuild
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sh-yoshida.hatenablog.com/entry/2017/05/27/012755&#34;&gt;MSBuildでコマンドラインからビルドする - 1.21 jigowatts&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>Unity/UWPでBLEを扱うプラグインを作る</title>
           <link>http://sambaiz.net/article/105/</link>
           <pubDate>Sun, 04 Jun 2017 11:57:00 &#43;0900</pubDate>
@@ -74,10 +194,10 @@ public class BLE : MonoBehaviour {
 
     void Start() {
         var ble = new UnityBLE.BLE();
-        ble.Start();
         ble.DeviceAdded += (sender, obj) =&amp;gt; {
             value = &amp;quot;DeviceID: &amp;quot; + obj.DeviceID;
             ble.Listen(obj.DeviceID, serviceUUID, characteristicUUID);
+            ble.Stop();
         };
         ble.CharacteristicReceived += (sender, obj) =&amp;gt;
         {
@@ -93,6 +213,7 @@ public class BLE : MonoBehaviour {
                 }
             }
         };
+        ble.Start();
     }
 
     void Update() {
@@ -194,7 +315,9 @@ if (result.Status == DevicePairingResultStatus.Paired || result.Status == Device
 &lt;code&gt;GetGattServicesForUuidAsyc&lt;/code&gt;などはCreaters Updateから追加されたAPI。
 deviceの値が取得できない場合はBluetoothが許可されているか確認する。
 あと、characteristicが一つも取れない場合、他のアプリケーションからアクセスしていないか注意。
-ドキュメントにも書いてあるけど、一つのサービスには一つのアプリケーションしかアクセスできない。&lt;/p&gt;
+ドキュメントにも書いてあるけど、一つのサービスには一つのアプリケーションしかアクセスできない。
+そもそも接続できない場合、一旦お互いの接続設定を消して再ペアリングするとよくなることがある。
+ペアリングもできないようだったらBluetoothをオフにしてみるとか。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;var device = await BluetoothLEDevice.FromIdAsync(deviceInfo.Id);
 

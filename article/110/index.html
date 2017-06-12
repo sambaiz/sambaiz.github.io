@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>Nightmareでブラウザでの操作を自動化する - sambaiz-net</title>
-    <meta name="twitter:title" content="Nightmareでブラウザでの操作を自動化する - sambaiz-net">
-    <meta property='og:title' content="Nightmareでブラウザでの操作を自動化する - sambaiz-net">
+    <title>VSでのネイティブプラグインのビルドからUnityでのWSAのビルドまでをバッチでする - sambaiz-net</title>
+    <meta name="twitter:title" content="VSでのネイティブプラグインのビルドからUnityでのWSAのビルドまでをバッチでする - sambaiz-net">
+    <meta property='og:title' content="VSでのネイティブプラグインのビルドからUnityでのWSAのビルドまでをバッチでする - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="Nightmare">
-      <meta name="twitter:description" content="Nightmare">
+      <meta name="description" content="何回も手動でやってると面倒になったのでバッチを書いた">
+      <meta name="twitter:description" content="何回も手動でやってると面倒になったのでバッチを書いた">
     
     
 
-    <meta property="og:url" content="http://sambaiz.net/article/90/">
+    <meta property="og:url" content="http://sambaiz.net/article/110/">
     <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"http:\/\/sambaiz.net\/"
     },
-    "headline": "Nightmareでブラウザでの操作を自動化する | sambaiz-net ",
-    "datePublished": "2017-03-29T23:18:00JST",
-    "dateModified": "2017-03-29T23:18:00JST",
+    "headline": "VSでのネイティブプラグインのビルドからUnityでのWSAのビルドまでをバッチでする | sambaiz-net ",
+    "datePublished": "2017-06-13T00:32:00JST",
+    "dateModified": "2017-06-13T00:32:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Nightmare"
+    "description": "何回も手動でやってると面倒になったのでバッチを書いた"
   }
 </script>
 </head>
@@ -103,73 +103,117 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Nightmareでブラウザでの操作を自動化する</h1>
-          <p>(2017-03-29)</p>
-          <p>最近、<a href="http://postwash.net/">POSTWASH</a>という洗濯代行サービスを使っている。
-専用のカバンに詰めて集荷にきた人に渡すと、きれいに畳まれた洗濯ものが届く便利なサービスだ。
-注文時にはWebのフォームから集荷、配達時間や支払い方法などを選ぶ必要があるんだけど、毎週のことなのでこれを自動化してみる。</p>
+          <h1>VSでのネイティブプラグインのビルドからUnityでのWSAのビルドまでをバッチでする</h1>
+          <p>(2017-06-13)</p>
+          
 
-<p>ブラウザの操作を自動化するのに<a href="https://github.com/segmentio/nightmare">Nightmare</a>を使う。
-<a href="https://electron.atom.io/">Electron</a>を使っていて、<a href="http://phantomjs.org/">PahntomJS</a>より2倍くらい速く、簡潔に書ける。</p>
+<h2 id="vsでのネイティブプラグインのビルド">VSでのネイティブプラグインのビルド</h2>
 
-<pre><code>$ npm install nightmare
+<p>VSが使っているビルドツール
+<a href="https://docs.microsoft.com/ja-jp/visualstudio/msbuild/msbuild">MSBuild</a>を使う。
+VSのプロジェクトファイルにはMSBuildのXMLが含まれている。
+これ自体はVSに依存していないため、単体で動かすこともできる。</p>
+
+<p>パスが通ってなかったらパスを通す。管理者権限が必要。</p>
+
+<pre><code>&gt; MSBuild
+'MSBuild' は、内部コマンドまたは外部コマンド、
+操作可能なプログラムまたはバッチ ファイルとして認識されていません。
+
+&gt;　SETX /M PATH &quot;%PATH%;C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin&quot;
+
+成功: 指定した値は保存されました。
 </code></pre>
 
-<p><code>Nightmare()</code>の引数に<code>show: true</code>を渡すとウィンドウが開いて実行し始める。
-これで確認画面までいくのであとは注文ボタンを押すだけ。
-ウィンドウが閉じないように最後に<code>nightmare.end()</code>を呼んでいない。</p>
+<p>別プロセスから適用されるので立ち上げ直すとパスが通っていることを確認できる。</p>
 
-<pre><code>const co = require('co');
-const moment = require('moment')
-const jst = +9
-const Nightmare = require('nightmare');		
-const nightmare = Nightmare({ 
-  show: true,
-  waitTimeout: 3000,
-  gotoTimeout: 3000
-});
-const loginID = process.env.LOGIN_ID;
-const loginPassword = process.env.LOGIN_PASSWORD;
+<pre><code>&gt; MSBuild /version
+Microsoft (R) Build Engine バージョン 15.1.1012.6693
+Copyright (C) Microsoft Corporation.All rights reserved.
 
-moment.locale('ja');
-const now = moment().utcOffset(jst)
-const dayAfterTomorrow = now.add(2, 'days').format(&quot;YYYY年M月D日(ddd)&quot;);
-const nextWeek = now.add(7, 'days').format(&quot;YYYY年M月D日(ddd)&quot;)
-console.log(`${dayAfterTomorrow}~${nextWeek}`);
-
-// IDとパスワードを入れてログイン
-const login = () =&gt; nightmare
-  .goto('https://sv359.xserver.jp/~postwash/postwash.net/accounts/')
-  .type('#loginid', loginID)
-  .insert('#loginpw', loginPassword) // .insert() is faster than .type() but does not trigger the keyboard events.
-  .click('#submit')
-  .wait('#yokoso')
-  .evaluate(() =&gt; document.querySelector('#yokoso h5').textContent);
-
-// 注文フォームを埋めていく
-const order = () =&gt; nightmare
-  .goto('https://sv359.xserver.jp/~postwash/postwash.net/mypage/order.html')
-  .wait('#item\\[4\\]')
-  .check('#item\\[4\\]')
-  .insert('#itemnum\\[4\\]', '1')
-  .select('#pickup_date_request', dayAfterTomorrow)
-  .select('#pickup_time_request', '午前中（8時～12時）')
-  .wait(500) // #delivery_date_request が切り替わってしまうので少し待つ
-  .select('#delivery_date_request', nextWeek)
-  .select('#delivery_time_request', '午前中（8時～12時）')
-  .select('#payment', '代金引換')
-  .check('#agreement')
-  .click('#submit')
-
-co(function *(){
-    yield login().then(
-        (result) =&gt; console.log(result), // ようこそ
-        (err) =&gt; console.log(err)
-    );
-    yield order();
-    // yield nightmare.end();
-});
+15.1.1012.6693
 </code></pre>
+
+<p>ビルドして<code>Assets\Plugins</code>に配置する。これは前作ったBLEのネイティブプラグインのもの。</p>
+
+<p><a href="http://sambaiz.net/article/105/">Unity/UWPでBLEを扱うプラグインを作る - sambaiz-net</a></p>
+
+<pre><code>&gt; git clone git@github.com:sambaiz/UnityBLE_UWP.git
+&gt; cd UnityBLE_UWP
+&gt; MSBuild UnityBLE_UWP\UnityBLE_UWP.csproj /t:restore;build /p:Configuration=Release;Platform=&quot;x86&quot;
+&gt; MSBuild UnityBLE_Editor\UnityBLE_Editor.csproj /t:restore;build /p:Configuration=Release
+&gt; copy /Y UnityBLE_UWP\bin\x86\Release\UnityBLE_UWP.dll ..\Assets\Plugins\WSA
+&gt; copy /Y UnityBLE_Editor\bin\Release\UnityBLE_Editor.dll ..\Assets\Plugins
+&gt; cd ..
+&gt; rmdir /S /Q UnityBLE_UWP
+</code></pre>
+
+<p>こんなエラーが出てきたらmscorlib.dllをインポートできていないのが原因のようで、
+restoreしたらうまくいった。</p>
+
+<pre><code>error CS0518: 定義済みの型 'System.Object' は定義、またはインポートされていません
+</code></pre>
+
+<h2 id="unityでのwsaのビルド">UnityでのWSAのビルド</h2>
+
+<p>同様にUnityもパスが通ってなかったら通す。</p>
+
+<pre><code>&gt; Unity
+'Unity' は、内部コマンドまたは外部コマンド、
+操作可能なプログラムまたはバッチ ファイルとして認識されていません。
+
+&gt;　SETX /M PATH &quot;%PATH%;C:\Program Files\Unity\Editor&quot;
+
+成功: 指定した値は保存されました。
+</code></pre>
+
+<p>こんな
+<a href="https://docs.unity3d.com/ja/current/ScriptReference/BuildPipeline.BuildPlayer.html">スクリプト</a>
+をAssets/Editorの中に置く。</p>
+
+<pre><code>using UnityEditor;
+
+public class Build {
+
+    static void PerformBuild()
+    {
+        string[] scenes = { &quot;Assets/main.unity&quot; };
+        BuildPipeline.BuildPlayer(scenes, &quot;build&quot;,
+            BuildTarget.WSAPlayer, BuildOptions.None);
+
+    }
+}
+</code></pre>
+
+<p>このstaticメソッドを<a href="https://docs.unity3d.com/ja/540/Manual/CommandLineArguments.html">executeMethod</a>
+で渡してビルドする。Unityを開いたままだと失敗するので閉じる必要がある。</p>
+
+<p>この例だとbuildディレクトリに出力される。もし出力されなかったらEditorログを見る。</p>
+
+<pre><code>&gt; Unity -quit -batchmode -executeMethod Build.PerformBuild
+&gt; type C:\Users\(username)\AppData\Local\Unity\Editor\Editor.log
+</code></pre>
+
+<h2 id="まとめたもの">まとめたもの</h2>
+
+<p>ということでこんなバッチをUnityプロジェクトの直下に置いておくことにした。</p>
+
+<pre><code>git clone git@github.com:sambaiz/UnityBLE_UWP.git
+cd UnityBLE_UWP
+MSBuild UnityBLE_UWP\UnityBLE_UWP.csproj /t:restore;build /p:Configuration=Release;Platform=&quot;x86&quot;
+MSBuild UnityBLE_Editor\UnityBLE_Editor.csproj /t:restore;build /p:Configuration=Release
+copy /Y UnityBLE_UWP\bin\x86\Release\UnityBLE_UWP.dll ..\Assets\Plugins\WSA
+copy /Y UnityBLE_Editor\bin\Release\UnityBLE_Editor.dll ..\Assets\Plugins
+cd ..
+rmdir /S /Q UnityBLE_UWP
+
+rmdir /S /Q build
+Unity -quit -batchmode -executeMethod Build.PerformBuild
+</code></pre>
+
+<h2 id="参考">参考</h2>
+
+<p><a href="http://sh-yoshida.hatenablog.com/entry/2017/05/27/012755">MSBuildでコマンドラインからビルドする - 1.21 jigowatts</a></p>
 
         </div>
       </article>
