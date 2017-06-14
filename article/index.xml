@@ -6,8 +6,108 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-06-13 00:32:00 &#43;0900 JST</updated>
+    <updated>2017-06-15 00:17:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>NorikraでログをJOINする</title>
+          <link>http://sambaiz.net/article/111/</link>
+          <pubDate>Thu, 15 Jun 2017 00:17:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/111/</guid>
+          <description>&lt;p&gt;適当なログを出すコードを書いた。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/lottery-log&#34;&gt;sambaiz/lottery-log&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;これは以下のようなlottery.logを出力し続け、数秒後に一定確率で同じuidのreceived.logを出力するもの。
+広告的に言えば、lotteryがimpで、receivedがclickといった感じかな。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// lottery.log
+{&amp;quot;ts&amp;quot;:1497453504.6818597,&amp;quot;uid&amp;quot;:&amp;quot;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&amp;quot;,&amp;quot;prize&amp;quot;:855,&amp;quot;isWin&amp;quot;:true}
+// received.log
+{&amp;quot;ts&amp;quot;:1497453515.932101,&amp;quot;uid&amp;quot;:&amp;quot;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
+もう片方はJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。
+received_rateも出したかったのだけど、うまい書き方が思いつかなかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker exec norikra norikra-client query add lottery_agg &#39;SELECT COUNT(*) as received_count, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time_batch(1 min).std:unique(uid) as a, received.win:time_batch(1 sec).std:unique(uid) as b WHERE a.uid = b.uid&#39;
+
+$ docker exec norikra norikra-client query add lottery_win_rate &#39;SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で、このクエリの結果をElasticsearchに送って可視化してみたのがこれ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type tail
+  path /var/log/lottery.log
+  pos_file /etc/td-agent/log.pos
+  tag event.lottery
+  format json
+&amp;lt;/source&amp;gt;
+
+&amp;lt;source&amp;gt;
+  @type tail
+  path /var/log/received.log
+  pos_file /etc/td-agent/log.pos
+  tag event.received
+  format json
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match event.*&amp;gt;
+  @type   norikra
+  norikra localhost:26571
+  
+  remove_tag_prefix event # event.*の部分が
+  target_map_tag    yes   # targetになる
+
+  &amp;lt;default&amp;gt;
+    auto_field false 
+  &amp;lt;/default&amp;gt;
+&amp;lt;/match&amp;gt;
+
+&amp;lt;source&amp;gt;
+  @type   norikra
+  norikra localhost:26571
+  &amp;lt;fetch&amp;gt;
+    method   event
+    target   lottery_agg
+    tag      string data.lottery_agg
+    interval 1m
+  &amp;lt;/fetch&amp;gt;
+  &amp;lt;fetch&amp;gt;
+    method   event
+    target   lottery_win_rate
+    tag      string data.lottery_win_rate
+    interval 1m
+  &amp;lt;/fetch&amp;gt;
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match data.lottery_agg&amp;gt;
+  @type elasticsearch
+  host 172.31.5.20
+  port 9200
+  logstash_prefix lottery
+  type_name lottery_agg
+  logstash_format true
+&amp;lt;/match&amp;gt;
+
+&amp;lt;match data.lottery_win_rate&amp;gt;
+  @type elasticsearch
+  host 172.31.5.20
+  port 9200
+  logstash_prefix lottery
+  type_name lottery_win_rate
+  logstash_format true
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/111v.png&#34; alt=&#34;可視化したもの&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -286,6 +386,8 @@ $ norikra-client event fetch www.length-len
 
 &lt;p&gt;他にもいろいろあるし、JOINやサブクエリも使える。&lt;/p&gt;
 
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/111/&#34;&gt;NorikraでログをJOINする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
 &lt;h2 id=&#34;fluentdとやり取りする&#34;&gt;fluentdとやり取りする&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://github.com/norikra/fluent-plugin-norikra&#34;&gt;fluent-plugin-norikra&lt;/a&gt;でNorikraサーバーにeventを送り、
@@ -354,7 +456,8 @@ how complex UDFs are
 5% usage of 4core CPU
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;1target、単純な1クエリなら秒間10000送ってみても問題なさそうだ。&lt;/p&gt;
+&lt;p&gt;1target、単純な1クエリなら秒間10000送ってみても問題なかった。
+あまり現実的なケースではないけど限界を目指してみる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ tail -f dummy_count
 20170609T212717+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}

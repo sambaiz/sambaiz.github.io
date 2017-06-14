@@ -6,8 +6,108 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-06-13 00:32:00 &#43;0900 JST</updated>
+    <updated>2017-06-15 00:17:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>NorikraでログをJOINする</title>
+          <link>http://sambaiz.net/article/111/</link>
+          <pubDate>Thu, 15 Jun 2017 00:17:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/111/</guid>
+          <description>&lt;p&gt;適当なログを出すコードを書いた。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/lottery-log&#34;&gt;sambaiz/lottery-log&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;これは以下のようなlottery.logを出力し続け、数秒後に一定確率で同じuidのreceived.logを出力するもの。
+広告的に言えば、lotteryがimpで、receivedがclickといった感じかな。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// lottery.log
+{&amp;quot;ts&amp;quot;:1497453504.6818597,&amp;quot;uid&amp;quot;:&amp;quot;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&amp;quot;,&amp;quot;prize&amp;quot;:855,&amp;quot;isWin&amp;quot;:true}
+// received.log
+{&amp;quot;ts&amp;quot;:1497453515.932101,&amp;quot;uid&amp;quot;:&amp;quot;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
+もう片方はJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。
+received_rateも出したかったのだけど、うまい書き方が思いつかなかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker exec norikra norikra-client query add lottery_agg &#39;SELECT COUNT(*) as received_count, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time_batch(1 min).std:unique(uid) as a, received.win:time_batch(1 sec).std:unique(uid) as b WHERE a.uid = b.uid&#39;
+
+$ docker exec norikra norikra-client query add lottery_win_rate &#39;SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;で、このクエリの結果をElasticsearchに送って可視化してみたのがこれ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type tail
+  path /var/log/lottery.log
+  pos_file /etc/td-agent/log.pos
+  tag event.lottery
+  format json
+&amp;lt;/source&amp;gt;
+
+&amp;lt;source&amp;gt;
+  @type tail
+  path /var/log/received.log
+  pos_file /etc/td-agent/log.pos
+  tag event.received
+  format json
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match event.*&amp;gt;
+  @type   norikra
+  norikra localhost:26571
+  
+  remove_tag_prefix event # event.*の部分が
+  target_map_tag    yes   # targetになる
+
+  &amp;lt;default&amp;gt;
+    auto_field false 
+  &amp;lt;/default&amp;gt;
+&amp;lt;/match&amp;gt;
+
+&amp;lt;source&amp;gt;
+  @type   norikra
+  norikra localhost:26571
+  &amp;lt;fetch&amp;gt;
+    method   event
+    target   lottery_agg
+    tag      string data.lottery_agg
+    interval 1m
+  &amp;lt;/fetch&amp;gt;
+  &amp;lt;fetch&amp;gt;
+    method   event
+    target   lottery_win_rate
+    tag      string data.lottery_win_rate
+    interval 1m
+  &amp;lt;/fetch&amp;gt;
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match data.lottery_agg&amp;gt;
+  @type elasticsearch
+  host 172.31.5.20
+  port 9200
+  logstash_prefix lottery
+  type_name lottery_agg
+  logstash_format true
+&amp;lt;/match&amp;gt;
+
+&amp;lt;match data.lottery_win_rate&amp;gt;
+  @type elasticsearch
+  host 172.31.5.20
+  port 9200
+  logstash_prefix lottery
+  type_name lottery_win_rate
+  logstash_format true
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/111v.png&#34; alt=&#34;可視化したもの&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -286,6 +386,8 @@ $ norikra-client event fetch www.length-len
 
 &lt;p&gt;他にもいろいろあるし、JOINやサブクエリも使える。&lt;/p&gt;
 
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/111/&#34;&gt;NorikraでログをJOINする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
 &lt;h2 id=&#34;fluentdとやり取りする&#34;&gt;fluentdとやり取りする&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://github.com/norikra/fluent-plugin-norikra&#34;&gt;fluent-plugin-norikra&lt;/a&gt;でNorikraサーバーにeventを送り、
@@ -354,7 +456,8 @@ how complex UDFs are
 5% usage of 4core CPU
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;1target、単純な1クエリなら秒間10000送ってみても問題なさそうだ。&lt;/p&gt;
+&lt;p&gt;1target、単純な1クエリなら秒間10000送ってみても問題なかった。
+あまり現実的なケースではないけど限界を目指してみる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ tail -f dummy_count
 20170609T212717+0900	data.dummy_count_1sec	{&amp;quot;count&amp;quot;:10000}
@@ -7678,192 +7781,6 @@ $ curl -XPOST &#39;localhost:9200/test_index/test_type?pretty&#39; -d&#39;
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;http://blog.johtani.info/blog/2014/09/09/performance-considerations-for-elasticsearch-indexing/&#34;&gt;Elasticsearchのインデキシングに関するパフォーマンス検討 - @johtaniの日記 2nd&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>Goのnet/httpとKeep-Alive</title>
-          <link>http://sambaiz.net/article/61/</link>
-          <pubDate>Tue, 07 Feb 2017 22:42:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/61/</guid>
-          <description>
-
-&lt;p&gt;Keep-AliveするとTCPコネクションを使い回し、名前解決やコネクション(3 way handshake)を毎回行わなくてよくなる。
-Goの&lt;code&gt;net/http&lt;/code&gt;ではデフォルトでKeep-Aliveが
-&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L129&#34;&gt;有効になっている&lt;/a&gt;が、
-全体と同一ホストでそれぞれKeep-Aliveするコネクション数が制限される。
-これらの値は&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L36&#34;&gt;Client&lt;/a&gt;のTransportが持っていて、
-これがnullだと&lt;a href=&#34;https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/transport.go#L39&#34;&gt;DefaultTransport&lt;/a&gt;が参照されるので、意識しなければこの値が使われる。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L143&#34;&gt;MaxIdleConns&lt;/a&gt;: DefaultTransportでは&lt;a href=&#34;https://github.com/golang/go/blob/master/src/net/http/transport.go#L46&#34;&gt;100になっている&lt;/a&gt;。0にすると無制限。&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L148&#34;&gt;MaxIdleConnsPerHost&lt;/a&gt;: &lt;a href=&#34;https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L54&#34;&gt;デフォルト値は2&lt;/a&gt;。0にするとデフォルト値が使われる。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;同一のホストに同時にたくさんリクエストする場合、2だとほとんど意味を持たない。これを増やして比較してみた。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;package main
-
-import (
-	&amp;quot;fmt&amp;quot;
-	&amp;quot;io/ioutil&amp;quot;
-	&amp;quot;net/http&amp;quot;
-	&amp;quot;time&amp;quot;
-)
-
-var client = http.Client{
-	Timeout: time.Millisecond * 100,
-}
-
-const TOTAL_REQUEST_NUM = 3000
-const TARGET_URL = &amp;quot;*****&amp;quot;
-
-func main() {
-
-	http.DefaultTransport.(*http.Transport).MaxIdleConns = 0
-	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 3000
-
-	okChan := make(chan int, TOTAL_REQUEST_NUM)
-	ngChan := make(chan int, TOTAL_REQUEST_NUM)
-
-	var okCount = 0
-	var ngCount = 0
-
-	// connect and keep-alive
-	for i := 0; i &amp;lt; TOTAL_REQUEST_NUM; i++ {
-		go request(okChan, ngChan)
-	}
-
-	for {
-		select {
-		case &amp;lt;-okChan:
-			okCount++
-		case &amp;lt;-ngChan:
-			ngCount++
-		}
-
-		if okCount+ngCount == TOTAL_REQUEST_NUM {
-			break
-		}
-	}
-
-	okCount = 0
-	ngCount = 0
-
-	startNs := time.Now().UnixNano()
-
-	for i := 0; i &amp;lt; TOTAL_REQUEST_NUM; i++ {
-		go request(okChan, ngChan)
-	}
-
-	for {
-		select {
-		case &amp;lt;-okChan:
-			okCount++
-		case &amp;lt;-ngChan:
-			ngCount++
-		}
-
-		if okCount+ngCount == TOTAL_REQUEST_NUM {
-			break
-		}
-	}
-
-	endNs := time.Now().UnixNano()
-
-	fmt.Printf(&amp;quot;[RESULT] request: %d, ok: %d, ng: %d, time(ms) %d\n&amp;quot;,
-		TOTAL_REQUEST_NUM, okCount, ngCount, (endNs-startNs)/(1000*1000))
-}
-
-func request(okch chan int, ngch chan int) {
-	req, err := http.NewRequest(&amp;quot;GET&amp;quot;, TARGET_URL, nil)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println(err.Error())
-		ngch &amp;lt;- 1
-		return
-	}
-	defer resp.Body.Close()
-
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println(err.Error())
-		ngch &amp;lt;- 1
-		return
-	}
-
-	okch &amp;lt;- 1
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;デフォルト設定: &lt;code&gt;[RESULT] request: 3000, ok: 530, ng: 2470, time(ms) 173&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;MaxIdleConnsPerHostを3000に: &lt;code&gt;[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 88&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;全てのリクエストが時間内に捌けるようになったので効果があったようだ。&lt;/p&gt;
-
-&lt;p&gt;ただ、このコードのようにgoroutineを無尽蔵に生成すると、限界を超えたときにタイムアウトが頻発してしまうので注意。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/74&#34;&gt;Goroutineの数をworkerで抑制する - sambaiz.net&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;ちなみに、&lt;a href=&#34;https://github.com/tcnksm/go-httpstat&#34;&gt;tcnksm/go-httpstat&lt;/a&gt;でnet/http/httptraceすると各処理にかかっている時間が分かる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;req, err := http.NewRequest(&amp;quot;GET&amp;quot;, TARGET_URL, nil)
-if err != nil {
-	panic(err.Error())
-}
-
-result := new(httpstat.Result)
-ctx := httpstat.WithHTTPStat(req.Context(), result)
-req = req.WithContext(ctx)
-
-resp, err := client.Do(req)
-if err != nil {
-	fmt.Println(err.Error())
-	ngch &amp;lt;- 1
-	return
-}
-defer resp.Body.Close()
-
-_, err = ioutil.ReadAll(resp.Body)
-if err != nil {
-	fmt.Println(err.Error())
-	ngch &amp;lt;- 1
-	return
-}
-
-result.End(time.Now())
-fmt.Printf(&amp;quot;%+v\n&amp;quot;, result)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;Start Transfer:   85 ms
-Total:            86 ms
-
-DNS lookup:           0 ms
-TCP connection:       0 ms
-TLS handshake:        0 ms
-Server processing:   64 ms
-Content transfer:     1 ms
-
-Name Lookup:       0 ms
-Connect:           0 ms
-Pre Transfer:      0 ms
-Start Transfer:   64 ms
-Total:            65 ms
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/&#34;&gt;Re:golang の http.Client を速くする - Shogo&amp;rsquo;s Blog&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       

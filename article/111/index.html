@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>O&#39;Reillyの「マイクロサービスアーキテクチャ」を読んだ - sambaiz-net</title>
-    <meta name="twitter:title" content="O&#39;Reillyの「マイクロサービスアーキテクチャ」を読んだ - sambaiz-net">
-    <meta property='og:title' content="O&#39;Reillyの「マイクロサービスアーキテクチャ」を読んだ - sambaiz-net">
+    <title>NorikraでログをJOINする - sambaiz-net</title>
+    <meta name="twitter:title" content="NorikraでログをJOINする - sambaiz-net">
+    <meta property='og:title' content="NorikraでログをJOINする - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="読んだ">
-      <meta name="twitter:description" content="読んだ">
+      <meta name="description" content="あとから来たログと合わせて集計する">
+      <meta name="twitter:description" content="あとから来たログと合わせて集計する">
     
     
 
-    <meta property="og:url" content="http://sambaiz.net/article/14/">
+    <meta property="og:url" content="http://sambaiz.net/article/111/">
     <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"http:\/\/sambaiz.net\/"
     },
-    "headline": "O\x27Reillyの「マイクロサービスアーキテクチャ」を読んだ | sambaiz-net ",
-    "datePublished": "2016-08-06T18:20:00JST",
-    "dateModified": "2016-08-06T18:20:00JST",
+    "headline": "NorikraでログをJOINする | sambaiz-net ",
+    "datePublished": "2017-06-15T00:17:00JST",
+    "dateModified": "2017-06-15T00:17:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "読んだ"
+    "description": "あとから来たログと合わせて集計する"
   }
 </script>
 </head>
@@ -103,45 +103,97 @@
 
       <article class="single">
         <div class="single body">
-          <h1>O&#39;Reillyの「マイクロサービスアーキテクチャ」を読んだ</h1>
-          <p>(2016-08-06)</p>
-          <p><a href="https://www.oreilly.co.jp/books/9784873117607/">O&rsquo;Reilly Japan - マイクロサービスアーキテクチャ</a></p>
+          <h1>NorikraでログをJOINする</h1>
+          <p>(2017-06-15)</p>
+          <p>適当なログを出すコードを書いた。</p>
 
-<p>設計、開発、テストや監視など一通りまとまっているマイクロサービスアーキテクチャの本。</p>
+<p><a href="https://github.com/sambaiz/lottery-log">sambaiz/lottery-log</a></p>
 
-<p>マイクロサービスアーキテクチャというのは、協調して動作する小規模で自律的なサービスでシステムを構成するもので、
-一般的なモノリシック(一枚岩)システムのモジュールのように独立したサービスを作っていく。
-自律的というのは、他には何も変更せずに、単独でサービスの変更やデプロイを行えるということ。</p>
+<p>これは以下のようなlottery.logを出力し続け、数秒後に一定確率で同じuidのreceived.logを出力するもの。
+広告的に言えば、lotteryがimpで、receivedがclickといった感じかな。</p>
 
-<p>メリットとしては</p>
+<pre><code>// lottery.log
+{&quot;ts&quot;:1497453504.6818597,&quot;uid&quot;:&quot;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&quot;,&quot;prize&quot;:855,&quot;isWin&quot;:true}
+// received.log
+{&quot;ts&quot;:1497453515.932101,&quot;uid&quot;:&quot;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&quot;}
+</code></pre>
 
-<ul>
-<li>サービスごとに異なる技術を使うことができる</li>
-<li>一部のサービスで障害が発生しても、機能低下させて稼働し続けるシステムを構築できる</li>
-<li>性能を高める必要があるサービスだけをスケールでき、効率的にリソースを使うことができる</li>
-<li>デプロイのリスクを最小限に抑えることができるため、迅速に行うことができる</li>
-<li>レガシーなコードを捨て去る障壁が低い</li>
-</ul>
+<p>クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
+もう片方はJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。
+received_rateも出したかったのだけど、うまい書き方が思いつかなかった。</p>
 
-<p>などが挙げられていた。</p>
+<pre><code>$ docker exec norikra norikra-client query add lottery_agg 'SELECT COUNT(*) as received_count, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time_batch(1 min).std:unique(uid) as a, received.win:time_batch(1 sec).std:unique(uid) as b WHERE a.uid = b.uid'
 
-<p>正しくサービスを切り分けるにはドメインの理解が必要で、「境界づけられたコンテキスト」が1つのサービスとなるようにする。
-そのため、最初はモノシリックに進めることも推奨されていた。</p>
+$ docker exec norikra norikra-client query add lottery_win_rate 'SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)'
+</code></pre>
 
-<blockquote>
-<p>特に初めてのドメインでは、システムをマイクロサービスに分解するのが時期尚早だとコストがかかってしまう場合があります。いろいろな意味で、マイクロサービスに分解したい既存のコードベースがある方が、最初からマイクロサービスに取り組むよりもはるかに簡単です (3.3.3)</p>
-</blockquote>
+<p>で、このクエリの結果をElasticsearchに送って可視化してみたのがこれ。</p>
 
-<p>実現する上で、DBの扱いが難しいと思った。
-サービス間のDBの共有はスキーマの変更に弱く、技術の縛りが発生してしまうので避けなければならない。
-一方で、DBを分割すると1つのトランザクションで完結しなくなり、どのように整合性を保っていくか。
-そんな話が5章に書いてあって、いくつか方法は挙げられているが、いずれにせよ何かしらの制御をしなくてはいけないし、
-データの取得の上でも一つのデータベースにあったほうが便利だったりする。
-サービスの単位がデータに引きずられてしまうと、マイクロサービスとはいえないものが出来上がりそうだ。
-きれいに分けられればいいけど実際どうなんだろう。</p>
+<pre><code>&lt;source&gt;
+  @type tail
+  path /var/log/lottery.log
+  pos_file /etc/td-agent/log.pos
+  tag event.lottery
+  format json
+&lt;/source&gt;
 
-<p>すぐにマイクロサービスを採用するかは別としても、考え方として活かせそうなことが多かった。
-実際にやってみて、また読み返して自分のものにしていこうと思う。</p>
+&lt;source&gt;
+  @type tail
+  path /var/log/received.log
+  pos_file /etc/td-agent/log.pos
+  tag event.received
+  format json
+&lt;/source&gt;
+
+&lt;match event.*&gt;
+  @type   norikra
+  norikra localhost:26571
+  
+  remove_tag_prefix event # event.*の部分が
+  target_map_tag    yes   # targetになる
+
+  &lt;default&gt;
+    auto_field false 
+  &lt;/default&gt;
+&lt;/match&gt;
+
+&lt;source&gt;
+  @type   norikra
+  norikra localhost:26571
+  &lt;fetch&gt;
+    method   event
+    target   lottery_agg
+    tag      string data.lottery_agg
+    interval 1m
+  &lt;/fetch&gt;
+  &lt;fetch&gt;
+    method   event
+    target   lottery_win_rate
+    tag      string data.lottery_win_rate
+    interval 1m
+  &lt;/fetch&gt;
+&lt;/source&gt;
+
+&lt;match data.lottery_agg&gt;
+  @type elasticsearch
+  host 172.31.5.20
+  port 9200
+  logstash_prefix lottery
+  type_name lottery_agg
+  logstash_format true
+&lt;/match&gt;
+
+&lt;match data.lottery_win_rate&gt;
+  @type elasticsearch
+  host 172.31.5.20
+  port 9200
+  logstash_prefix lottery
+  type_name lottery_win_rate
+  logstash_format true
+&lt;/match&gt;
+</code></pre>
+
+<p><img src="http://sambaiz.net/images/111v.png" alt="可視化したもの" /></p>
 
         </div>
       </article>
