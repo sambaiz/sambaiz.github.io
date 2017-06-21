@@ -121,10 +121,15 @@
 </code></pre>
 
 <p>クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
-もう一つはJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。
-received_rateも出したかったのだけど、うまい書き方が思いつかなかった。</p>
+received_rateの計算にはサブクエリも使っている。
+received_rateの計算で分母に小さな値を足しているのはNaNやInfinityにならないようにするため。
+receivedログは最大30秒遅れて出力されるため、40秒前までのreceivedログをwin:timeで見ている。
+これをtime_batchにしてしまうと期待通りの結果にならないので注意。</p>
 
-<pre><code>$ docker exec norikra norikra-client query add lottery_agg 'SELECT COUNT(*) as received_count, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time_batch(1 min).std:unique(uid) as a, received.win:time_batch(1 sec).std:unique(uid) as b WHERE a.uid = b.uid'
+<p>もう一つはJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。</p>
+
+<pre><code>$ docker exec norikra norikra-client query add lottery_agg '
+SELECT COUNT(*) as received_count, (COUNT(*) / (SELECT COUNT(*) + 0.00001 FROM lottery.win:time_batch(1 sec, 0).std:unique(uid))) as received_rate, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time(40 sec).std:unique(uid) as a, received.win:time_batch(1 sec, 0).std:unique(uid) as b WHERE a.uid = b.uid'
 
 $ docker exec norikra norikra-client query add lottery_win_rate 'SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)'
 </code></pre>
@@ -194,6 +199,8 @@ $ docker exec norikra norikra-client query add lottery_win_rate 'SELECT avg(Bool
   logstash_format true
 &lt;/match&gt;
 </code></pre>
+
+<p>received_rateを計算するときのウィンドウが1secと小さく、タイミングによってはreceivedの数がlotteryの数を上回ることがあるため1以下で絞っている。</p>
 
 <p><img src="http://sambaiz.net/images/111v.png" alt="可視化したもの" /></p>
 

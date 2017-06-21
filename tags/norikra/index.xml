@@ -32,10 +32,15 @@
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
-もう一つはJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。
-received_rateも出したかったのだけど、うまい書き方が思いつかなかった。&lt;/p&gt;
+received_rateの計算にはサブクエリも使っている。
+received_rateの計算で分母に小さな値を足しているのはNaNやInfinityにならないようにするため。
+receivedログは最大30秒遅れて出力されるため、40秒前までのreceivedログをwin:timeで見ている。
+これをtime_batchにしてしまうと期待通りの結果にならないので注意。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;$ docker exec norikra norikra-client query add lottery_agg &#39;SELECT COUNT(*) as received_count, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time_batch(1 min).std:unique(uid) as a, received.win:time_batch(1 sec).std:unique(uid) as b WHERE a.uid = b.uid&#39;
+&lt;p&gt;もう一つはJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker exec norikra norikra-client query add lottery_agg &#39;
+SELECT COUNT(*) as received_count, (COUNT(*) / (SELECT COUNT(*) + 0.00001 FROM lottery.win:time_batch(1 sec, 0).std:unique(uid))) as received_rate, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time(40 sec).std:unique(uid) as a, received.win:time_batch(1 sec, 0).std:unique(uid) as b WHERE a.uid = b.uid&#39;
 
 $ docker exec norikra norikra-client query add lottery_win_rate &#39;SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)&#39;
 &lt;/code&gt;&lt;/pre&gt;
@@ -105,6 +110,8 @@ $ docker exec norikra norikra-client query add lottery_win_rate &#39;SELECT avg(
   logstash_format true
 &amp;lt;/match&amp;gt;
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;received_rateを計算するときのウィンドウが1secと小さく、タイミングによってはreceivedの数がlotteryの数を上回ることがあるため1以下で絞っている。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/111v.png&#34; alt=&#34;可視化したもの&#34; /&gt;&lt;/p&gt;
 </description>
@@ -382,7 +389,8 @@ fluentdはrubyの&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%A
 (Global Interpreter Lock = GVL(Giant VM Lock))のため同時に&lt;a href=&#34;https://docs.ruby-lang.org/ja/2.3.0/doc/spec=2fthread.html&#34;&gt;1ネイティブスレッドしか動かせず&lt;/a&gt;、1コアしかCPUを使えないが、
 jrubyで動くNorikraは残りのコアを使うことができる。
 今回はtargetもクエリも一つだし、データ量も小さいためかメモリにはまだ余裕があった。
-実際のログを流してみたところ先にヒープメモリが一杯になってしまったので一概にどちらがどうというわけではなさそう。&lt;/p&gt;
+ログのサイズやウィンドウサイズが大きければメモリを使う量が増えるため、実際のログをしばらく
+流してどちらが問題になりそうか確認するべき。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt; PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND
 11378 root      20   0  350m 111m 6336 S 96.1  3.0   1:53.03 ruby
