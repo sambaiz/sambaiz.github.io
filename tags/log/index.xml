@@ -11,6 +11,63 @@
     
       
         <item>
+          <title>fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする</title>
+          <link>http://sambaiz.net/article/113/</link>
+          <pubDate>Sun, 25 Jun 2017 00:35:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/113/</guid>
+          <description>
+
+&lt;h2 id=&#34;elbでの負荷分散&#34;&gt;ELBでの負荷分散&lt;/h2&gt;
+
+&lt;p&gt;BeanstalkでAggregatrorを立ち上げた。TCPの24224(設定による)が
+通るようにEC2,ELBのSGとリスナーの設定をする必要があって、
+ELBのSGのアウトバウンドの設定が見落とされがち。ELBのクロスゾーン分散は有効になっている。&lt;/p&gt;
+
+&lt;p&gt;まず、ELBに3台、それぞれ別のAZ(1b, 1c, 1d)に配置されている状態でログを送り始めるとそれぞれ均等にログが届いた。
+その状態から4台(1b * 2, 1c, 1d)にすると、2つのインスタンス(1b, 1c)のみに均等にログが届くようになった。
+4台になると(1b, 1c)と(1b, 1d)に分けられてELBのノードがそれらの組に紐づいたということだと思う。
+各ノードにはDNSラウンドロビンするようになっている。実際restartすると今度は別の組の方に送られた。&lt;/p&gt;
+
+&lt;p&gt;では、なぜ一度送り始めると同じ方にしか飛ばないかというと、forwardプラグインの&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/out_forward#expirednscache&#34;&gt;expire_dns_cache&lt;/a&gt;がデフォルトでnilになっていて、
+heartbeatが届いている間は&lt;a href=&#34;https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L688&#34;&gt;無期限にDNSキャッシュする&lt;/a&gt;ようになっているため。これに0(キャッシュしない)か秒数を指定すると、
+その間隔で他の組のインスタンスにもログが届くようになった。
+&lt;code&gt;expire_dns_cache&lt;/code&gt;しなくても複数のインスタンスからラウンドロビンされるため全体でいえば分散される。&lt;/p&gt;
+
+&lt;h2 id=&#34;elbでのheartbeat&#34;&gt;ELBでのheartbeat&lt;/h2&gt;
+
+&lt;p&gt;ELB配下のEC2を全て落としても&lt;a href=&#34;https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L665&#34;&gt;heartbeat&lt;/a&gt;に失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまった。
+ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。
+全てのインスタンスが同時に落ちるというのは滅多に起きないだろうけど、少なくとも検知できるようにはしておく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;server&amp;gt;
+    name td1
+    host autoscale-td1.us-east-1.elasticbeanstalk.com
+    port 24224
+&amp;lt;/server&amp;gt;
+&amp;lt;server&amp;gt;
+    name td2
+    host autoscale-td2.us-east-1.elasticbeanstalk.com
+    port 24224
+    standby
+&amp;lt;/server&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;blue-green-deployment&#34;&gt;Blue/Green Deployment&lt;/h2&gt;
+
+&lt;p&gt;Blue-Green Deploymentというのは、2つの系を用意し、activeでない方にデプロイし、
+スワップして反映させるもの。ダウンタイムなしで問題が起きた際にもすぐに切り戻すことができる。
+スワップして向き先を変えるには&lt;code&gt;expire_dns_cache&lt;/code&gt;を設定する必要がある。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/elb-configuration-guide-1&#34;&gt;AWS ELBの社内向け構成ガイドを公開してみる 負荷分散編 – Cross-Zone Routingを踏まえて ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>NorikraでログをJOINする</title>
           <link>http://sambaiz.net/article/111/</link>
           <pubDate>Thu, 15 Jun 2017 00:17:00 &#43;0900</pubDate>
@@ -2465,6 +2522,8 @@ recovered forwarding server &#39;log_server2&#39; host=&amp;quot;yy.yy.yy.yy&amp
 TD_AGENT_USER=root
 TD_AGENT_GROUP=root
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/113/&#34;&gt;fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       

@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする - sambaiz-net</title>
-    <meta name="twitter:title" content="td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする - sambaiz-net">
-    <meta property='og:title' content="td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする - sambaiz-net">
+    <title>fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net</title>
+    <meta name="twitter:title" content="fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net">
+    <meta property='og:title' content="fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="Amazon Linux向けビルド">
-      <meta name="twitter:description" content="Amazon Linux向けビルド">
+      <meta name="description" content="DNSのキャッシュに気をつける">
+      <meta name="twitter:description" content="DNSのキャッシュに気をつける">
     
     
 
-    <meta property="og:url" content="http://sambaiz.net/article/107/">
+    <meta property="og:url" content="http://sambaiz.net/article/113/">
     <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"http:\/\/sambaiz.net\/"
     },
-    "headline": "td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする | sambaiz-net ",
-    "datePublished": "2017-06-04T23:50:00JST",
-    "dateModified": "2017-06-04T23:50:00JST",
+    "headline": "fluentdのAggregatorをELBで負荷分散し、Blue\/Green Deploymentする | sambaiz-net ",
+    "datePublished": "2017-06-25T00:35:00JST",
+    "dateModified": "2017-06-25T00:35:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Amazon Linux向けビルド"
+    "description": "DNSのキャッシュに気をつける"
   }
 </script>
 </head>
@@ -103,71 +103,54 @@
 
       <article class="single">
         <div class="single body">
-          <h1>td-agent2.3.5のfluentdが0.14系になってしまっているのでソースからビルドする</h1>
-          <p>(2017-06-04)</p>
-          <blockquote>
-<p>追記(2016-06-25): 現在は普通に入れても0.12系の2.3.5-1が入るようになっている。</p>
-</blockquote>
+          <h1>fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする</h1>
+          <p>(2017-06-25)</p>
+          
 
-<pre><code>$ curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh
-$ td-agent --version
-td-agent 0.14.16
+<h2 id="elbでの負荷分散">ELBでの負荷分散</h2>
+
+<p>BeanstalkでAggregatrorを立ち上げた。TCPの24224(設定による)が
+通るようにEC2,ELBのSGとリスナーの設定をする必要があって、
+ELBのSGのアウトバウンドの設定が見落とされがち。ELBのクロスゾーン分散は有効になっている。</p>
+
+<p>まず、ELBに3台、それぞれ別のAZ(1b, 1c, 1d)に配置されている状態でログを送り始めるとそれぞれ均等にログが届いた。
+その状態から4台(1b * 2, 1c, 1d)にすると、2つのインスタンス(1b, 1c)のみに均等にログが届くようになった。
+4台になると(1b, 1c)と(1b, 1d)に分けられてELBのノードがそれらの組に紐づいたということだと思う。
+各ノードにはDNSラウンドロビンするようになっている。実際restartすると今度は別の組の方に送られた。</p>
+
+<p>では、なぜ一度送り始めると同じ方にしか飛ばないかというと、forwardプラグインの<a href="http://docs.fluentd.org/v0.12/articles/out_forward#expirednscache">expire_dns_cache</a>がデフォルトでnilになっていて、
+heartbeatが届いている間は<a href="https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L688">無期限にDNSキャッシュする</a>ようになっているため。これに0(キャッシュしない)か秒数を指定すると、
+その間隔で他の組のインスタンスにもログが届くようになった。
+<code>expire_dns_cache</code>しなくても複数のインスタンスからラウンドロビンされるため全体でいえば分散される。</p>
+
+<h2 id="elbでのheartbeat">ELBでのheartbeat</h2>
+
+<p>ELB配下のEC2を全て落としても<a href="https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L665">heartbeat</a>に失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまった。
+ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。
+全てのインスタンスが同時に落ちるというのは滅多に起きないだろうけど、少なくとも検知できるようにはしておく。</p>
+
+<pre><code>&lt;server&gt;
+    name td1
+    host autoscale-td1.us-east-1.elasticbeanstalk.com
+    port 24224
+&lt;/server&gt;
+&lt;server&gt;
+    name td2
+    host autoscale-td2.us-east-1.elasticbeanstalk.com
+    port 24224
+    standby
+&lt;/server&gt;
 </code></pre>
 
-<p>0.12系じゃない！？</p>
+<h2 id="blue-green-deployment">Blue/Green Deployment</h2>
 
-<pre><code>$ yum list installed | grep td-agent
-td-agent.x86_64                       2.3.5-0.el2017               @treasuredata
-</code></pre>
+<p>Blue-Green Deploymentというのは、2つの系を用意し、activeでない方にデプロイし、
+スワップして反映させるもの。ダウンタイムなしで問題が起きた際にもすぐに切り戻すことができる。
+スワップして向き先を変えるには<code>expire_dns_cache</code>を設定する必要がある。</p>
 
-<p>どうやら2.3.5では0.14系になってしまっているよう。
-そのあとにリリースされた2.3.5-1では直ってるみたいだけど、現時点ではrpmリポジトリに上がっていない。</p>
+<h2 id="参考">参考</h2>
 
-<p>しょうがないのでソースからビルドすることにした。
-いずれにせよ各環境で同じバージョンのビルドに合わせるべきだとは思う。
-Beanstalk環境の場合、AMIに固めていたとしても非Beanstalk AMIではyum updateされてしまうので注意が必要だ。</p>
-
-<p><a href="http://sambaiz.net/article/106/">BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因 - sambaiz-net</a></p>
-
-<p>前UbuntuでやったようにDockerでビルドする。今回はAmazon Linux向け。</p>
-
-<p><a href="http://sambaiz.net/article/32/">td-agentをビルドしてfluentdのバージョンを上げる - sambaiz-net</a></p>
-
-<p><a href="https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/">https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/</a></p>
-
-<pre><code>FROM amazonlinux:2017.03
-
-WORKDIR /tmp
-
-RUN yum -y update &amp;&amp; \
-    yum groupinstall -y &quot;Development Tools&quot; &amp;&amp; \
-    yum install -y ruby23 ruby23-devel &amp;&amp; \
-    gem install bundler io-console &amp;&amp; \
-    git clone https://github.com/treasure-data/omnibus-td-agent
-
-WORKDIR /tmp/omnibus-td-agent
-
-RUN bundle install --binstubs &amp;&amp; \
-    bin/gem_downloader core_gems.rb &amp;&amp; \
-    bin/gem_downloader plugin_gems.rb &amp;&amp; \
-    bin/gem_downloader ui_gems.rb &amp;&amp; \
-    mkdir -p /opt/td-agent /var/cache/omnibus &amp;&amp; \
-    bin/omnibus build td-agent2 &amp;&amp; \
-    mv ./pkg/*.rpm /
-</code></pre>
-
-<pre><code>$ docker build -t amazon-linux-td-agent .
-$ docker run --name altd -itd amazon-linux-td-agent sh
-$ docker cp altd:/td-agent-2.3.5-1.el2017.x86_64.rpm .
-</code></pre>
-
-<p>あとはこれをインストールする。</p>
-
-<pre><code>$ yum install -y redhat-lsb-core
-$ rpm -ivh td-agent-2.3.5-1.el2017.x86_64.rpm 
-$ td-agent --version
-td-agent 0.12.36
-</code></pre>
+<p><a href="http://dev.classmethod.jp/cloud/elb-configuration-guide-1">AWS ELBの社内向け構成ガイドを公開してみる 負荷分散編 – Cross-Zone Routingを踏まえて ｜ Developers.IO</a></p>
 
         </div>
       </article>
