@@ -171,6 +171,166 @@ $ crontab -l
         </item>
       
     
+      
+        <item>
+          <title>iftopでネットワークの帯域を見る</title>
+          <link>http://sambaiz.net/article/60/</link>
+          <pubDate>Tue, 07 Feb 2017 20:30:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/60/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;$ yum install --enablerepo=epel iftop
+$ iftop -f &amp;quot;not dst net 10.0.0.0/8&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;-i eth0&lt;/code&gt;のようにしてインタフェースを指定し、&lt;code&gt;-f&lt;/code&gt;でフィルタをかけられる。フィルタの詳細は&lt;code&gt;man pcap-filter&lt;/code&gt;で。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;                          12.5Kb                     25.0Kb                     37.5Kb                     50.0Kb		62.5Kb
+└─────────────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────
+ip-172-31-9-9.ap-northeast-1.compute.internal         =&amp;gt; 61-121-217-66.dh-connect.net                          1.72Kb  6.57Kb  2.40Kb
+                                                      &amp;lt;=                                                        416b   2.13Kb   702b
+...
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+TX:             cum:   22.6KB   peak:   13.2Kb                                                        rates:   1.22Kb  1.27Kb  2.46Kb
+RX:                    6.63KB           5.03Kb                                                                  208b    330b    748b
+TOTAL:                 29.2KB           18.2Kb                                                                 1.42Kb  1.59Kb  3.19Kb
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;左から2, 10, 40秒間の平均kbps。TXが送信量、RXが受信量で、cumが総量、peakが最大。&lt;/p&gt;
+
+&lt;p&gt;実行中に&lt;code&gt;S&lt;/code&gt;でソースのポートを&lt;code&gt;D&lt;/code&gt;でディスティネーションのポートが表示される。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>SSHポートフォワーディングとnetstatのメモ</title>
+          <link>http://sambaiz.net/article/42/</link>
+          <pubDate>Sat, 17 Dec 2016 12:15:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/42/</guid>
+          <description>
+
+&lt;h2 id=&#34;sshポートフォワーディング&#34;&gt;SSHポートフォワーディング&lt;/h2&gt;
+
+&lt;p&gt;ローカルの8080ポートを、example.comを通したexample2.comの80ポートに向ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ssh hoge@example.com -Nf -L 8080:example2.com:80 
+$ curl localhost:8080 # =&amp;gt; example2.com:80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-N&lt;/code&gt;: リモートでコマンドを実行しない&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-f&lt;/code&gt;: バックグラウンドで実行&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;netstat&#34;&gt;netstat&lt;/h2&gt;
+
+&lt;p&gt;ネットワークの状態を確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ netstat -ant
+Proto Recv-Q Send-Q Local Address               Foreign Address             State      
+tcp        0      0 0.0.0.0:22                  0.0.0.0:*                   LISTEN 
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-a&lt;/code&gt;: non-listening(TCPではESTABLISHED状態)しているソケットだけではなく、listeningしている情報も出す&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-n&lt;/code&gt;: 数値のアドレスで表示する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-t&lt;/code&gt;: TCPで制限&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ファイルディスクリプタの上限を増やす</title>
+          <link>http://sambaiz.net/article/41/</link>
+          <pubDate>Thu, 08 Dec 2016 21:36:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/41/</guid>
+          <description>
+
+&lt;h2 id=&#34;ファイルディスクリプタとは&#34;&gt;ファイルディスクリプタとは&lt;/h2&gt;
+
+&lt;p&gt;プロセスの外部とやりとりするための識別子。POSIXではint型で、0がstdin、1がstdout、2がstderrといったもの。
+ファイルやデバイスに対するopen()や、
+ネットワーク(INETドメインソケット)やホスト内(UNIXドメインソケット)で
+通信するためのソケットを生成するsocket()などのシステムコールで生成される。&lt;/p&gt;
+
+&lt;h2 id=&#34;ファイルディスクリプタの上限&#34;&gt;ファイルディスクリプタの上限&lt;/h2&gt;
+
+&lt;p&gt;一つのプロセスがリソースを食いつぶさないように
+使えるファイルディスクリプタの上限が決まっていて、&lt;code&gt;ulimit -n&lt;/code&gt;で確認できる。デフォルトは大体1024。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ulimit -n
+1024
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;各プロセスの上限と使っているファイルディスクリプタはこれで確認できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /proc/&amp;lt;プロセスID&amp;gt;/limits
+...
+Max open files            1024                 4096                 files     
+...
+
+$ ls -l /proc/&amp;lt;プロセスID&amp;gt;/fd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;webサーバーのように同時にたくさん通信したりすると上限に達してしまい、&lt;code&gt;Too many open files&lt;/code&gt;になってしまうので増やす必要がある。&lt;/p&gt;
+
+&lt;h3 id=&#34;etc-security-limits-conf-で変更する&#34;&gt;&lt;code&gt;/etc/security/limits.conf&lt;/code&gt;で変更する&lt;/h3&gt;
+
+&lt;p&gt;PAM認証時(ログインするときなど)に適用されるので、サーバーの起動時に立ち上がったデーモンには使えない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /etc/pam.d/sshd
+...
+session    required     pam_limits.so
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;全てのユーザー(&lt;code&gt;*&lt;/code&gt;)のプロセスが使える
+ファイルディスクリプタ(nofile)のsoft(ユーザーが設定できる)とhard(rootが設定できる)上限を共に64000にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &amp;quot;* hard nofile 64000&amp;quot; &amp;gt;&amp;gt; /etc/security/limits.conf
+$ echo &amp;quot;* soft nofile 64000&amp;quot; &amp;gt;&amp;gt; /etc/security/limits.conf
+$ ulimit -n
+64000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;ulimit-n-で変更する&#34;&gt;&lt;code&gt;ulimit -n&lt;/code&gt;で変更する&lt;/h3&gt;
+
+&lt;p&gt;シェルと、起動したプロセスで有効。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ulimit -n 64000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;dockerコンテナでは&#34;&gt;dockerコンテナでは&lt;/h3&gt;
+
+&lt;p&gt;run時に&lt;a href=&#34;https://docs.docker.com/engine/reference/commandline/run/#/set-ulimits-in-container---ulimit&#34;&gt;ulimitオプション&lt;/a&gt;で
+&lt;code&gt;--ulimit nofile=11111&lt;/code&gt;のように指定することもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run -itd --ulimit nofile=11111 ubuntu
+$ docker exec -it &amp;lt;id&amp;gt; /bin/bash -c &amp;quot;ulimit -n&amp;quot;
+11111
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://open-groove.net/linux/memo-etcsecuritylimits-conf/&#34;&gt;/etc/security/limits.confに関するメモ | OpenGroove&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://staffblog.yumemi.jp/%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%83%87%E3%82%A3%E3%82%B9%E3%82%AF%E3%83%AA%E3%83%97%E3%82%BF%E6%95%B0%E3%81%AE%E4%B8%8A%E9%99%90%E5%A4%89%E6%9B%B4%E3%81%A8limits-conf%E3%81%AE%E7%BD%A0-2/&#34;&gt;ファイルディスクリプタ数の上限変更とlimits.confの罠&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.koikikukan.com/archives/2013/03/14-005555.php&#34;&gt;Linuxのファイルディスクリプタ数を変更・確認する方法: 小粋空間&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://ja.wikipedia.org/wiki/ファイル記述子&#34;&gt;ファイル記述子 - Wikipedia&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://qiita.com/kuni-nakaji/items/d11219e4ad7c74ece748&#34;&gt;調べなきゃ寝れない！と調べたら余計に寝れなくなったソケットの話 - Qiita&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
 
   </channel>
 </rss>
