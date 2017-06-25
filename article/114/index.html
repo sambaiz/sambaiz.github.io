@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
   <head>
@@ -16,19 +15,56 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>sambaiz-net</title>
-    <meta name="twitter:title" content="sambaiz-net">
-    <meta property='og:title' content="sambaiz-net">
-    <meta property="og:type" content="website">
-    <meta name="description" content="ホームページ">
-    <meta name="twitter:description" content="ホームページ">
+    <title>UnityのRigidbodyとCollidarとJoint - sambaiz-net</title>
+    <meta name="twitter:title" content="UnityのRigidbodyとCollidarとJoint - sambaiz-net">
+    <meta property='og:title' content="UnityのRigidbodyとCollidarとJoint - sambaiz-net">
+    <meta property="og:type" content="article">
+    
+      <meta name="description" content="物理エンジンまわり">
+      <meta name="twitter:description" content="物理エンジンまわり">
+    
     
 
-    <meta property="og:url" content="http://sambaiz.net/">
+    <meta property="og:url" content="http://sambaiz.net/article/114/">
     <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
 
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"http:\/\/sambaiz.net\/"
+    },
+    "headline": "UnityのRigidbodyとCollidarとJoint | sambaiz-net ",
+    "datePublished": "2017-06-25T23:26:00JST",
+    "dateModified": "2017-06-25T23:26:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "http:\/\/sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "http:\/\/sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "http:\/\/sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "物理エンジンまわり"
+  }
+</script>
 </head>
 
 <body>
@@ -61,209 +97,72 @@
 
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <div class="row">
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/13/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-08-05</time>
-      </div>
-      <p class="article title">Tensorflowの学習データを使ったAPIを作る</p>
-    </div>
-  </article>
-</a>
+      <article class="single">
+        <div class="single body">
+          <h1>UnityのRigidbodyとCollidarとJoint</h1>
+          <p>(2017-06-25)</p>
+          
+
+<h2 id="rigidbody-https-docs-unity3d-com-ja-current-manual-rigidbodiesoverview-html"><a href="https://docs.unity3d.com/ja/current/Manual/RigidbodiesOverview.html">Rigidbody</a></h2>
+
+<p>GameObjectを物理特性によって制御し、力の影響を受けるようにする。
+<code>Mass(質量)</code>や<code>Drag(空気抵抗)</code>、<code>Use Gravity</code>などのプロパティがある。</p>
+
+<p>移動させるのに自分でTransformは変更せず力をかけて物理演算に任せる。
+<code>Is Kinematic</code>にチェックを入れると物理エンジンによって移動しないようになるので、
+Transformを直接変更する場合は有効にする。
+ただし、スクリプトで動的にIs Kinematicを切り替えるのはパフォーマンスが良くない。</p>
+
+<h2 id="collidar-https-docs-unity3d-com-ja-current-manual-collidersoverview-html"><a href="https://docs.unity3d.com/ja/current/Manual/CollidersOverview.html">Collidar</a></h2>
+
+<p>RigidBodyの物理特性の境界を定義する。衝突させるには両方にCollidarが設定されている必要がある。
+RigidBodyなしのCollidarを静的Collidarといって、無効にしたり移動しないことを前提に最適化される。
+移動したりするものについてはRigidBodyを付けて、必要ならIs Kinematicを有効にする。</p>
+
+<p>衝突時には<a href="https://docs.unity3d.com/ja/current/ScriptReference/Collider.OnCollisionEnter.html">OnCollisionEnter()</a>
+が呼ばれる。ほかに離れたときの<a href="https://docs.unity3d.com/ja/current/ScriptReference/Collider.OnCollisionExit.html">OnCollisionExit()</a>、
+触れている間、毎フレーム呼ばれる<a href="https://docs.unity3d.com/ja/current/ScriptReference/Collider.OnCollisionStay.html">OnCollisionStay()</a>がある。</p>
+
+<pre><code>void OnCollisionEnter(Collision collision)
+{
+    foreach (ContactPoint contact in collision.contacts)
+    {
+        if (contact.otherCollider.tag == &quot;Player&quot;)
+        {
+            Debug.Log(collision.relativeVelocity.magnitude);
+        }
+    }
+}
+</code></pre>
+
+<p><code>Is Trigger</code>にチェックを入れると物理エンジンには無視されてすり抜け、侵入に対してトリガーイベントが呼ばれる。
+OnCollistionと同様に
+<a href="https://docs.unity3d.com/ja/current/ScriptReference/Collider.OnTriggerEnter.html">OnTriggerEnter()</a>、
+<a href="https://docs.unity3d.com/ja/current/ScriptReference/Collider.OnTriggerExit.html">OnTriggerExit()</a>、
+<a href="https://docs.unity3d.com/ja/current/ScriptReference/Collider.OnTriggerStay.html">OnTriggerStay()</a>
+がある。</p>
+
+<pre><code>void OnTriggerEnter(Collider other)
+{
+    Debug.Log(other.tag);
+}
+</code></pre>
+
+<h2 id="joint-https-docs-unity3d-com-ja-current-manual-joints-html"><a href="https://docs.unity3d.com/ja/current/Manual/Joints.html">Joint</a></h2>
+
+<p>Rigitbodyを他のRigitbodyとつなげるもの。
+例えばSprint Jointだとオブジェクト間がばねのように伸縮する。</p>
+
+<p><img src="http://sambaiz.net/images/114-joint.png" alt="Spring Joint" /></p>
 
         </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/12/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-29</time>
-      </div>
-      <p class="article title">Googleが作ったRPCフレームワークgRPCを使ってみた</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/11/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-24</time>
-      </div>
-      <p class="article title">MySQLで大文字小文字を区別しないのを直す</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/10/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-21</time>
-      </div>
-      <p class="article title">グラフデータベースNeo4jを触ってみた</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/9/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-18</time>
-      </div>
-      <p class="article title">Kubernatesのチュートリアルをたどる</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/8/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-15</time>
-      </div>
-      <p class="article title">Node.jsのバージョン管理</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/7/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-15</time>
-      </div>
-      <p class="article title">Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/6/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-12</time>
-      </div>
-      <p class="article title">TensorFlow チュートリアル2(Deep MNIST for Experts)</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/5/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-10</time>
-      </div>
-      <p class="article title">webpack環境でredux&amp;react-routerのページをサーバーサイドレンダリングする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/4/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-04</time>
-      </div>
-      <p class="article title">MySQLのUNIX_TIMESTAMPにある程度未来の日付を渡すと0になる</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/3/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-03</time>
-      </div>
-      <p class="article title">TensorFlow チュートリアルまで</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/2/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-02</time>
-      </div>
-      <p class="article title">Reactで作ったページにTwitterCardsとOGPのメタデータを埋める</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="http://sambaiz.net/article/1/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-06-29</time>
-      </div>
-      <p class="article title">ブログを作った</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-      </div>
-
-      
-<nav class="paging">
-  
-  <a href="/page/1" rel="nofollow" class="prev">PREV</a>
-  
-
-  
-</nav>
-
-
-
+      </article>
     </div>
   </div>
-
 </div>
 
 </div> 
