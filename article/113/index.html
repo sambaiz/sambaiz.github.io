@@ -20,8 +20,8 @@
     <meta property='og:title' content="fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="expire_dns_cache">
-      <meta name="twitter:description" content="expire_dns_cache">
+      <meta name="description" content="考えることはあるけど、デプロイやスループットの調整は簡単にできる">
+      <meta name="twitter:description" content="考えることはあるけど、デプロイやスループットの調整は簡単にできる">
     
     
 
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "expire_dns_cache"
+    "description": "考えることはあるけど、デプロイやスループットの調整は簡単にできる"
   }
 </script>
 </head>
@@ -107,7 +107,9 @@
           <p>(2017-06-25)</p>
           
 
-<h2 id="elbでの負荷分散">ELBでの負荷分散</h2>
+<p>考えることはあるけど、デプロイやスループットの調整は簡単にできる。</p>
+
+<h2 id="負荷分散">負荷分散</h2>
 
 <p>BeanstalkでAggregatrorを立ち上げた。TCPの24224(設定による)が
 通るようにEC2,ELBのSGとリスナーの設定をする必要があって、
@@ -123,7 +125,7 @@ heartbeatが届いている間は<a href="https://github.com/fluent/fluentd/blob
 その間隔で他の組のインスタンスにもログが届くようになった。
 <code>expire_dns_cache</code>しなくても複数のインスタンスからラウンドロビンされるため全体でいえば分散される。</p>
 
-<h2 id="elbでのheartbeat">ELBでのheartbeat</h2>
+<h2 id="heartbeat">heartbeat</h2>
 
 <p>ELB配下のEC2を全て落としても<a href="https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L665">heartbeat</a>に失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまうようだ。
 ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。
@@ -147,6 +149,22 @@ heartbeatが届いている間は<a href="https://github.com/fluent/fluentd/blob
 <p>Blue-Green Deploymentというのは、2つの系を用意し、activeでない方にデプロイし、
 スワップして反映させるもの。ダウンタイムなしで問題が起きた際にもすぐに切り戻すことができる。
 スワップして向き先を変えるには<code>expire_dns_cache</code>を設定する必要がある。</p>
+
+<h2 id="auto-scaling">Auto Scaling</h2>
+
+<p>増えるのはいいとして減るときにバッファが送信できないとログがロストしてしまう。
+これを避けるためにAuto Scalingグループの設定で
+<a href="http://docs.aws.amazon.com/ja_jp/autoscaling/latest/userguide/as-instance-termination.html#instance-protection">スケールインから保護</a>を有効にすると
+以後立ち上がるインスタンスはスケールインしなくなる。
+それまでのインスタンスには適用されないので注意。</p>
+
+<p>スケールインしないということは最大の台数で止まってしまうので、
+ピークを過ぎたらスワップしてバッファが全て掃けたことを確認してからTerminateすることになる。
+これを日常的にやるのは面倒なので、実際は予期しない流量の増加に備えて一応設定しておき、
+普段はしきい値にひっかからないような最低台数で待ち構えておくことにするのが現実的なところかな。
+あるいは頑張って自動化するとか。</p>
+
+<p>あとはヘルスチェックによって潰される可能性はなくもないけど、それはもうやむなし・・・。</p>
 
 <h2 id="参考">参考</h2>
 
