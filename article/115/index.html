@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net</title>
-    <meta name="twitter:title" content="fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net">
-    <meta property='og:title' content="fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net">
+    <title>UnityのNavmesh - sambaiz-net</title>
+    <meta name="twitter:title" content="UnityのNavmesh - sambaiz-net">
+    <meta property='og:title' content="UnityのNavmesh - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="expire_dns_cacheとか">
-      <meta name="twitter:description" content="expire_dns_cacheとか">
+      <meta name="description" content="物理エンジンまわり">
+      <meta name="twitter:description" content="物理エンジンまわり">
     
     
 
-    <meta property="og:url" content="http://sambaiz.net/article/113/">
+    <meta property="og:url" content="http://sambaiz.net/article/115/">
     <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"http:\/\/sambaiz.net\/"
     },
-    "headline": "fluentdのAggregatorをELBで負荷分散し、Blue\/Green Deploymentする | sambaiz-net ",
-    "datePublished": "2017-06-25T00:35:00JST",
-    "dateModified": "2017-06-25T00:35:00JST",
+    "headline": "UnityのNavmesh | sambaiz-net ",
+    "datePublished": "2017-06-25T23:26:00JST",
+    "dateModified": "2017-06-25T23:26:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "expire_dns_cacheとか"
+    "description": "物理エンジンまわり"
   }
 </script>
 </head>
@@ -103,74 +103,9 @@
 
       <article class="single">
         <div class="single body">
-          <h1>fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする</h1>
+          <h1>UnityのNavmesh</h1>
           <p>(2017-06-25)</p>
           
-
-<p>デプロイやスループットの調整を簡単にするため、BeanstalkでAggregatorを立ち上げた。</p>
-
-<h2 id="負荷分散">負荷分散</h2>
-
-<p>TCPの24224(設定による)が通るようにEC2,ELBのSGとリスナーの設定をする必要があって、
-ELBのSGのアウトバウンドの設定が見落とされがち。ELBのクロスゾーン分散は有効になっている。</p>
-
-<p>まず、ELBに3台、それぞれ別のAZ(1b, 1c, 1d)に配置されている状態でログを送り始めるとそれぞれ均等にログが届いた。
-その状態から4台(1b * 2, 1c, 1d)にすると、2つのインスタンス(1b, 1c)のみに均等にログが届くようになった。
-4台になると(1b, 1c)と(1b, 1d)に分けられてELBのノードがそれらの組に紐づいたということだと思う。
-各ノードにはDNSラウンドロビンするようになっている。実際restartすると今度は別の組の方に送られた。</p>
-
-<p>では、なぜ一度送り始めると同じ方にしか飛ばないかというと、forwardプラグインの<a href="http://docs.fluentd.org/v0.12/articles/out_forward#expirednscache">expire_dns_cache</a>がデフォルトでnilになっていて、
-heartbeatが届いている間は<a href="https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L688">無期限にDNSキャッシュする</a>ようになっているため。これに0(キャッシュしない)か秒数を指定すると、
-その間隔で他の組のインスタンスにもログが届くようになった。
-<code>expire_dns_cache</code>しなくても複数のインスタンスからラウンドロビンされるため全体でいえば分散される。</p>
-
-<h2 id="heartbeat">heartbeat</h2>
-
-<p>ELB配下のEC2を全て落としても<a href="https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L665">heartbeat</a>に失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまうようだ。
-ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。
-全てのインスタンスが同時に落ちるというのは滅多に起きないだろうけど、少なくとも検知できるようにはしておく。</p>
-
-<pre><code>&lt;server&gt;
-    name td1
-    host autoscale-td1.us-east-1.elasticbeanstalk.com
-    port 24224
-&lt;/server&gt;
-&lt;server&gt;
-    name td2
-    host autoscale-td2.us-east-1.elasticbeanstalk.com
-    port 24224
-    standby
-&lt;/server&gt;
-</code></pre>
-
-<h2 id="blue-green-deployment">Blue/Green Deployment</h2>
-
-<p>Blue-Green Deploymentというのは、2つの系を用意し、activeでない方にデプロイし、
-スワップして反映させるもの。ダウンタイムなしで問題が起きた際にもすぐに切り戻すことができる。
-スワップして向き先を変えるには<code>expire_dns_cache</code>を設定する必要がある。</p>
-
-<h2 id="auto-scaling">Auto Scaling</h2>
-
-<p>増えるのはいいとして減るときに、
-送り先で一時的に障害が起きていたりするとバッファをflushできずにログがロストする可能性がある。
-それでいうとログの送り元でも同じことが起こりうるんだけど、通常Aggregatorにしか送らないので比較的問題になりにくい。</p>
-
-<p>これを避けたい場合、Auto Scalingグループの設定で
-<a href="http://docs.aws.amazon.com/ja_jp/autoscaling/latest/userguide/as-instance-termination.html#instance-protection">スケールインから保護</a>を有効にして
-これから立ち上がるインスタンスはスケールインしなくすることができる。
-それまでに立ち上がっていたインスタンスには適用されないので注意。</p>
-
-<p>スケールインしないということは最大の台数で止まってしまうので、
-ピークを過ぎたらスワップしてバッファが全て掃けたことを確認してからTerminateすることになる。
-これを日常的にやるのは面倒なので、実際は予期しない流量の増加に備えて一応設定しておき、
-普段はしきい値にひっかからないような最低台数で待ち構えておくことにするかな。</p>
-
-<p>あとはヘルスチェックによって潰される可能性はなくもないけど、それはもうやむなし・・・。</p>
-
-<h2 id="参考">参考</h2>
-
-<p><a href="http://dev.classmethod.jp/cloud/elb-configuration-guide-1">AWS ELBの社内向け構成ガイドを公開してみる 負荷分散編 – Cross-Zone Routingを踏まえて ｜ Developers.IO</a></p>
-
         </div>
       </article>
     </div>

@@ -18,12 +18,11 @@
           <guid>http://sambaiz.net/article/113/</guid>
           <description>
 
-&lt;p&gt;考えることはあるけど、デプロイやスループットの調整は簡単にできる。&lt;/p&gt;
+&lt;p&gt;デプロイやスループットの調整を簡単にするため、BeanstalkでAggregatorを立ち上げた。&lt;/p&gt;
 
 &lt;h2 id=&#34;負荷分散&#34;&gt;負荷分散&lt;/h2&gt;
 
-&lt;p&gt;BeanstalkでAggregatrorを立ち上げた。TCPの24224(設定による)が
-通るようにEC2,ELBのSGとリスナーの設定をする必要があって、
+&lt;p&gt;TCPの24224(設定による)が通るようにEC2,ELBのSGとリスナーの設定をする必要があって、
 ELBのSGのアウトバウンドの設定が見落とされがち。ELBのクロスゾーン分散は有効になっている。&lt;/p&gt;
 
 &lt;p&gt;まず、ELBに3台、それぞれ別のAZ(1b, 1c, 1d)に配置されている状態でログを送り始めるとそれぞれ均等にログが届いた。
@@ -63,17 +62,19 @@ heartbeatが届いている間は&lt;a href=&#34;https://github.com/fluent/fluen
 
 &lt;h2 id=&#34;auto-scaling&#34;&gt;Auto Scaling&lt;/h2&gt;
 
-&lt;p&gt;増えるのはいいとして減るときにバッファが送信できないとログがロストしてしまう。
-これを避けるためにAuto Scalingグループの設定で
-&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/autoscaling/latest/userguide/as-instance-termination.html#instance-protection&#34;&gt;スケールインから保護&lt;/a&gt;を有効にすると
-以後立ち上がるインスタンスはスケールインしなくなる。
-それまでのインスタンスには適用されないので注意。&lt;/p&gt;
+&lt;p&gt;増えるのはいいとして減るときに、
+送り先で一時的に障害が起きていたりするとバッファをflushできずにログがロストする可能性がある。
+それでいうとログの送り元でも同じことが起こりうるんだけど、通常Aggregatorにしか送らないので比較的問題になりにくい。&lt;/p&gt;
+
+&lt;p&gt;これを避けたい場合、Auto Scalingグループの設定で
+&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/autoscaling/latest/userguide/as-instance-termination.html#instance-protection&#34;&gt;スケールインから保護&lt;/a&gt;を有効にして
+これから立ち上がるインスタンスはスケールインしなくすることができる。
+それまでに立ち上がっていたインスタンスには適用されないので注意。&lt;/p&gt;
 
 &lt;p&gt;スケールインしないということは最大の台数で止まってしまうので、
 ピークを過ぎたらスワップしてバッファが全て掃けたことを確認してからTerminateすることになる。
 これを日常的にやるのは面倒なので、実際は予期しない流量の増加に備えて一応設定しておき、
-普段はしきい値にひっかからないような最低台数で待ち構えておくことにするのが現実的なところかな。
-あるいは頑張って自動化するとか。&lt;/p&gt;
+普段はしきい値にひっかからないような最低台数で待ち構えておくことにするかな。&lt;/p&gt;
 
 &lt;p&gt;あとはヘルスチェックによって潰される可能性はなくもないけど、それはもうやむなし・・・。&lt;/p&gt;
 
