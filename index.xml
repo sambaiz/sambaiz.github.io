@@ -6,12 +6,80 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-06-25 23:26:00 &#43;0900 JST</updated>
+    <updated>2017-06-29 00:17:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>UnityのRigidbodyとCollidarとJoint</title>
+          <title>Unityの経路探索: NavMeshとAgentとObstacle</title>
+          <link>http://sambaiz.net/article/115/</link>
+          <pubDate>Thu, 29 Jun 2017 00:17:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/115/</guid>
+          <description>
+
+&lt;h2 id=&#34;navmeshと経路探索-https-docs-unity3d-com-jp-540-manual-nav-innerworkings-html&#34;&gt;&lt;a href=&#34;https://docs.unity3d.com/jp/540/Manual/nav-InnerWorkings.html&#34;&gt;NavMeshと経路探索&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;NavMeshというのはエージェントが移動できる面についてのデータ構造で、凸ポリゴンの面と位置関係を含んでいる。
+経路探索は2点間を一番近いポリゴンにマッピングし、&lt;a href=&#34;https://ja.wikipedia.org/wiki/A*&#34;&gt;A*アルゴリズム&lt;/a&gt;を用いて行われる。あとからオブジェクトが追加されるなどして道を塞いでしまってもCarvingしてNavMeshに穴をあければ別の経路で移動することができるが、このようなグローバルの経路探索に影響を及ぼす操作は計算にコストがかかるので、各エージェントローカルの衝突回避で済むならそのほうがよい。&lt;/p&gt;
+
+&lt;h2 id=&#34;navmeshをbakeする-https-docs-unity3d-com-jp-540-manual-nav-buildingnavmesh-html&#34;&gt;&lt;a href=&#34;https://docs.unity3d.com/jp/540/Manual/nav-BuildingNavMesh.html&#34;&gt;NavMeshをbakeする&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;こんな感じで床に適当なオブジェクトを置いてみた。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-stage.png&#34; alt=&#34;stage&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-stageh.png&#34; alt=&#34;階層&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;Window -&amp;gt; Navigation&lt;/code&gt;でBakeするのを選択してNavigation Staticし(StaticになってBakeの対象になる)、
+Bakeボタンを押すとこんな感じでBakeされる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-bake.png&#34; alt=&#34;bake&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;オブジェクトの上がNavMeshに含まれていないのはAgent sizeのStep Heightよりも高いため。
+段差を移動するときに浮いてしまうのを避けるためにはAdvancedの&lt;a href=&#34;https://docs.unity3d.com/jp/540/Manual/nav-HeightMesh.html&#34;&gt;Height Mesh&lt;/a&gt;をオンにする。
+また、端が含まれていないのはこのAgentの中心が入れる位置を表しているためで、
+Agent Radiusを変更すると広がったり狭まったりするのを確認できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-agentsize.png&#34; alt=&#34;Agent size&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;navmesh-agent-https-docs-unity3d-com-jp-540-manual-nav-createnavmeshagent-html&#34;&gt;&lt;a href=&#34;https://docs.unity3d.com/jp/540/Manual/nav-CreateNavMeshAgent.html&#34;&gt;NavMesh Agent&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Radius0.5, Height2のCylindarを作成し、Nav Mesh Agentを追加する。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-navmesh-agent.png&#34; alt=&#34;NavMesh Agent&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;で、ゴールにオブジェクトを置いてそこまで移動させてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;using UnityEngine.AI;
+
+public GameObject goal;
+
+void Start () {
+    var agent = GetComponent&amp;lt;NavMeshAgent&amp;gt;();
+    agent.destination = goal.transform.position;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-move.gif&#34; alt=&#34;ゴールまでたどり着くNavMesh Agent&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;navmesh-obstacle&#34;&gt;NavMesh Obstacle&lt;/h2&gt;
+
+&lt;p&gt;障害物。上で通った経路上にNavMesh Obstacleを追加したCubeを置いたところうまく避けてゴールまでたどり着いた。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-move2.gif&#34; alt=&#34;Obstacleを置いた&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;ただ、完全に道をふさいでしまうと立ち往生してしまうので
+Carveにチェックを入れるとCarvingされ、他の経路でゴールまで進むようになる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-move3.gif&#34; alt=&#34;Carvingした&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Unityの物理エンジン・衝突: RigidbodyとCollidarとJoint</title>
           <link>http://sambaiz.net/article/114/</link>
           <pubDate>Sun, 25 Jun 2017 23:26:00 &#43;0900</pubDate>
           <author></author>
@@ -7340,142 +7408,6 @@ Resource-&amp;gt;Metrics Explorerでもcustom/fluentd/buffer_queue_lengthを確�
 &lt;p&gt;これでAlertを設定できるようになった。TargetのResource TypeはCustom Metrics。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/66.png&#34; alt=&#34;Alertの設定&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>Goのselectの中断処理(close, context)</title>
-          <link>http://sambaiz.net/article/65/</link>
-          <pubDate>Thu, 16 Feb 2017 20:15:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/65/</guid>
-          <description>
-
-&lt;h2 id=&#34;close-chan&#34;&gt;close(chan)&lt;/h2&gt;
-
-&lt;p&gt;closeしたチャネルを読むとゼロ値になるので、selectで待っているやつにまとめて送れる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func main() {
-	done := make(chan bool)
-
-	wg := new(sync.WaitGroup)
-
-	waitTillDone(wg, done)
-	waitTillDone(wg, done)
-
-    // こんなことしなくていい
-	// done &amp;lt;- true
-	// done &amp;lt;- true
-
-	close(done)
-
-	wg.Wait()
-}
-
-func waitTillDone(wg *sync.WaitGroup, done &amp;lt;-chan bool) {
-	wg.Add(1)
-	go func() {
-		select {
-		case v := &amp;lt;-done:
-			fmt.Println(v) // false (ゼロ値)
-			wg.Done()
-		}
-	}()
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;context-https-godoc-org-golang-org-x-net-context&#34;&gt;&lt;a href=&#34;https://godoc.org/golang.org/x/net/context&#34;&gt;context&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;key-valueの値を渡せるほかにキャンセルやタイムアウトの仕組みをもつ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;ctx := context.Background() // empty context
-ctx, cancel = context.WithCancel(ctx)
-ctx, cancel = context.WithDeadline(ctx, time.Now().Add(time.Second * 10))
-ctx, cancel = context.WithTimeout(ctx, time.Second * 10)
-ctx = context.WithValue(ctx, key, value)
-ctx.Value(key).(Data)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さっきdoneで待ってたところを&lt;code&gt;ctx.Done()&lt;/code&gt;にする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func main() {
-	finished := make(chan interface{})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // キャンセルしないとリークする
-
-	go func() {
-		if err := f1(ctx); err != nil {
-			fmt.Printf(&amp;quot;main: %s\n&amp;quot;, err)
-		} else {
-			fmt.Println(&amp;quot;ok&amp;quot;)
-		}
-		close(finished)
-	}()
-
-	fmt.Println(&amp;quot;I will cancel!&amp;quot;)
-	cancel()
-
-	select {
-	case &amp;lt;-finished:
-		fmt.Println(&amp;quot;finished&amp;quot;)
-	}
-}
-
-func f1(ctx context.Context) error {
-	f2(ctx)
-	select {
-	case &amp;lt;-ctx.Done():
-		fmt.Printf(&amp;quot;f1: %s\n&amp;quot;, ctx.Err())
-		return ctx.Err()
-	}
-}
-
-func f2(ctx context.Context) error {
-	select {
-	case &amp;lt;-ctx.Done():
-		fmt.Printf(&amp;quot;f2: %s\n&amp;quot;, ctx.Err())
-		return ctx.Err()
-	}
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;I will cancel!
-f2: context canceled
-f1: context canceled
-main: context canceled
-finished
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちなみに、key-valueを受けわたすために使う場合は
-type-safeにするために
-NewContextで値を詰めて、FromContextで値を取り出すということがコメントに書いてある。
-また、Contextはctxという名前で第一引数として渡す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;type User struct {
-	name string
-}
-
-type key int
-
-var userKey key = 0
-
-func NewContext(ctx context.Context, u *User) context.Context {
-	return context.WithValue(ctx, userKey, u)
-}
-
-func FromContext(ctx context.Context) (*User, bool) {
-	u, ok := ctx.Value(userKey).(*User)
-	return u, ok
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://blog.golang.org/pipelines&#34;&gt;Go Concurrency Patterns: Pipelines and cancellation - The Go Blog&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://deeeet.com/writing/2016/07/22/context/&#34;&gt;Go1.7のcontextパッケージ | SOTA&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
