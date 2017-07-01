@@ -11,6 +11,127 @@
     
       
         <item>
+          <title>Unityで動的にNavMeshを生成する</title>
+          <link>http://sambaiz.net/article/117/</link>
+          <pubDate>Sat, 01 Jul 2017 23:50:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/117/</guid>
+          <description>&lt;p&gt;Unity5.6から動的にNavMeshを生成できるようになった。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/Unity-Technologies/NavMeshComponents&#34;&gt;Unity-Technologies/NavMeshComponents&lt;/a&gt;の
+Exampleの2_drop_blankのsceneを開く。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/117-sample.png&#34; alt=&#34;Exampleの2_drop_blank&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;分断されたCubeの床と、その上に黄色いCylindarと赤いCubeがあって、
+クリックしたところに黄色いCylindarが動くんだけど、床がつながっていないのでそのままでは赤いCubeまではたどり着けない。
+スペースを押すと目の前に板が出てくるのでこの上を渡って移動することができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/117-sample2.png&#34; alt=&#34;スペースを押すと板が出てくる&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;板の上がNavMeshとして認識されている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/117-sample3.png&#34; alt=&#34;スペースを押すと板が出てくる&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;床のCubeと追加される板には&lt;a href=&#34;https://github.com/Unity-Technologies/NavMeshComponents/blob/5.6.0b4/Assets/Examples/Scripts/NavMeshSourceTag.cs&#34;&gt;NavMeshSourceTag.cs&lt;/a&gt;が付いていて、staticな&lt;code&gt;m_Meshes&lt;/code&gt;と&lt;code&gt;m_Terrains&lt;/code&gt;にそれぞれ追加している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public static List&amp;lt;MeshFilter&amp;gt; m_Meshes = new List&amp;lt;MeshFilter&amp;gt;();
+public static List&amp;lt;Terrain&amp;gt; m_Terrains = new List&amp;lt;Terrain&amp;gt;();
+
+void OnEnable()
+{
+    var m = GetComponent&amp;lt;MeshFilter&amp;gt;();
+    if (m != null)
+    {
+        m_Meshes.Add(m);
+    }
+
+    var t = GetComponent&amp;lt;Terrain&amp;gt;();
+    if (t != null)
+    {
+        m_Terrains.Add(t);
+    }
+}
+
+void OnDisable()
+{
+    var m = GetComponent&amp;lt;MeshFilter&amp;gt;();
+    if (m != null)
+    {
+        m_Meshes.Remove(m);
+    }
+
+    var t = GetComponent&amp;lt;Terrain&amp;gt;();
+    if (t != null)
+    {
+        m_Terrains.Remove(t);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これらはCollectメソッドでNavMeshBuildSourceのリストを生成するのに使われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public static void Collect(ref List&amp;lt;NavMeshBuildSource&amp;gt; sources)
+{
+    sources.Clear();
+
+    for (var i = 0; i &amp;lt; m_Meshes.Count; ++i)
+    {
+        var mf = m_Meshes[i];
+        if (mf == null) continue;
+
+        var m = mf.sharedMesh;
+        if (m == null) continue;
+
+        var s = new NavMeshBuildSource();
+        s.shape = NavMeshBuildSourceShape.Mesh;
+        s.sourceObject = m;
+        s.transform = mf.transform.localToWorldMatrix;
+        s.area = 0;
+        sources.Add(s);
+    }
+
+    for (var i = 0; i &amp;lt; m_Terrains.Count; ++i)
+    {
+       ...
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;a href=&#34;https://github.com/Unity-Technologies/NavMeshComponents/blob/5.6.0b4/Assets/Examples/Scripts/LocalNavMeshBuilder.cs&#34;&gt;LocalNavMeshBuilder.cs&lt;/a&gt;から呼び、&lt;a href=&#34;https://docs.unity3d.com/ScriptReference/AI.NavMeshBuilder.UpdateNavMeshData.html&#34;&gt;NavMeshBuilder.UpdateNavMeshData&lt;/a&gt;に渡してNavMeshDataを更新している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;NavMeshData m_NavMesh;
+AsyncOperation m_Operation;
+NavMeshDataInstance m_Instance;
+List&amp;lt;NavMeshBuildSource&amp;gt; m_Sources = new List&amp;lt;NavMeshBuildSource&amp;gt;();
+
+IEnumerator Start()
+{
+    while (true)
+    {
+        UpdateNavMesh(true);
+        yield return m_Operation;
+    }
+}
+
+void UpdateNavMesh(bool asyncUpdate = false)
+{
+    NavMeshSourceTag.Collect(ref m_Sources);
+    var defaultBuildSettings = NavMesh.GetSettingsByID(0);
+    var bounds = QuantizedBounds();
+
+    if (asyncUpdate)
+        m_Operation = NavMeshBuilder.UpdateNavMeshDataAsync(m_NavMesh, defaultBuildSettings, m_Sources, bounds);
+    else
+        NavMeshBuilder.UpdateNavMeshData(m_NavMesh, defaultBuildSettings, m_Sources, bounds);
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>Unityの経路探索: NavMeshとAgentとObstacle</title>
           <link>http://sambaiz.net/article/115/</link>
           <pubDate>Thu, 29 Jun 2017 00:17:00 &#43;0900</pubDate>
@@ -73,6 +194,8 @@ void Start () {
 Carveにチェックを入れるとCarvingされ、他の経路でゴールまで進むようになる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-move3.gif&#34; alt=&#34;Carvingした&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/117/&#34;&gt;Unityで動的にNavMeshを生成する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       

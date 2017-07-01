@@ -6,8 +6,129 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-07-01 18:53:00 &#43;0900 JST</updated>
+    <updated>2017-07-01 23:50:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Unityで動的にNavMeshを生成する</title>
+          <link>http://sambaiz.net/article/117/</link>
+          <pubDate>Sat, 01 Jul 2017 23:50:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/117/</guid>
+          <description>&lt;p&gt;Unity5.6から動的にNavMeshを生成できるようになった。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/Unity-Technologies/NavMeshComponents&#34;&gt;Unity-Technologies/NavMeshComponents&lt;/a&gt;の
+Exampleの2_drop_blankのsceneを開く。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/117-sample.png&#34; alt=&#34;Exampleの2_drop_blank&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;分断されたCubeの床と、その上に黄色いCylindarと赤いCubeがあって、
+クリックしたところに黄色いCylindarが動くんだけど、床がつながっていないのでそのままでは赤いCubeまではたどり着けない。
+スペースを押すと目の前に板が出てくるのでこの上を渡って移動することができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/117-sample2.png&#34; alt=&#34;スペースを押すと板が出てくる&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;板の上がNavMeshとして認識されている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/117-sample3.png&#34; alt=&#34;スペースを押すと板が出てくる&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;床のCubeと追加される板には&lt;a href=&#34;https://github.com/Unity-Technologies/NavMeshComponents/blob/5.6.0b4/Assets/Examples/Scripts/NavMeshSourceTag.cs&#34;&gt;NavMeshSourceTag.cs&lt;/a&gt;が付いていて、staticな&lt;code&gt;m_Meshes&lt;/code&gt;と&lt;code&gt;m_Terrains&lt;/code&gt;にそれぞれ追加している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public static List&amp;lt;MeshFilter&amp;gt; m_Meshes = new List&amp;lt;MeshFilter&amp;gt;();
+public static List&amp;lt;Terrain&amp;gt; m_Terrains = new List&amp;lt;Terrain&amp;gt;();
+
+void OnEnable()
+{
+    var m = GetComponent&amp;lt;MeshFilter&amp;gt;();
+    if (m != null)
+    {
+        m_Meshes.Add(m);
+    }
+
+    var t = GetComponent&amp;lt;Terrain&amp;gt;();
+    if (t != null)
+    {
+        m_Terrains.Add(t);
+    }
+}
+
+void OnDisable()
+{
+    var m = GetComponent&amp;lt;MeshFilter&amp;gt;();
+    if (m != null)
+    {
+        m_Meshes.Remove(m);
+    }
+
+    var t = GetComponent&amp;lt;Terrain&amp;gt;();
+    if (t != null)
+    {
+        m_Terrains.Remove(t);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これらはCollectメソッドでNavMeshBuildSourceのリストを生成するのに使われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;public static void Collect(ref List&amp;lt;NavMeshBuildSource&amp;gt; sources)
+{
+    sources.Clear();
+
+    for (var i = 0; i &amp;lt; m_Meshes.Count; ++i)
+    {
+        var mf = m_Meshes[i];
+        if (mf == null) continue;
+
+        var m = mf.sharedMesh;
+        if (m == null) continue;
+
+        var s = new NavMeshBuildSource();
+        s.shape = NavMeshBuildSourceShape.Mesh;
+        s.sourceObject = m;
+        s.transform = mf.transform.localToWorldMatrix;
+        s.area = 0;
+        sources.Add(s);
+    }
+
+    for (var i = 0; i &amp;lt; m_Terrains.Count; ++i)
+    {
+       ...
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;a href=&#34;https://github.com/Unity-Technologies/NavMeshComponents/blob/5.6.0b4/Assets/Examples/Scripts/LocalNavMeshBuilder.cs&#34;&gt;LocalNavMeshBuilder.cs&lt;/a&gt;から呼び、&lt;a href=&#34;https://docs.unity3d.com/ScriptReference/AI.NavMeshBuilder.UpdateNavMeshData.html&#34;&gt;NavMeshBuilder.UpdateNavMeshData&lt;/a&gt;に渡してNavMeshDataを更新している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;NavMeshData m_NavMesh;
+AsyncOperation m_Operation;
+NavMeshDataInstance m_Instance;
+List&amp;lt;NavMeshBuildSource&amp;gt; m_Sources = new List&amp;lt;NavMeshBuildSource&amp;gt;();
+
+IEnumerator Start()
+{
+    while (true)
+    {
+        UpdateNavMesh(true);
+        yield return m_Operation;
+    }
+}
+
+void UpdateNavMesh(bool asyncUpdate = false)
+{
+    NavMeshSourceTag.Collect(ref m_Sources);
+    var defaultBuildSettings = NavMesh.GetSettingsByID(0);
+    var bounds = QuantizedBounds();
+
+    if (asyncUpdate)
+        m_Operation = NavMeshBuilder.UpdateNavMeshDataAsync(m_NavMesh, defaultBuildSettings, m_Sources, bounds);
+    else
+        NavMeshBuilder.UpdateNavMeshData(m_NavMesh, defaultBuildSettings, m_Sources, bounds);
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -181,6 +302,8 @@ void Start () {
 Carveにチェックを入れるとCarvingされ、他の経路でゴールまで進むようになる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/115-move3.gif&#34; alt=&#34;Carvingした&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/117/&#34;&gt;Unityで動的にNavMeshを生成する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
@@ -6885,180 +7008,6 @@ pre-warming申請することでnodeが増えた状態で待ち構えられる�
 &lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/elb-and-cloudwatch-metrics-in-depth/&#34;&gt;ELBの挙動とCloudWatchメトリクスの読み方を徹底的に理解する ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/premiumsupport/knowledge-center/elb-latency-troubleshooting/&#34;&gt;Elastic Load Balancing でのレイテンシーのトラブルシューティング&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>Kinesis Streams/Firehose/Analyticsを試す</title>
-          <link>http://sambaiz.net/article/67/</link>
-          <pubDate>Mon, 20 Feb 2017 21:15:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/67/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/&#34;&gt;https://aws.amazon.com/jp/kinesis/&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;リアルタイムのストリーミングデータを扱うサービス群。
-いまのところTokyoリージョンではKinesis Streamsしか使えない。&lt;/p&gt;
-
-&lt;h3 id=&#34;kinesis-firehose-https-aws-amazon-com-jp-kinesis-firehose&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/&#34;&gt;Kinesis Firehose&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;AWSのデータストアに送るストリーム。自分でデータを読む処理を書かなくてよく、スケーリングも勝手にやってくれるので簡単に使える。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/faqs/&#34;&gt;https://aws.amazon.com/jp/kinesis/firehose/faqs/&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Q: 送信先とは何ですか?
-送信先はデータが配信されるデータストアです。Amazon Kinesis Firehose では、
-現在送信先として Amazon S3、Amazon Redshift、Amazon Elasticsearch Service がサポートされています。
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/pricing/&#34;&gt;料金&lt;/a&gt;は取り込まれたデータ量による。&lt;/p&gt;
-
-&lt;p&gt;今回はS3に送ってみる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-create-firehose.png&#34; alt=&#34;firehose作成&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;圧縮方法を設定したり、Lambdaを噛ませたりすることができる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-create-firehose2.png&#34; alt=&#34;firehose作成2&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;StatusがActiveになったら&lt;a href=&#34;http://docs.aws.amazon.com/firehose/latest/dev/writing-with-agents.html&#34;&gt;Kinesis Agent&lt;/a&gt;で送ってみる。
-CloudWatchとFirehoseにPutする権限が必要。Firehoseはkinesis:ではなくfirehose:なので注意。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sudo yum install –y aws-kinesis-agent
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;/etc/aws-kinesis/agent.json&lt;/code&gt;を編集する。リージョンごとのエンドポイントは
-&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/general/latest/gr/rande.html#fh_region&#34;&gt;ここ&lt;/a&gt;
-にある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-    &amp;quot;awsAccessKeyId&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;awsSecretAccessKey&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;firehose.endpoint&amp;quot;: &amp;quot;https://firehose.us-east-1.amazonaws.com&amp;quot;, 
-    &amp;quot;flows&amp;quot;: [
-        {
-            &amp;quot;filePattern&amp;quot;: &amp;quot;/tmp/hoge.log&amp;quot;, 
-            &amp;quot;deliveryStream&amp;quot;: &amp;quot;hogefugastream&amp;quot;
-        }
-    ] 
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sudo service aws-kinesis-agent start
-$ sudo chkconfig aws-kinesis-agent on
-$ echo &amp;quot;aaa&amp;quot; &amp;gt;&amp;gt; /tmp/hoge.log
-$ tail /var/log/aws-kinesis-agent/aws-kinesis-agent.log
-com.amazon.kinesis.streaming.agent.Agent [INFO] Agent: Progress: 2 records parsed (168 bytes), 
-and 2 records sent successfully to destinations. Uptime: 300044ms
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;S3に保存されているのを確認。&lt;/p&gt;
-
-&lt;h3 id=&#34;kinesis-streams-https-aws-amazon-com-jp-kinesis-streams&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/streams/&#34;&gt;Kinesis Streams&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;用途を制限しないストリーム。データは保持期間の間、何度でも読むことができるので、
-とりあえず必要なだけシャードを増やしてデータを入れておけばどうにかなる。
-データを扱う側はそれぞれ独立に必要なタイミングで必要なだけpullするため、スケールするにあたってその先は別に考えることができ、
-高負荷なシステムのlog aggregatorとして使われる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/streams/pricing/&#34;&gt;料金&lt;/a&gt;は&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;時間単位のシャード速度： 1シャードは最大1000件/秒の1MB/秒の入力と2MB/秒の出力能力がある。&lt;/li&gt;
-&lt;li&gt;PUTペイロードユニット: 追加する25KBのチャンクの数。5KBでも1チャンク。&lt;/li&gt;
-&lt;li&gt;データ保持期間: デフォルトで24時間。7日まで延長可能。シャード時間ごとに課金。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;による。&lt;/p&gt;
-
-&lt;p&gt;ストリーム作成時はシャード数を入れる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-create-streams.png&#34; alt=&#34;streams作成&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;Firehoseと同じくKinesis Agentで送ってみる。
-エンドポイントは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/general/latest/gr/rande.html#ak_region&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-    &amp;quot;awsAccessKeyId&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;awsSecretAccessKey&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;kinesis.endpoint&amp;quot;: &amp;quot;https://kinesis.us-east-1.amazonaws.com&amp;quot;, 
-    &amp;quot;flows&amp;quot;: [
-        {
-            &amp;quot;filePattern&amp;quot;: &amp;quot;/tmp/hoge.log&amp;quot;, 
-            &amp;quot;kinesisStream&amp;quot;: &amp;quot;fugafugastream&amp;quot;
-        }
-    ] 
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;aws-cliでデータを&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/streams/latest/dev/fundamental-stream.html#get-records&#34;&gt;取得する&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;まず、シャードイテレーターを取得する。有効時間は300秒。
-&lt;a href=&#34;http://docs.aws.amazon.com/kinesis/latest/APIReference/API_GetShardIterator.html#API_GetShardIterator_RequestSyntax&#34;&gt;TRIM_HORIZON&lt;/a&gt;
-で最も古い方からデータを取得していく。SequenceNumberを指定して途中から読むこともできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ aws kinesis get-shard-iterator --shard-id shardId-000000000000 --shard-iterator-type TRIM_HORIZON --stream-name fugafugastream
-{
-    &amp;quot;ShardIterator&amp;quot;: &amp;quot;AAAAAAAAAAFjKI0neNqY2N5HzGljYFCzoFqpQsdncdC6xE+ylnqvZpmusNfyViY3hBSS8WQXa67gvtkF0f2eKzxQ/Fd7SXZG8Inkb8l1UDF5t+jHgErA28gVSWyT4uYxTzzbnhm9AhcbztyQrjqehYcjEfpWIz5XmhY9K3Kjp0Crygy+OYNSS5PoQFcB1PZ7xMFE8zLTxJXLv1ANRu0Q+1m/JFxKQ3WS&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このシャードイテレータを使ってget-recordsする。データはBase64で入っているのでデコードして確認する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ aws kinesis get-records --shard-iterator AAAAAAAAAAFjKI0neNqY2N5HzGljYFCzoFqpQsdncdC6xE+ylnqvZpmusNfyViY3hBSS8WQXa67gvtkF0f2eKzxQ/Fd7SXZG8Inkb8l1UDF5t+jHgErA28gVSWyT4uYxTzzbnhm9AhcbztyQrjqehYcjEfpWIz5XmhY9K3Kjp0Crygy+OYNSS5PoQFcB1PZ7xMFE8zLTxJXLv1ANRu0Q+1m/JFxKQ3WS
-{
-    &amp;quot;Records&amp;quot;: [
-        {
-            &amp;quot;Data&amp;quot;: &amp;quot;YWFhCg==&amp;quot;, 
-            &amp;quot;PartitionKey&amp;quot;: &amp;quot;999679.8130737302&amp;quot;, 
-            &amp;quot;ApproximateArrivalTimestamp&amp;quot;: 1487082145.518, 
-            &amp;quot;SequenceNumber&amp;quot;: &amp;quot;49570460043263608661463102123405561406360875697772167170&amp;quot;
-        }, 
-        ...
-    ], 
-    &amp;quot;NextShardIterator&amp;quot;: &amp;quot;AAAAAAAAAAE08GRdLF1d76L1wCyLIiuAgpSEkKZSkUEO0VdUt3EOfdm1oOSXA1Xc4+tJPkSmB8g5NaQqDPRS/67u5IXermTUiAj6g2lgvDCGCqWFcYMAxIwIKZjKluCPQjL9kRaUqfVAaElRoKjp4Gv7JmuBDjKpxsbF2yk4uJJDAcevqH/VVkala8UbdhTweGyFgf9VhP/ljzXlrqkZ8wbD0eFwtZ3x&amp;quot;, 
-    &amp;quot;MillisBehindLatest&amp;quot;: 0
-}
-
-$ echo &amp;quot;YWFhCg==&amp;quot; | base64 -d
-aaa
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;kinesis-analytics-https-aws-amazon-com-jp-kinesis-analytics&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/analytics/&#34;&gt;Kinesis Analytics&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;SourceとなるKinesis Streamsか、Firehoseを指定し、SQLを実行できる。そして必要なら次のストリームに入れることができる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-create-analytics.png&#34; alt=&#34;analytics作成&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;今回はSourceとしてjsonで株価のデータが入っているDemo streamを使う。
-いくつかSQLテンプレートが用意されていて、その中のContinuous Filterを選択。
-Streamに入ってきたものをTECHで絞って出力する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- ** Continuous Filter ** 
--- Performs a continuous filter based on a WHERE condition.
---          .----------.   .----------.   .----------.              
---          |  SOURCE  |   |  INSERT  |   |  DESTIN. |              
--- Source--&amp;gt;|  STREAM  |--&amp;gt;| &amp;amp; SELECT |--&amp;gt;|  STREAM  |--&amp;gt;Destination
---          |          |   |  (PUMP)  |   |          |              
---          &#39;----------&#39;   &#39;----------&#39;   &#39;----------&#39;               
--- STREAM (in-application): a continuously updated entity that you can SELECT from and INSERT into like a TABLE
--- PUMP: an entity used to continuously &#39;SELECT ... FROM&#39; a source STREAM, and INSERT SQL results into an output STREAM
--- Create output stream, which can be used to send to a destination
-CREATE OR REPLACE STREAM &amp;quot;DESTINATION_SQL_STREAM&amp;quot; (ticker_symbol VARCHAR(4), sector VARCHAR(12), change REAL, price REAL);
--- Create pump to insert into output 
-CREATE OR REPLACE PUMP &amp;quot;STREAM_PUMP&amp;quot; AS INSERT INTO &amp;quot;DESTINATION_SQL_STREAM&amp;quot;
--- Select all columns from source stream
-SELECT STREAM ticker_symbol, sector, change, price
-FROM &amp;quot;SOURCE_SQL_STREAM_001&amp;quot;
--- LIKE compares a string to a string pattern (_ matches all char, % matches substring)
--- SIMILAR TO compares string to a regex, may use ESCAPE
-WHERE sector SIMILAR TO &#39;%TECH%&#39;;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-run-analytics.png&#34; alt=&#34;analytics実行&#34; /&gt;&lt;/p&gt;
 </description>
         </item>
       
