@@ -6,8 +6,116 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-06-29 00:17:00 &#43;0900 JST</updated>
+    <updated>2017-07-01 18:53:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Fluentdのout_copyのstoreのエラーは他のstoreに影響する</title>
+          <link>http://sambaiz.net/article/116/</link>
+          <pubDate>Sat, 01 Jul 2017 18:53:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/116/</guid>
+          <description>&lt;p&gt;Fluentdの&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/out_copy&#34;&gt;out_copy&lt;/a&gt;プラグインは
+一つのeventを複数のoutputに渡すために使われる。
+ただ、複数設定した中のstoreでエラーが起きると他のstoreにも影響してしまう。&lt;/p&gt;
+
+&lt;p&gt;例えばこんなの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type dummy
+  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+  tag dummy
+  rate 1
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match dummy&amp;gt;
+  @type copy
+
+  &amp;lt;store&amp;gt;
+    @type stdout
+  &amp;lt;/store&amp;gt;
+
+  &amp;lt;store&amp;gt;
+    @type file
+    path /var/log/td-agent/dummy
+    buffer_queue_limit 0
+    buffer_chunk_limit 1k
+  &amp;lt;/store&amp;gt;
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fileの方で&lt;code&gt;queue size exceeds limit&lt;/code&gt;になるとstdoutも出力されなくなってしまう。&lt;/p&gt;
+
+&lt;p&gt;ちなみに一旦relabelしてもだめ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type dummy
+  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+  tag dummy
+  rate 1
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match dummy&amp;gt;
+  @type copy
+
+  &amp;lt;store&amp;gt;
+    @type stdout
+  &amp;lt;/store&amp;gt;
+
+  &amp;lt;store&amp;gt;
+    @type relabel
+    @label @file
+  &amp;lt;/store&amp;gt;
+&amp;lt;/match&amp;gt;
+
+&amp;lt;label @file&amp;gt;
+  &amp;lt;match dummy&amp;gt;
+    @type file
+    path /var/log/td-agent/dummy
+    buffer_queue_limit 0
+    buffer_chunk_limit 1k
+  &amp;lt;/match&amp;gt;
+&amp;lt;/label&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ドキュメントでも紹介されている、sonots氏の&lt;a href=&#34;https://github.com/sonots/fluent-plugin-copy_ex&#34;&gt;out_copy_ex&lt;/a&gt;では
+storeにignore_errorを付けるとrescueするようになっているので他に巻き込まれなくなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ td-agent-gem install fluent-plugin-copy_ex
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type dummy
+  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+  tag dummy
+  rate 1
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match dummy&amp;gt;
+  @type copy_ex
+
+  &amp;lt;store ignore_error&amp;gt;
+    @type stdout
+  &amp;lt;/store&amp;gt;
+
+  &amp;lt;store ignore_error&amp;gt;
+    @type file
+    path /var/log/td-agent/dummy
+    buffer_queue_limit 0
+    buffer_chunk_limit 1k
+  &amp;lt;/store&amp;gt;
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;dummy: {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+[error]:  error_class=Fluent::BufferQueueLimitError error=&amp;quot;queue size exceeds limit&amp;quot;
+dummy: {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+[error]:  error_class=Fluent::BufferQueueLimitError error=&amp;quot;queue size exceeds limit&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -6951,463 +7059,6 @@ WHERE sector SIMILAR TO &#39;%TECH%&#39;;
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/64-run-analytics.png&#34; alt=&#34;analytics実行&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する</title>
-          <link>http://sambaiz.net/article/66/</link>
-          <pubDate>Sun, 19 Feb 2017 23:55:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/66/</guid>
-          <description>
-
-&lt;h2 id=&#34;fluentdのmonitor-agent-http-docs-fluentd-org-v0-12-articles-monitoring&#34;&gt;&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/monitoring&#34;&gt;fluentdのmonitor_agent&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;メトリクスをjsonで返すAPIを提供する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
-  @type monitor_agent
-  bind 0.0.0.0
-  port 24220
-&amp;lt;/source&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl localhost:24220/api/plugins.json | jq
-{
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590d8c250&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;input&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;forward&amp;quot;,
-      &amp;quot;config&amp;quot;: {
-        &amp;quot;@type&amp;quot;: &amp;quot;forward&amp;quot;,
-        &amp;quot;port&amp;quot;: &amp;quot;24222&amp;quot;,
-        &amp;quot;bind&amp;quot;: &amp;quot;0.0.0.0&amp;quot;
-      },
-      &amp;quot;output_plugin&amp;quot;: false,
-      &amp;quot;retry_count&amp;quot;: null
-    },
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590d894c4&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;input&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;monitor_agent&amp;quot;,
-      &amp;quot;config&amp;quot;: {
-        &amp;quot;@type&amp;quot;: &amp;quot;monitor_agent&amp;quot;,
-        &amp;quot;bind&amp;quot;: &amp;quot;0.0.0.0&amp;quot;,
-        &amp;quot;port&amp;quot;: &amp;quot;24220&amp;quot;
-      },
-      &amp;quot;output_plugin&amp;quot;: false,
-      &amp;quot;retry_count&amp;quot;: null
-    },
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590dc1f2c&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;,
-      &amp;quot;config&amp;quot;: {
-        &amp;quot;@type&amp;quot;: &amp;quot;file&amp;quot;,
-        &amp;quot;path&amp;quot;: &amp;quot;/var/log/td-agent/hoge.log&amp;quot;,
-        &amp;quot;buffer_path&amp;quot;: &amp;quot;/var/log/td-agent/hoge.log.*&amp;quot;
-      },
-      &amp;quot;output_plugin&amp;quot;: true,
-      &amp;quot;buffer_queue_length&amp;quot;: 0,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 0,
-      &amp;quot;retry_count&amp;quot;: 0
-    }
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをもとにStackdriverで異常を検知できるようにする。&lt;/p&gt;
-
-&lt;h2 id=&#34;google-stackdriver-https-cloud-google-com-stackdriver&#34;&gt;&lt;a href=&#34;https://cloud.google.com/stackdriver/&#34;&gt;Google Stackdriver&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;GoogleがStackdriverを買収して改造したもの。GCPだけではなくAWSのリソースも監視できる。
-まだBeta。&lt;/p&gt;
-
-&lt;h2 id=&#34;ec2インスタンスを監視する-https-cloud-google-com-monitoring-quickstart-aws-configure-sd-acct&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/quickstart-aws#configure-sd-acct&#34;&gt;EC2インスタンスを監視する&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;GCPのメニューのSTACKDRIVER -&amp;gt; モニタリングで、プロジェクトを指定してStackdriverアカウントを作成する。&lt;/p&gt;
-
-&lt;p&gt;今回はEC2で動いているfluentdを監視するので指示に従ってクロスアカウントアクセスのロールを作成、
-Role ARNを入力してAWSアカウントと接続すると、
-StackdriverのResouces-&amp;gt;InstancesでCPUの使用率などは確認できるが、
-EC2にAgentを入れると詳細な情報を取得できる。&lt;/p&gt;
-
-&lt;p&gt;GCPのメニューのサービスアカウントから接続したAWSアカウントを選択し、
-Project-&amp;gt;編集者とLogging-&amp;gt;ログ書き込みロールのサービスアカウントを作成する。
-新しい秘密鍵の提供にチェックを入れて、JSONのキーをダウンロードする。
-これをEC2の&lt;code&gt;/etc/google/auth/application_default_credentials.json&lt;/code&gt;に置いて
-&lt;code&gt;chown root:root&lt;/code&gt;、&lt;code&gt;chmod 400&lt;/code&gt;する。&lt;/p&gt;
-
-&lt;p&gt;Monitoring AgentとLogging Agentをインストールし、
-&lt;code&gt;stackdriver-collectd&lt;/code&gt;と&lt;code&gt;google-fluentd&lt;/code&gt;のプロセスがあれば正常。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;curl -O https://repo.stackdriver.com/stack-install.sh
-sudo bash stack-install.sh --write-gcm
-
-curl -sSO https://dl.google.com/cloudagents/install-logging-agent.sh
-sudo bash install-logging-agent.sh
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;メモリの使用量やTCPコネクション数などがとれていることを確認する。
-Googleのドキュメントには見つからなかったけど、
-旧Stackdriverと同様、&lt;code&gt;stackdriver_monitor: false&lt;/code&gt;のタグを付けると
-&lt;a href=&#34;https://support.stackdriver.com/customer/portal/articles/1491785-collecting-data-from-specific-resources-only&#34;&gt;監視対象から外れる&lt;/a&gt;
-っぽい。&lt;/p&gt;
-
-&lt;h2 id=&#34;カスタムメトリクスを送る-https-cloud-google-com-monitoring-custom-metrics&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/&#34;&gt;カスタムメトリクスを送る&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;MetricDescriptorを作成し、これにTimeSeriesデータを書き込んでいく。&lt;/p&gt;
-
-&lt;h3 id=&#34;metricdescriptorの作成-https-cloud-google-com-monitoring-custom-metrics-creating-metrics-monitoring-create-metric-protocol&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-create-metric-protocol&#34;&gt;MetricDescriptorの作成&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors&#34;&gt;MetricDescriptor&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;typeは&lt;code&gt;custom.googleapis.com/&lt;/code&gt;
-から&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#custom_metric_names&#34;&gt;始める&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors#MetricKind&#34;&gt;metricKind&lt;/a&gt;
-にはGAUGEのほかに変化量をとるDELTA、累積するCUMULATIVEを指定できる。&lt;/p&gt;
-
-&lt;p&gt;labelはフィルタリングのためのもの。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;name&amp;quot;: &amp;quot;&amp;quot;,
-  &amp;quot;description&amp;quot;: &amp;quot;fluentd buffer_queue_length&amp;quot;,
-  &amp;quot;displayName&amp;quot;: &amp;quot;fluentd-buffer_queue_length&amp;quot;,
-  &amp;quot;type&amp;quot;: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
-  &amp;quot;metricKind&amp;quot;: &amp;quot;GAUGE&amp;quot;,
-  &amp;quot;valueType&amp;quot;: &amp;quot;INT64&amp;quot;,
-  &amp;quot;labels&amp;quot;: [
-    {
-      &amp;quot;key&amp;quot;: &amp;quot;plugin_type&amp;quot;,
-      &amp;quot;valueType&amp;quot;: &amp;quot;STRING&amp;quot;,
-      &amp;quot;description&amp;quot;: &amp;quot;The type of the plugin&amp;quot;
-    },
-  ],
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これをGoで登録する。&lt;/p&gt;
-
-&lt;p&gt;gcpのほうのprojectでProject-&amp;gt;編集者のサービスアカウントを作成してパスを
-環境変数&lt;code&gt;GOOGLE_APPLICATION_CREDENTIALS&lt;/code&gt;に入れて
-&lt;a href=&#34;https://developers.google.com/identity/protocols/application-default-credentials&#34;&gt;Default Credential&lt;/a&gt;
-にする。&lt;/p&gt;
-
-&lt;p&gt;必要なパッケージをgo get。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get google.golang.org/api/monitoring/v3
-$ go get golang.org/x/oauth2/google
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;func main() {
-	ctx := context.Background()
-	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
-	if err != nil {
-		panic(err)
-	}
-	client, err := monitoring.New(httpClient)
-	if err != nil {
-		panic(err)
-	}
-
-	var (
-		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
-		name = &amp;quot;projects/*****&amp;quot;
-
-		requestBody = &amp;amp;monitoring.MetricDescriptor{
-			Description: &amp;quot;fluentd buffer_queue_length&amp;quot;,
-			DisplayName: &amp;quot;fluentd-buffer_queue_length&amp;quot;,
-			Type:        &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
-			MetricKind:  &amp;quot;GAUGE&amp;quot;,
-			ValueType:   &amp;quot;INT64&amp;quot;,
-			Labels: []*monitoring.LabelDescriptor{
-				&amp;amp;monitoring.LabelDescriptor{
-					Key:         &amp;quot;plugin_type&amp;quot;,
-					ValueType:   &amp;quot;STRING&amp;quot;,
-					Description: &amp;quot;The type of the plugin&amp;quot;,
-				},
-			},
-		}
-	)
-
-	response, err := client.Projects.MetricDescriptors.Create(name, requestBody).Context(ctx).Do()
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(&amp;quot;done&amp;quot;)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;登録されたことをlistで確認する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;response, err := client.Projects.MetricDescriptors.List(name).Context(ctx).Do()
-if err != nil {
-  panic(err)
-}
-
-for _, v := range response.MetricDescriptors {
-  fmt.Println(v.DisplayName)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;API Request Count
-Agent Memory Usage
-Stream Space Used
-...
-fluentd-buffer_queue_length
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;timeseriesの書き込み-https-cloud-google-com-monitoring-custom-metrics-creating-metrics-monitoring-write-timeseries-protocol&#34;&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-write-timeseries-protocol&#34;&gt;TimeSeriesの書き込み&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TimeSeries&#34;&gt;TimeSeries&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;metricのtypeはMetricDescriptorのtypeと対応する。
-pointsのendTimeはRFC3339のUTC文字列で渡す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
- &amp;quot;timeSeries&amp;quot;: [
-  {
-   &amp;quot;metric&amp;quot;: {
-    &amp;quot;type&amp;quot;: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
-    &amp;quot;labels&amp;quot;: {
-     &amp;quot;plugin_type&amp;quot;: &amp;quot;file&amp;quot;
-    }
-   },
-   &amp;quot;resource&amp;quot;: {
-    &amp;quot;type&amp;quot;: &amp;quot;aws_ec2_instance&amp;quot;,
-    &amp;quot;labels&amp;quot;: {
-     &amp;quot;project_id&amp;quot;: &amp;quot;*****&amp;quot;,
-     &amp;quot;instance_id&amp;quot;: &amp;quot;*****&amp;quot;,
-     &amp;quot;region&amp;quot;: &amp;quot;aws:ap-northeast-1&amp;quot;,
-     &amp;quot;aws_account&amp;quot;: &amp;quot;*****&amp;quot;
-    }
-   },
-   &amp;quot;points&amp;quot;: [
-    {
-     &amp;quot;interval&amp;quot;: {
-      &amp;quot;endTime&amp;quot;: &amp;quot;2016-06-01T10:00:00-04:00&amp;quot;
-     },
-     &amp;quot;value&amp;quot;: {
-      &amp;quot;int64Value&amp;quot;: 0
-     }
-    }
-   ]
-  }
- ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;resourceのtypeは
-&lt;a href=&#34;https://cloud.google.com/logging/docs/reference/v2/rest/v2/monitoredResourceDescriptors/list#MonitoredResourceDescriptor&#34;&gt;MonitoredResourceDescriptor&lt;/a&gt;
-と対応していて、
-&lt;a href=&#34;https://cloud.google.com/logging/docs/reference/v2/rest/v2/monitoredResourceDescriptors/list&#34;&gt;list&lt;/a&gt;で確認できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
- &amp;quot;resourceDescriptors&amp;quot;: [
-   {
-   &amp;quot;type&amp;quot;: &amp;quot;aws_ec2_instance&amp;quot;,
-   &amp;quot;displayName&amp;quot;: &amp;quot;Amazon EC2 Instance&amp;quot;,
-   &amp;quot;description&amp;quot;: &amp;quot;A VM instance in Amazon EC2.&amp;quot;,
-   &amp;quot;labels&amp;quot;: [
-    {
-     &amp;quot;key&amp;quot;: &amp;quot;project_id&amp;quot;,
-     &amp;quot;description&amp;quot;: &amp;quot;The identifier of the GCP project under which data is stored for the AWS account specified in the aws_account label (e.g., my-project).&amp;quot;
-    },
-    {
-     &amp;quot;key&amp;quot;: &amp;quot;instance_id&amp;quot;,
-     &amp;quot;description&amp;quot;: &amp;quot;The VM instance identifier assigned by AWS.&amp;quot;
-    },
-    {
-     &amp;quot;key&amp;quot;: &amp;quot;region&amp;quot;,
-     &amp;quot;description&amp;quot;: &amp;quot;The AWS region in which the VM is running. Supported AWS region values are listed by service at http://docs.aws.amazon.com/general/latest/gr/rande.html. The value supplied for this label must be prefixed with &#39;aws:&#39; (for example, &#39;aws:us-east-1&#39; is a valid value while &#39;us-east-1&#39; is not).&amp;quot;
-    },
-    {
-     &amp;quot;key&amp;quot;: &amp;quot;aws_account&amp;quot;,
-     &amp;quot;description&amp;quot;: &amp;quot;The AWS account number under which the VM is running.&amp;quot;
-    }
-   ]
-  },
-  ...
- ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;書くコード。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func writeFluentdBufferQueueLength() error {
-	ctx := context.Background()
-	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
-	if err != nil {
-		return err
-	}
-	client, err := monitoring.New(httpClient)
-	if err != nil {
-		return err
-	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-
-	resource := &amp;amp;monitoring.MonitoredResource{
-		Type: &amp;quot;aws_ec2_instance&amp;quot;,
-		Labels: map[string]string{
-			&amp;quot;project_id&amp;quot;:  &amp;quot;*****&amp;quot;,
-			&amp;quot;instance_id&amp;quot;: &amp;quot;*****&amp;quot;,
-			&amp;quot;region&amp;quot;:      &amp;quot;aws:ap-northeast-1&amp;quot;,
-			&amp;quot;aws_account&amp;quot;: &amp;quot;*****&amp;quot;,
-		},
-	}
-
-	metrics, err := fetchFluentdMetrics()
-	if err != nil {
-		return err
-	}
-
-	timeSeries := []*monitoring.TimeSeries{}
-
-	for _, v := range metrics.Plugins {
-		if v.OutputPlugin {
-
-			fmt.Printf(&amp;quot;send %s\n&amp;quot;, v.Type)
-
-			timeSeries = append(
-				timeSeries,
-				&amp;amp;monitoring.TimeSeries{
-					Metric: &amp;amp;monitoring.Metric{
-						Type: &amp;quot;custom.googleapis.com/fluentd/buffer_queue_length&amp;quot;,
-						Labels: map[string]string{
-							&amp;quot;plugin_type&amp;quot;: v.Type,
-						},
-					},
-					Resource: resource,
-					Points: []*monitoring.Point{
-						&amp;amp;monitoring.Point{
-							Interval: &amp;amp;monitoring.TimeInterval{
-								EndTime: now,
-							},
-							Value: &amp;amp;monitoring.TypedValue{
-								Int64Value: int64p(v.BufferQueueLength),
-							},
-						},
-					},
-				},
-			)
-		}
-	}
-
-	var (
-		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
-		name = &amp;quot;projects/try-stackdriver-159110&amp;quot;
-
-		requestBody = &amp;amp;monitoring.CreateTimeSeriesRequest{
-			TimeSeries: timeSeries,
-		}
-	)
-
-	_, err = client.Projects.TimeSeries.Create(name, requestBody).Context(ctx).Do()
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(&amp;quot;done&amp;quot;)
-
-	return nil
-}
-
-const fluentdMonitorEndpoint = &amp;quot;http://localhost:24220/api/plugins.json&amp;quot;
-
-type fluentdMetrics struct {
-	Plugins []fluentdMetricsPlugin `json:&amp;quot;plugins&amp;quot;`
-}
-type fluentdMetricsPlugin struct {
-	Type              string `json:&amp;quot;type&amp;quot;`
-	OutputPlugin      bool   `json:&amp;quot;output_plugin&amp;quot;`
-	BufferQueueLength int64  `json:&amp;quot;buffer_queue_length&amp;quot;`
-}
-
-// monitor_agentからfluentdのメトリクスを取得する
-func fetchFluentdMetrics() (*fluentdMetrics, error) {
-
-	resp, err := http.Get(fluentdMonitorEndpoint)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var ret fluentdMetrics
-
-	if err := json.Unmarshal(body, &amp;amp;ret); err != nil {
-		return nil, err
-	}
-
-	return &amp;amp;ret, nil
-}
-
-// int64 -&amp;gt; *int64
-func int64p(n int64) *int64 {
-	return &amp;amp;n
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これを&lt;a href=&#34;https://github.com/jasonlvhit/gocron&#34;&gt;gocron&lt;/a&gt;などで定期的に実行させる。&lt;/p&gt;
-
-&lt;p&gt;読むコード。確認用。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func readFluentdBufferQueueLength() error {
-	ctx := context.Background()
-	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
-	if err != nil {
-		return err
-	}
-	client, err := monitoring.New(httpClient)
-	if err != nil {
-		return err
-	}
-
-	var (
-		// The project on which to execute the request. The format is `&amp;quot;projects/{project_id_or_number}&amp;quot;`.
-		name = &amp;quot;projects/*****&amp;quot;
-	)
-
-	start := time.Now().Add(time.Hour * -3).UTC().Format(time.RFC3339)
-	now := time.Now().UTC().Format(time.RFC3339)
-
-	filter := &amp;quot;metric.type = \&amp;quot;custom.googleapis.com/fluentd/buffer_queue_length\&amp;quot;&amp;quot;
-	resp, err := client.Projects.TimeSeries.List(name).
-		IntervalStartTime(start).
-		IntervalEndTime(now).
-		Filter(filter).Context(ctx).Do()
-	if err != nil {
-		return err
-	}
-
-	for _, v := range resp.TimeSeries {
-		fmt.Println(v.Metric.Type)
-		for _, p := range v.Points {
-			fmt.Println(*(p.Value.Int64Value))
-		}
-	}
-
-	return nil
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちゃんと届いていれば
-Resource-&amp;gt;Metrics Explorerでもcustom/fluentd/buffer_queue_lengthを確認できる。&lt;/p&gt;
-
-&lt;p&gt;これでAlertを設定できるようになった。TargetのResource TypeはCustom Metrics。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/66.png&#34; alt=&#34;Alertの設定&#34; /&gt;&lt;/p&gt;
 </description>
         </item>
       

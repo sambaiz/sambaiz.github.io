@@ -11,6 +11,114 @@
     
       
         <item>
+          <title>Fluentdのout_copyのstoreのエラーは他のstoreに影響する</title>
+          <link>http://sambaiz.net/article/116/</link>
+          <pubDate>Sat, 01 Jul 2017 18:53:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/116/</guid>
+          <description>&lt;p&gt;Fluentdの&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/out_copy&#34;&gt;out_copy&lt;/a&gt;プラグインは
+一つのeventを複数のoutputに渡すために使われる。
+ただ、複数設定した中のstoreでエラーが起きると他のstoreにも影響してしまう。&lt;/p&gt;
+
+&lt;p&gt;例えばこんなの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type dummy
+  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+  tag dummy
+  rate 1
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match dummy&amp;gt;
+  @type copy
+
+  &amp;lt;store&amp;gt;
+    @type stdout
+  &amp;lt;/store&amp;gt;
+
+  &amp;lt;store&amp;gt;
+    @type file
+    path /var/log/td-agent/dummy
+    buffer_queue_limit 0
+    buffer_chunk_limit 1k
+  &amp;lt;/store&amp;gt;
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fileの方で&lt;code&gt;queue size exceeds limit&lt;/code&gt;になるとstdoutも出力されなくなってしまう。&lt;/p&gt;
+
+&lt;p&gt;ちなみに一旦relabelしてもだめ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type dummy
+  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+  tag dummy
+  rate 1
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match dummy&amp;gt;
+  @type copy
+
+  &amp;lt;store&amp;gt;
+    @type stdout
+  &amp;lt;/store&amp;gt;
+
+  &amp;lt;store&amp;gt;
+    @type relabel
+    @label @file
+  &amp;lt;/store&amp;gt;
+&amp;lt;/match&amp;gt;
+
+&amp;lt;label @file&amp;gt;
+  &amp;lt;match dummy&amp;gt;
+    @type file
+    path /var/log/td-agent/dummy
+    buffer_queue_limit 0
+    buffer_chunk_limit 1k
+  &amp;lt;/match&amp;gt;
+&amp;lt;/label&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ドキュメントでも紹介されている、sonots氏の&lt;a href=&#34;https://github.com/sonots/fluent-plugin-copy_ex&#34;&gt;out_copy_ex&lt;/a&gt;では
+storeにignore_errorを付けるとrescueするようになっているので他に巻き込まれなくなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ td-agent-gem install fluent-plugin-copy_ex
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type dummy
+  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+  tag dummy
+  rate 1
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match dummy&amp;gt;
+  @type copy_ex
+
+  &amp;lt;store ignore_error&amp;gt;
+    @type stdout
+  &amp;lt;/store&amp;gt;
+
+  &amp;lt;store ignore_error&amp;gt;
+    @type file
+    path /var/log/td-agent/dummy
+    buffer_queue_limit 0
+    buffer_chunk_limit 1k
+  &amp;lt;/store&amp;gt;
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;dummy: {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+[error]:  error_class=Fluent::BufferQueueLimitError error=&amp;quot;queue size exceeds limit&amp;quot;
+dummy: {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+[error]:  error_class=Fluent::BufferQueueLimitError error=&amp;quot;queue size exceeds limit&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする</title>
           <link>http://sambaiz.net/article/113/</link>
           <pubDate>Sun, 25 Jun 2017 00:35:00 &#43;0900</pubDate>
