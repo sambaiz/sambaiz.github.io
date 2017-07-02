@@ -6,8 +6,162 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-07-01 23:50:00 &#43;0900 JST</updated>
+    <updated>2017-07-02 23:12:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>HoloLensのSpartial MappingでNavMeshを生成してランダムにAgentを出現・移動させる</title>
+          <link>http://sambaiz.net/article/118/</link>
+          <pubDate>Sun, 02 Jul 2017 23:12:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/118/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;Unity 5.6.2f1
+HoloToolkit v1.5.7.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Unity 5.6から動的にNavMeshを生成できるようになったので
+HoloLensのSpartial MappingしたものをNavMeshにしてAgentを動かしてみる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://sambaiz.net/article/117/&#34;&gt;Unityで動的にNavMeshを生成する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Spartial MappingしたものをNavMeshにするのは以下の記事の&lt;a href=&#34;https://gist.github.com/tarukosu/7bc78c189d8a7de8e94ca3fcfc8f7738#file-spatialmappingnavmesh-cs&#34;&gt;スクリプト&lt;/a&gt;を使った。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://tarukosu.hatenablog.com/entry/2017/04/23/183546&#34;&gt;HoloLens の空間マップで NavMesh を使ってみる - たるこすの日記&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/Unity-Technologies/NavMeshComponents&#34;&gt;Unity-Technologies/NavMeshComponents&lt;/a&gt;から
+&lt;code&gt;LocalNavMeshBuilder&lt;/code&gt;と&lt;code&gt;NavMeshSourceTag&lt;/code&gt;を持ってきてLocalNavMeshBuilderのObjectを置いておき、
+Spartial MappingしたものにNavMeshSourceTagを付けられればExampleと同様にNavMeshにできる。
+そこで、このスクリプトではSpatialMappingSourceを取得し、イベントハンドラでNavMeshSourceTagが追加されるようにしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;using HoloToolkit.Unity.SpatialMapping;
+using UnityEngine;
+using HoloToolkit.Unity;
+
+public class SpatialMappingNavMesh : MonoBehaviour
+{
+    public GameObject SpatialMapping;
+
+    private void Awake()
+    {
+        var spatialMappingSources = SpatialMapping.GetComponents&amp;lt;SpatialMappingSource&amp;gt;();
+        foreach (var source in spatialMappingSources)
+        {
+            source.SurfaceAdded += SpatialMappingSource_SurfaceAdded;
+            source.SurfaceUpdated += SpatialMappingSource_SurfaceUpdated;
+        }
+    }
+
+    private void SpatialMappingSource_SurfaceAdded(object sender, DataEventArgs&amp;lt;SpatialMappingSource.SurfaceObject&amp;gt; e)
+    {
+        e.Data.Object.AddComponent&amp;lt;NavMeshSourceTag&amp;gt;();
+    }
+
+    private void SpatialMappingSource_SurfaceUpdated(object sender, DataEventArgs&amp;lt;SpatialMappingSource.SurfaceUpdate&amp;gt; e)
+    {
+        var navMeshSourceTag = e.Data.New.Object.GetComponent&amp;lt;NavMeshSourceTag&amp;gt;();
+        if (navMeshSourceTag == null)
+        {
+            e.Data.New.Object.AddComponent&amp;lt;NavMeshSourceTag&amp;gt;();
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;NavMeshのランダムな場所を取得するには&lt;a href=&#34;https://docs.unity3d.com/ja/540/ScriptReference/NavMesh.SamplePosition.html&#34;&gt;NavMesh.SamplePosition&lt;/a&gt;を使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;bool RandomPoint(Vector3 center, float range, out Vector3 result) {
+    for (int i = 0; i &amp;lt; 30; i++) {
+        Vector3 randomPoint = center + Random.insideUnitSphere * range;
+        NavMeshHit hit;
+        if (NavMesh.SamplePosition(randomPoint, out hit, 1.0f, NavMesh.AllAreas)) {
+            result = hit.position;
+            return true;
+        }
+    }
+    result = Vector3.zero;
+    return false;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;動かすAgentはこんな感じ。こけないようにFreeze Rotationしている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/118.png&#34; alt=&#34;Agentの設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;このAgentを出現させて移動させる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AI;
+
+public class RandomSpawn : MonoBehaviour {
+
+    public GameObject agent;
+    public GameObject counter;
+
+    private List&amp;lt;GameObject&amp;gt; spawnedAgents = new List&amp;lt;GameObject&amp;gt;();
+    private float interval = 0.0f;
+
+    static int MAX_SPAWN_NUM = 10;
+
+	// Use this for initialization
+	void Start () {
+        counter.GetComponent&amp;lt;TextMesh&amp;gt;().text = spawnedAgents.Count + &amp;quot;&amp;quot;;
+    }
+
+    // Update is called once per frame
+    void Update () {
+
+        interval += Time.deltaTime;
+        if(interval &amp;gt; 5.0f)
+        {
+            if (spawnedAgents.Count &amp;lt; MAX_SPAWN_NUM)
+            {
+                Spawn();
+            }
+            Move();
+            interval = 0.0f;
+        }
+    }
+
+    void Spawn()
+    {
+        try
+        {
+            var point = GetRandomPosition();
+            var obj = Instantiate(agent, point, Quaternion.identity);
+            counter.GetComponent&amp;lt;TextMesh&amp;gt;().text = spawnedAgents.Count + &amp;quot;&amp;quot;;
+            spawnedAgents.Add(obj);
+        }
+        catch (Exception e)
+        {
+            Debug.Log(e.StackTrace);
+        }
+    }
+
+    void Move()
+    {
+        foreach(var agent in spawnedAgents)
+        {
+            agent.GetComponent&amp;lt;NavMeshAgent&amp;gt;().destination = GetRandomPosition();
+        }
+        
+    }
+
+    public static Vector3 GetRandomPosition()
+    {
+        ...
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちゃんと床や壁を認識して移動している。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/118.gif&#34; alt=&#34;移動するAgent&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -6969,45 +7123,6 @@ Cookie: yummy_cookie=choco; tasty_cookie=strawberry
 &lt;p&gt;リクエストが飛び、&lt;code&gt;Set-Cookie&lt;/code&gt;ヘッダーを受け取ればCookieに書かれるので、アクセスしたサイトのドメイン以外のCookieが書かれることがある。
 このようなCookieを3rd party cookieといって、広告のトラッキングによく使われるが、
 Safariなどのデフォルト設定では書き込めなくなっている。&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>ELBのスケーリングとsurge queue</title>
-          <link>http://sambaiz.net/article/68/</link>
-          <pubDate>Tue, 21 Feb 2017 19:48:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>http://sambaiz.net/article/68/</guid>
-          <description>
-
-&lt;p&gt;バックエンドだけではなくELB自体もスケーリングし、内部node数はdigで調べることができる。
-このnode数は自分ではコントロールできず、基本的に意識することはない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ dig ****.ap-northeast-1.elb.amazonaws.com
-
-;; ANSWER SECTION:
-*****.elb.amazonaws.com. 60 IN A xxx.xxx.xxx.xxx
-*****.elb.amazonaws.com. 60 IN A yyy.yyy.yyy.yyy
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;nodeが増えるのにはある程度時間がかかるので、
-アクセスが急増(5分間で50%以上のトラフィック増加が&lt;a href=&#34;http://aws.typepad.com/sajp/2015/05/aws-black-belt-elb.html&#34;&gt;目安&lt;/a&gt;)
-したら捌ききれず、503を返すことがある。
-前もって多量のアクセスが来ることが分かっていて、
-&lt;a href=&#34;https://aws.amazon.com/jp/premiumsupport/signup/&#34;&gt;AWSサポート&lt;/a&gt;がBusiness以上なら
-pre-warming申請することでnodeが増えた状態で待ち構えられる。&lt;/p&gt;
-
-&lt;p&gt;バックエンドのアプリケーションがリクエストを処理できない場合、ELBのsurge queueに溜まっていく。
-この数はCloudWatchのSurgeQueueLength(キュー長の急増)メトリクスで確認できる。
-また、SurgeQueueLengthの最大値1024を超えるとリクエストは拒否され、その数はSpoiloverCount(過剰数)メトリクスに出る。&lt;/p&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/elb-and-cloudwatch-metrics-in-depth/&#34;&gt;ELBの挙動とCloudWatchメトリクスの読み方を徹底的に理解する ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/premiumsupport/knowledge-center/elb-latency-troubleshooting/&#34;&gt;Elastic Load Balancing でのレイテンシーのトラブルシューティング&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       

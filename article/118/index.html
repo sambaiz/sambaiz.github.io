@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>剣を振るVRゲームを作った - sambaiz-net</title>
-    <meta name="twitter:title" content="剣を振るVRゲームを作った - sambaiz-net">
-    <meta property='og:title' content="剣を振るVRゲームを作った - sambaiz-net">
+    <title>HoloLensのSpartial MappingでNavMeshを生成してランダムにAgentを出現・移動させる - sambaiz-net</title>
+    <meta name="twitter:title" content="HoloLensのSpartial MappingでNavMeshを生成してランダムにAgentを出現・移動させる - sambaiz-net">
+    <meta property='og:title' content="HoloLensのSpartial MappingでNavMeshを生成してランダムにAgentを出現・移動させる - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="楽しい">
-      <meta name="twitter:description" content="楽しい">
+      <meta name="description" content="MRでのNavMesh">
+      <meta name="twitter:description" content="MRでのNavMesh">
     
     
 
-    <meta property="og:url" content="http://sambaiz.net/article/29/">
+    <meta property="og:url" content="http://sambaiz.net/article/118/">
     <meta property="og:image" content="http://sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="http://sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"http:\/\/sambaiz.net\/"
     },
-    "headline": "剣を振るVRゲームを作った | sambaiz-net ",
-    "datePublished": "2016-10-30T19:05:00JST",
-    "dateModified": "2016-10-30T19:05:00JST",
+    "headline": "HoloLensのSpartial MappingでNavMeshを生成してランダムにAgentを出現・移動させる | sambaiz-net ",
+    "datePublished": "2017-07-02T23:12:00JST",
+    "dateModified": "2017-07-02T23:12:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "楽しい"
+    "description": "MRでのNavMesh"
   }
 </script>
 </head>
@@ -103,209 +103,151 @@
 
       <article class="single">
         <div class="single body">
-          <h1>剣を振るVRゲームを作った</h1>
-          <p>(2016-10-30)</p>
-          
+          <h1>HoloLensのSpartial MappingでNavMeshを生成してランダムにAgentを出現・移動させる</h1>
+          <p>(2017-07-02)</p>
+          <pre><code>Unity 5.6.2f1
+HoloToolkit v1.5.7.0
+</code></pre>
 
-<p><img src="http://sambaiz.net/images/29_game.png" alt="ゲーム画像" /></p>
+<p>Unity 5.6から動的にNavMeshを生成できるようになったので
+HoloLensのSpartial MappingしたものをNavMeshにしてAgentを動かしてみる。</p>
 
-<p><a href="https://www.youtube.com/watch?v=Tlonh7D5UzY">プレイ動画</a></p>
+<p><a href="http://sambaiz.net/article/117/">Unityで動的にNavMeshを生成する - sambaiz-net</a></p>
 
-<p><a href="https://vr.google.com/intl/ja_jp/cardboard/">Cardboard</a>にAndroidを入れて、</p>
+<p>Spartial MappingしたものをNavMeshにするのは以下の記事の<a href="https://gist.github.com/tarukosu/7bc78c189d8a7de8e94ca3fcfc8f7738#file-spatialmappingnavmesh-cs">スクリプト</a>を使った。</p>
 
-<p><img src="http://sambaiz.net/images/29_card.jpg" alt="Cardboard" /></p>
+<p><a href="http://tarukosu.hatenablog.com/entry/2017/04/23/183546">HoloLens の空間マップで NavMesh を使ってみる - たるこすの日記</a></p>
 
-<p>iPhoneをくくりつけた傘を動かすと、画面の剣も動くのでこれで敵を倒すゲーム。</p>
+<p><a href="https://github.com/Unity-Technologies/NavMeshComponents">Unity-Technologies/NavMeshComponents</a>から
+<code>LocalNavMeshBuilder</code>と<code>NavMeshSourceTag</code>を持ってきてLocalNavMeshBuilderのObjectを置いておき、
+Spartial MappingしたものにNavMeshSourceTagを付けられればExampleと同様にNavMeshにできる。
+そこで、このスクリプトではSpatialMappingSourceを取得し、イベントハンドラでNavMeshSourceTagが追加されるようにしている。</p>
 
-<p><img src="http://sambaiz.net/images/29_sword.jpg" alt="iPhoneをくくりつけた傘" /></p>
+<pre><code>using HoloToolkit.Unity.SpatialMapping;
+using UnityEngine;
+using HoloToolkit.Unity;
 
-<h2 id="実装">実装</h2>
+public class SpatialMappingNavMesh : MonoBehaviour
+{
+    public GameObject SpatialMapping;
 
-<h3 id="剣-ios">剣(iOS)</h3>
-
-<p>剣にくくりつけたiPhoneの傾きの値をUnity(Android)に送信している。
-iOSはClassic Bluetoothを自由に使えないので、Androidと通信する場合はBLEを使う。
-BLEは通常だと20byteしか一度に送れないので、これを超えないよう注意する必要がある。</p>
-
-<p>BLEで通信するところは</p>
-
-<p><a href="http://sambaiz.net/article/26">iOS端末をBLEのPeripheralにする</a></p>
-
-<p>で作ったので、端末の傾きを取得して送るだけ。</p>
-
-<pre><code>import UIKit
-import CoreMotion
-
-class Motion{
-
-    let peripheral: BLEPeripheral
-    let accelHandler:CMDeviceMotionHandler
-    let manager = CMMotionManager()
-
-    public init(peripheral :BLEPeripheral, label :UILabel){
-        self.peripheral = peripheral
-
-        accelHandler = {
-            (data: CMDeviceMotion?, error: Error?) -&gt; Void in
-            let str = String(format: &quot;%.1f %.1f %.1f&quot;,
-                             arguments: [data!.attitude.pitch * 180 / M_PI,
-                                         data!.attitude.roll * 180 / M_PI,
-                                         data!.attitude.yaw * 180 / M_PI]
-                )
-            let res = peripheral.update(str.data(using: String.Encoding.utf8))
-            label.text = str + &quot; &quot; + String(res)
+    private void Awake()
+    {
+        var spatialMappingSources = SpatialMapping.GetComponents&lt;SpatialMappingSource&gt;();
+        foreach (var source in spatialMappingSources)
+        {
+            source.SurfaceAdded += SpatialMappingSource_SurfaceAdded;
+            source.SurfaceUpdated += SpatialMappingSource_SurfaceUpdated;
         }
     }
 
-    func start(){
-        if manager.isDeviceMotionAvailable {
-            manager.deviceMotionUpdateInterval = 1 / 12;
-            manager.startDeviceMotionUpdates(to: OperationQueue.current!, withHandler: accelHandler)
+    private void SpatialMappingSource_SurfaceAdded(object sender, DataEventArgs&lt;SpatialMappingSource.SurfaceObject&gt; e)
+    {
+        e.Data.Object.AddComponent&lt;NavMeshSourceTag&gt;();
+    }
+
+    private void SpatialMappingSource_SurfaceUpdated(object sender, DataEventArgs&lt;SpatialMappingSource.SurfaceUpdate&gt; e)
+    {
+        var navMeshSourceTag = e.Data.New.Object.GetComponent&lt;NavMeshSourceTag&gt;();
+        if (navMeshSourceTag == null)
+        {
+            e.Data.New.Object.AddComponent&lt;NavMeshSourceTag&gt;();
         }
     }
 }
 </code></pre>
 
-<h3 id="ゲーム-unity-android">ゲーム(Unity &amp; Android)</h3>
+<p>NavMeshのランダムな場所を取得するには<a href="https://docs.unity3d.com/ja/540/ScriptReference/NavMesh.SamplePosition.html">NavMesh.SamplePosition</a>を使う。</p>
 
-<p>オライリーから</p>
+<pre><code>bool RandomPoint(Vector3 center, float range, out Vector3 result) {
+    for (int i = 0; i &lt; 30; i++) {
+        Vector3 randomPoint = center + Random.insideUnitSphere * range;
+        NavMeshHit hit;
+        if (NavMesh.SamplePosition(randomPoint, out hit, 1.0f, NavMesh.AllAreas)) {
+            result = hit.position;
+            return true;
+        }
+    }
+    result = Vector3.zero;
+    return false;
+}
+</code></pre>
 
-<p><a href="https://www.oreilly.co.jp/books/9784873117577/">UnityによるVRアプリケーション開発――作りながら学ぶバーチャルリアリティ入門</a></p>
+<p>動かすAgentはこんな感じ。こけないようにFreeze Rotationしている。</p>
 
-<p>という本が出ていたので買った。Unityの初歩的なところやBlenderとかも説明があるのでおすすめ。
-とりあえず<a href="https://developers.google.com/vr/unity/">GoogleのSDK</a>をimportして、
-Prefabの<code>GvrViewerMain</code>を置くと二眼のそれっぽい感じになる。</p>
+<p><img src="http://sambaiz.net/images/118.png" alt="Agentの設定" /></p>
 
-<p>スコアとかゲームオーバーの状態と処理。</p>
+<p>このAgentを出現させて移動させる。</p>
 
-<pre><code>using UnityEngine;
-using UnityEngine.UI;
-using System.Collections;
+<pre><code>using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AI;
 
-public class Game : MonoBehaviour {
+public class RandomSpawn : MonoBehaviour {
 
-	public static int score = 0;
-	public static bool gameOver = false;
-	public static bool killed = false;
+    public GameObject agent;
+    public GameObject counter;
 
-	public Text gameOverText;
-	public Text scoreText;
-	public GameObject enemy;
+    private List&lt;GameObject&gt; spawnedAgents = new List&lt;GameObject&gt;();
+    private float interval = 0.0f;
 
+    static int MAX_SPAWN_NUM = 10;
+
+	// Use this for initialization
 	void Start () {
-		gameOverText.enabled = false;
-	}
+        counter.GetComponent&lt;TextMesh&gt;().text = spawnedAgents.Count + &quot;&quot;;
+    }
 
-	void Update () {
-		scoreText.text = &quot;Score: &quot; + score;
-		if (gameOver) gameOverText.enabled = true;
-		if (killed) {
-			nextLevel ();
-			killed = false;
-		}
-	}
+    // Update is called once per frame
+    void Update () {
 
-	public void nextLevel(){
-		var old = enemy;
-		var x = Random.Range (-10, 10);
-		enemy = (GameObject) Instantiate (
-			enemy, new Vector3(x, 0, Mathf.Sqrt(10 * 10 - x * x)), Quaternion.Euler(0, 0, 0));
-		Destroy (old);
-	}
+        interval += Time.deltaTime;
+        if(interval &gt; 5.0f)
+        {
+            if (spawnedAgents.Count &lt; MAX_SPAWN_NUM)
+            {
+                Spawn();
+            }
+            Move();
+            interval = 0.0f;
+        }
+    }
+
+    void Spawn()
+    {
+        try
+        {
+            var point = GetRandomPosition();
+            var obj = Instantiate(agent, point, Quaternion.identity);
+            counter.GetComponent&lt;TextMesh&gt;().text = spawnedAgents.Count + &quot;&quot;;
+            spawnedAgents.Add(obj);
+        }
+        catch (Exception e)
+        {
+            Debug.Log(e.StackTrace);
+        }
+    }
+
+    void Move()
+    {
+        foreach(var agent in spawnedAgents)
+        {
+            agent.GetComponent&lt;NavMeshAgent&gt;().destination = GetRandomPosition();
+        }
+        
+    }
+
+    public static Vector3 GetRandomPosition()
+    {
+        ...
+    }
 }
 </code></pre>
 
-<p>敵の当たり判定。剣に当たったら爆発して次のが出てくる。
-体(見えないCapsule Colliderを設定している)に当たるとゲームオーバー。</p>
+<p>ちゃんと床や壁を認識して移動している。</p>
 
-<pre><code>using UnityEngine;
-using UnityEngine.UI;
-using System.Collections;
-
-public class MonsterHit : MonoBehaviour {
-
-	public GameObject killEffect;
-
-	void OnCollisionEnter(Collision collision) {
-		switch (collision.gameObject.name) {
-		case &quot;sword&quot;:
-			if (!Game.gameOver) {
-				Game.score += 1;
-				Instantiate (killEffect, transform.position, transform.rotation);
-				Game.killed = true;
-			}
-			break;
-
-		case &quot;Body&quot;:
-			Game.gameOver = true;
-			break;
-		}
-	}
-}
-</code></pre>
-
-<p>敵を動かす。スコアが上がるとスピードも上がる。</p>
-
-<pre><code>using UnityEngine;
-using System.Collections;
-
-public class MonsterMove : MonoBehaviour {
-
-	private float moveRate;
-
-	void Start () {
-		moveRate = 0.0f;
-	}
-
-	void Update () {
-		transform.position = Vector3.Lerp (transform.position, new Vector3 (0, 0, -1.5f), moveRate);
-		moveRate += 0.0001f * (Game.score + 1);
-		transform.LookAt (new Vector3 (0, 0, -1.5f));
-  }
-}
-</code></pre>
-
-<p>センサーの値を受け取って、剣を動かす。ここで使っているネイティブライブラリは前作ったもの。</p>
-
-<p><a href="http://sambaiz.net/article/27">UnityでAndroidのBLEを使うネイティブプラグインを作る</a></p>
-
-<pre><code>using UnityEngine;
-using System.Collections;
-
-public class SwordMotion : MonoBehaviour {
-
-	private AndroidJavaObject ble;
-	private Quaternion q;
-
-	void Start () {
-		ble = new AndroidJavaObject (&quot;net.sambaiz.unity_ble.BLE&quot;, this.gameObject.name, &quot;received&quot;);
-		q = Quaternion.Euler (0, 0, 0);
-	}
-
-	void Update () {
-		transform.rotation = q;
-	}
-
-	void received(string message){
-		var motionData = message.Split (' '); // pitch roll yaw
-		q = Quaternion.Euler (
-				90 - float.Parse (motionData [0]),
-				float.Parse (motionData [1]),
-				0) ;
-	}
-
-	void OnApplicationPause (bool pauseStatus)
-	{
-		if (ble != null) {
-			if (pauseStatus) {
-				ble.Call (&quot;onPause&quot;);
-			} else {
-				ble.Call (&quot;onActive&quot;);
-			}
-		}
-	}
-}
-</code></pre>
+<p><img src="http://sambaiz.net/images/118.gif" alt="移動するAgent" /></p>
 
         </div>
       </article>
