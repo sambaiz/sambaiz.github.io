@@ -6,12 +6,215 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-07-23 02:54:00 &#43;0900 JST</updated>
+    <updated>2017-07-26 01:33:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>TerraformでAWSのVPCを管理するmoduleを作る</title>
+          <title>k8sのパッケージマネージャーHelmを使う</title>
+          <link>http://sambaiz.net/article/122/</link>
+          <pubDate>Wed, 26 Jul 2017 01:33:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/122/</guid>
+          <description>&lt;p&gt;Kubernatesが操舵手なのに対して、Helmは舵。
+パッケージは&lt;a href=&#34;https://github.com/kubernetes/charts&#34;&gt;Chart&lt;/a&gt;(海図)と呼ばれている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/kubernetes/helm&#34;&gt;Helm&lt;/a&gt;をインストールし、&lt;a href=&#34;https://github.com/kubernetes/minikube&#34;&gt;minikube&lt;/a&gt;を立ち上げる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install kubernetes-helm
+$ helm version
+Client: &amp;amp;version.Version{SemVer:&amp;quot;v2.5.0&amp;quot;, GitCommit:&amp;quot;012cb0ac1a1b2f888144ef5a67b8dab6c2d45be6&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+
+# brew cask install virtualbox minikube
+$ minikube version
+minikube version: v0.20.0
+
+$ minikube start
+Kubectl is now configured to use the cluster.
+
+$ kubectl version
+Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;7&amp;quot;, GitVersion:&amp;quot;v1.7.2&amp;quot;, GitCommit:&amp;quot;922a86cfcd65915a9b2f69f3f193b8907d741d9c&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;, BuildDate:&amp;quot;2017-07-21T19:06:19Z&amp;quot;, GoVersion:&amp;quot;go1.8.3&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;darwin/amd64&amp;quot;}
+Server Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;6&amp;quot;, GitVersion:&amp;quot;v1.6.4&amp;quot;, GitCommit:&amp;quot;d6f433224538d4f9ca2f7ae19b252e6fcb66a3ae&amp;quot;, GitTreeState:&amp;quot;dirty&amp;quot;, BuildDate:&amp;quot;2017-06-22T04:31:09Z&amp;quot;, GoVersion:&amp;quot;go1.7.5&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;linux/amd64&amp;quot;}
+
+$ kubectl config current-context
+minikube
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;k8sクラスタ上にHelmの管理サーバーTillerをインストールする必要がある。
+ついでにリポジトリもupdateする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm init
+$ helm repo update
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.helm.sh/helm/#helm-search&#34;&gt;search&lt;/a&gt;でChartを検索する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm search mysql
+NAME                  	VERSION	DESCRIPTION                                       
+stable/mysql          	0.2.6  	Fast, reliable, scalable, and easy to use open-...
+stable/percona        	0.2.0  	free, fully compatible, enhanced, open source d...
+stable/gcloud-sqlproxy	0.1.0  	Google Cloud SQL Proxy                            
+stable/mariadb        	0.6.3  	Fast, reliable, scalable, and easy to use open-...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.helm.sh/helm/#helm-inspect&#34;&gt;inspect&lt;/a&gt;でChartの内容を確認することができる。
+&lt;code&gt;---&lt;/code&gt;より上がChartの情報のChart.yamlで、下がデフォルト値のvalues.yaml。
+この値は&lt;a href=&#34;https://github.com/kubernetes/charts/blob/master/stable/mysql/templates/deployment.yaml#L54&#34;&gt;template&lt;/a&gt;で
+参照される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm inspect stable/mysql
+description: Fast, reliable, scalable, and easy to use open-source relational database
+  system.
+engine: gotpl
+home: https://www.mysql.com/
+icon: https://www.mysql.com/common/logos/logo-mysql-170x115.png
+keywords:
+- mysql
+- database
+- sql
+maintainers:
+- email: viglesias@google.com
+  name: Vic Iglesias
+name: mysql
+sources:
+- https://github.com/kubernetes/charts
+- https://github.com/docker-library/mysql
+version: 0.2.6
+
+---
+## mysql image version
+## ref: https://hub.docker.com/r/library/mysql/tags/
+##
+image: &amp;quot;mysql&amp;quot;
+imageTag: &amp;quot;5.7.14&amp;quot;
+
+## Specify password for root user
+##
+## Default: random 10 character string
+# mysqlRootPassword: testing
+
+## Create a database user
+##
+# mysqlUser:
+# mysqlPassword:
+
+## Allow unauthenticated access, uncomment to enable
+##
+# mysqlAllowEmptyPassword: true
+
+## Create a database
+##
+# mysqlDatabase:
+
+## Specify an imagePullPolicy (Required)
+## It&#39;s recommended to change this to &#39;Always&#39; if the image tag is &#39;latest&#39;
+## ref: http://kubernetes.io/docs/user-guide/images/#updating-images
+##
+imagePullPolicy: IfNotPresent
+
+## Persist data to a persitent volume
+persistence:
+  enabled: true
+  ## If defined, volume.beta.kubernetes.io/storage-class: &amp;lt;storageClass&amp;gt;
+  ## Default: volume.alpha.kubernetes.io/storage-class: default
+  ##
+  # storageClass:
+  accessMode: ReadWriteOnce
+  size: 8Gi
+
+## Configure resource requests and limits
+## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+##
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;mysqlDatabaseの値を渡してinstallしてみる。
+パスワードなどをを保持する&lt;a href=&#34;https://kubernetes.io/docs/concepts/configuration/secret/&#34;&gt;Secret&lt;/a&gt;、
+&lt;a href=&#34;https://kubernetes.io/docs/concepts/storage/persistent-volumes/&#34;&gt;Persistent Volumes&lt;/a&gt;(PV)を要求する&lt;a href=&#34;https://kubernetes.io/docs/concepts/storage/persistent-volumes/&#34;&gt;PersistentVolumeClaim&lt;/a&gt;(PVC)と
+ServiceとDeploymentが作成された。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo &#39;{mysqlDatabase: user0db}&#39; &amp;gt; config.yaml
+$ helm install -f config.yaml stable/mysql
+...
+RESOURCES:
+==&amp;gt; v1/Secret
+NAME                    TYPE    DATA  AGE
+pioneering-hydra-mysql  Opaque  2     1s
+
+==&amp;gt; v1/PersistentVolumeClaim
+NAME                    STATUS  VOLUME                                    CAPACITY  ACCESSMODES  STORAGECLASS  AGE
+pioneering-hydra-mysql  Bound   pvc-9649c097-7088-11e7-8dd5-0800270629d8  8Gi       RWO          standard      1s
+
+==&amp;gt; v1/Service
+NAME                    CLUSTER-IP  EXTERNAL-IP  PORT(S)   AGE
+pioneering-hydra-mysql  10.0.0.216  &amp;lt;none&amp;gt;       3306/TCP  1s
+
+==&amp;gt; v1beta1/Deployment
+NAME                    DESIRED  CURRENT  UP-TO-DATE  AVAILABLE  AGE
+pioneering-hydra-mysql  1        1        1           0          1s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get pods
+NAME                                      READY     STATUS    RESTARTS   AGE
+pioneering-hydra-mysql-3456603420-0pldk   1/1       Running   0          4m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/kubernetes/charts/blob/master/stable/mysql/templates/secrets.yaml#L15&#34;&gt;生成された&lt;/a&gt;Secretの値は&lt;a href=&#34;https://github.com/kubernetes/charts/blob/master/stable/mysql/templates/deployment.yaml#L44&#34;&gt;secretKeyRef&lt;/a&gt;で参照できる。&lt;/p&gt;
+
+&lt;p&gt;PVというのは管理者によってクラスタにプロビジョニングされた、あるいは動的にされる、Podとは独立したライフサイクルを持つVolume。PVCは&lt;a href=&#34;https://kubernetes.io/docs/concepts/storage/persistent-volumes/#storageclasses&#34;&gt;StorageClass&lt;/a&gt;、ReadWriteOnceのようなアクセスモード、容量でリクエストする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get storageclasses
+NAME                 TYPE
+standard (default)   k8s.io/minikube-hostpath 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;Secretからrootパスワードを取得し、他のpodから接続できるのとDBが作成されていることを確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get secret --namespace default pioneering-hydra-mysql -o jsonpath=&amp;quot;{.data.mysql-root-password}&amp;quot; | base64 --decode; echo
+******
+
+$ kubectl run -i --tty ubuntu --image=ubuntu:16.04 --restart=Never -- bash -il
+$ apt-get update &amp;amp;&amp;amp; apt-get install mysql-client -y
+$ mysql -h pioneering-hydra-mysql -p
+mysql&amp;gt; show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
+| user0db            |
++--------------------+
+5 rows in set (0.00 sec)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.helm.sh/helm/#helm-list&#34;&gt;ls&lt;/a&gt;でインストールしたものを確認でき、
+&lt;a href=&#34;https://docs.helm.sh/helm/#helm-delete&#34;&gt;delete&lt;/a&gt;で削除できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm ls
+NAME            	REVISION	UPDATED                 	STATUS CHART      	NAMESPACE
+pioneering-hydra	1       	Tue Jul 25 00:55:59 2017	DEPLOYEmysql-0.2.6	default  
+
+$ helm delete pioneering-hydra
+$ kubectl get secret --namespace default pioneering-hydra-mysql -o jsonpath=&amp;quot;{.data.mysql-root-password}&amp;quot; | base64 --decode; echo
+Error from server (NotFound): secrets &amp;quot;pioneering-hydra-mysql&amp;quot; not found
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>TerraformでVPCを管理するmoduleを作る</title>
           <link>http://sambaiz.net/article/121/</link>
           <pubDate>Sun, 23 Jul 2017 02:54:00 &#43;0900</pubDate>
           <author></author>
