@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz-net</title>
+    <link>http://sambaiz.net/tags/python/index.xml</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2017</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
+
+    
+      
+        <item>
+          <title>PythonのLintとFormatter</title>
+          <link>http://sambaiz.net/article/125/</link>
+          <pubDate>Fri, 11 Aug 2017 14:57:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/125/</guid>
+          <description>
+
+&lt;h2 id=&#34;yapf-https-github-com-google-yapf&#34;&gt;&lt;a href=&#34;https://github.com/google/yapf&#34;&gt;YAPF&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;スタイルに沿って整形してくれる、Goでいう&lt;code&gt;go fmt&lt;/code&gt;みたいなもの。
+デフォルトはPython公式のスタイルガイド&lt;a href=&#34;https://www.python.org/dev/peps/pep-0008/&#34;&gt;PEP8&lt;/a&gt;でフォーマットされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pip install yapf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;VSCodeでPythonを書くときは、
+&lt;a href=&#34;https://github.com/DonJayamanne/pythonVSCode/wiki&#34;&gt;Pythonプラグイン&lt;/a&gt;
+を入れてこんな設定をWorkspaceのconfigに入れておいて、
+保存した時にフォーマットがかかるようにすると快適。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;editor.formatOnSave&amp;quot;: true,
+&amp;quot;python.formatting.provider&amp;quot;: &amp;quot;yapf&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;lint&#34;&gt;Lint&lt;/h2&gt;
+
+&lt;p&gt;YAPFでフォーマットされた以下のコードにLintをかける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class FizzBuzz:
+    def __init__(self, start=0):
+        self.num = start
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.num += 1
+        if self.num % 15 == 0:
+            return &amp;quot;FizzBuzz&amp;quot;
+        if self.num % 3 == 0:
+            return &amp;quot;Fizz&amp;quot;
+        if self.num % 5 == 0:
+            return &amp;quot;Buzz&amp;quot;
+        return self.num
+
+
+if __name__ == &amp;quot;__main__&amp;quot;:
+    fizzBuzz = FizzBuzz()
+    for i in range(100):
+        print(next(fizzBuzz))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;pylint&#34;&gt;Pylint&lt;/h3&gt;
+
+&lt;p&gt;Pythonプラグインではデフォルトで&lt;a href=&#34;https://github.com/PyCQA/pylint/&#34;&gt;Pylint&lt;/a&gt;が使われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pip install pylint
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;必要ならパスをUserのconfigでパスを指定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;python.linting.pylintPath&amp;quot;: &amp;quot;***&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;コマンドライン上で実行するとこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pylint main.py 
+No config file found, using default configuration
+************* Module main
+C: 22, 0: Final newline missing (missing-final-newline)
+C:  1, 0: Missing module docstring (missing-docstring)
+C:  1, 0: Missing class docstring (missing-docstring)
+R:  1, 0: Too few public methods (0/2) (too-few-public-methods)
+C: 20, 4: Invalid constant name &amp;quot;fizzBuzz&amp;quot; (invalid-name)
+
+-----------------------------------
+Your code has been rated at 7.22/10
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;指摘された項目を見ると下の二つは余計かなと感じる。
+そんな場合、コメントで&lt;code&gt;# pylint: disable=invalid-name&lt;/code&gt;のように書くか、
+設定ファイル&lt;code&gt;pylintrc&lt;/code&gt;のdisableに追加すれば無視できる。
+&lt;code&gt;--generate-rc-file&lt;/code&gt;でとても長い設定ファイルが生成される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pylint --generate-rcfile &amp;gt; pylintrc
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;10点満点にしたのがこれ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;&amp;quot;&amp;quot;
+FizzBuzz main
+&amp;quot;&amp;quot;&amp;quot;
+
+class FizzBuzz: # pylint: disable=too-few-public-methods
+    &amp;quot;&amp;quot;&amp;quot;
+    FizzBuzz is incrementing a number and
+    if the number is divisible by both 3 and 5, output &amp;quot;FizzBuzz&amp;quot;,
+    if divisible by 3, &amp;quot;Fizz&amp;quot;,
+    if divisible by 5, &amp;quot;Buzz&amp;quot;,
+    Otherwise, output the number.
+    &amp;quot;&amp;quot;&amp;quot;
+
+    def __init__(self, start=0):
+        self.num = start
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.num += 1
+        if self.num % 15 == 0:
+            return &amp;quot;FizzBuzz&amp;quot;
+        if self.num % 3 == 0:
+            return &amp;quot;Fizz&amp;quot;
+        if self.num % 5 == 0:
+            return &amp;quot;Buzz&amp;quot;
+        return self.num
+
+if __name__ == &amp;quot;__main__&amp;quot;:
+    fizzBuzz = FizzBuzz() # pylint: disable=invalid-name
+    for i in range(100):
+        print(next(fizzBuzz))
+        
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;flake8-https-github-com-pycqa-flake8&#34;&gt;&lt;a href=&#34;https://github.com/PyCQA/flake8&#34;&gt;Flake8&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;他のLintとしてFlake8を使うこともできる。これは&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/PyCQA/pyflakes&#34;&gt;PyFlakes&lt;/a&gt;: エラー&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/PyCQA/pycodestyle&#34;&gt;pycodestyle&lt;/a&gt;(元pep8): PEP8&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/pycqa/mccabe&#34;&gt;Ned Batchelder&amp;rsquo;s McCabe script&lt;/a&gt;: &lt;a href=&#34;https://ja.wikipedia.org/wiki/%E5%BE%AA%E7%92%B0%E7%9A%84%E8%A4%87%E9%9B%91%E5%BA%A6&#34;&gt;循環的複雑度&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;のチェッカーを合わせたもの。
+&lt;a href=&#34;https://github.com/PyCQA/flake8-docstrings&#34;&gt;docstring&lt;/a&gt;は別に入れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pip install flake8 flake8_docstrings
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;VSCodeでの設定はこんな感じ。Pylintと同時に使うこともできなくはない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;python.linting.pylintEnabled&amp;quot;: false
+&amp;quot;python.linting.flake8Enabled&amp;quot;: true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;同じコードにLintをかけてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ flake8 main.py
+main.py:1:1: D100 Missing docstring in public module
+main.py:1:1: D101 Missing docstring in public class
+main.py:2:1: D102 Missing docstring in public method
+main.py:5:1: D105 Missing docstring in magic method
+main.py:8:1: D105 Missing docstring in magic method
+main.py:22:30: W292 no newline at end of file
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;flake8-docstringは&lt;a href=&#34;https://www.python.org/dev/peps/pep-0257/&#34;&gt;PEP257&lt;/a&gt;に忠実にチェックしているのでちょっと厳しめ。&lt;code&gt;# flake8: noqa:D105&lt;/code&gt;のように無視することもできるし、
+設定ファイル&lt;code&gt;.flake8&lt;/code&gt;に書くこともできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[flake8]
+ignore = D105
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist
+max-complexity = 10
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>
