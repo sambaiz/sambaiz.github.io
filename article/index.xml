@@ -6,8 +6,191 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-08-11 14:57:00 &#43;0900 JST</updated>
+    <updated>2017-08-14 22:52:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>HDFS(Hadoop Distributed File System)</title>
+          <link>http://sambaiz.net/article/126/</link>
+          <pubDate>Mon, 14 Aug 2017 22:52:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>http://sambaiz.net/article/126/</guid>
+          <description>
+
+&lt;h2 id=&#34;hdfsとは&#34;&gt;HDFSとは&lt;/h2&gt;
+
+&lt;p&gt;Hadoopの分散ファイルシステム。Hadoopの抽象化されたファイルシステム実装の一つ。
+データのサイズが大きい場合に特に問題になるディスクI/Oを分散させ、
+読み書きする最小の単位であるブロックサイズを大きくしシークのコストを減らすことで
+スループットを高めている。
+ディスクI/Oがどれくらい遅いかというと、
+シークがデータセンター内での往復の通信の20倍(10ms)、
+1MBの読み込みが40倍の時間(20ms)&lt;a href=&#34;https://gist.github.com/jboner/2841832&#34;&gt;かかる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;一方、小さなデータに低レイテンシでアクセスするというのは得意でなく、
+また、1ファイルあたり150バイトのメタデータがNameNodeのメモリ上に乗っかるため大量のファイルを扱うのは大変。
+あとデータは追記しかできない。&lt;/p&gt;
+
+&lt;h3 id=&#34;namenodeとdatanode&#34;&gt;NameNodeとDataNode&lt;/h3&gt;
+
+&lt;p&gt;クラスタの中にはおおよそ2種類のノードがあって、
+ブロックがあるいくらかのDataNodeと、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;ファイルの階層とメタデータ&lt;/li&gt;
+&lt;li&gt;どのDataNodeにそのファイルのブロックがあるか&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;の情報が含まれる&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;fsimage(メタデータのスナップショット)&lt;/li&gt;
+&lt;li&gt;edit log(fsimageに含まれていない変更ログ)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;を保存する、名前空間に単一のNameNodeがある。
+もう一つSecondary NameNodeというのがあって、これはedit logが大きくならないよう
+定期的にedit logをfsimageにマージするもの。&lt;/p&gt;
+
+&lt;p&gt;NameNodeが機能停止すると読み書きできなくなってしまうので、
+新しいNameNodeを立てる必要がある。
+その際fsimageにedit logを適用して状態を復元するため
+これらのファイルを別のファイルシステムにバックアップなどして失われないようにする。&lt;/p&gt;
+
+&lt;p&gt;巨大なクラスタだとNameNodeを立ち上げるのに30分以上かかることもあるため、
+Secondary NameNodeの代わりにStandby NameNodeを立ててHigh Availabilityにすることもできる。
+Standby NameNodeはNameNodeと共有ストレージでedit logを共有し、最新の状態がメモリ上に乗っているので
+NameNodeが死んだと判断されてから数十秒ほどで切り替えることができる。&lt;/p&gt;
+
+&lt;h2 id=&#34;書き込みと読み込み&#34;&gt;書き込みと読み込み&lt;/h2&gt;
+
+&lt;h3 id=&#34;書き込み&#34;&gt;書き込み&lt;/h3&gt;
+
+&lt;p&gt;ファイルシステムがNameNodeとやりとりして、ファイルが存在しているか、パーミッションがあるかを確認し、問題なければFSDataOutputStreamをクライアントに返す。
+書き込むデータはdata queueにまず入って、
+どのDataNodeに書き込むかはDataStreamerというのがNameNodeとやりとりして決める。
+レプリカの設定数分DataNodeが選ばれ、順に書き込まれるようDataNode間でパイプラインを作る。
+正常に書き込まれたDetaNodeからはack packetが返ってくるのでこれはack queryに入れて
+全て正しく書き込まれたことが確認できたら消す。
+失敗したDataNodeがあったら、そこに中途半端に書き込まれた分を復活したら消すようにして、パイプラインから除き
+新しいパイプラインを作る。&lt;/p&gt;
+
+&lt;h3 id=&#34;読み込み&#34;&gt;読み込み&lt;/h3&gt;
+
+&lt;p&gt;ファイルシステムがNameNodeにファイルのブロックがどこにあるかを聞く。
+NameNodeは、ブロックがあるDataNodeをクライアントからネットワークトポロジ的に近い順にソートしてアドレスを返す。
+ファイルシステムはそのアドレスが含まれたFSDataInputStreamをクライアントに返して、クライアントが順にreadしていく。&lt;/p&gt;
+
+&lt;h2 id=&#34;singlenode-clusterで動かす-http-hadoop-apache-org-docs-current-hadoop-project-dist-hadoop-common-singlecluster-html&#34;&gt;&lt;a href=&#34;http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/SingleCluster.html&#34;&gt;SingleNode Clusterで動かす&lt;/a&gt;&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yum --enablerepo=epel -y install pdsh
+$ echo $JAVA_HOME
+/usr/lib/jvm/jre
+$ wget http://ftp.jaist.ac.jp/pub/apache/hadoop/common/hadoop-2.7.3/hadoop-2.7.3.tar.gz
+$ tar xvzf hadoop-2.7.3.tar.gz 
+$ cd hadoop-2.7.3
+$ bin/hadoop version
+Hadoop 2.7.3
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デフォルトのファイルシステムをHDFSにしてレプリカを1にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ vi etc/hadoop/core-site.xml
+&amp;lt;?xml version=&amp;quot;1.0&amp;quot; encoding=&amp;quot;UTF-8&amp;quot;?&amp;gt;
+&amp;lt;?xml-stylesheet type=&amp;quot;text/xsl&amp;quot; href=&amp;quot;configuration.xsl&amp;quot;?&amp;gt;
+...
+&amp;lt;configuration&amp;gt;
+    &amp;lt;property&amp;gt;
+        &amp;lt;name&amp;gt;fs.defaultFS&amp;lt;/name&amp;gt;
+        &amp;lt;value&amp;gt;hdfs://localhost:9000&amp;lt;/value&amp;gt;
+    &amp;lt;/property&amp;gt;
+&amp;lt;/configuration&amp;gt;
+
+$ vi etc/hadoop/hdfs-site.xml
+&amp;lt;?xml version=&amp;quot;1.0&amp;quot; encoding=&amp;quot;UTF-8&amp;quot;?&amp;gt;
+&amp;lt;?xml-stylesheet type=&amp;quot;text/xsl&amp;quot; href=&amp;quot;configuration.xsl&amp;quot;?&amp;gt;
+...
+&amp;lt;configuration&amp;gt;
+    &amp;lt;property&amp;gt;
+        &amp;lt;name&amp;gt;dfs.replication&amp;lt;/name&amp;gt;
+        &amp;lt;value&amp;gt;1&amp;lt;/value&amp;gt;
+    &amp;lt;/property&amp;gt;
+&amp;lt;/configuration&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Hadoopデーモンを起動/終了させるためにsshできるようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ssh-keygen -t rsa -P &#39;&#39; -f ~/.ssh/id_rsa
+$ cat ~/.ssh/id_rsa.pub &amp;gt;&amp;gt; ~/.ssh/authorized_keys
+$ chmod 0600 ~/.ssh/authorized_keys
+$ ssh localhost
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;起動。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ bin/hdfs namenode -format
+$ sbin/start-dfs.sh
+localhost: starting namenode, ...
+localhost: starting datanode, ...
+0.0.0.0: starting secondarynamenode, ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ディレクトリやファイルを作成して参照する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ bin/hdfs dfs -mkdir /home
+$ bin/hdfs dfs -mkdir /user/ec2-user
+$ echo &#39;aaaaa&#39; &amp;gt; hoge
+$ bin/hdfs dfs -put hoge ./
+$ bin/hdfs dfs -put hoge ./
+put: `hoge&#39;: File exists
+
+$ bin/hdfs dfs -appendToFile hoge hoge
+$ bin/hdfs dfs -ls ./
+Found 1 items
+-rw-r--r--   1 ec2-user supergroup         12 2017-08-14 13:44 hoge
+
+$ bin/hdfs dfs -cat hoge
+aaaaa
+aaaaa
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Filesystem check utilityを実行する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ bin/hdfs fsck ./ -files -blocks
+Connecting to namenode via http://localhost:50070/fsck?ugi=ec2-user&amp;amp;files=1&amp;amp;blocks=1&amp;amp;path=%2Fuser%2Fec2-user
+FSCK started by ec2-user (auth:SIMPLE) from /127.0.0.1 for path /user/ec2-user at Mon Aug 14 13:44:48 UTC 2017
+/user/ec2-user &amp;lt;dir&amp;gt;
+/user/ec2-user/hoge 12 bytes, 1 block(s):  OK
+0. BP-478671077-172.31.3.159-1502715364675:blk_1073741825_1002 len=12 repl=1
+
+Status: HEALTHY
+ Total size:	12 B
+ Total dirs:	1
+ Total files:	1
+ Total symlinks:		0
+ Total blocks (validated):	1 (avg. block size 12 B)
+ Minimally replicated blocks:	1 (100.0 %)
+ Over-replicated blocks:	0 (0.0 %)
+ Under-replicated blocks:	0 (0.0 %)
+ Mis-replicated blocks:		0 (0.0 %)
+ Default replication factor:	1
+ Average block replication:	1.0
+ Corrupt blocks:		0
+ Missing replicas:		0 (0.0 %)
+ Number of data-nodes:		1
+ Number of racks:		1
+FSCK ended at Mon Aug 14 13:44:48 UTC 2017 in 2 milliseconds
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://shop.oreilly.com/product/0636920033448.do&#34;&gt;Hadoop: The Definitive Guide, 4th Edition&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://blog.cloudera.com/blog/2014/03/a-guide-to-checkpointing-in-hadoop/&#34;&gt;A Guide to Checkpointing in Hadoop – Cloudera Engineering Blog&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
