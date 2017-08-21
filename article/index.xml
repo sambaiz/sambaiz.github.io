@@ -6,8 +6,112 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-08-14 22:52:00 &#43;0900 JST</updated>
+    <updated>2017-08-21 23:15:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>CloudflareでカスタムドメインのGitHub PagesにHTTPSでアクセスできるようにする</title>
+          <link>https://www.sambaiz.net/article/127/</link>
+          <pubDate>Mon, 21 Aug 2017 23:15:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/127/</guid>
+          <description>
+
+&lt;p&gt;このサイトはGitHub Pagesでカスタムドメインsambaiz.netを設定して、
+Apex Domain(sambaiz.net)に&lt;a href=&#34;https://help.github.com/articles/setting-up-an-apex-domain/&#34;&gt;Aレコード&lt;/a&gt;を登録して運用していたのだけれど、これだとカスタムドメインの証明書を置けないのでHTTPSでアクセスすると警告が出てしまう。
+いい加減HTTPだと許されない風潮になってきたのでCloudflareを前に挟んでHTTPSでアクセスできるようにした。
+ついでにCNAMEを登録できないApex Domain(sambaiz.net)をやめてwww.sambaiz.netに向ける。&lt;/p&gt;
+
+&lt;h2 id=&#34;dnsの設定をする&#34;&gt;DNSの設定をする&lt;/h2&gt;
+
+&lt;p&gt;Cloudflareでドメインを入れると既存のDNS Recordsを読み込むので必要に応じて修正する。
+Cloudflareでは&lt;a href=&#34;https://support.cloudflare.com/hc/en-us/articles/200169056-CNAME-Flattening-RFC-compliant-support-for-CNAME-at-the-root&#34;&gt;CNAME Flattening&lt;/a&gt;によってApex Domainにも設定上ではCNAMEを与えることができ、内部でAレコードに解決してくれる。
+そのためApex Domainをそのまま使っても実は問題ないのだけど、今後のために変えておく。
+www.sambaiz.netにGitHub PagesのCNAMEを設定し、sambaiz.net(@)にはwww.sambaiz.netをCNAMEとして設定した。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/127.png&#34; alt=&#34;DNS設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;あとGitHub Pagesの方のカスタムドメインもwww.sambaiz.netにした。
+wwwを設定するとApex Domainでアクセスしたときにリダイレクトするように&lt;a href=&#34;https://help.github.com/articles/setting-up-an-apex-domain-and-www-subdomain/&#34;&gt;なっている&lt;/a&gt;ので
+既存のリンクが切れたり混在することはない。&lt;/p&gt;
+
+&lt;p&gt;指示された&lt;code&gt;*.ns.cloudflare.com&lt;/code&gt;のようなCloudflareのネームサーバーをドメインに設定する。
+さくらの場合、Apex Domainのネームサーバーはゾーン表示ではなくWHOIS情報のところから変更できる。
+設定してしばらくするとCloudflare経由でアクセスが飛び警告なくHTTPSでアクセスできるようになる。
+証明書は共有のものになっている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/127-2.png&#34; alt=&#34;共有証明書&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;正常にアクセスできることを確認できたら今HTTPになっている画像やリンクもHTTPSにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ find . -name &#39;.git*&#39; -prune -o -name &#39;public&#39; -prune -o -name &#39;static&#39; -prune -o -type d -o -print | xargs sed -i &amp;quot;&amp;quot; &amp;quot;s/http:\/\/sambaiz.net/https:\/\/www.sambaiz.net/g&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;cloudflareの機能&#34;&gt;Cloudflareの機能&lt;/h2&gt;
+
+&lt;p&gt;Cloudflareにはいくつか&lt;a href=&#34;https://www.cloudflare.com/plans/&#34;&gt;プラン&lt;/a&gt;があって、今回はFreeプランにした。&lt;/p&gt;
+
+&lt;h3 id=&#34;analytics&#34;&gt;Analytics&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;キャッシュされている/ないリクエスト数や帯域、それによる節約量&lt;/li&gt;
+&lt;li&gt;ブロックした&lt;a href=&#34;https://support.cloudflare.com/hc/en-us/articles/204191238-What-are-the-types-of-Threats-&#34;&gt;脅威&lt;/a&gt;の数&lt;/li&gt;
+&lt;li&gt;何人/どこの国からアクセスが来たか&lt;/li&gt;
+&lt;li&gt;コンテンツ(HTML/CSS/PNG)ごとのリクエストの割合&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;などがわかる。FreeだとWeb TrafficやGeographyが直近24時間より短いスパンで取れない。&lt;/p&gt;
+
+&lt;h3 id=&#34;crypto&#34;&gt;Crypto&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.cloudflare.com/ssl/&#34;&gt;SSL&lt;/a&gt;まわりの設定。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Flexible: クライアントとCloudflareはHTTPS、CloudflareとオリジンサーバーはHTTPで通信する。&lt;/li&gt;
+&lt;li&gt;Full: デフォルト。Cloudflareとオリジンサーバーの通信もHTTPSで行うが、証明書の検証は行われない。&lt;/li&gt;
+&lt;li&gt;Full(Strict) 証明書の検証も行う。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;から選択する。Business以上のPlanだと共有の証明書ではなく独自のものを上げることもできる。&lt;/p&gt;
+
+&lt;p&gt;HTTPで来たらHTTPSにリダイレクトさせるのと、ブラウザでHTTPをHTTPSに置き換える&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/Security/HTTP_Strict_Transport_Security&#34;&gt;HTTP Strict Transport Security(HSTS)&lt;/a&gt;
+の設定もある。
+HSTSを設定するときに出るように
+将来HTTPSをサポートしなくなった場合、HSTSの期限が残っているブラウザからはアクセスできなくなるので注意。
+まあ今後HTTPのみに戻すということは考えにくいのだけど、推奨の有効期限は6ヶ月になっている。
+あとNo-Sniff Headerの設定もここにあって、これをオンのままにしておくとContent-Typeがtext/cssでない
+styleやJavaScriptのMIME Typeでないscriptのリクエストは&lt;a href=&#34;https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options&#34;&gt;ブロック&lt;/a&gt;しXSSを防ぐ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Strict-Transport-Security: max-age=15552000
+X-Content-Type-Options: nosniff
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;firewall&#34;&gt;Firewall&lt;/h3&gt;
+
+&lt;p&gt;IPアドレスや国でブロックしたりとか。Pro以上のプランだと&lt;a href=&#34;https://www.cloudflare.com/waf/&#34;&gt;Web Application Firewall&lt;/a&gt;を有効にできる。&lt;/p&gt;
+
+&lt;h3 id=&#34;speed&#34;&gt;Speed&lt;/h3&gt;
+
+&lt;p&gt;JS/CSS/HTMLを自動でMinifyしたり、モバイルの場合リダイレクトさせたりできる。
+Proプランでは画像を最適化してくれる。&lt;/p&gt;
+
+&lt;h3 id=&#34;caching&#34;&gt;Caching&lt;/h3&gt;
+
+&lt;p&gt;キャッシュをパージしたり、どのレベルでキャッシュするかの設定など。&lt;/p&gt;
+
+&lt;h3 id=&#34;page-rules&#34;&gt;Page Rules&lt;/h3&gt;
+
+&lt;p&gt;URL単位でルールを設定できる。example.com/hoge/*は静的なページなのでHTMLもキャッシュするとか。
+3つルールが作れて、5つ追加するのに月5ドル。&lt;/p&gt;
+
+&lt;h3 id=&#34;network&#34;&gt;Network&lt;/h3&gt;
+
+&lt;p&gt;最大アップロードサイズやWebSocketを有効にするかなどの設定。
+ユーザーのIPアドレスをTrue-Client-IPに乗せるのはEnterpriseプランが必要。&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
