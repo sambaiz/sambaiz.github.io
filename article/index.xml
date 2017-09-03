@@ -6,8 +6,187 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-08-26 18:02:00 &#43;0900 JST</updated>
+    <updated>2017-09-03 18:51:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Headless Chromeでファイルをダウンロードする</title>
+          <link>https://www.sambaiz.net/article/131/</link>
+          <pubDate>Sun, 03 Sep 2017 18:51:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/131/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://chromedevtools.github.io/devtools-protocol/&#34;&gt;Chrome DevTools Protocol&lt;/a&gt;に
+Experimentalだけど&lt;a href=&#34;https://chromedevtools.github.io/devtools-protocol/tot/Page#method-setDownloadBehavior&#34;&gt;Page.setDownloadBehavior&lt;/a&gt;
+というのがあったので、これを呼んでファイルをダウンロードしてみた。&lt;/p&gt;
+
+&lt;p&gt;今回は公式のDevToolsのNode API、&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer&#34;&gt;Puppeteer&lt;/a&gt;を使うけど、
+setDownloadBehaviorを送るAPIはまだ&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/blob/64124df62f4e81999fe1a0ab45c6fb9718a0e413/lib/Page.js#L29&#34;&gt;なく&lt;/a&gt;、直接clientを取ってsendするので他の言語でもやることは変わらないと思う。
+Puppeteerのインストールの際にChromiumも入る。setDownloadBehaviorは現行Chromeの60では&lt;a href=&#34;https://bugs.chromium.org/p/chromium/issues/detail?id=696481&#34;&gt;対応していない&lt;/a&gt;ようだけど、62が入ったのでなんとかなりそう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yarn add puppeteer
+$ find . -name &amp;quot;*chrome*&amp;quot;
+./node_modules/puppeteer/.local-chromium/mac-497674/chrome-mac
+./node_modules/puppeteer/.local-chromium/mac-497674/chrome-mac/Chromium.app/Contents/Versions/62.0.3198.0/Chromium Framework.framework/Versions/A/Resources/chrome_100_percent.pak
+./node_modules/puppeteer/.local-chromium/mac-497674/chrome-mac/Chromium.app/Contents/Versions/62.0.3198.0/Chromium Framework.framework/Versions/A/Resources/chrome_200_percent.pak
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ChromeでChromeをダウンロードする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const puppeteer = require(&#39;puppeteer&#39;),
+      fs        = require(&#39;fs&#39;);
+
+const headless     = true,
+      downloadPath = &#39;./Download&#39;;
+
+(async () =&amp;gt; {
+  const browser = await puppeteer.launch({headless: headless});
+  
+  const page = await browser.newPage();
+  await page._client.send(
+    &#39;Page.setDownloadBehavior&#39;,
+    {behavior : &#39;allow&#39;, downloadPath: downloadPath}
+  );
+
+  await page.goto(&#39;https://www.google.co.jp/chrome/browser/desktop/index.html&#39;, {waitUntil: &#39;networkidle&#39;});
+  await page.click(&#39;a.download-button&#39;);  /* Chromeをダウンロード         */
+  await page.click(&#39;button#eula-accept&#39;); /* 利用規約に同意してインストール */
+
+  await waitDownloadComplete(downloadPath)
+        .catch((err) =&amp;gt; console.error(err));
+ 
+  console.log(&#39;finished&#39;);
+  browser.close();  
+})();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ファイルがダウンロードできたかどうかは.crdownloadのありなしで判定している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const waitDownloadComplete = async (path, waitTimeSpanMs = 1000, timeoutMs = 60 * 1000) =&amp;gt; {
+  return new Promise((resolve, reject) =&amp;gt; {
+
+    const wait = (waitTimeSpanMs, totalWaitTimeMs) =&amp;gt; setTimeout(
+      () =&amp;gt; isDownloadComplete(path).then(
+        (completed) =&amp;gt; {
+          if (completed) { 
+            resolve();
+          } else {
+
+            const nextTotalTime = totalWaitTimeMs + waitTimeSpanMs;
+            if (nextTotalTime &amp;gt;= timeoutMs) {
+              reject(&#39;timeout&#39;);
+            }
+
+            const nextSpan = Math.min(
+              waitTimeSpanMs,
+              timeoutMs - nextTotalTime
+            );
+            wait(nextSpan, nextTotalTime);
+          }           
+        }
+      ).catch(
+        (err) =&amp;gt; { reject(err); }
+      ),
+      waitTimeSpanMs
+    );
+    
+    wait(waitTimeSpanMs, 0);
+  }); 
+}
+
+const isDownloadComplete = async (path) =&amp;gt; {
+  return new Promise((resolve, reject) =&amp;gt; {
+    fs.readdir(path, (err, files) =&amp;gt; {
+      if (err) {
+        reject(err);
+      } else {
+        if (files.length === 0) {
+          resolve(/* completed */ false);
+          return;
+        }
+        for(let file of files){
+
+          // .crdownloadがあればダウンロード中のものがある
+          if (/.*\.crdownload$/.test(file)) { 
+            resolve(/* completed */ false);
+            return;
+          }
+        }
+        resolve(/* completed */ true);
+      }
+    });
+  });
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;ちなみに、機能としては近い立ち位置の&lt;a href=&#34;http://www.nightmarejs.org/&#34;&gt;NightmareJS&lt;/a&gt;は
+v1の&lt;a href=&#34;http://phantomjs.org/&#34;&gt;PhantomJS&lt;/a&gt;、現行v2の&lt;a href=&#34;https://electron.atom.io/&#34;&gt;Electron&lt;/a&gt;を経て
+v3ではHeadless Chromeに&lt;a href=&#34;https://github.com/segmentio/nightmare/issues/1092&#34;&gt;なるかもしれない&lt;/a&gt;。
+速いし、ウィンドウがないので&lt;a href=&#34;https://en.wikipedia.org/wiki/Xvfb&#34;&gt;xvfb(X virtual framebuffer)&lt;/a&gt;も&lt;a href=&#34;https://developers.google.com/web/updates/2017/04/headless-chrome&#34;&gt;必要ない&lt;/a&gt;し良さそうなんだけど、
+現在のChrome DevTools ProtocolではNightmareの既存APIをサポートできなかったり、
+Puppeteerとの住み分けはどうするのって話になっているみたいだ。&lt;/p&gt;
+
+&lt;p&gt;現状Nightmare自体にダウンロード機能は含まれていないが、
+Electronの&lt;a href=&#34;https://github.com/electron/electron/blob/master/docs-translations/jp/api/download-item.md&#34;&gt;will-download&lt;/a&gt;イベントを
+ハンドリングする
+&lt;a href=&#34;https://github.com/rosshinkley/nightmare-download-manager&#34;&gt;nightmare-download-manager&lt;/a&gt;や
+&lt;a href=&#34;https://github.com/rosshinkley/nightmare-inline-download&#34;&gt;nightmare-inline-download&lt;/a&gt;
+といったライブラリがある。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>floatとdoubleの表現と精度</title>
+          <link>https://www.sambaiz.net/article/130/</link>
+          <pubDate>Sat, 02 Sep 2017 12:47:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/130/</guid>
+          <description>
+
+&lt;p&gt;IEEE754の仕様。記憶が薄れていたのでまとめておく。&lt;/p&gt;
+
+&lt;p&gt;float(32bit)は&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;1bit: 符号&lt;/li&gt;
+&lt;li&gt;8bit: 指数部(exponent)&lt;/li&gt;
+&lt;li&gt;23bit: 仮数部(fraction)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;double(64bit)は&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;1bit: 符号&lt;/li&gt;
+&lt;li&gt;11bit: 指数部&lt;/li&gt;
+&lt;li&gt;52bit: 仮数部&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;で表される。&lt;/p&gt;
+
+&lt;p&gt;例えば-5.25(2進で-101.01)を表す場合、
+&lt;code&gt;-1.0101 * 2^2&lt;/code&gt;のように&lt;code&gt;±1.xxxx * 2^n&lt;/code&gt;の形にして、負なら符号を1に、指数部を正(1~254or2046)にするため
+nに127or1023のバイアスを足した数を入れ、仮数部にはxxxxの部分の後ろに0を詰めたのをそのまま入れる。
+したがって、-5.25のfloatは&lt;code&gt;1 10000001 01010000000000000000000&lt;/code&gt;になる。&lt;/p&gt;
+
+&lt;p&gt;ただし、指数部が0のときは仮数部xxxxに対して&lt;code&gt;0.xxxx * 2^-126or1022&lt;/code&gt;のように解釈し、
+0や指数部で表すことができる数(2^-126or1022)より絶対値が小さい非正規化数を表すことができるようになっている。
+また、Infinityはそれぞれ(255or2047,0)、NaNは(255or2047,0以外)で表す。&lt;/p&gt;
+
+&lt;p&gt;精度は仮数部の大きさに依存し、floatが10進で&lt;code&gt;Math.log10(2 ** 23) = 6.92&lt;/code&gt;桁で、doubleが&lt;code&gt;Math.log10(2 ** 52) = 15.65&lt;/code&gt;桁。JavaScriptの数値はdoubleなので
+&lt;code&gt;1234567890.1234569&lt;/code&gt;が&lt;code&gt;1234567890.123457&lt;/code&gt;になり16~17桁目で値がおかしくなることが確認できる。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://ja.wikipedia.org/wiki/IEEE_754&#34;&gt;IEEE 754 - Wikipedia&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Double-precision_floating-point_format&#34;&gt;Double-precision floating-point format - Wikipedia&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
