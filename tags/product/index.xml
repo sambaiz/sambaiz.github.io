@@ -11,6 +11,126 @@
     
       
         <item>
+          <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</title>
+          <link>https://www.sambaiz.net/article/132/</link>
+          <pubDate>Sun, 10 Sep 2017 23:45:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/132/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer&#34;&gt;Puppeteer&lt;/a&gt;でHeadless Chromeを動かすコードを
+Lambda上で動かすStarter Kitを作った。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit&#34;&gt;puppeteer-lambda-starter-kit&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;chromeの準備&#34;&gt;Chromeの準備&lt;/h2&gt;
+
+&lt;p&gt;Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても
+Lambdaにないshared libraryに依存しているため失敗する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Lambda上でHeadless Chromeを動かす例がないか調べたら&lt;a href=&#34;https://github.com/adieuadieu/serverless-chrome&#34;&gt;serverless-chrome&lt;/a&gt;というのがあって、
+Headless用の設定でChromeをビルドしていた。
+ほかには&lt;a href=&#34;https://github.com/graphcool/chromeless&#34;&gt;chromeless&lt;/a&gt;というのもあるけど
+これはserverless-chromeに
+&lt;a href=&#34;https://github.com/graphcool/chromeless/blob/master/serverless/serverless.yml#L46&#34;&gt;依存している&lt;/a&gt;。
+最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。&lt;/p&gt;
+
+&lt;p&gt;serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。
+基本的には&lt;a href=&#34;https://github.com/adieuadieu/serverless-chrome/tree/master/chrome&#34;&gt;書いてある&lt;/a&gt;
+通りやればうまくいく。&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/master/chrome/buildChrome.sh#L20&#34;&gt;/dev/shmの代わりに/tmpを使う&lt;/a&gt;
+ようにしないと、実行時の&lt;code&gt;page.goto()&lt;/code&gt;で&lt;code&gt;Failed Provisional Load: ***, error_code: -12&lt;/code&gt;になるので注意。&lt;/p&gt;
+
+&lt;p&gt;ビルドしたheadless_shellには問題になった依存は含まれていないようだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ldd headless_shell 
+	linux-vdso.so.1 =&amp;gt;  (0x00007ffcb6fed000)
+	libpthread.so.0 =&amp;gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000)
+	libdl.so.2 =&amp;gt; /lib64/libdl.so.2 (0x00007f5f17bba000)
+	librt.so.1 =&amp;gt; /lib64/librt.so.1 (0x00007f5f179b1000)
+	libnss3.so =&amp;gt; /usr/lib64/libnss3.so (0x00007f5f17692000)
+	libnssutil3.so =&amp;gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000)
+	libsmime3.so =&amp;gt; /usr/lib64/libsmime3.so (0x00007f5f1723e000)
+	libnspr4.so =&amp;gt; /lib64/libnspr4.so (0x00007f5f17001000)
+	libexpat.so.1 =&amp;gt; /lib64/libexpat.so.1 (0x00007f5f16dd8000)
+	libfontconfig.so.1 =&amp;gt; not found
+	libfreetype.so.6 =&amp;gt; /usr/lib64/libfreetype.so.6 (0x00007f5f16b3b000)
+	libm.so.6 =&amp;gt; /lib64/libm.so.6 (0x00007f5f16839000)
+	libstdc++.so.6 =&amp;gt; /usr/lib64/libstdc++.so.6 (0x00007f5f16533000)
+	libgcc_s.so.1 =&amp;gt; /lib64/libgcc_s.so.1 (0x00007f5f1631d000)
+	libc.so.6 =&amp;gt; /lib64/libc.so.6 (0x00007f5f15f5b000)
+	/lib64/ld-linux-x86-64.so.2 (0x000055ba0af5e000)
+	libplc4.so =&amp;gt; /lib64/libplc4.so (0x00007f5f15d55000)
+	libplds4.so =&amp;gt; /lib64/libplds4.so (0x00007f5f15b51000)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Puppetterで落としてくる普通のChromeは&lt;a href=&#34;http://docs.aws.amazon.com/lambda/latest/dg/limits.html&#34;&gt;Lambdaの制限&lt;/a&gt;の50MBを超えていたが、
+ビルドしたものはぎりぎり超えていないのでパッケージに含められるようになった。
+PuppeteerのChromeは環境変数&lt;code&gt;PUPPETEER_SKIP_CHROMIUM_DOWNLOAD&lt;/code&gt;を設定することで&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/blob/2817130fe099a7431e98c20ce1f44c6e547d4ca9/docs/api.md#puppeteer&#34;&gt;含めないようにできる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;他のパッケージのサイズによっては50MBを超えてしまうこともあるので、
+パッケージに含めず&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/v0.9.0/src/util.js#L62&#34;&gt;S3からダウンロード&lt;/a&gt;できるようにもした。&lt;/p&gt;
+
+&lt;p&gt;いずれの場合も最終的な置き先はLambdaで唯一書き込める&lt;code&gt;/tmp&lt;/code&gt;になる。
+この領域は512MBまで使えるので展開してもまだ余裕がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Error: EROFS: read-only file system, open &#39;node_modules/puppeteer/.local-chromium&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;chromeのlaunch時のoption&#34;&gt;ChromeのLaunch時のOption&lt;/h2&gt;
+
+&lt;p&gt;いろいろ試した結果、最低限必要だったのはこのあたり。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;exports.launchOptionForLambda = [
+    // error when launch(); No usable sandbox! Update your kernel
+    &#39;--no-sandbox&#39;,
+    // error when launch(); Failed to load libosmesa.so
+    &#39;--disable-gpu&#39;, 
+    // freeze when newPage()
+    &#39;--single-process&#39;
+];
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;エラーは分かりづらいものが多く、ときにはエラーすら出ずに止まってしまうこともある。
+デバッグの際はdumpioを有効にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const browser = await puppeteer.launch({
+    ...
+    dumpio: !!util.DEBUG,
+});  
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;babel&#34;&gt;Babel&lt;/h2&gt;
+
+&lt;p&gt;現在のLambdaのNodeのバージョンはv6.10.3。
+&lt;a href=&#34;http://node.green/&#34;&gt;node.green&lt;/a&gt;によるとES2015は99%対応していて、ES2016もべき乗演算子(2 ** 3 = 8)以外は対応しているが、ES2017のasync/awaitは7.6からなので、8系に対応するまではbabelにかける必要がある。
+ちなみにPuppeteerは6.4以降で&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/tree/master/utils/node6-transform&#34;&gt;動く&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yarn add --dev babel-cli babel-preset-env
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/babel/babel-preset-env&#34;&gt;babel-preset-env&lt;/a&gt;
+.babelrcはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat .babelrc
+{
+  &amp;quot;presets&amp;quot;: [
+    [&amp;quot;env&amp;quot;, {
+      &amp;quot;targets&amp;quot;: {
+        &amp;quot;node&amp;quot;: &amp;quot;6.10&amp;quot;
+      }
+    }]
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>一定間隔でjsonデータを作って送り続けるCLIツールを作った</title>
           <link>https://www.sambaiz.net/article/76/</link>
           <pubDate>Sat, 04 Mar 2017 23:18:00 &#43;0900</pubDate>

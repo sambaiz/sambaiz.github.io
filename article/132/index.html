@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>iftopでネットワークの帯域を見る - sambaiz-net</title>
-    <meta name="twitter:title" content="iftopでネットワークの帯域を見る - sambaiz-net">
-    <meta property='og:title' content="iftopでネットワークの帯域を見る - sambaiz-net">
+    <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った - sambaiz-net</title>
+    <meta name="twitter:title" content="Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った - sambaiz-net">
+    <meta property='og:title' content="Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="iftop">
-      <meta name="twitter:description" content="iftop">
+      <meta name="description" content="LambdaでPuppeteer/Headless Chrome">
+      <meta name="twitter:description" content="LambdaでPuppeteer/Headless Chrome">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/60/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/132/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "iftopでネットワークの帯域を見る | sambaiz-net ",
-    "datePublished": "2017-02-07T20:30:00JST",
-    "dateModified": "2017-02-07T20:30:00JST",
+    "headline": "Lambda上でPuppeteer\/Headless Chromeを動かすStarter Kitを作った | sambaiz-net ",
+    "datePublished": "2017-09-10T23:45:00JST",
+    "dateModified": "2017-09-10T23:45:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "iftop"
+    "description": "LambdaでPuppeteer\/Headless Chrome"
   }
 </script>
 </head>
@@ -103,28 +103,117 @@
 
       <article class="single">
         <div class="single body">
-          <h1>iftopでネットワークの帯域を見る</h1>
-          <p>(2017-02-07)</p>
-          <pre><code>$ yum install --enablerepo=epel iftop
-$ iftop -f &quot;not dst net 10.0.0.0/8&quot;
+          <h1>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</h1>
+          <p>(2017-09-10)</p>
+          
+
+<p><a href="https://github.com/GoogleChrome/puppeteer">Puppeteer</a>でHeadless Chromeを動かすコードを
+Lambda上で動かすStarter Kitを作った。</p>
+
+<p><a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit">puppeteer-lambda-starter-kit</a></p>
+
+<h2 id="chromeの準備">Chromeの準備</h2>
+
+<p>Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても
+Lambdaにないshared libraryに依存しているため失敗する。</p>
+
+<pre><code>error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory
 </code></pre>
 
-<p><code>-i eth0</code>のようにしてインタフェースを指定し、<code>-f</code>でフィルタをかけられる。フィルタの詳細は<code>man pcap-filter</code>で。</p>
+<p>Lambda上でHeadless Chromeを動かす例がないか調べたら<a href="https://github.com/adieuadieu/serverless-chrome">serverless-chrome</a>というのがあって、
+Headless用の設定でChromeをビルドしていた。
+ほかには<a href="https://github.com/graphcool/chromeless">chromeless</a>というのもあるけど
+これはserverless-chromeに
+<a href="https://github.com/graphcool/chromeless/blob/master/serverless/serverless.yml#L46">依存している</a>。
+最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。</p>
 
-<pre><code>                          12.5Kb                     25.0Kb                     37.5Kb                     50.0Kb		62.5Kb
-└─────────────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────
-ip-172-31-9-9.ap-northeast-1.compute.internal         =&gt; 61-121-217-66.dh-connect.net                          1.72Kb  6.57Kb  2.40Kb
-                                                      &lt;=                                                        416b   2.13Kb   702b
-...
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-TX:             cum:   22.6KB   peak:   13.2Kb                                                        rates:   1.22Kb  1.27Kb  2.46Kb
-RX:                    6.63KB           5.03Kb                                                                  208b    330b    748b
-TOTAL:                 29.2KB           18.2Kb                                                                 1.42Kb  1.59Kb  3.19Kb
+<p>serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。
+基本的には<a href="https://github.com/adieuadieu/serverless-chrome/tree/master/chrome">書いてある</a>
+通りやればうまくいく。<a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/master/chrome/buildChrome.sh#L20">/dev/shmの代わりに/tmpを使う</a>
+ようにしないと、実行時の<code>page.goto()</code>で<code>Failed Provisional Load: ***, error_code: -12</code>になるので注意。</p>
+
+<p>ビルドしたheadless_shellには問題になった依存は含まれていないようだ。</p>
+
+<pre><code>$ ldd headless_shell 
+	linux-vdso.so.1 =&gt;  (0x00007ffcb6fed000)
+	libpthread.so.0 =&gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000)
+	libdl.so.2 =&gt; /lib64/libdl.so.2 (0x00007f5f17bba000)
+	librt.so.1 =&gt; /lib64/librt.so.1 (0x00007f5f179b1000)
+	libnss3.so =&gt; /usr/lib64/libnss3.so (0x00007f5f17692000)
+	libnssutil3.so =&gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000)
+	libsmime3.so =&gt; /usr/lib64/libsmime3.so (0x00007f5f1723e000)
+	libnspr4.so =&gt; /lib64/libnspr4.so (0x00007f5f17001000)
+	libexpat.so.1 =&gt; /lib64/libexpat.so.1 (0x00007f5f16dd8000)
+	libfontconfig.so.1 =&gt; not found
+	libfreetype.so.6 =&gt; /usr/lib64/libfreetype.so.6 (0x00007f5f16b3b000)
+	libm.so.6 =&gt; /lib64/libm.so.6 (0x00007f5f16839000)
+	libstdc++.so.6 =&gt; /usr/lib64/libstdc++.so.6 (0x00007f5f16533000)
+	libgcc_s.so.1 =&gt; /lib64/libgcc_s.so.1 (0x00007f5f1631d000)
+	libc.so.6 =&gt; /lib64/libc.so.6 (0x00007f5f15f5b000)
+	/lib64/ld-linux-x86-64.so.2 (0x000055ba0af5e000)
+	libplc4.so =&gt; /lib64/libplc4.so (0x00007f5f15d55000)
+	libplds4.so =&gt; /lib64/libplds4.so (0x00007f5f15b51000)
 </code></pre>
 
-<p>左から2, 10, 40秒間の平均kbps。TXが送信量、RXが受信量で、cumが総量、peakが最大。</p>
+<p>Puppetterで落としてくる普通のChromeは<a href="http://docs.aws.amazon.com/lambda/latest/dg/limits.html">Lambdaの制限</a>の50MBを超えていたが、
+ビルドしたものはぎりぎり超えていないのでパッケージに含められるようになった。
+PuppeteerのChromeは環境変数<code>PUPPETEER_SKIP_CHROMIUM_DOWNLOAD</code>を設定することで<a href="https://github.com/GoogleChrome/puppeteer/blob/2817130fe099a7431e98c20ce1f44c6e547d4ca9/docs/api.md#puppeteer">含めないようにできる</a>。</p>
 
-<p>実行中に<code>S</code>でソースのポートを<code>D</code>でディスティネーションのポートが表示される。</p>
+<p>他のパッケージのサイズによっては50MBを超えてしまうこともあるので、
+パッケージに含めず<a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/v0.9.0/src/util.js#L62">S3からダウンロード</a>できるようにもした。</p>
+
+<p>いずれの場合も最終的な置き先はLambdaで唯一書き込める<code>/tmp</code>になる。
+この領域は512MBまで使えるので展開してもまだ余裕がある。</p>
+
+<pre><code>Error: EROFS: read-only file system, open 'node_modules/puppeteer/.local-chromium'
+</code></pre>
+
+<h2 id="chromeのlaunch時のoption">ChromeのLaunch時のOption</h2>
+
+<p>いろいろ試した結果、最低限必要だったのはこのあたり。</p>
+
+<pre><code>exports.launchOptionForLambda = [
+    // error when launch(); No usable sandbox! Update your kernel
+    '--no-sandbox',
+    // error when launch(); Failed to load libosmesa.so
+    '--disable-gpu', 
+    // freeze when newPage()
+    '--single-process'
+];
+</code></pre>
+
+<p>エラーは分かりづらいものが多く、ときにはエラーすら出ずに止まってしまうこともある。
+デバッグの際はdumpioを有効にする。</p>
+
+<pre><code>const browser = await puppeteer.launch({
+    ...
+    dumpio: !!util.DEBUG,
+});  
+</code></pre>
+
+<h2 id="babel">Babel</h2>
+
+<p>現在のLambdaのNodeのバージョンはv6.10.3。
+<a href="http://node.green/">node.green</a>によるとES2015は99%対応していて、ES2016もべき乗演算子(2 ** 3 = 8)以外は対応しているが、ES2017のasync/awaitは7.6からなので、8系に対応するまではbabelにかける必要がある。
+ちなみにPuppeteerは6.4以降で<a href="https://github.com/GoogleChrome/puppeteer/tree/master/utils/node6-transform">動く</a>。</p>
+
+<pre><code>$ yarn add --dev babel-cli babel-preset-env
+</code></pre>
+
+<p><a href="https://github.com/babel/babel-preset-env">babel-preset-env</a>
+.babelrcはこんな感じ。</p>
+
+<pre><code>$ cat .babelrc
+{
+  &quot;presets&quot;: [
+    [&quot;env&quot;, {
+      &quot;targets&quot;: {
+        &quot;node&quot;: &quot;6.10&quot;
+      }
+    }]
+  ]
+}
+</code></pre>
 
         </div>
       </article>
