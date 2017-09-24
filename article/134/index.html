@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>Goroutineの数をworkerで抑制する - sambaiz-net</title>
-    <meta name="twitter:title" content="Goroutineの数をworkerで抑制する - sambaiz-net">
-    <meta property='og:title' content="Goroutineの数をworkerで抑制する - sambaiz-net">
+    <title>自己情報量、エントロピー、KL情報量、交差エントロピー - sambaiz-net</title>
+    <meta name="twitter:title" content="自己情報量、エントロピー、KL情報量、交差エントロピー - sambaiz-net">
+    <meta property='og:title' content="自己情報量、エントロピー、KL情報量、交差エントロピー - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="Worker pool">
-      <meta name="twitter:description" content="Worker pool">
+      <meta name="description" content="情報理論">
+      <meta name="twitter:description" content="情報理論">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/74/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/134/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "Goroutineの数をworkerで抑制する | sambaiz-net ",
-    "datePublished": "2017-02-27T23:10:00JST",
-    "dateModified": "2017-02-27T23:10:00JST",
+    "headline": "自己情報量、エントロピー、KL情報量、交差エントロピー | sambaiz-net ",
+    "datePublished": "2017-09-25T23:50:00JST",
+    "dateModified": "2017-09-25T23:50:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Worker pool"
+    "description": "情報理論"
   }
 </script>
 </head>
@@ -103,154 +103,58 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Goroutineの数をworkerで抑制する</h1>
-          <p>(2017-02-27)</p>
-          <p><a href="https://www.sambaiz.net/article/61/">Goのnet/httpとKeep-Alive - sambaiz.net</a>でやったように、
-あるエンドポイントに連続してGoroutineでリクエストを投げると、リクエスト数を増やしたときにタイムアウトが頻発するようになった。</p>
+          <h1>自己情報量、エントロピー、KL情報量、交差エントロピー</h1>
+          <p>(2017-09-25)</p>
+          
 
-<p>まず、2000リクエストを投げてみた結果。</p>
+<h2 id="自己情報量">自己情報量</h2>
 
-<pre><code>[RESULT] request: 2000, ok: 2000, ng: 0, time(ms) 138
-</code></pre>
+<p>P(ω)の確率で起きる事象ωの自己情報量は以下の式で定義される。logの底を2にしてbitsで表すのが一般的。</p>
 
-<p>一応全部捌けてはいるけど、おおよそ同時にリクエストを送っているのにタイムアウト(100ms)時間を超えてしまっている。これをさらに3000に増やしてみる。</p>
+<p><img src="https://www.sambaiz.net/images/134-self-information.png" alt="自己情報量の定義" /></p>
 
-<pre><code>[RESULT] request: 3000, ok: 13, ng: 2987, time(ms) 372
-</code></pre>
+<p><img src="https://www.sambaiz.net/images/134-self-information-graph.png" alt="自己情報量のグラフ" /></p>
 
-<p>ほぼ全滅してしまった・・・。時間もおかしいのでGoroutineでの処理に遅延が発生しているようだ。
-そこで、都度Goroutineを生成してリクエストを投げるのではなく、
-一定数のWorkerに処理させることで、同時に作られるGoroutineの数を抑制する。</p>
+<p><code>log(P)+log(Q)=log(P*Q)</code>より加法性がある。
+例えば、サイコロで1の目が2回連続で出る(P=<sup>1</sup>&frasl;<sub>36</sub>)情報量(5.16bits)はサイコロで1の目が出る(P=<sup>1</sup>&frasl;<sub>6</sub>)情報量(2.58bits)の2倍と等しい。
+確率が高ければ高いほど自己情報量は小さくなり、<code>P(ω)=1</code>では0bitになる。</p>
 
-<pre><code>type Req struct {
-	Okch chan int
-	Ngch chan int
-}
+<h2 id="エントロピー">エントロピー</h2>
 
-func startWorker(ctx context.Context, num int) (requestch chan *Req) {
+<p>確率分布Pに従う確率変数Xのエントロピーは以下の式で定義される。情報量の平均。</p>
 
-	requestch = make(chan *Req)
+<p><img src="https://www.sambaiz.net/images/134-entropy.png" alt="エントロピーの定義" /></p>
 
-	for i := 0; i &lt; num; i++ {
-		go func() {
-			for {
-				select {
-				case req := &lt;-requestch:
-					request(req.Okch, req.Ngch)
-				case &lt;-ctx.Done():
-					return
-				}
-			}
-		}()
-	}
+<p>これは情報を送る際に必要なビット数の平均の下限になっている。
+例えば、Xが1~4の値を(0.8, 0.1, 0.06, 0.04)の確率でとるとする。
+4通りなのだからそれぞれ2bits(00, 01, 10, 11)のコードで表すこともできるが、
+ほとんど3や4は出ないのだからbit数を偏らせて(0, 10, 110, 111)のコードで表すと
+<code>0.8*1 + 0.1*2 + 0.06*3 + 0.04*3 = 1.3bits</code>まで減らすことができる。
+この場合のエントロピーは1.01bitsで、これより小さくすることはできない。</p>
 
-	return
-}
+<h2 id="カルバック-ライブラー情報量">カルバック・ライブラー情報量</h2>
 
-func main(){
-    ...
-    ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	requestch := startWorker(ctx, 1000)
+<p>離散確率分布PのQに対するカルバック・ライブラー情報量は以下の式で定義される。連続確率分布では積分する。
+Qの自己情報量からPの自己情報量を引いて平均を取ったもの。ギブスの不等式より非負の値を取る。</p>
 
-    requestch &lt;- req
-    ...
-}
-</code></pre>
+<p><img src="https://www.sambaiz.net/images/134-kl.png" alt="KL情報量の定義" /></p>
 
-<p>結果、すべてのリクエストをタイムアウトせずに送れるようになった。</p>
+<h2 id="交差エントロピー">交差エントロピー</h2>
 
-<pre><code>[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 157
-[RESULT] request: 5000, ok: 5000, ng: 0, time(ms) 239
-</code></pre>
+<p>離散確率分布PとQの交差エントロピーは以下の式で定義される。連続確率分布では積分する。
+PのエントロピーにPのQに対するKL情報量を足したもの。</p>
 
-<p>上のコードではWorkerを作るにあたって単純にWorkerの数分goroutineを生成して共通のチャネルに入ってきたものを読んで処理させているが、
-以下の記事のようにDispatcherを用意してWorkerPool(chan chan Job)からWorkerのjobChannel(chan Job)を取り出して送る方法も紹介されていたので
-これとも比較してみた。今回は入力するチャネルだけ分けて終了方法はStartで渡したcontextに一任しているので上の方法とさほど変わらず、むしろ冗長に見えるが、
-実際はWorkerそれぞれがquitするチャネルなどを持っていて、独立して終了させることができるため、Workerの数を動的にコントロールしやすいのが特長だと思う。</p>
+<p><img src="https://www.sambaiz.net/images/134-cross-entropy.png" alt="交差エントロピーの定義" /></p>
 
-<p><a href="http://marcio.io/2015/07/handling-1-million-requests-per-minute-with-golang/">Handling 1 Million Requests per Minute with Go  · marcio.io</a></p>
+<p>これはQの分布に最適化されたコードでPの分布の確率変数の情報を送ってしまった際に必要なビット数の平均の下限になっている。KL情報量が余分な分。</p>
 
-<pre><code>type Dispatcher struct{
-	Requestch chan *Req
-	workerPool chan chan *Req
-	workerNum int
-}
+<h2 id="参考">参考</h2>
 
-func NewDispatcher(workerNum int) *Dispatcher{
-	return &amp;Dispatcher{
-		Requestch: make(chan *Req),
-		workerPool: make(chan chan *Req, workerNum),
-		workerNum: workerNum,
-	}
-}
+<p><a href="https://en.wikipedia.org/wiki/Self-information">Self-information - Wikipedia</a></p>
 
+<p><a href="https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence">Kullback–Leibler divergence - Wikipedia</a></p>
 
-func (d *Dispatcher) Start(ctx context.Context) error{
-	poolLength := len(d.workerPool)
-	if poolLength != 0{
-		return errors.New(&quot;already started&quot;)
-	}
-	for i := 0; i &lt; d.workerNum; i++{
-		startWorker(ctx, 1, d.workerPool)
-	}
-
-	go d.dispatch(ctx)
-
-	return nil
-}
-
-func (d *Dispatcher) dispatch(ctx context.Context){
-	for{
-		select{
-		case req := &lt;- d.Requestch:
-            // workerPoolからchanを取り出しreqを入れる
-			worker := &lt;- d.workerPool
-			worker &lt;- req
-		case &lt;-ctx.Done():
-			return 
-		}
-	}
-}
-
-func startWorker(ctx context.Context, num int, workerPool chan chan *Req) {
-
-	requestch := make(chan *Req)
-
-	for i := 0; i &lt; num; i++ {
-		go func() {
-			for {
-                // workerPoolにchanを入れる(終わったらまだ戻る)
-				workerPool &lt;- requestch
-				select {
-				case req := &lt;-requestch:
-					request(req.Okch, req.Ngch)
-				case &lt;-ctx.Done():
-					return
-				}
-			}
-		}()
-	}
-
-	return
-}
-
-func main(){
-    ...
-    dispatcher := NewDispatcher(1000)
-	if err := dispatcher.Start(ctx); err != nil{
-		panic(err)
-	}
-
-    dispatcher.requestch &lt;- req
-}
-</code></pre>
-
-<p>ほとんど変わらず。WorkerPoolからチャネルを取り出す分、わずかに遅いかな。</p>
-
-<pre><code>[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 169
-[RESULT] request: 5000, ok: 5000, ng: 0, time(ms) 246
-</code></pre>
+<p><a href="http://postd.cc/visual-information-theory-3/">情報理論を視覚的に理解する (<sup>3</sup>&frasl;<sub>4</sub>) | コンピュータサイエンス | POSTD</a></p>
 
         </div>
       </article>
