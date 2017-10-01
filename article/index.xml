@@ -6,8 +6,135 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-09-25 23:50:00 &#43;0900 JST</updated>
+    <updated>2017-10-01 21:02:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>RSA暗号/署名</title>
+          <link>https://www.sambaiz.net/article/135/</link>
+          <pubDate>Sun, 01 Oct 2017 21:02:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/135/</guid>
+          <description>
+
+&lt;h2 id=&#34;rsa暗号とは&#34;&gt;RSA暗号とは&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;暗号化: &lt;code&gt;c ≡ m^e (mod n)&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;複合: &lt;code&gt;m ≡ c^d (mod n)&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;公開鍵がe,nで秘密鍵がd。nはとても大きく近くない素数p,qの積で、
+これを公開しても素因数分解できないのがこの暗号の前提になっている。
+768bit(10進数で232桁)では既に解読されているので、少なくとも1024bit以上にする。&lt;/p&gt;
+
+&lt;p&gt;eは&lt;a href=&#34;https://en.wikipedia.org/wiki/Euler%27s_totient_function&#34;&gt;Euler totient function&lt;/a&gt;(1~nまでの整数でnと互いに素なものの個数。今回の場合は&lt;code&gt;φ(n)=(p-1)(q-1)&lt;/code&gt;未満で互いに素な正の整数で、小さすぎても大きすぎてもだめ。&lt;code&gt;2^16 + 1 = 65537&lt;/code&gt;がよく使われる。&lt;/p&gt;
+
+&lt;p&gt;dは&lt;code&gt;ed ≡ 1 (mod φ(n))&lt;/code&gt;を満たすd。
+署名する場合は逆、つまり秘密鍵で暗号化し、公開鍵で複合できることを確認する。&lt;/p&gt;
+
+&lt;h2 id=&#34;例&#34;&gt;例&lt;/h2&gt;
+
+&lt;p&gt;例として(p,q)=(193,709)とするとこんな感じ。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;n = p * q = 136837&lt;/li&gt;
+&lt;li&gt;φ(n) = (p-1)(q-1) = 135936&lt;/li&gt;
+&lt;li&gt;e = 65537 &amp;lt; φ(n)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;秘密鍵dは&lt;code&gt;65537*d ≡ 1 (mod 135936)&lt;/code&gt;の式を変形した
+&lt;code&gt;65537*d - 153936*x = gcd(d,x) = 1&lt;/code&gt;を、拡張されたユークリッドの互除法で解く。
+以下のように135936と65537を残しながら展開していく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;135936 = 65537 * 2 + 4862 
+=&amp;gt; 4862 = 135936 * 1 + 65537 * -2
+
+65537 = 4862 * 13 + 2331 
+=&amp;gt; 2331 = 65537 - (135936 * 1 + 65537 * -2) * 13
+        = 135936 * -13 + 65537 * 27
+
+4862 = 2331 * 2 + 200 
+=&amp;gt; 200 = (135936 * 1 + 65537 * -2) - (135936 * -13 + 65537 * 27) * 2
+       = 135936 * 27 + 65537 * -56
+
+2331 = 200 * 11 + 131 
+=&amp;gt; 131 = (135936 * -13 + 65537 * 27) - (135936 * 27 + 65537 * -56) * 11
+       = 135936 * -310 + 65537 * 643 
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをコードに表したのがこれ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const d = (phi,e) =&amp;gt; {
+    let history = {[phi]: [1,0], [e]:[0,1]} // [x,y] =&amp;gt; φ * x + e * y
+    let x = phi
+    let y = e
+    while(y &amp;gt; 1){
+        const nextY = x % y
+        history[x % y] = history[x].map((vx,index) =&amp;gt; vx - history[y][index] * Math.floor(x/y))
+        x = y
+        y = nextY;
+    }
+    return history;
+}
+
+const phi = (193-1) * (709-1)
+const e = 65537
+const result = d(phi,e);
+console.log(result);
+console.log(`1 = ${phi}*${result[1][0]} + ${e}*${result[1][1]}`);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;{ &#39;1&#39;: [ 9503, -19711 ],
+  &#39;6&#39;: [ -8519, 17670 ],
+  &#39;7&#39;: [ 984, -2041 ],
+  &#39;62&#39;: [ -647, 1342 ],
+  &#39;69&#39;: [ 337, -699 ],
+  &#39;131&#39;: [ -310, 643 ],
+  &#39;200&#39;: [ 27, -56 ],
+  &#39;2331&#39;: [ -13, 27 ],
+  &#39;4862&#39;: [ 1, -2 ],
+  &#39;65537&#39;: [ 0, 1 ],
+  &#39;135936&#39;: [ 1, 0 ] }
+1 = 135936*9503 + 65537*-19711
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;135936*-65537 + 65537*135936 = 0&lt;/code&gt;より
+&lt;code&gt;1 = 135936*(9503-65537) + 65537*(-19711 + 135936)&lt;/code&gt;なので
+&lt;code&gt;d=116225&lt;/code&gt;。実際&lt;code&gt;(65537*116225) % 135936 = 1&lt;/code&gt;が成り立つ。&lt;/p&gt;
+
+&lt;p&gt;平文が12345とすると、公開鍵で暗号化したのが&lt;code&gt;(12345 ** 65537) % 136837 = 6964&lt;/code&gt;。
+これを秘密鍵で複合すると&lt;code&gt;(6964 ** 116225) % 136837 = 12345&lt;/code&gt;のように平文が得られる。&lt;/p&gt;
+
+&lt;h2 id=&#34;用語&#34;&gt;用語&lt;/h2&gt;
+
+&lt;h3 id=&#34;der-distinguished-encoding-rules&#34;&gt;DER(Distinguished Encoding Rules)&lt;/h3&gt;
+
+&lt;p&gt;DERは
+&lt;a href=&#34;https://ja.wikipedia.org/wiki/Abstract_Syntax_Notation_One&#34;&gt;ASN.1(Abstract Syntax Notation One)&lt;/a&gt;記法で定義されたデータを
+エンコードするルールの一つ。
+&lt;code&gt;1a(INTEGER) 0b(octet) 68 65 6c 6c 6f 20 77 6f 72 6c 64(&amp;quot;hello world&amp;quot;))&lt;/code&gt;
+のようなtype-length-valueで表す。&lt;/p&gt;
+
+&lt;h3 id=&#34;pem-privacy-enhanced-electronic-mail&#34;&gt;PEM(Privacy-enhanced Electronic Mail)&lt;/h3&gt;
+
+&lt;p&gt;PEMは
+公開鍵証明書のフォーマットの定義&lt;a href=&#34;https://en.wikipedia.org/wiki/X.509&#34;&gt;X.509&lt;/a&gt;で
+定められている拡張子で、Base64でエンコードされたDER。
+公開鍵の場合&lt;code&gt;-----BEGIN CERTIFICATE-----&lt;/code&gt;と&lt;code&gt;-----END CERTIFICATE-----&lt;/code&gt;に囲まれている。&lt;/p&gt;
+
+&lt;h3 id=&#34;pkcs-public-key-cryptography-standards-https-en-wikipedia-org-wiki-pkcs&#34;&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/PKCS&#34;&gt;PKCS(Public-Key Cryptography Standards)&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;PKCSは公開鍵暗号における標準仕様を定めたもの。PKCS#1(&lt;a href=&#34;https://tools.ietf.org/html/rfc8017&#34;&gt;RFC8017&lt;/a&gt;)にはRSA暗号の方式やASN.1表現などが含まれている。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://people.csail.mit.edu/rivest/Rsapaper.pdf&#34;&gt;A Method for Obtaining Digital Signatures and Public-Key Cryptosystems&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
