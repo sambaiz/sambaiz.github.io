@@ -11,7 +11,7 @@
     
       
         <item>
-          <title>RSA暗号/署名</title>
+          <title>RSA暗号とPEM/DERの中身</title>
           <link>https://www.sambaiz.net/article/135/</link>
           <pubDate>Sun, 01 Oct 2017 21:02:00 &#43;0900</pubDate>
           <author></author>
@@ -108,30 +108,166 @@ console.log(`1 = ${phi}*${result[1][0]} + ${e}*${result[1][1]}`);
 &lt;p&gt;平文が12345とすると、公開鍵で暗号化したのが&lt;code&gt;(12345 ** 65537) % 136837 = 6964&lt;/code&gt;。
 これを秘密鍵で複合すると&lt;code&gt;(6964 ** 116225) % 136837 = 12345&lt;/code&gt;のように平文が得られる。&lt;/p&gt;
 
-&lt;h2 id=&#34;用語&#34;&gt;用語&lt;/h2&gt;
+&lt;h2 id=&#34;鍵ファイルの生成&#34;&gt;鍵ファイルの生成&lt;/h2&gt;
 
-&lt;h3 id=&#34;der-distinguished-encoding-rules&#34;&gt;DER(Distinguished Encoding Rules)&lt;/h3&gt;
+&lt;p&gt;ssh-keygenで生成されるようなPEMファイルを作る。&lt;/p&gt;
 
-&lt;p&gt;DERは
+&lt;h3 id=&#34;用語&#34;&gt;用語&lt;/h3&gt;
+
+&lt;p&gt;DER(Distinguished Encoding Rules)は
 &lt;a href=&#34;https://ja.wikipedia.org/wiki/Abstract_Syntax_Notation_One&#34;&gt;ASN.1(Abstract Syntax Notation One)&lt;/a&gt;記法で定義されたデータを
 エンコードするルールの一つ。
-&lt;code&gt;1a(INTEGER) 0b(octet) 68 65 6c 6c 6f 20 77 6f 72 6c 64(&amp;quot;hello world&amp;quot;))&lt;/code&gt;
+&lt;code&gt;1a(INTEGER) 0b(byte) 68 65 6c 6c 6f 20 77 6f 72 6c 64(&amp;quot;hello world&amp;quot;))&lt;/code&gt;
 のようなtype-length-valueで表す。&lt;/p&gt;
 
-&lt;h3 id=&#34;pem-privacy-enhanced-electronic-mail&#34;&gt;PEM(Privacy-enhanced Electronic Mail)&lt;/h3&gt;
-
-&lt;p&gt;PEMは
-公開鍵証明書のフォーマットの定義&lt;a href=&#34;https://en.wikipedia.org/wiki/X.509&#34;&gt;X.509&lt;/a&gt;で
+&lt;p&gt;PEM(Privacy-enhanced Electronic Mail)は
+公開鍵のフォーマットの定義&lt;a href=&#34;https://en.wikipedia.org/wiki/X.509&#34;&gt;X.509&lt;/a&gt;で
 定められている拡張子で、Base64でエンコードされたDER。
 公開鍵の場合&lt;code&gt;-----BEGIN CERTIFICATE-----&lt;/code&gt;と&lt;code&gt;-----END CERTIFICATE-----&lt;/code&gt;に囲まれている。&lt;/p&gt;
 
-&lt;h3 id=&#34;pkcs-public-key-cryptography-standards-https-en-wikipedia-org-wiki-pkcs&#34;&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/PKCS&#34;&gt;PKCS(Public-Key Cryptography Standards)&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/PKCS&#34;&gt;PKCS(Public-Key Cryptography Standards)&lt;/a&gt;は公開鍵暗号における標準仕様を定めたもの。PKCS#1(&lt;a href=&#34;https://tools.ietf.org/html/rfc2313&#34;&gt;RFC2313&lt;/a&gt;)にはRSA暗号の方式やASN.1表現などが含まれている。&lt;/p&gt;
 
-&lt;p&gt;PKCSは公開鍵暗号における標準仕様を定めたもの。PKCS#1(&lt;a href=&#34;https://tools.ietf.org/html/rfc8017&#34;&gt;RFC8017&lt;/a&gt;)にはRSA暗号の方式やASN.1表現などが含まれている。&lt;/p&gt;
+&lt;p&gt;RFC2313に書かれているASN.1を見ながらPEMの内容を確認する。&lt;/p&gt;
+
+&lt;h3 id=&#34;rsaprivatekey&#34;&gt;RSAPrivateKey&lt;/h3&gt;
+
+&lt;p&gt;n,e,dに加えて生成に使った素数まで含んでいる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;RSAPrivateKey ::= SEQUENCE {
+     version Version,
+     modulus INTEGER, -- n
+     publicExponent INTEGER, -- e
+     privateExponent INTEGER, -- d
+     prime1 INTEGER, -- p
+     prime2 INTEGER, -- q
+     exponent1 INTEGER, -- d mod (p-1)
+     exponent2 INTEGER, -- d mod (q-1)
+     coefficient INTEGER -- (inverse of q) mod p }
+
+   Version ::= INTEGER
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pemを生成し、Base64デコードしてDERにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ openssl genrsa 1024 &amp;gt; secret.pem
+$ cat secret.pem 
+-----BEGIN RSA PRIVATE KEY-----
+(内容)
+-----END RSA PRIVATE KEY-----
+
+$ echo (内容) | base64 -D | xxd
+00000000: 3082 025c 0201 0002 8181 .... .... .... 
+00000080: .... .... .... .... .... ..02 0301 0001
+00000090: 0281 80..
+00000110: .... ..02 41.. 
+00000150: .... .... .... 0241 ....
+00000190: .... .... .... .... ..02 40.. 
+000001d0: .... .... .... .... .... ..02 41.. ....  
+00000210: .... .... .... .... .... .... .... 0240 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;整理するとこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[0000] 30 82 02 5c       
+(30-&amp;gt;Type=SEQUENCE 82-&amp;gt;先頭bitが1なのでlengthに使うバイト数(2bytes) 025c-&amp;gt;Length=605bytes)
+
+  [0000] 02 01 00
+  (version: 02-&amp;gt;Type=INTEGER, 01-&amp;gt;先頭が0なのでそのままLength=3bytes, Value=0)
+
+  [0000] 02 81 81 .. 
+  (modulus: Type=INTEGER, Length=129bytes)
+
+  [0080] 02 03 01 00 01 
+  (publicExponent: Type=INTEGER, Length=3bytes, Value=65537)
+
+  [0090] 02 81 80 ..
+  (privateExponent: Type=INTEGER, Length=128bytes)
+
+  [0110] 02 41 ..
+  (prime1: Type=INTEGER, Length=65bytes)
+
+  [0150] 02 41 .. 
+  (prime2: Type=INTEGER, Length=65bytes)
+
+  [0190] 02 40 ..
+  (exponent1: Type=INTEGER, Length=64bytes)
+
+  [01d0] 02 41 ..
+  (exponent2: Type=INTEGER, Length=65bytes)
+
+  [0210] 02 40 ..
+  (coefficient: Type=INTEGER, Length=64bytes)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;rsapublickey&#34;&gt;RSAPublicKey&lt;/h3&gt;
+
+&lt;p&gt;nとeだけ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;RSAPublicKey ::= SEQUENCE {
+     modulus INTEGER, -- n
+     publicExponent INTEGER -- e }
+
+digestInfo ::= SEQUENCE {
+     digestAlgorithm DigestAlgorithmIdentifier,
+     digest Digest 
+}
+
+Digest ::= OCTET STRING
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;秘密鍵から公開鍵を生成して同様にDERにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ openssl rsa -pubout &amp;lt; secret.pem &amp;gt; public.pem
+$ cat public.pem 
+-----BEGIN PUBLIC KEY-----
+(内容)
+-----END PUBLIC KEY-----
+
+$ echo (内容) | base64 -D | xxd
+00000000: 3081 9f30 0d06 092a 8648 86f7 0d01 0101
+00000010: 0500 0381 8d00 3081 8902 8181 .... ....
+00000090: .... .... .... .... .... .... ..02 0301 
+000000a0: 0001
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;[0000] 30 81 9f
+(Type=SEQUENCE, Length=159bytes)
+  [0000] 30 0d
+  (Type=SEQUENCE, Length=13bytes)
+    [0000] 06 09 2a 86 48 86 f7 0d 01 01 01
+    (Type=OBJECT IDENTIFIER, Length=9bytes, 
+    value=http://www.oid-info.com/get/1.2.840.113549.1.1.1
+          最上位ビットは区切りのサイン
+          2a ((0)010 1010) =&amp;gt; 40 * 1 + 2 =&amp;gt; 1(iso) 2(member-body)
+          86 48 ((1)000 0110 (0)100 1000) =&amp;gt; 840(us)
+          86 f7 0d ((1)000 0110 (1)111 0111 (0)000 1101) =&amp;gt; 113549(rsadsi)
+          01 ((0)000 0001) =&amp;gt; 1(pkcs)
+          01 ((0)000 0001) =&amp;gt; 1(pcks-1)
+          01 ((0)000 0001) =&amp;gt; 1(rsaEncryption)
+
+    [0010] 05 00
+    (Type=Null 0byte)
+
+    [0010] 03 81 8d 00 
+    (Type=BIT STRING, 141bytes, 最終byteの切り捨て0bit)
+
+    [0010] 30 81 89
+    (Type=SEQUENCE, 137bytes)
+
+        [0010] 02 81 81 ..
+        (modulus: Type=INTEGER, Length=129bytes)
+
+        [0090] 02 03 01 00 01
+        (publicExponent: Type=INTEGER, Length=3bytes, Value=65537)
+&lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;http://people.csail.mit.edu/rivest/Rsapaper.pdf&#34;&gt;A Method for Obtaining Digital Signatures and Public-Key Cryptosystems&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://bearmini.hatenablog.com/entry/2014/02/05/143510&#34;&gt;RSA 秘密鍵/公開鍵ファイルのフォーマット - bearmini&amp;rsquo;s blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://crypto.stackexchange.com/questions/29115/how-is-oid-2a-86-48-86-f7-0d-parsed-as-1-2-840-113549&#34;&gt;openssl - How is OID 2a 86 48 86 f7 0d parsed as 1.2.840.113549? - Cryptography Stack Exchange&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
