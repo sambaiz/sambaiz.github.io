@@ -11,7 +11,7 @@
     
       
         <item>
-          <title>RSA暗号とPEM/DERの中身</title>
+          <title>RSA暗号とPEM/DERの構造</title>
           <link>https://www.sambaiz.net/article/135/</link>
           <pubDate>Sun, 01 Oct 2017 21:02:00 &#43;0900</pubDate>
           <author></author>
@@ -31,8 +31,7 @@
 
 &lt;p&gt;eは&lt;a href=&#34;https://en.wikipedia.org/wiki/Euler%27s_totient_function&#34;&gt;Euler totient function&lt;/a&gt;(1~nまでの整数でnと互いに素なものの個数。今回の場合は&lt;code&gt;φ(n)=(p-1)(q-1)&lt;/code&gt;)未満で互いに素な正の整数で、小さすぎても大きすぎてもだめ。&lt;code&gt;2^16 + 1 = 65537&lt;/code&gt;がよく使われる。&lt;/p&gt;
 
-&lt;p&gt;dは&lt;code&gt;ed ≡ 1 (mod φ(n))&lt;/code&gt;を満たすd。
-署名する場合は逆、つまり秘密鍵で暗号化し、公開鍵で複合できることを確認する。&lt;/p&gt;
+&lt;p&gt;dは&lt;code&gt;ed ≡ 1 (mod φ(n))&lt;/code&gt;を満たすd。&lt;/p&gt;
 
 &lt;h2 id=&#34;例&#34;&gt;例&lt;/h2&gt;
 
@@ -45,7 +44,7 @@
 &lt;/ul&gt;
 
 &lt;p&gt;秘密鍵dは&lt;code&gt;65537*d ≡ 1 (mod 135936)&lt;/code&gt;の式を変形した
-&lt;code&gt;65537*d - 153936*x = gcd(d,x) = 1&lt;/code&gt;を、拡張されたユークリッドの互除法で解く。
+&lt;code&gt;65537*d - 135936*x = gcd(65537,135936) = 1&lt;/code&gt;を、拡張されたユークリッドの互除法で解く。
 以下のように135936と65537を残しながら展開していく。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;135936 = 65537 * 2 + 4862 
@@ -205,13 +204,6 @@ $ echo (内容) | base64 -D | xxd
 &lt;pre&gt;&lt;code&gt;RSAPublicKey ::= SEQUENCE {
      modulus INTEGER, -- n
      publicExponent INTEGER -- e }
-
-digestInfo ::= SEQUENCE {
-     digestAlgorithm DigestAlgorithmIdentifier,
-     digest Digest 
-}
-
-Digest ::= OCTET STRING
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;秘密鍵から公開鍵を生成して同様にDERにする。&lt;/p&gt;
@@ -245,13 +237,13 @@ $ echo (内容) | base64 -D | xxd
           01 ((0)000 0001) =&amp;gt; 1(rsaEncryption)
 
     [0010] 05 00
-    (Type=Null 0byte)
+    (アルゴリズムパラメータ: Type=Null 0byte)
 
     [0010] 03 81 8d 00 
     (Type=BIT STRING, 141bytes, 最終byteの切り捨て0bit)
 
-    [0010] 30 81 89
-    (Type=SEQUENCE, 137bytes)
+      [0010] 30 81 89
+      (Type=SEQUENCE, 137bytes)
 
         [0010] 02 81 81 ..
         (modulus: Type=INTEGER, Length=129bytes)
@@ -260,9 +252,27 @@ $ echo (内容) | base64 -D | xxd
         (publicExponent: Type=INTEGER, Length=3bytes, Value=65537)
 &lt;/code&gt;&lt;/pre&gt;
 
+&lt;h3 id=&#34;digestinfo&#34;&gt;digestInfo&lt;/h3&gt;
+
+&lt;p&gt;署名に使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;digestInfo ::= SEQUENCE {
+     digestAlgorithm DigestAlgorithmIdentifier,
+     digest Digest 
+}
+
+Digest ::= OCTET STRING
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;digestAlgorithmでデータをハッシュ化したものをdigestInfoに詰め、秘密鍵で暗号化したものを署名とし、
+公開鍵で複合してdigestと実際のハッシュ値が一致することを確認する。
+RSASSA-PKCS1-v1_5では暗号化の前に&lt;code&gt;00 01 ff ff ff .. 00&lt;/code&gt;のパディングを加える。&lt;/p&gt;
+
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;http://people.csail.mit.edu/rivest/Rsapaper.pdf&#34;&gt;A Method for Obtaining Digital Signatures and Public-Key Cryptosystems&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://blog.livedoor.jp/k_urushima/archives/979220.html&#34;&gt;自堕落な技術者の日記 : 図説RSA署名の巻&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;http://bearmini.hatenablog.com/entry/2014/02/05/143510&#34;&gt;RSA 秘密鍵/公開鍵ファイルのフォーマット - bearmini&amp;rsquo;s blog&lt;/a&gt;&lt;/p&gt;
 

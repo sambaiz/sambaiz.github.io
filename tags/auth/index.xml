@@ -11,6 +11,223 @@
     
       
         <item>
+          <title>OpenID ConnectのIDトークンの内容と検証</title>
+          <link>https://www.sambaiz.net/article/136/</link>
+          <pubDate>Mon, 09 Oct 2017 20:01:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/136/</guid>
+          <description>
+
+&lt;p&gt;OpenID Connectは認可(AuthoriZation)のプロトコルであるOAuth 2.0を正しく認証(AutheNtication)に使うためのプロトコル。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://openid-foundation-japan.github.io/openid-connect-core-1_0.ja.html&#34;&gt;OpenID Connect Core 1.0(日本語訳)&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/48/&#34;&gt;OAuth2.0のメモ - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;OpenID ConnectではOAuthのアクセストークンに加えて
+Issuer(IdP)によって署名されたJWT(JSON Web Token)形式のIDトークンも返す。
+このIDトークンの署名を検証し、含まれるIssuerとクライアントの情報を参照することで
+OAuthのImplicit flowでのトークン置き換え攻撃を防ぐことができる。&lt;/p&gt;
+
+&lt;h2 id=&#34;jwt-idトークン&#34;&gt;JWT/IDトークン&lt;/h2&gt;
+
+&lt;p&gt;JWTは&lt;a href=&#34;https://tools.ietf.org/html/rfc7519&#34;&gt;RFC7519&lt;/a&gt;で定義されている、
+パーティ間で安全にClaim(エンドユーザーのようなエンティティの情報)を受け渡すための表現方法。
+JSONにエンコードしたClaimは、JOSE(Javascript Object Signing and Encryption)のサブセットである&lt;a href=&#34;https://tools.ietf.org/html/rfc7515&#34;&gt;JWS&lt;/a&gt;(JSON Web Signature)のペイロードとして署名を付与されるか、&lt;a href=&#34;https://tools.ietf.org/html/rfc7519&#34;&gt;JWE&lt;/a&gt;(JSON Web Encryption)で暗号化される。
+以下のJWTはJWSのもの。&lt;/p&gt;
+
+&lt;p&gt;JWSには&lt;code&gt;(ヘッダ).(ペイロード).(署名)&lt;/code&gt;の文字列で表現されるCompact SerializationとJSONで表現されるJSON Serializationがあるが、JWTではCompact Serializationを使う。&lt;/p&gt;
+
+&lt;p&gt;ヘッダには署名に使うアルゴリズム&lt;code&gt;alg&lt;/code&gt;が含まれる。
+JWTを受け取った際、不正なalgになっていないかチェックする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;alg&amp;quot;: &amp;quot;RS256&amp;quot;,
+  &amp;quot;kid&amp;quot;: &amp;quot;5b0924f6f83c719514987954cf66683b370677d4&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ペイロードには以下のようなClaimが含まれる。これ以外のClaimを含めることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;iss&amp;quot;: &amp;quot;https://server.example.com&amp;quot;, # IssuerのIdentifier。httpsのURL
+    &amp;quot;sub&amp;quot;: &amp;quot;24400320&amp;quot;, # Subject Identifier。Issuerでユニークなエンドユーザーの識別子。
+    &amp;quot;aud&amp;quot;: &amp;quot;s6BhdRkqt3&amp;quot;, # audience。OAuth2.0のclient_id
+    &amp;quot;nonce&amp;quot;: &amp;quot;n-0S6_WzA2Mj&amp;quot;, # リクエストで送ったのがそのまま返ってくる。プレイ攻撃を防ぐため
+    &amp;quot;exp&amp;quot;: 1311281970, # IDトークンの有効期限。時間はすべてUNIXエポック秒
+    &amp;quot;iat&amp;quot;: 1311280970, # IDトークンの発行時刻
+    &amp;quot;auth_time&amp;quot;: 1311280969 # エンドユーザーの認証時刻
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;idトークンを取得する&#34;&gt;IDトークンを取得する&lt;/h2&gt;
+
+&lt;p&gt;Googleの&lt;a href=&#34;https://developers.google.com/identity/protocols/OpenIDConnect&#34;&gt;OAuth 2.0 API&lt;/a&gt;はOpenID Connectに対応している。これのIDトークンを取得する。&lt;/p&gt;
+
+&lt;p&gt;エンドポイント等は&lt;a href=&#34;https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig&#34;&gt;OpenID Connect Discovery 1.0&lt;/a&gt;の
+&lt;code&gt;/.well-known/openid-configuration&lt;/code&gt;で取得できるようになっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl https://accounts.google.com/.well-known/openid-configuration | jq
+{
+  &amp;quot;issuer&amp;quot;: &amp;quot;https://accounts.google.com&amp;quot;,
+  &amp;quot;authorization_endpoint&amp;quot;: &amp;quot;https://accounts.google.com/o/oauth2/v2/auth&amp;quot;,
+  &amp;quot;token_endpoint&amp;quot;: &amp;quot;https://www.googleapis.com/oauth2/v4/token&amp;quot;,
+  &amp;quot;userinfo_endpoint&amp;quot;: &amp;quot;https://www.googleapis.com/oauth2/v3/userinfo&amp;quot;,
+  &amp;quot;revocation_endpoint&amp;quot;: &amp;quot;https://accounts.google.com/o/oauth2/revoke&amp;quot;,
+  &amp;quot;jwks_uri&amp;quot;: &amp;quot;https://www.googleapis.com/oauth2/v3/certs&amp;quot;,
+  &amp;quot;response_types_supported&amp;quot;: [
+    &amp;quot;code&amp;quot;,
+    &amp;quot;token&amp;quot;,
+    &amp;quot;id_token&amp;quot;,
+    &amp;quot;code token&amp;quot;,
+    &amp;quot;code id_token&amp;quot;,
+    &amp;quot;token id_token&amp;quot;,
+    &amp;quot;code token id_token&amp;quot;,
+    &amp;quot;none&amp;quot;
+  ],
+  &amp;quot;subject_types_supported&amp;quot;: [
+    &amp;quot;public&amp;quot;
+  ],
+  &amp;quot;id_token_signing_alg_values_supported&amp;quot;: [
+    &amp;quot;RS256&amp;quot;
+  ],
+  &amp;quot;scopes_supported&amp;quot;: [
+    &amp;quot;openid&amp;quot;,
+    &amp;quot;email&amp;quot;,
+    &amp;quot;profile&amp;quot;
+  ],
+  &amp;quot;token_endpoint_auth_methods_supported&amp;quot;: [
+    &amp;quot;client_secret_post&amp;quot;,
+    &amp;quot;client_secret_basic&amp;quot;
+  ],
+  &amp;quot;claims_supported&amp;quot;: [
+    &amp;quot;aud&amp;quot;,
+    &amp;quot;email&amp;quot;,
+    &amp;quot;email_verified&amp;quot;,
+    &amp;quot;exp&amp;quot;,
+    &amp;quot;family_name&amp;quot;,
+    &amp;quot;given_name&amp;quot;,
+    &amp;quot;iat&amp;quot;,
+    &amp;quot;iss&amp;quot;,
+    &amp;quot;locale&amp;quot;,
+    &amp;quot;name&amp;quot;,
+    &amp;quot;picture&amp;quot;,
+    &amp;quot;sub&amp;quot;
+  ],
+  &amp;quot;code_challenge_methods_supported&amp;quot;: [
+    &amp;quot;plain&amp;quot;,
+    &amp;quot;S256&amp;quot;
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;テスト用にcodeを受け取ってトークンをリクエストするサーバーを書いた。コードは&lt;a href=&#34;https://github.com/sambaiz/openid-connect-test-client&#34;&gt;ここ&lt;/a&gt;。client_idとclient_secretは&lt;a href=&#34;https://console.developers.google.com/&#34;&gt;API Console&lt;/a&gt;で発行できる。&lt;/p&gt;
+
+&lt;p&gt;立ち上げて&lt;code&gt;https://localhost:3000/auth&lt;/code&gt;にアクセスするとリダイレクトし、以下のような情報が出力される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;code&amp;quot;: {
+    &amp;quot;state&amp;quot;: &amp;quot;*****&amp;quot;,
+    &amp;quot;code&amp;quot;: &amp;quot;*****&amp;quot;,
+    &amp;quot;authuser&amp;quot;: &amp;quot;0&amp;quot;,
+    &amp;quot;session_state&amp;quot;: &amp;quot;*****&amp;quot;,
+    &amp;quot;prompt&amp;quot;: &amp;quot;none&amp;quot;
+  },
+  &amp;quot;token&amp;quot;: {
+    &amp;quot;access_token&amp;quot;: &amp;quot;*****.*****.*****&amp;quot;
+  },
+  &amp;quot;id_token_header&amp;quot;: {
+    &amp;quot;alg&amp;quot;: &amp;quot;RS256&amp;quot;,
+    &amp;quot;kid&amp;quot;: &amp;quot;5b0924f6f83c719514987954cf66683b370677d4&amp;quot;
+  },
+  &amp;quot;id_token_payload&amp;quot;: {
+    &amp;quot;azp&amp;quot;: &amp;quot;*****&amp;quot;,
+    &amp;quot;aud&amp;quot;: &amp;quot;*****&amp;quot;,
+    &amp;quot;sub&amp;quot;: &amp;quot;*****&amp;quot;,
+    &amp;quot;email&amp;quot;: &amp;quot;****@gmail.com&amp;quot;,
+    &amp;quot;email_verified&amp;quot;: true,
+    &amp;quot;at_hash&amp;quot;: &amp;quot;*****&amp;quot;,
+    &amp;quot;nonce&amp;quot;: &amp;quot;*****&amp;quot;,
+    &amp;quot;iss&amp;quot;: &amp;quot;https://accounts.google.com&amp;quot;,
+    &amp;quot;iat&amp;quot;: 1506613038,
+    &amp;quot;exp&amp;quot;: 1506616638
+  },
+  &amp;quot;id_token_verify_signature&amp;quot;: &amp;quot;*****&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このIDトークンのiss, audを見て署名も&lt;a href=&#34;https://developers.google.com/identity/protocols/OpenIDConnect#validatinganidtoken&#34;&gt;検証する&lt;/a&gt;ことで、
+たしかに発行元と先が正しいことを確認し、expも過ぎていなければ、
+subに示されるIDのエンティティとして認証できる。&lt;/p&gt;
+
+&lt;h2 id=&#34;idトークンの署名を検証する&#34;&gt;IDトークンの署名を検証する&lt;/h2&gt;
+
+&lt;p&gt;検証もやってみた。urlは&lt;code&gt;https://localhost:3000/verify?token=****&lt;/code&gt;。&lt;/p&gt;
+
+&lt;p&gt;GoogleのIDトークンのalgを見ると、RS256(RSASSA-PKCS1-v1_5 using SHA-256)で署名されていることがわかる。対象となるデータはJWSの&lt;code&gt;(ヘッダ).(ペイロード)&lt;/code&gt;まで。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/135/&#34;&gt;RSA暗号とPEM/DERの構造 - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;公開鍵はDiscoveryのjwks_uriで取得でき、1日に1回更新される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl https://www.googleapis.com/oauth2/v3/certs
+{
+ &amp;quot;keys&amp;quot;: [
+  {
+   &amp;quot;kty&amp;quot;: &amp;quot;RSA&amp;quot;,
+   &amp;quot;alg&amp;quot;: &amp;quot;RS256&amp;quot;,
+   &amp;quot;use&amp;quot;: &amp;quot;sig&amp;quot;,
+   &amp;quot;kid&amp;quot;: &amp;quot;23e255c65b234549cc0fe3073bce15e59bd4d4b0&amp;quot;,
+   &amp;quot;n&amp;quot;: &amp;quot;w5i-jGiwEyuPewnvR-lFceBRYh4gx91-OFLaJwwr8yCrSVczAgyc1wywFBCsUBDBhHpKSVilqIGG2fIqhdX2_IFJ-OxYvXDmJtYF69kWTafZjFtnAl8EdIqj1X-y31Pm9gYD_rYeLG3CZhNLjIE_y9fk5_MbOOc0Z-br4_wzing6HfERITbAOAfCd8Ri0_tXDqYgi-C1C_gs2HheYEIWqpZ2se8UsGvIg2uePOCV8G3a0fuvh6hgjutspfJ_VH3eeHwYwyYzieq-sDWcyV5qGlnJp9TZlZ9z242WdYHj3C2kudNTUg76p6svbs6cu1ZiZA9WZkaL9d8hWeJ4tLQg3Q&amp;quot;,
+   &amp;quot;e&amp;quot;: &amp;quot;AQAB&amp;quot;
+  },
+  {
+   &amp;quot;kty&amp;quot;: &amp;quot;RSA&amp;quot;,
+   &amp;quot;alg&amp;quot;: &amp;quot;RS256&amp;quot;,
+   &amp;quot;use&amp;quot;: &amp;quot;sig&amp;quot;,
+   &amp;quot;kid&amp;quot;: &amp;quot;db15c5e7c1b82b93388459602e4852bfd9b95931&amp;quot;,
+   &amp;quot;n&amp;quot;: &amp;quot;lZUcUSL9piIsbwP_Y84683P7-vX_Y9CEvqpeCNpI4p55HFCDnp9xtnvc5mBEOrFP-vwk6sjlkLVbl74d1CR-jKX-z8zPg3T0qQzYWgedAddfQL1zFUyo2BLbCg2JeYDZF6IHv6qfwzM3hgQIMJMa29izyAyZ2T0zhXf5fU311LEKWCdpemQsNj5V4r5Z52vsTuOhm16Xt7LWx_iWb-_VdYxhDYoQ87pZIVaCdnKDwGON0MPoI4eQJdb-ABrcz290mbGJ8kiI4BU_iA98HCc3ifWDe8eatpV9LK54eYansDTMQJXoYZ6a7C-0-Mh1-g6qaxYjpymJXbJjYitiMejYFQ&amp;quot;,
+   &amp;quot;e&amp;quot;: &amp;quot;AQAB&amp;quot;
+  },
+  ...
+ ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;signature,n,eをそれぞれbase64デコードしたのを整数として扱い、&lt;code&gt;m ≡ (signature)^e (mod n)&lt;/code&gt;で複合するとdigestInfoのDERの前に&lt;code&gt;00 01 ff ff .. 00&lt;/code&gt;のパディングがついたものになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;digestInfo ::= SEQUENCE {
+     digestAlgorithm DigestAlgorithmIdentifier,
+     digest Digest 
+}
+
+Digest ::= OCTET STRING
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;const digestInfoDERFromSignature = (signature, e, n) =&amp;gt; {
+  const signatureHex = Buffer.from(signature, &#39;base64&#39;).toString(&#39;hex&#39;)
+  const eHex  = Buffer.from(e, &#39;base64&#39;).toString(&#39;hex&#39;)
+  const nHex = Buffer.from(n, &#39;base64&#39;).toString(&#39;hex&#39;)
+
+  const signatureNum = bigInt(signatureHex, 16)
+  const eNum = bigInt(eHex, 16)
+  const nNum = bigInt(nHex, 16)  
+
+  const m = signatureNum.modPow(eNum, nNum); // c^e (mod n)
+  const decrypted = m.toString(16);
+  const paddingRemoved = decrypted.replace(/^1f*00/g, &amp;quot;&amp;quot;);
+  return paddingRemoved;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;この中のdigestと&lt;code&gt;(ヘッダ).(ペイロード)&lt;/code&gt;のsha256 hashが一致することを確認する。
+digestは末尾にくるので簡易的にendsWithで比較している。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>OAuth2.0のメモ</title>
           <link>https://www.sambaiz.net/article/48/</link>
           <pubDate>Sun, 08 Jan 2017 02:00:00 &#43;0900</pubDate>
