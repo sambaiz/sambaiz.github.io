@@ -53,7 +53,7 @@ JWTを受け取った際、不正なalgになっていないかチェックす�
     &amp;quot;iss&amp;quot;: &amp;quot;https://server.example.com&amp;quot;, # IssuerのIdentifier。httpsのURL
     &amp;quot;sub&amp;quot;: &amp;quot;24400320&amp;quot;, # Subject Identifier。Issuerでユニークなエンドユーザーの識別子。
     &amp;quot;aud&amp;quot;: &amp;quot;s6BhdRkqt3&amp;quot;, # audience。OAuth2.0のclient_id
-    &amp;quot;nonce&amp;quot;: &amp;quot;n-0S6_WzA2Mj&amp;quot;, # リクエストで送ったのがそのまま返ってくる。プレイ攻撃を防ぐため
+    &amp;quot;nonce&amp;quot;: &amp;quot;n-0S6_WzA2Mj&amp;quot;, # リクエストで送ったのがそのまま返ってくる。リプレイ攻撃を防ぐため
     &amp;quot;exp&amp;quot;: 1311281970, # IDトークンの有効期限。時間はすべてUNIXエポック秒
     &amp;quot;iat&amp;quot;: 1311280970, # IDトークンの発行時刻
     &amp;quot;auth_time&amp;quot;: 1311280969 # エンドユーザーの認証時刻
@@ -166,7 +166,7 @@ subに示されるIDのエンティティとして認証できる。&lt;/p&gt;
 
 &lt;p&gt;GoogleのIDトークンのalgを見ると、RS256(RSASSA-PKCS1-v1_5 using SHA-256)で署名されていることがわかる。対象となるデータはJWSの&lt;code&gt;(ヘッダ).(ペイロード)&lt;/code&gt;まで。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/135/&#34;&gt;RSA暗号とPEM/DERの構造 - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/135/&#34;&gt;RSA暗号とPEM/DERの構造 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;公開鍵はDiscoveryのjwks_uriで取得でき、1日に1回更新される。&lt;/p&gt;
 
@@ -13419,10 +13419,15 @@ net/httpのserveでもrecoverしてるのでここでひっかかる(レスポ�
 &lt;li&gt;認証: ユーザーが何者かを検証する&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;h2 id=&#34;oauth2-0&#34;&gt;OAuth2.0&lt;/h2&gt;
+&lt;h2 id=&#34;oauth-2-0&#34;&gt;OAuth 2.0&lt;/h2&gt;
 
 &lt;p&gt;認可のプロトコル。
-それによってアクセスできるようになったリソースの情報をもとに他のサービスが認証を行ったりしている。&lt;/p&gt;
+それによってアクセスできるようになったリソースの情報をもとに認証を行ったりすることもあるが、
+以下に示すImplicit Flowでそれをやると他のサービスのトークンで他人に成りすませてしまう問題があるため、
+認証する場合はOAuth 2.0ベースの認証プロトコルのOpenID Connectを使うべき。
+その場合もトークンを取得するまでの流れはほとんどOAuth 2.0通りなのでフローを理解しておいて無駄はない。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;h3 id=&#34;authorization-code-flow&#34;&gt;Authorization Code Flow&lt;/h3&gt;
 
@@ -13443,9 +13448,9 @@ net/httpのserveでもrecoverしてるのでここでひっかかる(レスポ�
 
 &lt;p&gt;が含まれる。&lt;/p&gt;
 
-&lt;p&gt;認可されると認可コードとstateを付けてredirect_uriにリダイレクトするので、
+&lt;p&gt;認可されると認可コードとstateを付けてredirect_uri(&lt;a href=&#34;https://tools.ietf.org/html/rfc6749#section-3.1.2.2&#34;&gt;事前に登録しておく&lt;/a&gt;)にリダイレクトするので、
 アプリケーションサーバーは認可コードをアクセストークンに交換する。
-この際、client_idとclient_secretも送って認証する。&lt;/p&gt;
+この際、client_idとclient_secretも送る。&lt;/p&gt;
 
 &lt;p&gt;オプションでリフレッシュトークンを含み、これを使うと期限が切れたとき新しいアクセストークンを取得できる。&lt;/p&gt;
 
@@ -13455,15 +13460,13 @@ net/httpのserveでもrecoverしてるのでここでひっかかる(レスポ�
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/48_implicit.png&#34; alt=&#34;シーケンス図&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;OAuthクライアントがブラウザのときのフロー。
-つまりclient_secretの機密性を保てないパターン。&lt;/p&gt;
+&lt;p&gt;OAuthクライアントがアプリなどでclient_secretの機密性を保てない場合のフロー。&lt;/p&gt;
 
 &lt;p&gt;認可コードは不要なので&lt;code&gt;response_type=token&lt;/code&gt;でリクエストし、アクセストークンをブラウザで取得する。
 リフレッシュトークンは含まない。
-これをそのまま認証に使うと、他のサービスで発行された他人のトークンを使うことでなりすませてしまうので、
-そのトークンがどのサービスに対して発行されたかを確認する術が必要。&lt;/p&gt;
-
-&lt;p&gt;redirect_uriは&lt;a href=&#34;https://tools.ietf.org/html/rfc6749#section-3.1.2.2&#34;&gt;事前に登録しておく必要がある。&lt;/a&gt;&lt;/p&gt;
+他のサービスで発行された他人のトークンを使うことでなりすませてしまうので、
+そのトークンがどのサービスに対して発行されたかを確認する術が特に用意されているのでなければ
+認証に使ってはいけない。OpenID Connectでは署名されたIDトークンに発行されたサービスの情報が含まれている。&lt;/p&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
