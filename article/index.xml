@@ -6,8 +6,586 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-10-15 01:53:00 &#43;0900 JST</updated>
+    <updated>2017-11-03 15:00:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>圧縮アルゴリズムZopfliとBrotli</title>
+          <link>https://www.sambaiz.net/article/142/</link>
+          <pubDate>Fri, 03 Nov 2017 15:00:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/142/</guid>
+          <description>
+
+&lt;p&gt;どちらもGoogleが開発した圧縮アルゴリズム。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit&#34;&gt;puppetter-lambda-starter-kit&lt;/a&gt;
+の&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/issues/2&#34;&gt;issue&lt;/a&gt;に
+現在使っているgzipと、Zopfli、Brotliを比較したデータが上がっていたので調べてみた。&lt;/p&gt;
+
+&lt;h2 id=&#34;zopfli-https-github-com-google-zopfli&#34;&gt;&lt;a href=&#34;https://github.com/google/zopfli&#34;&gt;Zopfli&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;出力としてDeflateに対応している。&lt;/p&gt;
+
+&lt;h3 id=&#34;deflate&#34;&gt;Deflate&lt;/h3&gt;
+
+&lt;p&gt;LZ77(実際は改良版のLZSS)とハフマン記号による可逆圧縮アルゴリズム。
+zip、zlib、gzip、pngなどで使われていて、これらはヘッダーやフッターが異なる。
+LZSSはバイト列を見ていって同じ部分を発見したらそこを参照するように置き換えていく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;a b c a b c a b c d d d
+=&amp;gt; a b c (距離3, 長さ6) d (距離１, 長さ2)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このLZSSにあたる部分をZopfliはがんばってやるので圧縮時間が結構かかるがサイズは小さくなるらしい。
+展開は通常のDeflate通り。上げてくれたデータを見ても大体そんな感じだ。&lt;/p&gt;
+
+&lt;h2 id=&#34;brotli-https-github-com-google-brotli&#34;&gt;&lt;a href=&#34;https://github.com/google/brotli&#34;&gt;Brotli&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;LZ77、ハフマン記号に加えて2nd order context modelingというのを使って圧縮する
+Deflateではない可逆圧縮アルゴリズム。
+Safari以外のモダンなブラウザで既に対応しているか対応しているところ。
+圧縮率も展開時間もかなり良さそう。&lt;/p&gt;
+
+&lt;p&gt;Nodeにもblotliのライブラリが&lt;a href=&#34;https://github.com/devongovett/brotli.js&#34;&gt;あって&lt;/a&gt;、
+圧縮はEmscriptenで&lt;a href=&#34;https://github.com/google/brotli&#34;&gt;本家のC++コード&lt;/a&gt;から変換し、
+展開は手で移植しているようだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install blotli
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
+const brotli = require(&#39;brotli&#39;);
+const TARGET = process.env.TARGET;
+const MODE = process.env.MODE;
+
+const compress = () =&amp;gt; {
+  const target = fs.readFileSync(TARGET);
+  const compressed = brotli.compress(target, {
+    quality: 11,
+  });
+  fs.writeFileSync(`${TARGET}.br`, compressed);
+};
+
+const decompress = () =&amp;gt; {
+  const target = fs.readFileSync(TARGET);
+  const decompressed = brotli.decompress(target);
+  fs.writeFileSync(`${TARGET.replace(&#39;.br&#39;, &#39;&#39;)}`, decompressed);
+};
+
+(async () =&amp;gt; {
+    if (MODE === &#39;decompress&#39;) {
+        decompress();
+    } else {
+        compress();
+    }
+})();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ただ、これで大きなファイルを圧縮しようとすると以下のようなエラーが出て失敗する。
+設定を変えてコンパイルするのも面倒なので、圧縮はCLIでやることにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ TARGET=headless_shell node compress.js 
+Cannot enlarge memory arrays. Either (1) compile with  -s TOTAL_MEMORY=X  with X higher than the current value 318767104, (2) compile with  -s ALLOW_MEMORY_GROWTH=1  which adjusts the size at runtime but prevents some optimizations, (3) set Module.TOTAL_MEMORY to a higher value before the program runs, or if you want malloc to return NULL (0) instead of this abort, compile with  -s ABORTING_MALLOC=0 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;リポジトリをcloneしてきてmake installする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/google/brotli.git
+$ mkdir out &amp;amp;&amp;amp; cd out
+$ ../configure-cmake
+$ make
+$ make test
+$ make install
+$ brotli --version
+brotli 1.0.1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デフォルトで最高レベル(11)で圧縮することもあり、かなり時間がかかる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ time brotli headless_shell
+$ time brotli headless_shell
+
+real	18m41.814s
+user	18m6.485s
+sys	0m7.906s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;gzipだと最高レベルで圧縮しても43MBまでのところ、33MBまで圧縮できた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;131M headless_shell
+33M  headless_shell.br
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;展開はすぐ。むしろgzipより速い。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ time TARGET=aaaa.br MODE=decompress node compress.js
+
+real	0m5.850s
+user	0m4.626s
+sys	0m1.030s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;対応版を出そうとしたけど謎のエラーがすぐに解決できなかったので後でやる。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.slideshare.net/7shi/deflate&#34;&gt;Deflate&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://qiita.com/jkr_2255/items/f3dfdf08267f2a8b590a&#34;&gt;Zopfliで高圧縮gzip・PNGほか - Qiita&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Redashでデータを可視化する</title>
+          <link>https://www.sambaiz.net/article/141/</link>
+          <pubDate>Mon, 23 Oct 2017 23:59:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/141/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/getredash/redash&#34;&gt;Redash&lt;/a&gt;はOSSのデータ可視化ツール。
+BIツールのようにパラメータを変えながら指標を探っていくというよりは、分かっている指標を見るのに使うイメージ。
+比較的機能が少ない分処理がわかりやすく、
+クエリが自動生成されないため時間がかかるものを実行する前にある程度気づけるのが良いと思う。&lt;/p&gt;
+
+&lt;p&gt;docker-composeで立ち上げることもできるけど、
+AWSの各リージョンに&lt;a href=&#34;https://redash.io/help-onpremise/setup/setting-up-redash-instance.html&#34;&gt;AMIが用意されている&lt;/a&gt;のでそれで立ち上げる。&lt;/p&gt;
+
+&lt;p&gt;sshで入って以下のようなのを必要に応じて設定する。
+メールを送る場合はSESでメールアドレスをVerifyしてやるのが簡単。
+GSuiteを使っている場合、OAuthのClientID、Secretを発行しドメインを登録するとそれで認証できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ssh ubuntu@*****
+$ sudo vi /opt/redash/.env
+export REDASH_MAIL_SERVER=&amp;quot;email-smtp.us-east-1.amazonaws.com&amp;quot;
+export REDASH_MAIL_USE_TLS=&amp;quot;true&amp;quot;
+export REDASH_MAIL_USERNAME=&amp;quot;*****&amp;quot;
+export REDASH_MAIL_PASSWORD=&amp;quot;*****&amp;quot;
+export REDASH_MAIL_DEFAULT_SENDER=&amp;quot;*****&amp;quot; # Email address to send from
+
+export REDASH_GOOGLE_CLIENT_ID=&amp;quot;&amp;quot;
+export REDASH_GOOGLE_CLIENT_SECRET=&amp;quot;&amp;quot;
+
+$ cd /opt/redash/current
+$ sudo -u redash bin/run ./manage.py org set_google_apps_domains {{domains}}
+$ sudo supervisorctl restart all
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;HTTPS対応するのに&lt;code&gt;/etc/nginx/sites-available/redash&lt;/code&gt;を編集する。crtとkeyの場所は変える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;upstream rd_servers {
+  server 127.0.0.1:5000;
+}
+
+server {
+
+  server_tokens off;
+
+  listen 80 default;
+
+  access_log /var/log/nginx/rd.access.log;
+
+  gzip on;
+  gzip_types *;
+  gzip_proxied any;
+
+  location /ping {
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass       http://rd_servers;
+  }
+  
+  location / {
+    return 301 https://$host$request_uri; 
+  }
+}
+
+server {
+  listen 443 ssl;
+
+  # Make sure to set paths to your certificate .pem and .key files.
+  ssl on;
+  ssl_certificate /path-to/cert.pem; # or crt
+  ssl_certificate_key /path-to/cert.key;
+
+  # Specifies that we don&#39;t want to use SSLv2 (insecure) or SSLv3 (exploitable)
+  ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+  # Uses the server&#39;s ciphers rather than the client&#39;s
+  ssl_prefer_server_ciphers on;
+  # Specifies which ciphers are okay and which are not okay. List taken from https://raymii.org/s/tutorials/Strong_SSL_Security_On_nginx.html
+  ssl_ciphers &amp;quot;EECDH+AESGCM:EDH+AESGCM:ECDHE-RSA-AES128-GCM-SHA256:AES256+EECDH:DHE-RSA-AES128-GCM-SHA256:AES256+EDH:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4&amp;quot;;
+
+  access_log /var/log/nginx/redash.access.log;
+
+  gzip on;
+  gzip_types *;
+  gzip_proxied any;
+
+  location / {
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass       http://rd_servers;
+    proxy_redirect   off;
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;諸々のデータはローカルで動いているPostgreSQLに入っている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;redash-# \d
+                       List of relations
+ Schema |               Name               |   Type   | Owner  
+--------+----------------------------------+----------+--------
+ public | access_permissions               | table    | redash
+ public | access_permissions_id_seq        | sequence | redash
+ public | alembic_version                  | table    | redash
+ public | alert_subscriptions              | table    | redash
+ public | alert_subscriptions_id_seq       | sequence | redash
+ public | alerts                           | table    | redash
+ public | alerts_id_seq                    | sequence | redash
+ public | api_keys                         | table    | redash
+ public | api_keys_id_seq                  | sequence | redash
+ public | changes                          | table    | redash
+ public | changes_id_seq                   | sequence | redash
+ public | dashboards                       | table    | redash
+ public | dashboards_id_seq                | sequence | redash
+ public | data_source_groups               | table    | redash
+ public | data_source_groups_id_seq        | sequence | redash
+ public | data_sources                     | table    | redash
+ public | data_sources_id_seq              | sequence | redash
+ public | events                           | table    | redash
+ public | events_id_seq                    | sequence | redash
+ public | groups                           | table    | redash
+ public | groups_id_seq                    | sequence | redash
+ public | notification_destinations        | table    | redash
+ public | notification_destinations_id_seq | sequence | redash
+ public | organizations                    | table    | redash
+ public | organizations_id_seq             | sequence | redash
+ public | queries                          | table    | redash
+ public | queries_id_seq                   | sequence | redash
+ public | query_results                    | table    | redash
+ public | query_results_id_seq             | sequence | redash
+ public | query_snippets                   | table    | redash
+ public | query_snippets_id_seq            | sequence | redash
+ public | users                            | table    | redash
+ public | users_id_seq                     | sequence | redash
+ public | visualizations                   | table    | redash
+ public | visualizations_id_seq            | sequence | redash
+ public | widgets                          | table    | redash
+ public | widgets_id_seq                   | sequence | redash
+(37 rows)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なので&lt;a href=&#34;https://redash.io/help-onpremise/misc/backup-your-redash-database-and-restore-it-on-a-different-server.html&#34;&gt;他の環境に移すとき&lt;/a&gt;はこのdumpを取ってリストアする。バックアップを取っておくと良い。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-start.png&#34; alt=&#34;最初の画面&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;データソースを登録する。MySQLやRedshift、AthenaやBigQueryのほかにHive、ElasticSearchなども選べる。
+今回はMySQL(Amazon RDS)を選択した。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-datasource.png&#34; alt=&#34;データソースの登録&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;適当なデータをいれる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const mysql = require(&#39;mysql&#39;);
+const connection = mysql.createConnection({
+  host     : &#39;*****&#39;,
+  user     : &#39;*****&#39;,
+  password : &#39;*****&#39;,
+  database : &#39;*****&#39;
+});
+
+const query = (connection, query, params) =&amp;gt; {
+  return new Promise((resolve, reject) =&amp;gt; {
+    connection.query(query, params, (error, results, fields) =&amp;gt; {
+      if (error) reject(error);
+      resolve(results);
+    });
+  });
+};
+
+(async () =&amp;gt; {
+  connection.connect();
+
+  await query(connection,
+    `DROP TABLE IF EXISTS hoge`
+  );
+
+  await query(connection, 
+    `CREATE TABLE hoge (
+      id int,
+      fuga_id int,
+      piyo_id int,
+      value int,
+      created_at datetime
+    )`
+  );
+
+  for (let i = 0; i &amp;lt; 100; i++) {
+    console.log(i);
+    await query(connection,
+      `INSERT INTO hoge SET ?`,
+      {
+       id: i, 
+       fuga_id: Math.floor(Math.random() * 3), 
+       piyo_id: Math.floor(Math.random() * 10),
+       value: Math.floor(Math.random() * 100),
+       created_at: new Date(),
+      }
+    );
+  };
+
+  connection.end();
+})();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クエリを登録する。エディタがあってフォーマットもしてくれる。
+毎分や特定の時刻に実行するスケジュール機能もあるので、
+重いクエリも事前に実行しておいて必要なときにすぐに見られるようにすることができる。
+&lt;code&gt;{{name}}&lt;/code&gt;のようにパラメータを入れることもできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-query.png&#34; alt=&#34;クエリの登録&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;実行して得られたデータからChartを作る。データはCSVでダウンロードもできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-visualization.png&#34; alt=&#34;Chart&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;このChartをDashboardに貼る。
+パラメータがある場合は入力するフォームが出るので、クエリを書かない人に使ってもらうこともできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-dashboard.png&#34; alt=&#34;Dashbord&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;あとは簡単なAlertも登録することができて、
+飛ばす先はSettingsのALERT DISTINATIONSに
+SlackのWebhookなどを設定できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-alert.png&#34; alt=&#34;Alert&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-slack.png&#34; alt=&#34;Slackに飛ぶメッセージ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ApexでLambdaをデプロイする</title>
+          <link>https://www.sambaiz.net/article/140/</link>
+          <pubDate>Sun, 22 Oct 2017 16:06:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/140/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/apex/apex&#34;&gt;Apex&lt;/a&gt;でLambdaをデプロイする。
+とても簡単に使えるし、変なこともしないので良い感じ。&lt;/p&gt;
+
+&lt;p&gt;インストール。ダウンロードして実行できるようにしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl https://raw.githubusercontent.com/apex/apex/master/install.sh | sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;IAMFullAccess&lt;/li&gt;
+&lt;li&gt;AWSLambdaFullAccess&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;を付けたIAMのプロファイルを登録しておく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws configure --profile apex
+$ aws configure list --profile apex
+      Name                    Value             Type    Location
+      ----                    -----             ----    --------
+   profile                     apex           manual    --profile
+access_key     ****************OVGQ shared-credentials-file    
+secret_key     ****************oi5t shared-credentials-file    
+    region           ap-northeast-1      config-file    ~/.aws/config
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apex init&lt;/code&gt;してnameとdescriptionを入れるとIAMが登録され、
+ディレクトリ構造が作られる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex init --profile apex
+Project name: try-apex
+Project description: test  
+[+] creating IAM try-apex_lambda_function role
+[+] creating IAM try-apex_lambda_logs policy
+[+] attaching policy to lambda_function role.
+[+] creating ./project.json
+[+] creating ./functions
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;package.jsonで環境変数などの設定ができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls -R
+functions	project.json
+
+./functions:
+hello
+
+./functions/hello:
+index.js
+
+$ cat project.json 
+{
+  &amp;quot;name&amp;quot;: &amp;quot;try-apex&amp;quot;,
+  &amp;quot;description&amp;quot;: &amp;quot;test&amp;quot;,
+  &amp;quot;memory&amp;quot;: 128,
+  &amp;quot;timeout&amp;quot;: 5,
+  &amp;quot;role&amp;quot;: &amp;quot;arn:aws:iam::524580158183:role/try-apex_lambda_function&amp;quot;,
+  &amp;quot;environment&amp;quot;: {}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apex deploy&lt;/code&gt;するとlambdaが作られる。&lt;code&gt;--dry-run&lt;/code&gt;もできる。
+バージョン管理されているので&lt;code&gt;rollback&lt;/code&gt;もできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex deploy hello --profile apex
+   • creating function         env= function=hello
+   • created alias current     env= function=hello version=1
+   • function created          env= function=hello name=try-apex_hello version=1
+
+$ apex list
+
+  hello
+    runtime: nodejs6.10
+    memory: 128mb
+    timeout: 5s
+    role: arn:aws:iam::*****:role/try-apex_lambda_function
+    handler: index.handle
+    arn: arn:aws:lambda:ap-northeast-1:*****:function:try-apex_hello:current
+    aliases: current@v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;マネジメントコンソールではここでバージョンが確認できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/140.png&#34; alt=&#34;バージョンの確認&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;apex invoke&lt;/code&gt;で実行。標準入力でイベントを渡せる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex invoke hello
+{&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;パッケージに含めないファイルは.apexignoreに書く。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Node.jsのコードをPrettierでフォーマットしてESLintにかける</title>
+          <link>https://www.sambaiz.net/article/139/</link>
+          <pubDate>Thu, 19 Oct 2017 00:35:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/139/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/prettier/prettier&#34;&gt;Prettier&lt;/a&gt;はJSやTSのコードフォーマッタで、
+ReactやBabel、Yarnなどの開発にも使われている。&lt;/p&gt;
+
+&lt;p&gt;今回はPrettierでフォーマットしたものを
+&lt;code&gt;eslint --fix&lt;/code&gt;する&lt;a href=&#34;https://github.com/prettier/prettier-eslint-cli&#34;&gt;prettier-eslint-cli&lt;/a&gt;を使う。役割が被っているけどPrettierは&lt;code&gt;eslint --fix&lt;/code&gt;よりも強力にフォーマットしてくれるようだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git init
+$ yarn add --dev eslint eslint-config-google prettier-eslint-cli husky lint-staged
+$ cat .eslintrc.js 
+module.exports = {
+    &amp;quot;extends&amp;quot;: &amp;quot;google&amp;quot;,
+    &amp;quot;parserOptions&amp;quot;: {
+    	&amp;quot;ecmaVersion&amp;quot;: 2017,
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;対象のコードはこれ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/main.js
+/**
+ * hoge function
+ */
+function hoge() {
+
+  const f = (aaaaaaaaaaaaaaa, bbbbbbbbbb, ccccccccc, dddddddddddd, eeeeeeeeeeeeee) =&amp;gt;
+    console.log(&#39;a&#39;);
+
+
+  f(1, 2, 3, 4, 5);
+}
+
+
+hoge();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Prettierのドキュメントでも紹介されているように&lt;a href=&#34;https://github.com/okonet/lint-staged&#34;&gt;lint-staged&lt;/a&gt;を使うとCommit時にフォーマットし、Lintをかけることができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;scripts&amp;quot;: {
+    &amp;quot;precommit&amp;quot;: &amp;quot;lint-staged&amp;quot;,
+    &amp;quot;lint&amp;quot;: &amp;quot;eslint src&amp;quot;,
+    &amp;quot;format&amp;quot;: &amp;quot;prettier-eslint --write \&amp;quot;src/**/*.js\&amp;quot;&amp;quot;
+  },
+  &amp;quot;lint-staged&amp;quot;: {
+    &amp;quot;*.js&amp;quot;: [
+      &amp;quot;prettier-eslint --write&amp;quot;,
+      &amp;quot;eslint&amp;quot;,
+      &amp;quot;git add&amp;quot;
+    ]
+  },
+  &amp;quot;devDependencies&amp;quot;: {
+    &amp;quot;eslint&amp;quot;: &amp;quot;^4.9.0&amp;quot;,
+    &amp;quot;eslint-config-google&amp;quot;: &amp;quot;^0.9.1&amp;quot;,
+    &amp;quot;husky&amp;quot;: &amp;quot;^0.14.3&amp;quot;,
+    &amp;quot;lint-staged&amp;quot;: &amp;quot;^4.2.3&amp;quot;,
+    &amp;quot;prettier-eslint-cli&amp;quot;: &amp;quot;^4.4.0&amp;quot;
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git commit -m &amp;quot;test&amp;quot;
+husky &amp;gt; npm run -s precommit (node v8.2.1)
+
+ ✔ Running tasks for *.js
+[master e325ea3] test
+
+$ cat src/main.js 
+/**
+ * hoge function
+ */
+function hoge() {
+  const f = (
+    aaaaaaaaaaaaaaa,
+    bbbbbbbbbb,
+    ccccccccc,
+    dddddddddddd,
+    eeeeeeeeeeeeee
+  ) =&amp;gt; console.log(&#39;a&#39;);
+
+  f(1, 2, 3, 4, 5);
+}
+
+hoge();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Prettierは&lt;code&gt;eslint --fix&lt;/code&gt;で修正されないmax-lenも良い感じにしてくれる。
+なのでESLintのフォーマットに関するところはほとんど修正いらないはず。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git commit -m &amp;quot;test&amp;quot;
+husky &amp;gt; npm run -s precommit (node v8.2.1)
+
+ ❯ Running tasks for *.js
+   ✖ eslint --fix
+     git add
+✖ eslint --fix found some errors. Please fix them and try committing again.
+
+***/src/main.js
+  5:1  error  Line 5 exceeds the maximum line length of 80  max-len
+
+✖ 1 problem (1 error, 0 warnings)
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -67,14 +645,16 @@ p=0.5であれば、n=10の二項分布&lt;code&gt;B[10,0.5]&lt;/code&gt;でも�
     
       
         <item>
-          <title>ノルムとは</title>
+          <title>Lpノルムと正則化</title>
           <link>https://www.sambaiz.net/article/137/</link>
           <pubDate>Thu, 12 Oct 2017 23:48:00 &#43;0900</pubDate>
           <author></author>
           <guid>https://www.sambaiz.net/article/137/</guid>
           <description>
 
-&lt;p&gt;ノルムというのはベクトル空間の距離を表す、以下の条件を満たす関数p。&lt;/p&gt;
+&lt;h2 id=&#34;ノルムとは&#34;&gt;ノルムとは&lt;/h2&gt;
+
+&lt;p&gt;ノルムはベクトル空間の距離を表す、以下の条件を満たす関数p。&lt;/p&gt;
 
 &lt;ul&gt;
 &lt;li&gt;&lt;code&gt;p(av) = |a| p(v)&lt;/code&gt;: スケーラブル&lt;/li&gt;
@@ -100,9 +680,20 @@ StreetとAvenueが格子状になっているマンハッタンではタクシ�
 
 &lt;p&gt;2乗の和の平方根。普通の距離。&lt;/p&gt;
 
+&lt;h2 id=&#34;正則化-regularization&#34;&gt;正則化(regularization)&lt;/h2&gt;
+
+&lt;p&gt;機械学習で過学習を防ぐためのもの。
+Lp正則化は重みのLpノルムをp乗してハイパーパラメータΛを掛けたものを正則化項として
+素の損失関数に加える。これを最小化するのだから重みがペナルティとしてはたらく。
+L1正則化ではΛが大きければいくつかの重みが0になって次元削減できるが、
+L2正則化では重みに比例して小さくなるだけ。それぞれLasso回帰、Ridge回帰ともいう。
+また、これらを割合で足して使うElasticNetというものもある。&lt;/p&gt;
+
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Norm_(mathematics)&#34;&gt;Norm (mathematics) - Wikipedia&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://tjo.hatenablog.com/entry/2015/03/03/190000&#34;&gt;RでL1 / L2正則化を実践する - 六本木で働くデータサイエンティストのブログ&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       

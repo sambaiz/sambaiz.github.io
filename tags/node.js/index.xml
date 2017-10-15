@@ -11,6 +11,221 @@
     
       
         <item>
+          <title>ApexでLambdaをデプロイする</title>
+          <link>https://www.sambaiz.net/article/140/</link>
+          <pubDate>Sun, 22 Oct 2017 16:06:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/140/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/apex/apex&#34;&gt;Apex&lt;/a&gt;でLambdaをデプロイする。
+とても簡単に使えるし、変なこともしないので良い感じ。&lt;/p&gt;
+
+&lt;p&gt;インストール。ダウンロードして実行できるようにしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl https://raw.githubusercontent.com/apex/apex/master/install.sh | sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;IAMFullAccess&lt;/li&gt;
+&lt;li&gt;AWSLambdaFullAccess&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;を付けたIAMのプロファイルを登録しておく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws configure --profile apex
+$ aws configure list --profile apex
+      Name                    Value             Type    Location
+      ----                    -----             ----    --------
+   profile                     apex           manual    --profile
+access_key     ****************OVGQ shared-credentials-file    
+secret_key     ****************oi5t shared-credentials-file    
+    region           ap-northeast-1      config-file    ~/.aws/config
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apex init&lt;/code&gt;してnameとdescriptionを入れるとIAMが登録され、
+ディレクトリ構造が作られる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex init --profile apex
+Project name: try-apex
+Project description: test  
+[+] creating IAM try-apex_lambda_function role
+[+] creating IAM try-apex_lambda_logs policy
+[+] attaching policy to lambda_function role.
+[+] creating ./project.json
+[+] creating ./functions
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;package.jsonで環境変数などの設定ができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls -R
+functions	project.json
+
+./functions:
+hello
+
+./functions/hello:
+index.js
+
+$ cat project.json 
+{
+  &amp;quot;name&amp;quot;: &amp;quot;try-apex&amp;quot;,
+  &amp;quot;description&amp;quot;: &amp;quot;test&amp;quot;,
+  &amp;quot;memory&amp;quot;: 128,
+  &amp;quot;timeout&amp;quot;: 5,
+  &amp;quot;role&amp;quot;: &amp;quot;arn:aws:iam::524580158183:role/try-apex_lambda_function&amp;quot;,
+  &amp;quot;environment&amp;quot;: {}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apex deploy&lt;/code&gt;するとlambdaが作られる。&lt;code&gt;--dry-run&lt;/code&gt;もできる。
+バージョン管理されているので&lt;code&gt;rollback&lt;/code&gt;もできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex deploy hello --profile apex
+   • creating function         env= function=hello
+   • created alias current     env= function=hello version=1
+   • function created          env= function=hello name=try-apex_hello version=1
+
+$ apex list
+
+  hello
+    runtime: nodejs6.10
+    memory: 128mb
+    timeout: 5s
+    role: arn:aws:iam::*****:role/try-apex_lambda_function
+    handler: index.handle
+    arn: arn:aws:lambda:ap-northeast-1:*****:function:try-apex_hello:current
+    aliases: current@v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;マネジメントコンソールではここでバージョンが確認できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/140.png&#34; alt=&#34;バージョンの確認&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;apex invoke&lt;/code&gt;で実行。標準入力でイベントを渡せる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex invoke hello
+{&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;パッケージに含めないファイルは.apexignoreに書く。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Node.jsのコードをPrettierでフォーマットしてESLintにかける</title>
+          <link>https://www.sambaiz.net/article/139/</link>
+          <pubDate>Thu, 19 Oct 2017 00:35:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/139/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/prettier/prettier&#34;&gt;Prettier&lt;/a&gt;はJSやTSのコードフォーマッタで、
+ReactやBabel、Yarnなどの開発にも使われている。&lt;/p&gt;
+
+&lt;p&gt;今回はPrettierでフォーマットしたものを
+&lt;code&gt;eslint --fix&lt;/code&gt;する&lt;a href=&#34;https://github.com/prettier/prettier-eslint-cli&#34;&gt;prettier-eslint-cli&lt;/a&gt;を使う。役割が被っているけどPrettierは&lt;code&gt;eslint --fix&lt;/code&gt;よりも強力にフォーマットしてくれるようだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git init
+$ yarn add --dev eslint eslint-config-google prettier-eslint-cli husky lint-staged
+$ cat .eslintrc.js 
+module.exports = {
+    &amp;quot;extends&amp;quot;: &amp;quot;google&amp;quot;,
+    &amp;quot;parserOptions&amp;quot;: {
+    	&amp;quot;ecmaVersion&amp;quot;: 2017,
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;対象のコードはこれ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/main.js
+/**
+ * hoge function
+ */
+function hoge() {
+
+  const f = (aaaaaaaaaaaaaaa, bbbbbbbbbb, ccccccccc, dddddddddddd, eeeeeeeeeeeeee) =&amp;gt;
+    console.log(&#39;a&#39;);
+
+
+  f(1, 2, 3, 4, 5);
+}
+
+
+hoge();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Prettierのドキュメントでも紹介されているように&lt;a href=&#34;https://github.com/okonet/lint-staged&#34;&gt;lint-staged&lt;/a&gt;を使うとCommit時にフォーマットし、Lintをかけることができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;scripts&amp;quot;: {
+    &amp;quot;precommit&amp;quot;: &amp;quot;lint-staged&amp;quot;,
+    &amp;quot;lint&amp;quot;: &amp;quot;eslint src&amp;quot;,
+    &amp;quot;format&amp;quot;: &amp;quot;prettier-eslint --write \&amp;quot;src/**/*.js\&amp;quot;&amp;quot;
+  },
+  &amp;quot;lint-staged&amp;quot;: {
+    &amp;quot;*.js&amp;quot;: [
+      &amp;quot;prettier-eslint --write&amp;quot;,
+      &amp;quot;eslint&amp;quot;,
+      &amp;quot;git add&amp;quot;
+    ]
+  },
+  &amp;quot;devDependencies&amp;quot;: {
+    &amp;quot;eslint&amp;quot;: &amp;quot;^4.9.0&amp;quot;,
+    &amp;quot;eslint-config-google&amp;quot;: &amp;quot;^0.9.1&amp;quot;,
+    &amp;quot;husky&amp;quot;: &amp;quot;^0.14.3&amp;quot;,
+    &amp;quot;lint-staged&amp;quot;: &amp;quot;^4.2.3&amp;quot;,
+    &amp;quot;prettier-eslint-cli&amp;quot;: &amp;quot;^4.4.0&amp;quot;
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git commit -m &amp;quot;test&amp;quot;
+husky &amp;gt; npm run -s precommit (node v8.2.1)
+
+ ✔ Running tasks for *.js
+[master e325ea3] test
+
+$ cat src/main.js 
+/**
+ * hoge function
+ */
+function hoge() {
+  const f = (
+    aaaaaaaaaaaaaaa,
+    bbbbbbbbbb,
+    ccccccccc,
+    dddddddddddd,
+    eeeeeeeeeeeeee
+  ) =&amp;gt; console.log(&#39;a&#39;);
+
+  f(1, 2, 3, 4, 5);
+}
+
+hoge();
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Prettierは&lt;code&gt;eslint --fix&lt;/code&gt;で修正されないmax-lenも良い感じにしてくれる。
+なのでESLintのフォーマットに関するところはほとんど修正いらないはず。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git commit -m &amp;quot;test&amp;quot;
+husky &amp;gt; npm run -s precommit (node v8.2.1)
+
+ ❯ Running tasks for *.js
+   ✖ eslint --fix
+     git add
+✖ eslint --fix found some errors. Please fix them and try committing again.
+
+***/src/main.js
+  5:1  error  Line 5 exceeds the maximum line length of 80  max-len
+
+✖ 1 problem (1 error, 0 warnings)
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</title>
           <link>https://www.sambaiz.net/article/132/</link>
           <pubDate>Sun, 10 Sep 2017 23:45:00 &#43;0900</pubDate>
