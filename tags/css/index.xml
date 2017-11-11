@@ -11,6 +11,300 @@
     
       
         <item>
+          <title>JavaScriptのrequire/import</title>
+          <link>https://www.sambaiz.net/article/143/</link>
+          <pubDate>Sat, 11 Nov 2017 20:20:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/143/</guid>
+          <description>
+
+&lt;h2 id=&#34;scriptタグを並べる&#34;&gt;scriptタグを並べる&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;body&amp;gt;
+&amp;lt;script src=&amp;quot;a.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;script src=&amp;quot;b.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;/body&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;先に書かれた&lt;code&gt;a.js&lt;/code&gt;で定義された内容は&lt;code&gt;b.js&lt;/code&gt;で読むことができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat a.js 
+const a = &#39;a is defined&#39;;
+const divA = document.createElement(&#39;div&#39;);
+divA.textContent = (typeof b !== &#39;undefined&#39;) ? b : &#39;b is undefined&#39;;
+document.body.appendChild(divA);
+
+$ cat b.js 
+const b = &#39;b is defined&#39;;
+const divB = document.createElement(&#39;div&#39;);
+divB.textContent = (typeof a !== &#39;undefined&#39;) ? a : &#39;a is undefined&#39;;
+document.body.appendChild(divB);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;依存が増えてくると順番を考えるのが大変。さらにグローバルな名前空間を汚染してしまう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;b is undefined
+a is defined
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;amdとcommonjsとes-modules&#34;&gt;AMDとCommonJSとES Modules&lt;/h2&gt;
+
+&lt;p&gt;というのも、かつてのJSにはモジュールを読み込む仕組みがなかった。
+そこで考えられたのがAMDやCommonJSというフォーマット。
+AMD(Asynchronous module definition)は&lt;a href=&#34;http://requirejs.org/&#34;&gt;RequireJS&lt;/a&gt;によって提供される&lt;code&gt;require()&lt;/code&gt;で動的にscriptタグを埋める。CommonJSはNodeでもおなじみの&lt;code&gt;require()&lt;/code&gt;で、これにWebpackなどを通して一つのファイルにまとめておく。同じ関数名が使われているが全くの別物。&lt;/p&gt;
+
+&lt;p&gt;今は言語仕様にECMAScript Modulesが追加され、普通に&lt;code&gt;import&lt;/code&gt;でモジュールを読み込めるようになったが、
+対応ブラウザがまだ少ないのでWebpackなどをかける必要がある。
+Nodeにも実装されているがStableになるのは&lt;a href=&#34;https://nodejs.org/api/esm.html&#34;&gt;まだ先&lt;/a&gt;のようだ。&lt;/p&gt;
+
+&lt;h2 id=&#34;requirejs-http-requirejs-org&#34;&gt;&lt;a href=&#34;http://requirejs.org/&#34;&gt;RequireJS&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;define()&lt;/code&gt;でモジュールを定義し、&lt;code&gt;require()&lt;/code&gt;で読み込む。
+エントリーポイントは&lt;code&gt;data-main&lt;/code&gt;に指定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/b.js
+require([&#39;a&#39;], (a) =&amp;gt; {
+  const divB = document.createElement(&#39;div&#39;);
+  divB.textContent = a.a();
+  document.body.appendChild(divB);
+});
+
+$ cat src/a.js
+define({
+  a: () =&amp;gt; &#39;a is defined&#39;
+});
+
+$ cat src/index.html
+&amp;lt;body&amp;gt;
+&amp;lt;script data-main=&amp;quot;b.js&amp;quot; src=&amp;quot;require.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;/body&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CommonJSのモジュールを読み込もうとするとエラーになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/c.js 
+const d = require(&#39;d&#39;);
+exports.c = () =&amp;gt; {
+  return d.d();
+};
+
+$ cat src/d.js 
+exports.d = () =&amp;gt; &#39;d is defined&#39;;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;Uncaught Error: Module name &amp;quot;d&amp;quot; has not been loaded yet for context: _. Use require([])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;RequireJSのNode版、&lt;a href=&#34;https://github.com/requirejs/r.js&#34;&gt;r.js&lt;/a&gt;でCommonJSのモジュールをAMDに変換することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install -g requirejs
+$ r.js -convert src out
+$ cat c.js 
+define(function (require, exports, module) {const d = require(&#39;d&#39;);
+exports.c = () =&amp;gt; {
+  return d.d();
+};
+
+});
+
+$ cat d.js 
+define(function (require, exports, module) {exports.d = () =&amp;gt; &#39;d is defined&#39;;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;また、Webpackのようにコードを一つのjsファイルにbundleすることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ r.js -o baseUrl=out name=b out=bundle.js optimize=none
+$ cat bundle.js 
+define(&#39;a&#39;,{
+  a: () =&amp;gt; &#39;a is defined&#39;
+});
+
+define(&#39;d&#39;,[&#39;require&#39;,&#39;exports&#39;,&#39;module&#39;],function (require, exports, module) {exports.d = () =&amp;gt; &#39;d is defined&#39;;
+
+
+});
+
+define(&#39;c&#39;,[&#39;require&#39;,&#39;exports&#39;,&#39;module&#39;,&#39;d&#39;],function (require, exports, module) {const d = require(&#39;d&#39;);
+exports.c = () =&amp;gt; {
+  return d.d();
+};
+
+});
+
+require([&#39;a&#39;,&#39;c&#39;], (a,c) =&amp;gt; {
+  const divB = document.createElement(&#39;div&#39;);
+  divB.textContent = a.a();
+  document.body.appendChild(divB);
+
+  const divB2 = document.createElement(&#39;div&#39;);
+  divB2.textContent = c.c();
+  document.body.appendChild(divB2);
+});
+
+define(&amp;quot;b&amp;quot;, function(){});
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちなみに&lt;code&gt;optimize=none&lt;/code&gt;を付けているのはES6のコードに対応していないため。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;If the source uses ES2015 or later syntax, please pass &amp;quot;optimize: &#39;none&#39;&amp;quot; to r.js and use an ES2015+ compatible minifier after running r.js. The included UglifyJS only understands ES5 or earlier syntax.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/guybedford/require-css&#34;&gt;guybedford/require-css&lt;/a&gt;を使うと
+cssも依存に含めることができ、scriptタグと同様にstyleタグが動的に入る。&lt;/p&gt;
+
+&lt;h2 id=&#34;webpack-https-webpack-js-org&#34;&gt;&lt;a href=&#34;https://webpack.js.org/&#34;&gt;Webpack&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;webpack.config.js&lt;/code&gt;の
+&lt;code&gt;entry&lt;/code&gt;にエントリーポイント、
+&lt;code&gt;output&lt;/code&gt;に出力場所、
+&lt;code&gt;module&lt;/code&gt;にJS以外のファイルを処理するloader、
+&lt;code&gt;plugins&lt;/code&gt;に全体を処理するpluginの
+設定を書く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yarn add --dev webpack html-webpack-plugin
+$ cat webpack.config.js 
+const HtmlWebpackPlugin = require(&#39;html-webpack-plugin&#39;);
+const webpack = require(&#39;webpack&#39;);
+const path = require(&#39;path&#39;);
+
+const config = {
+  entry: &#39;./src/main.js&#39;,
+  output: {
+    path: path.resolve(__dirname, &#39;dist&#39;),
+    filename: &#39;bundle.js&#39;
+  },
+  module: {},
+  plugins: [
+    // new webpack.optimize.UglifyJsPlugin(),
+    new HtmlWebpackPlugin({template: &#39;./src/index.html&#39;})
+  ]
+};
+
+module.exports = config;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ES Modulesの記法を使っている。CommonJSにも対応しているが今はこちらが&lt;a href=&#34;https://webpack.js.org/api/module-methods/&#34;&gt;推奨&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/main.js 
+import { bar } from &#39;./foo&#39;;
+const div = document.createElement(&#39;div&#39;);
+div.textContent = bar();
+document.body.appendChild(div);
+
+$ cat src/foo.js 
+export function bar() {
+  return &#39;bar&#39;;
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実行するとこんな感じにbundleされる。実際はUglifyJsPluginによってもう少しサイズが小さくなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ node_modules/.bin/webpack 
+$ cat dist/index.html 
+&amp;lt;!DOCTYPE html&amp;gt;
+&amp;lt;html&amp;gt;
+  &amp;lt;head&amp;gt;
+    &amp;lt;title&amp;gt;Test&amp;lt;/title&amp;gt;
+  &amp;lt;/head&amp;gt;
+  &amp;lt;body&amp;gt;
+  &amp;lt;script type=&amp;quot;text/javascript&amp;quot; src=&amp;quot;bundle.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;&amp;lt;/body&amp;gt;
+&amp;lt;/html&amp;gt;
+
+$ z$ cat dist/bundle.js 
+/******/ (function(modules) { // webpackBootstrap
+/******/ 	// The module cache
+/******/ 	var installedModules = {};
+/******/
+/******/ 	// The require function
+/******/ 	function __webpack_require__(moduleId) {
+/******/
+...
+/******/
+/******/ 	// Load entry module and return exports
+/******/ 	return __webpack_require__(__webpack_require__.s = 0);
+/******/ })
+/************************************************************************/
+/******/ ([
+/* 0 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+&amp;quot;use strict&amp;quot;;
+Object.defineProperty(__webpack_exports__, &amp;quot;__esModule&amp;quot;, { value: true });
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__foo__ = __webpack_require__(1);
+
+const div = document.createElement(&#39;div&#39;);
+div.textContent = Object(__WEBPACK_IMPORTED_MODULE_0__foo__[&amp;quot;a&amp;quot; /* bar */])();
+document.body.appendChild(div);
+
+
+/***/ }),
+/* 1 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+&amp;quot;use strict&amp;quot;;
+/* harmony export (immutable) */ __webpack_exports__[&amp;quot;a&amp;quot;] = bar;
+function bar() {
+  return &#39;bar&#39;;
+};
+
+
+/***/ })
+/******/ ]);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/webpack-contrib/css-loader&#34;&gt;css-loader&lt;/a&gt;を使うとCSSをbundleできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yarn add --dev style-loader css-loader
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CSS Moduleを有効にして、ほかの同名のクラスに影響を及ぼさないようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: [ 
+          &#39;style-loader&#39;, 
+          {
+            loader: &#39;css-loader&#39;,
+            options: {
+              modules: true,
+            }
+          }
+        ]
+      }
+    ]
+  },
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;importするとCSSに書かれたクラスと変換後の対応が取れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat src/main.js 
+import { bar } from &#39;./foo&#39;;
+import css from &#39;./style.css&#39;;
+
+const div = document.createElement(&#39;div&#39;);
+div.textContent = bar();
+div.className = css[&#39;bg&#39;]; /* {&amp;quot;bg&amp;quot;:&amp;quot;_2T2hBh3FkCro4-BOuqaGg5&amp;quot;} */
+document.body.appendChild(div);
+
+$ cat src/style.css 
+.bg {
+  background-color: #22ee22;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;動的に&lt;code&gt;&amp;lt;style&amp;gt;&lt;/code&gt;が埋められる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat dist/bundle.js | grep &amp;quot;#22ee22&amp;quot;
+exports.push([module.i, &amp;quot;._2T2hBh3FkCro4-BOuqaGg5 {\n  background-color: #22ee22;\n}\n&amp;quot;, &amp;quot;&amp;quot;]);
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>CSSのdisplayとposition</title>
           <link>https://www.sambaiz.net/article/98/</link>
           <pubDate>Sat, 06 May 2017 14:58:00 &#43;0900</pubDate>
