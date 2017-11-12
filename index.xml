@@ -6,8 +6,150 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2017</rights>
-    <updated>2017-11-11 20:20:00 &#43;0900 JST</updated>
+    <updated>2017-11-12 22:23:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>ApexでデプロイしたLambdaのトリガーをTerraformで管理する</title>
+          <link>https://www.sambaiz.net/article/144/</link>
+          <pubDate>Sun, 12 Nov 2017 22:23:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/144/</guid>
+          <description>
+
+&lt;p&gt;Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。
+これを手作業で行うこともできるのだけど、せっかくなのでアプリケーションと一緒に管理したい。
+そんなときのために&lt;code&gt;terraform&lt;/code&gt;コマンドをラップした&lt;a href=&#34;http://apex.run/#managing-infrastructure&#34;&gt;apex infra&lt;/a&gt;が用意されている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/121/&#34;&gt;TerraformでVPCを管理するmoduleを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。
+その下に環境ごとのディレクトリを作成することもできて、その場合は&lt;code&gt;--env&lt;/code&gt;で指定した環境のものが使われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;- functions
+- infrastructure
+  main.tf
+  variables.tf
+  - modules
+    - cloudwatch_schedule
+      main.tf
+      variables.tf
+project.json 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;functionをデプロイするとそのARNが変数で取れるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex list --tfvars
+apex_function_hello=&amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_rule.html&#34;&gt;aws_cloudwatch_event_rule&lt;/a&gt;でイベントルール(今回はschedule)を作成&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_target.html&#34;&gt;aws_cloudwatch_event_target&lt;/a&gt;でルールにターゲット(今回はLambda)を設定&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/lambda_permission.html&#34;&gt;aws_lambda_permission&lt;/a&gt;でルールに対象Lambdaをinvokeする権限を付ける&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat infrastructure/modules/cloudwatch_schefule/variables.tf
+variable &amp;quot;lambda_function_name&amp;quot; {}
+variable &amp;quot;lambda_function_arn&amp;quot; {}
+variable &amp;quot;schedule_expression&amp;quot; {
+    description = &amp;quot;cloudwatch schedule expression e.g. \&amp;quot;cron(0/5 * * * ? *)\&amp;quot;&amp;quot;
+}
+
+$ cat infrastructure/modules/cloudwatch_schefule/main.tf
+resource &amp;quot;aws_cloudwatch_event_rule&amp;quot; &amp;quot;lambda&amp;quot; {
+  name        = &amp;quot;lambda_rule_${var.lambda_function_name}&amp;quot;
+  description = &amp;quot;invoke lambda ${var.lambda_function_name}&amp;quot;
+  schedule_expression = &amp;quot;${var.schedule_expression}&amp;quot;
+}
+ 
+resource &amp;quot;aws_cloudwatch_event_target&amp;quot; &amp;quot;lambda&amp;quot; {
+  target_id = &amp;quot;lambda_target_${var.lambda_function_name}&amp;quot;
+  rule      = &amp;quot;${aws_cloudwatch_event_rule.lambda.name}&amp;quot;
+  arn       = &amp;quot;${var.lambda_function_arn}&amp;quot;
+}
+ 
+resource &amp;quot;aws_lambda_permission&amp;quot; &amp;quot;lambda&amp;quot; {
+  statement_id  = &amp;quot;AllowExecutionFromCloudWatch&amp;quot;
+  action        = &amp;quot;lambda:InvokeFunction&amp;quot;
+  function_name = &amp;quot;${aws_cloudwatch_event_target.lambda.arn}&amp;quot;
+  principal     = &amp;quot;events.amazonaws.com&amp;quot;
+  source_arn    = &amp;quot;${aws_cloudwatch_event_rule.lambda.arn}&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat infrastructure/variables.tf 
+variable &amp;quot;apex_function_names&amp;quot; {
+    type=&amp;quot;map&amp;quot;
+}
+variable &amp;quot;apex_function_hello&amp;quot; {}
+
+$ cat infrastructure/main.tf
+terraform {
+  backend &amp;quot;s3&amp;quot; {
+    bucket = &amp;quot;sambaiz-terraform&amp;quot;
+    key    = &amp;quot;usetf.tfstate&amp;quot;
+    region = &amp;quot;ap-northeast-1&amp;quot;
+  }
+}
+
+module &amp;quot;hello_trigger&amp;quot; {
+  source = &amp;quot;./modules/cloudwatch_schedule&amp;quot;
+  lambda_function_name = &amp;quot;${var.apex_function_names[&amp;quot;hello&amp;quot;]}&amp;quot;
+  lambda_function_arn = &amp;quot;${var.apex_function_hello}&amp;quot;
+  schedule_expression = &amp;quot;cron(0/5 * * * ? *)&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;init&lt;/code&gt;してbackendを初期化してmoduleを準備する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra --profile apex init
+$ ls infrastructure/.terraform/modules/*****
+main.tf		variables.tf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;plan&lt;/code&gt;するとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra --profile apex plan
++ module.hello_trigger.aws_cloudwatch_event_rule.lambda
+    arn:                 &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+    description:         &amp;quot;invoke lambda usetf_hello&amp;quot;
+    is_enabled:          &amp;quot;true&amp;quot;
+    name:                &amp;quot;lambda_rule_usetf_hello&amp;quot;
+    schedule_expression: &amp;quot;cron(0/5 * * * ? *)&amp;quot;
+
++ module.hello_trigger.aws_cloudwatch_event_target.lambda
+    arn:       &amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+    rule:      &amp;quot;lambda_rule_usetf_hello&amp;quot;
+    target_id: &amp;quot;lambda_target_usetf_hello&amp;quot;
+
++ module.hello_trigger.aws_lambda_permission.lambda
+    action:        &amp;quot;lambda:InvokeFunction&amp;quot;
+    function_name: &amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+    principal:     &amp;quot;events.amazonaws.com&amp;quot;
+    source_arn:    &amp;quot;${aws_cloudwatch_event_rule.lambda.arn}&amp;quot;
+    statement_id:  &amp;quot;AllowExecutionFromCloudWatch&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apply&lt;/code&gt;するとトリガーが登録される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra --profile apex apply
+$ apex logs --profile apex hello
+...
+/aws/lambda/usetf_hello 2017-11-12T13:20:14.561Z	37e75818-c7ac-11e7-a333-111863808b13	processing event:
+...
+/aws/lambda/usetf_hello 2017-11-12T13:25:15.182Z	eb178941-c7ac-11e7-bde0-998ea9659640 processing event:
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://dev.classmethod.jp/cloud/aws/ami-and-snapshot-delete-with-apex-and-terraform/&#34;&gt;ApexとTerraformでCloudWatch EventsによりInvokeされるLambda関数をデプロイする ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -47,15 +189,17 @@ document.body.appendChild(divB);
 a is defined
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h2 id=&#34;amdとcommonjsとes-modules&#34;&gt;AMDとCommonJSとES Modules&lt;/h2&gt;
+&lt;h2 id=&#34;amdとcommonjs&#34;&gt;AMDとCommonJS&lt;/h2&gt;
 
 &lt;p&gt;というのも、かつてのJSにはモジュールを読み込む仕組みがなかった。
 そこで考えられたのがAMDやCommonJSというフォーマット。
-AMD(Asynchronous module definition)は&lt;a href=&#34;http://requirejs.org/&#34;&gt;RequireJS&lt;/a&gt;によって提供される&lt;code&gt;require()&lt;/code&gt;で動的にscriptタグを埋める。CommonJSはNodeでもおなじみの&lt;code&gt;require()&lt;/code&gt;で、これにWebpackなどを通して一つのファイルにまとめておく。同じ関数名が使われているが全くの別物。&lt;/p&gt;
+AMD(Asynchronous module definition)は&lt;a href=&#34;http://requirejs.org/&#34;&gt;RequireJS&lt;/a&gt;によって提供される&lt;code&gt;require()&lt;/code&gt;で動的にscriptタグを埋める。CommonJSはNodeでもおなじみの&lt;code&gt;require()&lt;/code&gt;で、これにWebpackを通して一つのファイルにまとめておく。同じ関数名が使われているが全くの別物。&lt;/p&gt;
+
+&lt;h2 id=&#34;es-modules&#34;&gt;ES Modules&lt;/h2&gt;
 
 &lt;p&gt;今は言語仕様にECMAScript Modulesが追加され、普通に&lt;code&gt;import&lt;/code&gt;でモジュールを読み込めるようになったが、
-対応ブラウザがまだ少ないのでWebpackなどをかける必要がある。
-Nodeにも実装されているがStableになるのは&lt;a href=&#34;https://nodejs.org/api/esm.html&#34;&gt;まだ先&lt;/a&gt;のようだ。&lt;/p&gt;
+対応ブラウザがまだ少ないこともあり基本的にはWebpackをかけることになる。
+Nodeにも実装されつつあるがStableになるのは&lt;a href=&#34;https://nodejs.org/api/esm.html&#34;&gt;まだ先&lt;/a&gt;のようだ。&lt;/p&gt;
 
 &lt;h2 id=&#34;requirejs-http-requirejs-org&#34;&gt;&lt;a href=&#34;http://requirejs.org/&#34;&gt;RequireJS&lt;/a&gt;&lt;/h2&gt;
 
@@ -157,7 +301,7 @@ cssも依存に含めることができ、scriptタグと同様にstyleタグが
 &lt;p&gt;&lt;code&gt;webpack.config.js&lt;/code&gt;の
 &lt;code&gt;entry&lt;/code&gt;にエントリーポイント、
 &lt;code&gt;output&lt;/code&gt;に出力場所、
-&lt;code&gt;module&lt;/code&gt;にJS以外のファイルを処理するloader、
+&lt;code&gt;module&lt;/code&gt;にJS以外のファイルをbundleするloader、
 &lt;code&gt;plugins&lt;/code&gt;に全体を処理するpluginの
 設定を書く。&lt;/p&gt;
 
@@ -252,7 +396,7 @@ function bar() {
 /******/ ]);
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://github.com/webpack-contrib/css-loader&#34;&gt;css-loader&lt;/a&gt;を使うとCSSをbundleできる。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/webpack-contrib/css-loader&#34;&gt;css-loader&lt;/a&gt;でCSSをbundleする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ yarn add --dev style-loader css-loader
 &lt;/code&gt;&lt;/pre&gt;
@@ -294,7 +438,7 @@ $ cat src/style.css
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;動的に&lt;code&gt;&amp;lt;style&amp;gt;&lt;/code&gt;が埋められる。&lt;/p&gt;
+&lt;p&gt;こんな感じでbundleされている。動的にstyleタグが入るのは同じ。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat dist/bundle.js | grep &amp;quot;#22ee22&amp;quot;
 exports.push([module.i, &amp;quot;._2T2hBh3FkCro4-BOuqaGg5 {\n  background-color: #22ee22;\n}\n&amp;quot;, &amp;quot;&amp;quot;]);
@@ -340,7 +484,7 @@ LZSSはバイト列を見ていって同じ部分を発見したらそこを参�
 &lt;p&gt;LZ77、ハフマン記号に加えて2nd order context modelingというのを使って圧縮する
 Deflateではない可逆圧縮アルゴリズム。
 Safari以外のモダンなブラウザで既に対応しているか対応しているところ。
-対応している場合、&lt;code&gt;Accept-Encoding&lt;/code&gt;や&lt;code&gt;Content-Encoding&lt;/code&gt;ヘッダに含まれるのは&lt;code&gt;br&lt;/code&gt;。
+対応している場合、&lt;code&gt;Accept-Encoding&lt;/code&gt;や&lt;code&gt;Content-Encoding&lt;/code&gt;ヘッダに含まれるのは&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/HTTP/Headers/Content-Encoding&#34;&gt;br&lt;/a&gt;。
 圧縮率も展開時間もかなり良さそう。&lt;/p&gt;
 
 &lt;p&gt;Nodeにもblotliのライブラリが&lt;a href=&#34;https://github.com/devongovett/brotli.js&#34;&gt;あって&lt;/a&gt;、
@@ -7377,424 +7521,6 @@ bind | split-window -v
 # 同時入力
 bind s set-window-option synchronize-panes on
 bind S set-window-option synchronize-panes off
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>Firebaseをwebで使う(Hosting, Authentication, Realtime Database, Storage)</title>
-          <link>https://www.sambaiz.net/article/94/</link>
-          <pubDate>Sun, 16 Apr 2017 20:03:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/94/</guid>
-          <description>
-
-&lt;h2 id=&#34;firebase-https-firebase-google-com-hl-ja-とは&#34;&gt;&lt;a href=&#34;https://firebase.google.com/?hl=ja&#34;&gt;Firebase&lt;/a&gt;とは&lt;/h2&gt;
-
-&lt;p&gt;GoogleのmBaaS。Android/iOSアプリの開発に使う認証、データストア、クラッシュレポート、分析、通知、広告などなど全部入りサービス。
-今年のGoogleI/Oでも&lt;a href=&#34;https://events.google.com/io/schedule/?section=may-19&#34;&gt;毎時間のように&lt;/a&gt;
-Firebaseのセッションがあって大分推している印象。&lt;/p&gt;
-
-&lt;p&gt;基本的にはアプリで使うのだけれど、webで使える機能も結構ある。今回は&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;Hosting&lt;/li&gt;
-&lt;li&gt;Authentication&lt;/li&gt;
-&lt;li&gt;Realtime Database&lt;/li&gt;
-&lt;li&gt;Storage&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;を使ってみる。&lt;/p&gt;
-
-&lt;h2 id=&#34;料金-https-firebase-google-com-pricing&#34;&gt;&lt;a href=&#34;https://firebase.google.com/pricing/&#34;&gt;料金&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;プランは無料のSPARKと25ドル/月のFLAME、従量課金のBLAZEがある。
-試す分にはSPARKで十分だけど、Realtime Databaseの同時接続数が100なので注意。&lt;/p&gt;
-
-&lt;h2 id=&#34;セットアップ-https-firebase-google-com-docs-web-setup&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/web/setup&#34;&gt;セットアップ&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://firebase.google.com/docs/cli/&#34;&gt;firebase-cli&lt;/a&gt;をインストール、ログインして初期化する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install -g firebase-tools
-$ firebase login
-$ mkdir firebase-chat &amp;amp;&amp;amp; cd firebase-chat
-$ firebase init
-...
-? What Firebase CLI features do you want to setup for this folder? 
-❯◉ Database: Deploy Firebase Realtime Database Rules
- ◉ Functions: Configure and deploy Cloud Functions
- ◉ Hosting: Configure and deploy Firebase Hosting sites
-
-? What Firebase project do you want to associate as default? *****
-
-? What file should be used for Database Rules? database.rules.json
-
-? Do you want to install dependencies with npm now? Yes
-
-? What do you want to use as your public directory? public
-
-? Configure as a single-page app (rewrite all urls to /index.html)? Yes
-
-✔  Firebase initialization complete!
-
-$ ls
-database.rules.json	firebase.json		functions		public
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;firebase.jsonはこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat firebase.json
-{
-  &amp;quot;database&amp;quot;: {
-    &amp;quot;rules&amp;quot;: &amp;quot;database.rules.json&amp;quot;
-  },
-  &amp;quot;hosting&amp;quot;: {
-    &amp;quot;public&amp;quot;: &amp;quot;public&amp;quot;,
-    &amp;quot;rewrites&amp;quot;: [
-      {
-        &amp;quot;source&amp;quot;: &amp;quot;**&amp;quot;,
-        &amp;quot;destination&amp;quot;: &amp;quot;/index.html&amp;quot;
-      }
-    ]
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ローカルでサーバーを立ち上げて確認する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ firebase serve
-Server listening at: http://localhost:5000
-
-$ curl http://localhost:5000 # Firebase SDK loaded with auth, database, messaging, storage
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;hosting-https-firebase-google-com-docs-hosting-hl-ja&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/hosting/?hl=ja&#34;&gt;Hosting&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;静的サイトのホスティング。もちろん独自ドメインも使える。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ firebase deploy --only hosting
-...
-✔  Deploy complete!
-
-Project Console: https://console.firebase.google.com/project/*****/overview
-Hosting URL: https://*****.firebaseapp.com
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;authentication-https-firebase-google-com-docs-auth&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/auth/&#34;&gt;Authentication&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;ユーザー認証。Googleだけではなく、TwitterやFacebook、Githubといったプロバイダや、メールとパスワードでの認証が用意されていて、
-コンソールから有効にする必要がある。&lt;/p&gt;
-
-&lt;p&gt;実装はFirebase SDKで自分でやるか、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const provider = new firebase.auth.GoogleAuthProvider();
-firebase.auth().signInWithPopup(provider).then((result) =&amp;gt; {
-    console.log(`sign in successfully. ${result.user.displayName}`)
-}).catch((error) =&amp;gt; {
-    console.log(`fail to sign in. ${error.message}`)
-});
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/firebase/FirebaseUI-Web&#34;&gt;FirebaseUI Auth&lt;/a&gt;を使う。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;script defer src=&amp;quot;https://cdn.firebase.com/libs/firebaseui/1.0.1/firebaseui.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
-&amp;lt;link type=&amp;quot;text/css&amp;quot; rel=&amp;quot;stylesheet&amp;quot; href=&amp;quot;https://cdn.firebase.com/libs/firebaseui/1.0.1/firebaseui.css&amp;quot; /&amp;gt;
-
-&amp;lt;div id=&amp;quot;firebaseui-auth-container&amp;quot;&amp;gt;&amp;lt;/div&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;// FirebaseUI config.
-var uiConfig = {
-  signInOptions: [
-    // Leave the lines as is for the providers you want to offer your users.
-    firebase.auth.GoogleAuthProvider.PROVIDER_ID
-  ],
-  callbacks: {
-    signInSuccess: function(currentUser, credential, redirectUrl) {
-      // リダイレクトさせない
-      return false;
-    }
-  },
-  // Terms of service url.
-  tosUrl: &#39;&amp;lt;your-tos-url&amp;gt;&#39;
-};
-
-// Initialize the FirebaseUI Widget using Firebase.
-var ui = new firebaseui.auth.AuthUI(firebase.auth());
-// The start method will wait until the DOM is loaded.
-ui.start(&#39;#firebaseui-auth-container&#39;, uiConfig);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな感じにボタンが並ぶ。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/93-firebase-authentication.png&#34; alt=&#34;Firebase authentication&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;onAuthStateChanged()&lt;/code&gt;でsign in/outをハンドリングでき、&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;firebase.auth().onAuthStateChanged((user) =&amp;gt; {
-    if (user) {
-      console.log(`${user.displayName} sign in`);
-    } else {
-      console.log(&#39;sign out&#39;);
-    }
-  }, (error) =&amp;gt; {
-    console.log(error);
-  }
-);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;currentUserでsign inしてるユーザーを取得できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;if(firebase.auth().currentUser){
-  console.log(firebase.auth().currentUser.displayName);
-}else{
-  // need to sign in
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;realtime-database-https-firebase-google-com-docs-database&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/database/&#34;&gt;Realtime Database&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;NoSQLなデータベース。直接読み書きするのではなく、
-ローカルにデータを保存してリアルタイムに同期するため一時的にオフライン状態になっても読み書きできる。&lt;/p&gt;
-
-&lt;h3 id=&#34;読み書き-https-firebase-google-com-docs-database-web-read-and-write&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/database/web/read-and-write&#34;&gt;読み書き&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;データベースへの書き込みと更新。refで&lt;code&gt;users/1&lt;/code&gt;のように参照を取って操作する。
-&lt;a href=&#34;https://firebase.google.com/docs/reference/js/firebase.database.Reference?hl=ja#push&#34;&gt;push()&lt;/a&gt;で
-&lt;code&gt;hoge/-Khp36CCygw5AI6G8L1B&lt;/code&gt;のようなユニークなキーを発行することができ、これは時系列にソートされるようになっている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const database = firebase.database();
-
-for(let i = 0; i &amp;lt; 10; i++){
-    
-    const newHogeRef = database.ref(&#39;hoge&#39;).push();
-    console.log(`newHogeRef: ${newHogeRef.toString()}`);
-    
-    newHogeRef.set({
-        idx: i,
-        aaa: &amp;quot;bbb123&amp;quot;,
-    });
-
-    newHogeRef.update({
-        aaa: &amp;quot;bbb456&amp;quot;,
-        eee: &amp;quot;fff&amp;quot;
-    });
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;newHogeRef: https://test-3a363.firebaseio.com/hoge/-Khp36CCygw5AI6G8L1B
-newHogeRef: https://test-3a363.firebaseio.com/hoge/-Khp36CLyJ9BQVefW-l5
-newHogeRef: https://test-3a363.firebaseio.com/hoge/-Khp36CMs9-jJoKUUgr0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://firebase.google.com/docs/reference/js/firebase.database.Reference?hl=ja#on&#34;&gt;on()&lt;/a&gt;で
-value eventを拾うと、
-呼んだときとデータに変更があったときに&lt;a href=&#34;https://firebase.google.com/docs/reference/js/firebase.database.DataSnapshot?hl=ja&#34;&gt;snapshot&lt;/a&gt;が取得できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;database.ref(&amp;quot;hoge&amp;quot;).orderByKey().limitToLast(3).on(&amp;quot;value&amp;quot;, (snapshot) =&amp;gt; {
-    snapshot.forEach((data) =&amp;gt; console.log(data.val()));
-});
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;...
-Object {aaa: &amp;quot;bbb456&amp;quot;, eee: &amp;quot;fff&amp;quot;, idx: 7}
-Object {aaa: &amp;quot;bbb456&amp;quot;, eee: &amp;quot;fff&amp;quot;, idx: 8}
-Object {aaa: &amp;quot;bbb456&amp;quot;, eee: &amp;quot;fff&amp;quot;, idx: 9}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;アクセス権限-バリデーション-https-firebase-google-com-docs-database-security-securing-data&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/database/security/securing-data&#34;&gt;アクセス権限・バリデーション&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;firebase.jsonで指定しているdatabase ruleファイル(database.rules.json)でルールを設定する。
-デフォルトで認証していれば読み書きできる設定になっている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;rules&amp;quot;: {
-    &amp;quot;.read&amp;quot;: &amp;quot;auth != null&amp;quot;,
-    &amp;quot;.write&amp;quot;: &amp;quot;auth != null&amp;quot;
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;read/writeだけではなくバリデーションの設定もこんな感じでできる。
-これは&lt;code&gt;users/${ユーザーのuid}&lt;/code&gt;への読み書きを本人のみができるようにするもの。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;rules&amp;quot;: {
-    &amp;quot;users&amp;quot;: {
-      &amp;quot;$uid&amp;quot;: {
-        &amp;quot;.read&amp;quot;: &amp;quot;$uid === auth.uid&amp;quot;,
-        &amp;quot;.write&amp;quot;: &amp;quot;$uid === auth.uid&amp;quot;,
-        &amp;quot;.validate&amp;quot;: &amp;quot;newData.hasChildren([&#39;age&#39;, &#39;name&#39;]) &amp;amp;&amp;amp; newData.child(&#39;age&#39;).isNumber() &amp;amp;&amp;amp; newData.child(&#39;age&#39;).val() &amp;gt;= 0 &amp;amp;&amp;amp; newData.child(&#39;age&#39;).val() &amp;lt; 200 &amp;amp;&amp;amp; newData.child(&#39;name&#39;).isString() &amp;amp;&amp;amp; newData.child(&#39;name&#39;).val().length &amp;lt; 50&amp;quot;
-      }
-    }
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ firebase deploy --only database
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;上の設定を適用したデータベースに読み書きしてみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const uid = firebase.auth().currentUser.uid;
-
-database.ref(`users/${uid}`).set({
-    age: 20,
-    name: &amp;quot;taro&amp;quot;
-});
-
-// ok: Object {age: 20, name: &amp;quot;taro&amp;quot;}
-database.ref(`users/${uid}`).on(&amp;quot;value&amp;quot;, (snapshot) =&amp;gt; {
-    console.log(snapshot.val()); // Object {age: 20, name: &amp;quot;taro&amp;quot;}
-});
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;以下のような不正なデータや不正なキーに書き込もうとすると
-&lt;code&gt;PERMISSION_DENIED: Permission denied&lt;/code&gt;になる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;// ageがおかしい
-database.ref(`users/${uid}`).set({
-    age: &amp;quot;aaaa&amp;quot;,
-    name: &amp;quot;jiro&amp;quot;
-});
-
-// 本人じゃない
-database.ref(`users/hogehoge`).set({
-    age: 20,
-    name: &amp;quot;jiro&amp;quot;
-});
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちなみに、さっきまでアクセスできていたhogeにもアクセスできなくなっている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;// PERMISSION_DENIED: Permission denied
-database.ref(&amp;quot;hoge&amp;quot;).orderByKey().limitToLast(3).on(&amp;quot;value&amp;quot;, (snapshot) =&amp;gt; {
-    snapshot.forEach((data) =&amp;gt; console.log(data.val()));
-});
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これを解決するためにrulesのルートに&lt;code&gt;auth != null&lt;/code&gt;の設定を入れてしまうと、
-&lt;a href=&#34;https://firebase.google.com/docs/database/security/securing-data#read_and_write_rules_cascade&#34;&gt;浅い階層のルールが深い階層のルールより優先される&lt;/a&gt;
-ためusersのread/writeの設定が無効になってしまうので注意。ただしvalidateはそれぞれの階層でチェックされる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;rules&amp;quot;: {
-    &amp;quot;.read&amp;quot;: &amp;quot;auth != null&amp;quot;,
-    &amp;quot;.write&amp;quot;: &amp;quot;auth != null&amp;quot;,
-    &amp;quot;users&amp;quot;: {
-      &amp;quot;$uid&amp;quot;: {
-        &amp;quot;.read&amp;quot;: &amp;quot;$uid === auth.uid&amp;quot;,
-        &amp;quot;.write&amp;quot;: &amp;quot;$uid === auth.uid&amp;quot;,
-        &amp;quot;.validate&amp;quot;: &amp;quot;newData.hasChildren([&#39;age&#39;, &#39;name&#39;]) &amp;amp;&amp;amp; newData.child(&#39;age&#39;).isNumber() &amp;amp;&amp;amp; newData.child(&#39;age&#39;).val() &amp;gt;= 0 &amp;amp;&amp;amp; newData.child(&#39;age&#39;).val() &amp;lt; 200 &amp;amp;&amp;amp; newData.child(&#39;name&#39;).isString() &amp;amp;&amp;amp; newData.child(&#39;name&#39;).val().length &amp;lt; 50&amp;quot;
-      }
-    }
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;storage-https-firebase-google-com-docs-storage&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/storage/&#34;&gt;Storage&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;画像などを保存しておくために使う。
-Realtime Databaseと同様、
-ネットワーク品質が良くない環境でも使えるように、処理が中断されても途中から処理を再開するようになっている。
-裏側ではGoogle Cloud Storageが使われている。&lt;/p&gt;
-
-&lt;h3 id=&#34;アップロード-https-firebase-google-com-docs-storage-web-upload-files&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/storage/web/upload-files&#34;&gt;アップロード&lt;/a&gt;&lt;/h3&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;input type=&amp;quot;file&amp;quot; id=&amp;quot;file-upload&amp;quot;&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;const storage = firebase.storage();
-
-const inputFile = document.getElementById(&#39;file-upload&#39;);
-
-inputFile.addEventListener(&#39;change&#39;, (e) =&amp;gt; {
-  const files = e.target.files;
-  const user = firebase.auth().currentUser;
-  if(user){
-    const ref = storage.ref(`images/${user.uid}`);
-    const uploadTask = ref.put(files[0]);
-  }
-}, false);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;中断、再開、キャンセル。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;uploadTask.pause();
-uploadTask.resume();
-uploadTask.cancel();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;アップロードの状態はstage_changed eventで確認し、完了するとダウンロードURLを取得できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;uploadTask.on(&#39;state_changed&#39;, (snapshot) =&amp;gt; {
-
-  const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-  console.log(&#39;Upload is &#39; + progress + &#39;% done&#39;);
-
-  switch (snapshot.state) {
-    case firebase.storage.TaskState.PAUSED: // or &#39;paused&#39;
-      console.log(&#39;Upload is paused&#39;);
-      break;
-    case firebase.storage.TaskState.RUNNING: // or &#39;running&#39;
-      console.log(&#39;Upload is running&#39;);
-      break;
-  }
-}, (error) =&amp;gt; {
-  // Handle unsuccessful uploads
-  console.log(error);
-}, () =&amp;gt; {
-  // Handle successful uploads on complete
-  // For instance, get the download URL: https://firebasestorage.googleapis.com/...
-  console.log(uploadTask.snapshot.downloadURL);
-});
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;アクセス制限-バリデーション-https-firebase-google-com-docs-storage-security-hl-ja&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/storage/security/?hl=ja&#34;&gt;アクセス制限・バリデーション&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;Realtime Databaseと同様にアクセス制限やバリデーションをかけることができる。
-設定はコンソールから。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/93-firebase-storage-rule.png&#34; alt=&#34;Storageのルール&#34; /&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;service firebase.storage {
-  match /b/*****.appspot.com/o {
-    match /images/{imageId} {
-      // Only allow uploads of any image file that&#39;s less than 5MB
-      allow write: if request.resource.size &amp;lt; 5 * 1024 * 1024
-                   &amp;amp;&amp;amp; request.resource.contentType.matches(&#39;image/.*&#39;)
-                   &amp;amp;&amp;amp; request.auth != null;
-      allow read: if request.auth != null;             
-    }
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;ダウンロード-https-firebase-google-com-docs-storage-web-download-files&#34;&gt;&lt;a href=&#34;https://firebase.google.com/docs/storage/web/download-files&#34;&gt;ダウンロード&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;&lt;code&gt;getDownloadURL()&lt;/code&gt;でURLを取得する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;img id=&amp;quot;myimg&amp;quot;&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;const ref = storage.ref(`images/${user.uid}`).getDownloadURL().then((url) =&amp;gt; {
-  
-  const img = document.getElementById(&#39;myimg&#39;);
-  img.src = url;
-
-}).catch((error) =&amp;gt; {
-
-  switch (error.code) {
-    case &#39;storage/object-not-found&#39;:
-      console.log(&amp;quot;not found&amp;quot;);
-      break;
-
-    default:
-      console.log(error);
-  }
-});;
 &lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>

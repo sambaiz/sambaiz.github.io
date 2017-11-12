@@ -15,17 +15,14 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>Node.jsのコードをPrettierでフォーマットしてESLintにかける - sambaiz-net</title>
-    <meta name="twitter:title" content="Node.jsのコードをPrettierでフォーマットしてESLintにかける - sambaiz-net">
-    <meta property='og:title' content="Node.jsのコードをPrettierでフォーマットしてESLintにかける - sambaiz-net">
+    <title>ApexでデプロイしたLambdaのトリガーをTerraformで管理する - sambaiz-net</title>
+    <meta name="twitter:title" content="ApexでデプロイしたLambdaのトリガーをTerraformで管理する - sambaiz-net">
+    <meta property='og:title' content="ApexでデプロイしたLambdaのトリガーをTerraformで管理する - sambaiz-net">
     <meta property="og:type" content="article">
-    
-      <meta name="description" content="コードフォーマッタ">
-      <meta name="twitter:description" content="コードフォーマッタ">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/139/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/144/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +35,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "Node.jsのコードをPrettierでフォーマットしてESLintにかける | sambaiz-net ",
-    "datePublished": "2017-10-19T00:35:00JST",
-    "dateModified": "2017-10-19T00:35:00JST",
+    "headline": "ApexでデプロイしたLambdaのトリガーをTerraformで管理する | sambaiz-net ",
+    "datePublished": "2017-11-12T22:23:00JST",
+    "dateModified": "2017-11-12T22:23:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +59,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "コードフォーマッタ"
+    "description": ""
   }
 </script>
 </head>
@@ -103,110 +100,139 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Node.jsのコードをPrettierでフォーマットしてESLintにかける</h1>
-          <p>(2017-10-19)</p>
-          <p><a href="https://github.com/prettier/prettier">Prettier</a>はJSやTSのコードフォーマッタで、
-ReactやBabel、Yarnなどの開発にも使われている。</p>
+          <h1>ApexでデプロイしたLambdaのトリガーをTerraformで管理する</h1>
+          <p>(2017-11-12)</p>
+          
 
-<p>今回はPrettierでフォーマットしたものを
-<code>eslint --fix</code>する<a href="https://github.com/prettier/prettier-eslint-cli">prettier-eslint-cli</a>を使う。役割が被っているけどPrettierは<code>eslint --fix</code>よりも強力にフォーマットしてくれるようだ。</p>
+<p>Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。
+これを手作業で行うこともできるのだけど、せっかくなのでアプリケーションと一緒に管理したい。
+そんなときのために<code>terraform</code>コマンドをラップした<a href="http://apex.run/#managing-infrastructure">apex infra</a>が用意されている。</p>
 
-<pre><code>$ git init
-$ yarn add --dev eslint eslint-config-google prettier-eslint-cli husky lint-staged
-$ cat .eslintrc.js 
-module.exports = {
-    &quot;extends&quot;: &quot;google&quot;,
-    &quot;parserOptions&quot;: {
-    	&quot;ecmaVersion&quot;: 2017,
-    }
-};
+<p><a href="https://www.sambaiz.net/article/121/">TerraformでVPCを管理するmoduleを作る - sambaiz-net</a></p>
+
+<p>functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。
+その下に環境ごとのディレクトリを作成することもできて、その場合は<code>--env</code>で指定した環境のものが使われる。</p>
+
+<pre><code>- functions
+- infrastructure
+  main.tf
+  variables.tf
+  - modules
+    - cloudwatch_schedule
+      main.tf
+      variables.tf
+project.json 
 </code></pre>
 
-<p>対象のコードはこれ。</p>
+<p>functionをデプロイするとそのARNが変数で取れるようになる。</p>
 
-<pre><code>$ cat src/main.js
-/**
- * hoge function
- */
-function hoge() {
+<pre><code>$ apex list --tfvars
+apex_function_hello=&quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&quot;
+</code></pre>
 
-  const f = (aaaaaaaaaaaaaaa, bbbbbbbbbb, ccccccccc, dddddddddddd, eeeeeeeeeeeeee) =&gt;
-    console.log('a');
+<p>今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。</p>
 
+<ul>
+<li><a href="https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_rule.html">aws_cloudwatch_event_rule</a>でイベントルール(今回はschedule)を作成</li>
+<li><a href="https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_target.html">aws_cloudwatch_event_target</a>でルールにターゲット(今回はLambda)を設定</li>
+<li><a href="https://www.terraform.io/docs/providers/aws/r/lambda_permission.html">aws_lambda_permission</a>でルールに対象Lambdaをinvokeする権限を付ける</li>
+</ul>
 
-  f(1, 2, 3, 4, 5);
+<pre><code>$ cat infrastructure/modules/cloudwatch_schefule/variables.tf
+variable &quot;lambda_function_name&quot; {}
+variable &quot;lambda_function_arn&quot; {}
+variable &quot;schedule_expression&quot; {
+    description = &quot;cloudwatch schedule expression e.g. \&quot;cron(0/5 * * * ? *)\&quot;&quot;
 }
 
-
-hoge();
+$ cat infrastructure/modules/cloudwatch_schefule/main.tf
+resource &quot;aws_cloudwatch_event_rule&quot; &quot;lambda&quot; {
+  name        = &quot;lambda_rule_${var.lambda_function_name}&quot;
+  description = &quot;invoke lambda ${var.lambda_function_name}&quot;
+  schedule_expression = &quot;${var.schedule_expression}&quot;
+}
+ 
+resource &quot;aws_cloudwatch_event_target&quot; &quot;lambda&quot; {
+  target_id = &quot;lambda_target_${var.lambda_function_name}&quot;
+  rule      = &quot;${aws_cloudwatch_event_rule.lambda.name}&quot;
+  arn       = &quot;${var.lambda_function_arn}&quot;
+}
+ 
+resource &quot;aws_lambda_permission&quot; &quot;lambda&quot; {
+  statement_id  = &quot;AllowExecutionFromCloudWatch&quot;
+  action        = &quot;lambda:InvokeFunction&quot;
+  function_name = &quot;${aws_cloudwatch_event_target.lambda.arn}&quot;
+  principal     = &quot;events.amazonaws.com&quot;
+  source_arn    = &quot;${aws_cloudwatch_event_rule.lambda.arn}&quot;
+}
 </code></pre>
 
-<p>Prettierのドキュメントでも紹介されているように<a href="https://github.com/okonet/lint-staged">lint-staged</a>を使うとCommit時にフォーマットし、Lintをかけることができる。</p>
+<pre><code>$ cat infrastructure/variables.tf 
+variable &quot;apex_function_names&quot; {
+    type=&quot;map&quot;
+}
+variable &quot;apex_function_hello&quot; {}
 
-<pre><code>{
-  &quot;scripts&quot;: {
-    &quot;precommit&quot;: &quot;lint-staged&quot;,
-    &quot;lint&quot;: &quot;eslint src&quot;,
-    &quot;format&quot;: &quot;prettier-eslint --write \&quot;src/**/*.js\&quot;&quot;
-  },
-  &quot;lint-staged&quot;: {
-    &quot;*.js&quot;: [
-      &quot;prettier-eslint --write&quot;,
-      &quot;eslint&quot;,
-      &quot;git add&quot;
-    ]
-  },
-  &quot;devDependencies&quot;: {
-    &quot;eslint&quot;: &quot;^4.9.0&quot;,
-    &quot;eslint-config-google&quot;: &quot;^0.9.1&quot;,
-    &quot;husky&quot;: &quot;^0.14.3&quot;,
-    &quot;lint-staged&quot;: &quot;^4.2.3&quot;,
-    &quot;prettier-eslint-cli&quot;: &quot;^4.4.0&quot;
+$ cat infrastructure/main.tf
+terraform {
+  backend &quot;s3&quot; {
+    bucket = &quot;sambaiz-terraform&quot;
+    key    = &quot;usetf.tfstate&quot;
+    region = &quot;ap-northeast-1&quot;
   }
 }
-</code></pre>
 
-<pre><code>$ git commit -m &quot;test&quot;
-husky &gt; npm run -s precommit (node v8.2.1)
-
- ✔ Running tasks for *.js
-[master e325ea3] test
-
-$ cat src/main.js 
-/**
- * hoge function
- */
-function hoge() {
-  const f = (
-    aaaaaaaaaaaaaaa,
-    bbbbbbbbbb,
-    ccccccccc,
-    dddddddddddd,
-    eeeeeeeeeeeeee
-  ) =&gt; console.log('a');
-
-  f(1, 2, 3, 4, 5);
+module &quot;hello_trigger&quot; {
+  source = &quot;./modules/cloudwatch_schedule&quot;
+  lambda_function_name = &quot;${var.apex_function_names[&quot;hello&quot;]}&quot;
+  lambda_function_arn = &quot;${var.apex_function_hello}&quot;
+  schedule_expression = &quot;cron(0/5 * * * ? *)&quot;
 }
-
-hoge();
 </code></pre>
 
-<p>Prettierは<code>eslint --fix</code>で修正されないmax-lenも良い感じにしてくれる。
-なのでESLintのフォーマットに関するところはほとんど修正いらないはず。</p>
+<p><code>init</code>してbackendを初期化してmoduleを準備する。</p>
 
-<pre><code>$ git commit -m &quot;test&quot;
-husky &gt; npm run -s precommit (node v8.2.1)
-
- ❯ Running tasks for *.js
-   ✖ eslint --fix
-     git add
-✖ eslint --fix found some errors. Please fix them and try committing again.
-
-***/src/main.js
-  5:1  error  Line 5 exceeds the maximum line length of 80  max-len
-
-✖ 1 problem (1 error, 0 warnings)
+<pre><code>$ apex infra --profile apex init
+$ ls infrastructure/.terraform/modules/*****
+main.tf		variables.tf
 </code></pre>
+
+<p><code>plan</code>するとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。</p>
+
+<pre><code>$ apex infra --profile apex plan
++ module.hello_trigger.aws_cloudwatch_event_rule.lambda
+    arn:                 &quot;&lt;computed&gt;&quot;
+    description:         &quot;invoke lambda usetf_hello&quot;
+    is_enabled:          &quot;true&quot;
+    name:                &quot;lambda_rule_usetf_hello&quot;
+    schedule_expression: &quot;cron(0/5 * * * ? *)&quot;
+
++ module.hello_trigger.aws_cloudwatch_event_target.lambda
+    arn:       &quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&quot;
+    rule:      &quot;lambda_rule_usetf_hello&quot;
+    target_id: &quot;lambda_target_usetf_hello&quot;
+
++ module.hello_trigger.aws_lambda_permission.lambda
+    action:        &quot;lambda:InvokeFunction&quot;
+    function_name: &quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&quot;
+    principal:     &quot;events.amazonaws.com&quot;
+    source_arn:    &quot;${aws_cloudwatch_event_rule.lambda.arn}&quot;
+    statement_id:  &quot;AllowExecutionFromCloudWatch&quot;
+</code></pre>
+
+<p><code>apply</code>するとトリガーが登録される。</p>
+
+<pre><code>$ apex infra --profile apex apply
+$ apex logs --profile apex hello
+...
+/aws/lambda/usetf_hello 2017-11-12T13:20:14.561Z	37e75818-c7ac-11e7-a333-111863808b13	processing event:
+...
+/aws/lambda/usetf_hello 2017-11-12T13:25:15.182Z	eb178941-c7ac-11e7-bde0-998ea9659640 processing event:
+</code></pre>
+
+<h2 id="参考">参考</h2>
+
+<p><a href="https://dev.classmethod.jp/cloud/aws/ami-and-snapshot-delete-with-apex-and-terraform/">ApexとTerraformでCloudWatch EventsによりInvokeされるLambda関数をデプロイする ｜ Developers.IO</a></p>
 
         </div>
       </article>

@@ -11,6 +11,148 @@
     
       
         <item>
+          <title>ApexでデプロイしたLambdaのトリガーをTerraformで管理する</title>
+          <link>https://www.sambaiz.net/article/144/</link>
+          <pubDate>Sun, 12 Nov 2017 22:23:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/144/</guid>
+          <description>
+
+&lt;p&gt;Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。
+これを手作業で行うこともできるのだけど、せっかくなのでアプリケーションと一緒に管理したい。
+そんなときのために&lt;code&gt;terraform&lt;/code&gt;コマンドをラップした&lt;a href=&#34;http://apex.run/#managing-infrastructure&#34;&gt;apex infra&lt;/a&gt;が用意されている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/121/&#34;&gt;TerraformでVPCを管理するmoduleを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。
+その下に環境ごとのディレクトリを作成することもできて、その場合は&lt;code&gt;--env&lt;/code&gt;で指定した環境のものが使われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;- functions
+- infrastructure
+  main.tf
+  variables.tf
+  - modules
+    - cloudwatch_schedule
+      main.tf
+      variables.tf
+project.json 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;functionをデプロイするとそのARNが変数で取れるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex list --tfvars
+apex_function_hello=&amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_rule.html&#34;&gt;aws_cloudwatch_event_rule&lt;/a&gt;でイベントルール(今回はschedule)を作成&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_target.html&#34;&gt;aws_cloudwatch_event_target&lt;/a&gt;でルールにターゲット(今回はLambda)を設定&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/lambda_permission.html&#34;&gt;aws_lambda_permission&lt;/a&gt;でルールに対象Lambdaをinvokeする権限を付ける&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat infrastructure/modules/cloudwatch_schefule/variables.tf
+variable &amp;quot;lambda_function_name&amp;quot; {}
+variable &amp;quot;lambda_function_arn&amp;quot; {}
+variable &amp;quot;schedule_expression&amp;quot; {
+    description = &amp;quot;cloudwatch schedule expression e.g. \&amp;quot;cron(0/5 * * * ? *)\&amp;quot;&amp;quot;
+}
+
+$ cat infrastructure/modules/cloudwatch_schefule/main.tf
+resource &amp;quot;aws_cloudwatch_event_rule&amp;quot; &amp;quot;lambda&amp;quot; {
+  name        = &amp;quot;lambda_rule_${var.lambda_function_name}&amp;quot;
+  description = &amp;quot;invoke lambda ${var.lambda_function_name}&amp;quot;
+  schedule_expression = &amp;quot;${var.schedule_expression}&amp;quot;
+}
+ 
+resource &amp;quot;aws_cloudwatch_event_target&amp;quot; &amp;quot;lambda&amp;quot; {
+  target_id = &amp;quot;lambda_target_${var.lambda_function_name}&amp;quot;
+  rule      = &amp;quot;${aws_cloudwatch_event_rule.lambda.name}&amp;quot;
+  arn       = &amp;quot;${var.lambda_function_arn}&amp;quot;
+}
+ 
+resource &amp;quot;aws_lambda_permission&amp;quot; &amp;quot;lambda&amp;quot; {
+  statement_id  = &amp;quot;AllowExecutionFromCloudWatch&amp;quot;
+  action        = &amp;quot;lambda:InvokeFunction&amp;quot;
+  function_name = &amp;quot;${aws_cloudwatch_event_target.lambda.arn}&amp;quot;
+  principal     = &amp;quot;events.amazonaws.com&amp;quot;
+  source_arn    = &amp;quot;${aws_cloudwatch_event_rule.lambda.arn}&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat infrastructure/variables.tf 
+variable &amp;quot;apex_function_names&amp;quot; {
+    type=&amp;quot;map&amp;quot;
+}
+variable &amp;quot;apex_function_hello&amp;quot; {}
+
+$ cat infrastructure/main.tf
+terraform {
+  backend &amp;quot;s3&amp;quot; {
+    bucket = &amp;quot;sambaiz-terraform&amp;quot;
+    key    = &amp;quot;usetf.tfstate&amp;quot;
+    region = &amp;quot;ap-northeast-1&amp;quot;
+  }
+}
+
+module &amp;quot;hello_trigger&amp;quot; {
+  source = &amp;quot;./modules/cloudwatch_schedule&amp;quot;
+  lambda_function_name = &amp;quot;${var.apex_function_names[&amp;quot;hello&amp;quot;]}&amp;quot;
+  lambda_function_arn = &amp;quot;${var.apex_function_hello}&amp;quot;
+  schedule_expression = &amp;quot;cron(0/5 * * * ? *)&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;init&lt;/code&gt;してbackendを初期化してmoduleを準備する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra --profile apex init
+$ ls infrastructure/.terraform/modules/*****
+main.tf		variables.tf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;plan&lt;/code&gt;するとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra --profile apex plan
++ module.hello_trigger.aws_cloudwatch_event_rule.lambda
+    arn:                 &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+    description:         &amp;quot;invoke lambda usetf_hello&amp;quot;
+    is_enabled:          &amp;quot;true&amp;quot;
+    name:                &amp;quot;lambda_rule_usetf_hello&amp;quot;
+    schedule_expression: &amp;quot;cron(0/5 * * * ? *)&amp;quot;
+
++ module.hello_trigger.aws_cloudwatch_event_target.lambda
+    arn:       &amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+    rule:      &amp;quot;lambda_rule_usetf_hello&amp;quot;
+    target_id: &amp;quot;lambda_target_usetf_hello&amp;quot;
+
++ module.hello_trigger.aws_lambda_permission.lambda
+    action:        &amp;quot;lambda:InvokeFunction&amp;quot;
+    function_name: &amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+    principal:     &amp;quot;events.amazonaws.com&amp;quot;
+    source_arn:    &amp;quot;${aws_cloudwatch_event_rule.lambda.arn}&amp;quot;
+    statement_id:  &amp;quot;AllowExecutionFromCloudWatch&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apply&lt;/code&gt;するとトリガーが登録される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra --profile apex apply
+$ apex logs --profile apex hello
+...
+/aws/lambda/usetf_hello 2017-11-12T13:20:14.561Z	37e75818-c7ac-11e7-a333-111863808b13	processing event:
+...
+/aws/lambda/usetf_hello 2017-11-12T13:25:15.182Z	eb178941-c7ac-11e7-bde0-998ea9659640 processing event:
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://dev.classmethod.jp/cloud/aws/ami-and-snapshot-delete-with-apex-and-terraform/&#34;&gt;ApexとTerraformでCloudWatch EventsによりInvokeされるLambda関数をデプロイする ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>JavaScriptのrequire/import</title>
           <link>https://www.sambaiz.net/article/143/</link>
           <pubDate>Sat, 11 Nov 2017 20:20:00 &#43;0900</pubDate>
@@ -47,15 +189,17 @@ document.body.appendChild(divB);
 a is defined
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h2 id=&#34;amdとcommonjsとes-modules&#34;&gt;AMDとCommonJSとES Modules&lt;/h2&gt;
+&lt;h2 id=&#34;amdとcommonjs&#34;&gt;AMDとCommonJS&lt;/h2&gt;
 
 &lt;p&gt;というのも、かつてのJSにはモジュールを読み込む仕組みがなかった。
 そこで考えられたのがAMDやCommonJSというフォーマット。
-AMD(Asynchronous module definition)は&lt;a href=&#34;http://requirejs.org/&#34;&gt;RequireJS&lt;/a&gt;によって提供される&lt;code&gt;require()&lt;/code&gt;で動的にscriptタグを埋める。CommonJSはNodeでもおなじみの&lt;code&gt;require()&lt;/code&gt;で、これにWebpackなどを通して一つのファイルにまとめておく。同じ関数名が使われているが全くの別物。&lt;/p&gt;
+AMD(Asynchronous module definition)は&lt;a href=&#34;http://requirejs.org/&#34;&gt;RequireJS&lt;/a&gt;によって提供される&lt;code&gt;require()&lt;/code&gt;で動的にscriptタグを埋める。CommonJSはNodeでもおなじみの&lt;code&gt;require()&lt;/code&gt;で、これにWebpackを通して一つのファイルにまとめておく。同じ関数名が使われているが全くの別物。&lt;/p&gt;
+
+&lt;h2 id=&#34;es-modules&#34;&gt;ES Modules&lt;/h2&gt;
 
 &lt;p&gt;今は言語仕様にECMAScript Modulesが追加され、普通に&lt;code&gt;import&lt;/code&gt;でモジュールを読み込めるようになったが、
-対応ブラウザがまだ少ないのでWebpackなどをかける必要がある。
-Nodeにも実装されているがStableになるのは&lt;a href=&#34;https://nodejs.org/api/esm.html&#34;&gt;まだ先&lt;/a&gt;のようだ。&lt;/p&gt;
+対応ブラウザがまだ少ないこともあり基本的にはWebpackをかけることになる。
+Nodeにも実装されつつあるがStableになるのは&lt;a href=&#34;https://nodejs.org/api/esm.html&#34;&gt;まだ先&lt;/a&gt;のようだ。&lt;/p&gt;
 
 &lt;h2 id=&#34;requirejs-http-requirejs-org&#34;&gt;&lt;a href=&#34;http://requirejs.org/&#34;&gt;RequireJS&lt;/a&gt;&lt;/h2&gt;
 
@@ -157,7 +301,7 @@ cssも依存に含めることができ、scriptタグと同様にstyleタグが
 &lt;p&gt;&lt;code&gt;webpack.config.js&lt;/code&gt;の
 &lt;code&gt;entry&lt;/code&gt;にエントリーポイント、
 &lt;code&gt;output&lt;/code&gt;に出力場所、
-&lt;code&gt;module&lt;/code&gt;にJS以外のファイルを処理するloader、
+&lt;code&gt;module&lt;/code&gt;にJS以外のファイルをbundleするloader、
 &lt;code&gt;plugins&lt;/code&gt;に全体を処理するpluginの
 設定を書く。&lt;/p&gt;
 
@@ -252,7 +396,7 @@ function bar() {
 /******/ ]);
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://github.com/webpack-contrib/css-loader&#34;&gt;css-loader&lt;/a&gt;を使うとCSSをbundleできる。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/webpack-contrib/css-loader&#34;&gt;css-loader&lt;/a&gt;でCSSをbundleする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ yarn add --dev style-loader css-loader
 &lt;/code&gt;&lt;/pre&gt;
@@ -294,7 +438,7 @@ $ cat src/style.css
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;動的に&lt;code&gt;&amp;lt;style&amp;gt;&lt;/code&gt;が埋められる。&lt;/p&gt;
+&lt;p&gt;こんな感じでbundleされている。動的にstyleタグが入るのは同じ。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat dist/bundle.js | grep &amp;quot;#22ee22&amp;quot;
 exports.push([module.i, &amp;quot;._2T2hBh3FkCro4-BOuqaGg5 {\n  background-color: #22ee22;\n}\n&amp;quot;, &amp;quot;&amp;quot;]);
