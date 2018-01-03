@@ -5,7 +5,7 @@
     <link>https://www.sambaiz.net/tags/node.js/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
-    <rights>(C) 2017</rights>
+    <rights>(C) 2018</rights>
     <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
     
@@ -26,10 +26,9 @@
 &lt;p&gt;ではどうしようもないかというと&lt;code&gt;MSCK REPAIR TABLE&lt;/code&gt;というのがあって、
 これはS3のObjectの&lt;code&gt;dt=YYYY-MM-DD&lt;/code&gt;のようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだけど、勝手に&lt;code&gt;YYYY/MM/DD/HH&lt;/code&gt;のprefixを付けてしまうFirehoseのようなのもある。&lt;/p&gt;
 
-&lt;p&gt;そうじゃなくてもスキーマ変更はおっくうだ。頻度もあまり多くない故に、いざやろうとすると腰が重い。&lt;/p&gt;
-
-&lt;p&gt;このライブラリは以下のような定義ファイルを読んで、パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationしたりする。
-これをバージョン管理すればテーブル定義の変更を追うことができる。&lt;/p&gt;
+&lt;p&gt;今回作った&lt;a href=&#34;https://github.com/sambaiz/athena-admin&#34;&gt;athena-admin&lt;/a&gt;は以下のような定義ファイルから、
+パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationする。
+このファイルを書き換えるだけで基本的にどうにかなるし、バージョン管理すればテーブル定義の変更を追うことができる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;{
   &amp;quot;general&amp;quot;: {
@@ -41,7 +40,10 @@
     &amp;quot;sample_data&amp;quot;: {
       &amp;quot;columns&amp;quot;: {
         &amp;quot;user_id&amp;quot;: &amp;quot;int&amp;quot;,
-        &amp;quot;value&amp;quot;: &amp;quot;struct&amp;lt;score:int,category:string&amp;gt;&amp;quot;
+        &amp;quot;value&amp;quot;: {
+          &amp;quot;score&amp;quot;: &amp;quot;int&amp;quot;,
+          &amp;quot;category&amp;quot;: &amp;quot;string&amp;quot;
+        } /* &amp;quot;struct&amp;lt;score:int,category:string&amp;gt;&amp;quot; のように書くこともできる */
       },
       &amp;quot;srcLocation&amp;quot;: &amp;quot;s3://src/location/&amp;quot;,
       &amp;quot;partition&amp;quot;: {
@@ -60,9 +62,9 @@
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;使い方はこんな感じ。
+&lt;p&gt;使い方はこんな感じ。使い方によっては&lt;code&gt;migrate()&lt;/code&gt;だけ呼ぶこともあると思う。
 &lt;code&gt;replaceObjects()&lt;/code&gt;にはmatchedHandlerというのを渡すこともできて、
-UTCからJSTに変換するといったこともできるようにした。&lt;/p&gt;
+UTCからJSTに変換するといったこともできる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm install athena-admin
 &lt;/code&gt;&lt;/pre&gt;

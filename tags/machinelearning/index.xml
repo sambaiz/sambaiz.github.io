@@ -5,9 +5,420 @@
     <link>https://www.sambaiz.net/tags/machinelearning/index.xml</link>
     <language>ja</language>
     <author>sambaiz</author>
-    <rights>(C) 2017</rights>
+    <rights>(C) 2018</rights>
     <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
 
+    
+      
+        <item>
+          <title>TensorflowのRNN(LSTM)のチュートリアルのコードを読む</title>
+          <link>https://www.sambaiz.net/article/146/</link>
+          <pubDate>Wed, 03 Jan 2018 21:12:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/146/</guid>
+          <description>
+
+&lt;p&gt;TensorflowのRNN(Recurrent Neural Networks)の&lt;a href=&#34;https://www.tensorflow.org/tutorials/recurrent&#34;&gt;チュートリアル&lt;/a&gt;の&lt;a href=&#34;https://github.com/tensorflow/models/blob/12f279d6f4cb33574bc20109b41eb8a59f40cfd1/tutorials/rnn/ptb/ptb_word_lm.py&#34;&gt;コード&lt;/a&gt;を読む。これは文章のそれまでの単語の履歴から、その次に続く単語を予測することで言語モデルを作るもの。&lt;/p&gt;
+
+&lt;h2 id=&#34;rnn-lstmとは&#34;&gt;RNN/LSTMとは&lt;/h2&gt;
+
+&lt;p&gt;RNNは入力に対して出力のほかに情報を次のステップに渡すネットワーク。
+展開すると同じネットワークに単語を一つずつ入れていくように表現できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/146-rnn.png&#34; alt=&#34;RNN&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;TensorflowではいくつかRNNの実装が用意されていて、このコードではそのうちの&lt;code&gt;CudnnLSTM&lt;/code&gt;や&lt;code&gt;BasicLSTMCell&lt;/code&gt;、&lt;code&gt;LSTMBlockCell&lt;/code&gt;を選べるようになっている。&lt;a href=&#34;https://developer.nvidia.com/cudnn&#34;&gt;cuDNN&lt;/a&gt;というのはNVIDIAのCUDAのDNNライブラリのこと。&lt;code&gt;LSTMBlockCell&lt;/code&gt;は&lt;code&gt;BasicLSTMCell&lt;/code&gt;より速い。&lt;/p&gt;
+
+&lt;p&gt;LSTM(Long Short Term Memory networks)はRNNの一種で、入力にtanhを通す通常のRNNの処理に加え、それぞれ重みを持ち、どの値を更新するか決定する&lt;code&gt;input gate&lt;/code&gt;や、どの値を忘れるかを決定する&lt;code&gt;forget gate&lt;/code&gt;、何を出力するか決定する&lt;code&gt;output gate&lt;/code&gt;を通す。
+こちらはtanhではなく値域(0,1)のシグモイドを通したものを掛けていくので、0であれば情報は失われ、1であれば完全に残る。&lt;/p&gt;
+
+&lt;h2 id=&#34;動かしてみる&#34;&gt;動かしてみる&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/tensorflow/models.git
+$ cd models/tutorials/rnn/ptb/
+$ wget http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz
+$ tar xvf simple-examples.tgz 
+$ python3 -m venv env
+$ . ./env/bin/activate
+$ pip install numpy tensorflow
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ python ptb_word_lm.py --data_path=simple-examples/data/ --num_gpus=0
+Epoch: 1 Learning rate: 1.000
+0.004 perplexity: 5534.452 speed: 894 wps
+0.104 perplexity: 845.383 speed: 1277 wps
+...
+0.803 perplexity: 316.808 speed: 1195 wps
+0.903 perplexity: 298.087 speed: 1205 wps
+Epoch: 1 Train Perplexity: 283.825
+Epoch: 1 Valid Perplexity: 182.132
+Epoch: 2 Learning rate: 1.000
+...
+Epoch: 4 Learning rate: 1.000
+...
+Epoch: 5 Learning rate: 0.500
+...
+Epoch: 6 Learning rate: 0.250
+...
+Epoch: 7 Learning rate: 0.125
+...
+Epoch: 13 Learning rate: 0.002
+...
+Test Perplexity: 121.759
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;reader&#34;&gt;reader&lt;/h2&gt;
+
+&lt;p&gt;readerにはテストがあったので、これを使って実際にどんな出力をしているか見てみる。&lt;/p&gt;
+
+&lt;h3 id=&#34;ptb-raw-data&#34;&gt;ptb_raw_data&lt;/h3&gt;
+
+&lt;p&gt;単語をIDに変換したものと語彙数が返る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def setUp(self):
+  self._string_data = &amp;quot;\n&amp;quot;.join(
+    [&amp;quot; hello there i am&amp;quot;,
+     &amp;quot; rain as day&amp;quot;,
+     &amp;quot; want some cheesy puffs ?&amp;quot;])
+
+def testPtbRawData(self):
+  tmpdir = tf.test.get_temp_dir()
+  for suffix in &amp;quot;train&amp;quot;, &amp;quot;valid&amp;quot;, &amp;quot;test&amp;quot;:
+    filename = os.path.join(tmpdir, &amp;quot;ptb.%s.txt&amp;quot; % suffix)
+    with tf.gfile.GFile(filename, &amp;quot;w&amp;quot;) as fh:
+    fh.write(self._string_data)
+  # Smoke test
+  output = reader.ptb_raw_data(tmpdir)
+  print(&#39;output: {0}&#39;.format(output))
+  # output: (
+  #   [5, 10, 6, 1, 8, 2, 4, 11, 9, 3, 7, 0], # train
+  #   [5, 10, 6, 1, 8, 2, 4, 11, 9, 3, 7, 0], # valid
+  #   [5, 10, 6, 1, 8, 2, 4, 11, 9, 3, 7, 0], # test
+  #   12 # vocabulary
+  # )
+  self.assertEqual(len(output), 4)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;print(word_to_id)
+=&amp;gt; {&#39;?&#39;: 0, &#39;am&amp;lt;eos&amp;gt;&#39;: 1, &#39;as&#39;: 2, &#39;cheesy&#39;: 3, &#39;day&amp;lt;eos&amp;gt;&#39;: 4, &#39;hello&#39;: 5, &#39;i&#39;: 6, &#39;puffs&#39;: 7, &#39;rain&#39;: 8, &#39;some&#39;: 9, &#39;there&#39;: 10, &#39;want&#39;: 11}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;ptb-producer&#34;&gt;ptb_producer&lt;/h3&gt;
+
+&lt;p&gt;session.runする度に時系列順に[batch_size, num_steps]のTensorを出力する。
+二つ目の返り値は一つ右にずらしたもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def testPtbProducer(self):
+  raw_data = [
+  # t=0↓  t=1↓
+    4, 3, 2, 1, 0, 
+    5, 6, 1, 1, 1, 
+    1, 0, 3, 4, 1
+  ]
+  batch_size = 3
+  num_steps = 2
+  x, y = reader.ptb_producer(raw_data, batch_size, num_steps)
+  with self.test_session() as session:
+    coord = tf.train.Coordinator()
+    tf.train.start_queue_runners(session, coord=coord)
+    try:
+      xval, yval = session.run([x, y])
+      self.assertAllEqual(xval, [[4, 3], [5, 6], [1, 0]])
+      self.assertAllEqual(yval, [[3, 2], [6, 1], [0, 3]])
+      xval, yval = session.run([x, y])
+      self.assertAllEqual(xval, [[2, 1], [1, 1], [3, 4]])
+      self.assertAllEqual(yval, [[1, 0], [1, 1], [4, 1]])
+    finally:
+      coord.request_stop()
+      coord.join()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実装はこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;i = tf.train.range_input_producer(epoch_size, shuffle=False).dequeue()
+x = tf.strided_slice(data, [0, i * num_steps],
+                        [batch_size, (i + 1) * num_steps])
+x.set_shape([batch_size, num_steps])
+y = tf.strided_slice(data, [0, i * num_steps + 1],
+                        [batch_size, (i + 1) * num_steps + 1])
+y.set_shape([batch_size, num_steps])
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;range_input_producerはその名の通りrangeのように0から値を生成するが、
+Threadを調整する&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/Coordinator&#34;&gt;Coordinator&lt;/a&gt;を生成し、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/start_queue_runners&#34;&gt;start_queue_runners&lt;/a&gt;に渡す必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# example of range_input_producer
+with self.test_session() as session:
+  i = tf.train.range_input_producer(100, shuffle=False).dequeue()
+  coord = tf.train.Coordinator()
+  tf.train.start_queue_runners(session, coord=coord)
+  try:
+    print(session.run(i)) # =&amp;gt; 0
+    print(session.run(i)) # =&amp;gt; 1
+    print(session.run(i)) # =&amp;gt; 2
+  finally:
+    coord.request_stop()
+    coord.join() # Wait for all the threads to terminate.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;model&#34;&gt;Model&lt;/h2&gt;
+
+&lt;h3 id=&#34;入力の準備&#34;&gt;入力の準備&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/nn/embedding_lookup&#34;&gt;embedding_lookup&lt;/a&gt;で
+embeddingから各stepの単語のものを抽出する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;with tf.device(&amp;quot;/cpu:0&amp;quot;):
+  embedding = tf.get_variable(
+    &amp;quot;embedding&amp;quot;, [vocab_size, size], dtype=data_type())
+  # shape=(batch_size, num_steps, size), dtype=float32
+  inputs = tf.nn.embedding_lookup(embedding, input_.input_data)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;# example of embedding_lookup
+with tf.Session() as session:
+  print(session.run(tf.nn.embedding_lookup(
+    [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]],
+    [[0,1,2], [3,4,5], [6,7,8]]
+  ))) 
+  # =&amp;gt; [[ 0  2  4]
+  #     [ 6  8 10]
+  #     [ 1  3  5]]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;学習中の場合、過学習を防ぐためkeep_prob残してDropoutし、RNNのグラフを作り始める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;if is_training and config.keep_prob &amp;lt; 1:
+  inputs = tf.nn.dropout(inputs, config.keep_prob)
+
+output, state = self._build_rnn_graph(inputs, config, is_training)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;rnnのグラフ&#34;&gt;RNNのグラフ&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;rnn_mode&lt;/code&gt;で実装を選べるようになっているが、基本BLOCK。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def _build_rnn_graph(self, inputs, config, is_training):
+  if config.rnn_mode == CUDNN:
+    return self._build_rnn_graph_cudnn(inputs, config, is_training)
+  else:
+    return self._build_rnn_graph_lstm(inputs, config, is_training)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Cellは&lt;code&gt;LSTMBlockCell&lt;/code&gt;をDroopoutWrapperでラップしたもの。
+さらにこれをCellの出力が次のCellの入力になる&lt;code&gt;MultiRNNCell&lt;/code&gt;で&lt;code&gt;num_layers&lt;/code&gt;重ねている。&lt;/p&gt;
+
+&lt;p&gt;最初に&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/contrib/rnn/BasicLSTMCell#zero_state&#34;&gt;zero_state&lt;/a&gt;の
+初期状態から&lt;code&gt;num_steps&lt;/code&gt;まわして各stepでのoutputと最後のstateを返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def _get_lstm_cell(self, config, is_training):
+  if config.rnn_mode == BASIC:
+    return tf.contrib.rnn.BasicLSTMCell(
+      config.hidden_size, forget_bias=0.0, state_is_tuple=True,
+      reuse=not is_training)
+  if config.rnn_mode == BLOCK:
+    return tf.contrib.rnn.LSTMBlockCell(
+      config.hidden_size, forget_bias=0.0)
+  raise ValueError(&amp;quot;rnn_mode %s not supported&amp;quot; % config.rnn_mode)
+
+def _build_rnn_graph_lstm(self, inputs, config, is_training):
+  def make_cell():
+    cell = self._get_lstm_cell(config, is_training)
+    if is_training and config.keep_prob &amp;lt; 1:
+      cell = tf.contrib.rnn.DropoutWrapper(
+        cell, output_keep_prob=config.keep_prob)
+    return cell
+
+  cell = tf.contrib.rnn.MultiRNNCell(
+    [make_cell() for _ in range(config.num_layers)], state_is_tuple=True)
+
+  self._initial_state = cell.zero_state(config.batch_size, data_type())
+  state = self._initial_state
+
+  # [shape=(batch_size, hidden_size) dtype=float32, ...]
+  outputs = []
+  with tf.variable_scope(&amp;quot;RNN&amp;quot;):
+    for time_step in range(self.num_steps):
+      if time_step &amp;gt; 0: tf.get_variable_scope().reuse_variables()
+      (cell_output, state) = cell(inputs[:, time_step, :], state)
+      outputs.append(cell_output)
+
+  # shape=(batch_size * num_steps, hidden_size), dtype=float32
+  output = tf.reshape(tf.concat(outputs, 1), [-1, config.hidden_size])
+  return output, state
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;コスト&#34;&gt;コスト&lt;/h3&gt;
+
+&lt;p&gt;このoutputにもう一つ層を通してlogits(&lt;code&gt;log(p/(1-p)) (0≦p≦1)&lt;/code&gt;)として扱い、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/contrib/seq2seq/sequence_loss&#34;&gt;sequence_loss&lt;/a&gt;で
+logitsのシーケンスの交差エントロピーを求め、その和をコストとする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;output, state = self._build_rnn_graph(inputs, config, is_training)
+
+softmax_w = tf.get_variable(
+    &amp;quot;softmax_w&amp;quot;, [size, vocab_size], dtype=data_type())
+softmax_b = tf.get_variable(&amp;quot;softmax_b&amp;quot;, [vocab_size], dtype=data_type())
+logits = tf.nn.xw_plus_b(output, softmax_w, softmax_b)
+# shape=(batch_size, num_steps, vocab_size), dtype=float32
+logits = tf.reshape(logits, [self.batch_size, self.num_steps, vocab_size])
+
+loss = tf.contrib.seq2seq.sequence_loss(
+    # logits: [batch_size, sequence_length=num_steps, num_decoder_symbols=vocab_size] and dtype float
+    # The logits correspond to the prediction across all classes at each timestep.
+    logits,
+
+    # targets: [batch_size, sequence_length=num_steps] and dtype int
+    # The target represents the true class at each timestep.
+    input_.targets,
+
+    # weights: [batch_size, sequence_length] and dtype float
+    # When using weights as masking, set all valid timesteps to 1 and all padded timesteps to 0
+    tf.ones([self.batch_size, self.num_steps], dtype=data_type()),
+
+    average_across_timesteps=False,
+    average_across_batch=True)
+
+# Update the cost
+self._cost = tf.reduce_sum(loss)
+self._final_state = state
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;勾配&#34;&gt;勾配&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/trainable_variables&#34;&gt;trainable_variables&lt;/a&gt;で
+&lt;code&gt;trainable=True(デフォルト)&lt;/code&gt;のvariableを取得し、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/gradients&#34;&gt;gradients&lt;/a&gt;で各variableに対しての勾配を求め、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/clip_by_global_norm&#34;&gt;clip_by_global_norm&lt;/a&gt;で
+全体のノルムの大きさを抑える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;if not is_training:
+    return
+
+self._lr = tf.Variable(0.0, trainable=False)
+tvars = tf.trainable_variables()
+grads, _ = tf.clip_by_global_norm(tf.gradients(self._cost, tvars),
+                                    config.max_grad_norm)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;# example of trainable_variables
+with tf.Session() as session:
+  a = tf.Variable(10.0, trainable=False)
+  b = tf.Variable(20.0)
+  c = tf.get_variable(&amp;quot;c&amp;quot;, [2, 2])
+  d = tf.get_variable(&amp;quot;d&amp;quot;, [3, 3], trainable=False)
+  session.run(tf.global_variables_initializer())
+  print(session.run(tf.trainable_variables()))
+  # [20.0, array([[ 1.10110056,  0.6373167 ],
+  # [ 0.44673324, -0.11995673]], dtype=float32)]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;# example of gradients &amp;amp; clip_by_global_norm
+with tf.Session() as session:
+  xs = tf.Variable([10., 20., 30.])
+  ys = [xs ** 2 + 123, xs * 5]
+  grad = tf.gradients(ys,xs)
+  session.run(tf.global_variables_initializer())
+  print(session.run(grad)) # [20 + 5, 40 + 5, 60 + 5]
+
+  list_clipped, global_norm = session.run(tf.clip_by_global_norm(grad,2))
+  # global_norm = sqrt(sum([l2norm(t)**2 for t in t_list]))
+  # = sqrt(25 ** 2 + 45 ** 2 + 65 ** 2)
+  print(global_norm) # 82.9156
+
+  # t_list[i] * clip_norm / max(global_norm, clip_norm)
+  # = [25, 45, 65] * 2 / global_norm
+  print(list_clipped) # [0.60302269, 1.08544087, 1.56785905]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;optimize&#34;&gt;Optimize&lt;/h3&gt;
+
+&lt;p&gt;学習率_lrの&lt;code&gt;GradientDescenetOptimizer&lt;/code&gt;でoptimizeする。
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/GradientDescentOptimizer#apply_gradients&#34;&gt;apply_gradients&lt;/a&gt;するたびに
+global_stepがインクリメントされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;optimizer = tf.train.GradientDescentOptimizer(self._lr)
+self._train_op = optimizer.apply_gradients(
+  zip(grads, tvars),
+  global_step=tf.train.get_or_create_global_step())
+
+self._new_lr = tf.placeholder(
+  tf.float32, shape=[], name=&amp;quot;new_learning_rate&amp;quot;)
+self._lr_update = tf.assign(self._lr, self._new_lr)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;run-epoch&#34;&gt;run_epoch&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;session.run&lt;/code&gt;する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;fetches = {
+  &amp;quot;cost&amp;quot;: model.cost,
+  &amp;quot;final_state&amp;quot;: model.final_state,
+}
+if eval_op is not None:
+  fetches[&amp;quot;eval_op&amp;quot;] = eval_op
+
+for step in range(model.input.epoch_size):
+  feed_dict = {}
+  for i, (c, h) in enumerate(model.initial_state):
+    feed_dict[c] = state[i].c
+    feed_dict[h] = state[i].h
+
+  vals = session.run(fetches, feed_dict)
+  cost = vals[&amp;quot;cost&amp;quot;]
+  state = vals[&amp;quot;final_state&amp;quot;]
+
+  costs += cost
+  iters += model.input.num_steps
+
+  if verbose and step % (model.input.epoch_size // 10) == 10:
+    print(&amp;quot;%.3f perplexity: %.3f speed: %.0f wps&amp;quot; %
+      (step * 1.0 / model.input.epoch_size, np.exp(costs / iters),
+       iters * model.input.batch_size * max(1, FLAGS.num_gpus) /
+       (time.time() - start_time)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;main&#34;&gt;main&lt;/h3&gt;
+
+&lt;p&gt;起点。学習率はmax_epochまで初期値で、それ以後のepochでは指数的に減少させていく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;with tf.Graph().as_default():
+  tf.train.import_meta_graph(metagraph)
+  for model in models.values():
+    model.import_ops()
+  sv = tf.train.Supervisor(logdir=FLAGS.save_path)
+  config_proto = tf.ConfigProto(allow_soft_placement=soft_placement)
+  with sv.managed_session(config=config_proto) as session:
+    for i in range(config.max_max_epoch):
+      lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
+      m.assign_lr(session, config.learning_rate * lr_decay)
+
+      print(&amp;quot;Epoch: %d Learning rate: %.3f&amp;quot; % (i + 1, session.run(m.lr)))
+      train_perplexity = run_epoch(session, m, eval_op=m.train_op,
+                                    verbose=True)
+      print(&amp;quot;Epoch: %d Train Perplexity: %.3f&amp;quot; % (i + 1, train_perplexity))
+      valid_perplexity = run_epoch(session, mvalid)
+      print(&amp;quot;Epoch: %d Valid Perplexity: %.3f&amp;quot; % (i + 1, valid_perplexity))
+
+    test_perplexity = run_epoch(session, mtest)
+    print(&amp;quot;Test Perplexity: %.3f&amp;quot; % test_perplexity)
+
+    if FLAGS.save_path:
+      print(&amp;quot;Saving model to %s.&amp;quot; % FLAGS.save_path)
+      sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://colah.github.io/posts/2015-08-Understanding-LSTMs/&#34;&gt;Understanding LSTM Networks &amp;ndash; colah&amp;rsquo;s blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://qiita.com/t_Signull/items/21b82be280b46f467d1b&#34;&gt;わかるLSTM ～ 最近の動向と共に - Qiita&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://returnn.readthedocs.io/en/latest/tf_lstm_benchmark.html&#34;&gt;TensorFlow LSTM benchmark — RETURNN 1.0-dev documentation&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
