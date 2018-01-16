@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>TensorBoardでsummaryやグラフを見る - sambaiz-net</title>
-    <meta name="twitter:title" content="TensorBoardでsummaryやグラフを見る - sambaiz-net">
-    <meta property='og:title' content="TensorBoardでsummaryやグラフを見る - sambaiz-net">
+    <title>SlackのInteractive messagesでボタンの入力を受け付ける - sambaiz-net</title>
+    <meta name="twitter:title" content="SlackのInteractive messagesでボタンの入力を受け付ける - sambaiz-net">
+    <meta property='og:title' content="SlackのInteractive messagesでボタンの入力を受け付ける - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="TensorBoard">
-      <meta name="twitter:description" content="TensorBoard">
+      <meta name="description" content="ボタンを押す">
+      <meta name="twitter:description" content="ボタンを押す">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/147/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/148/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "TensorBoardでsummaryやグラフを見る | sambaiz-net ",
-    "datePublished": "2018-01-07T21:12:00JST",
-    "dateModified": "2018-01-07T21:12:00JST",
+    "headline": "SlackのInteractive messagesでボタンの入力を受け付ける | sambaiz-net ",
+    "datePublished": "2018-01-16T21:59:00JST",
+    "dateModified": "2018-01-16T21:59:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "TensorBoard"
+    "description": "ボタンを押す"
   }
 </script>
 </head>
@@ -103,43 +103,92 @@
 
       <article class="single">
         <div class="single body">
-          <h1>TensorBoardでsummaryやグラフを見る</h1>
-          <p>(2018-01-07)</p>
-          <p><a href="https://www.sambaiz.net/article/146/">TensorflowのRNN(LSTM)のチュートリアルのコードを読む - sambaiz-net</a></p>
+          <h1>SlackのInteractive messagesでボタンの入力を受け付ける</h1>
+          <p>(2018-01-16)</p>
+          
 
-<p>で読んだコードをTensorboardでみてみる。</p>
+<p><a href="https://api.slack.com/interactive-messages">Interactive messages</a></p>
 
-<p>8888がJupyter、6006がTensorboard。</p>
+<p><img src="https://www.sambaiz.net/images/148.gif" alt="ボタンを押す" /></p>
 
-<pre><code>$ docker run -it -p 8888:8888 -p 6006:6006 gcr.io/tensorflow/tensorflow
+<p>まずはサーバーを用意する。コードは<a href="https://github.com/sambaiz/node-slack-interactive-messages-sample">ここ</a>にあって、
+Interactive messagesのハンドリングはSlack公式の<a href="https://github.com/slackapi/node-slack-interactive-messages">node-slack-interactive-messages</a>を使っている。</p>
+
+<pre><code>app.use('/slack', slackMessages.expressMiddleware());
+
+slackMessages.action('question_button', (payload) =&gt; {
+  let replacement = payload.original_message;
+  replacement.text =`${payload.user.name} likes ${payload.actions[0].value}`;
+  delete replacement.attachments[0].actions;
+  return replacement;
+});
 </code></pre>
 
-<p>コードをuploadするかJupyterからterminalを開いてcloneしてくる。</p>
+<p>ボタンの表示はattachmentsを使う。</p>
 
-<pre><code># apt-get update
-# apt-get install -y git wget
-# git clone https://github.com/tensorflow/models.git
-# cd models/tutorials/rnn/ptb &amp;&amp; wget http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz &amp;&amp; tar xvf simple-examples.tgz 
+<pre><code>web.chat.postMessage(channelId, 'Question', {
+  attachments: [
+    {
+      text: &quot;Which buttons do you like?&quot;,
+      color: &quot;#f9a41b&quot;,
+      callback_id: &quot;question_button&quot;,
+      actions: [
+        {
+          name: &quot;primary_button&quot;,
+          type: &quot;button&quot;,
+          style: &quot;primary&quot;,
+          text: &quot;Primary&quot;,
+          value: &quot;Primary Button&quot;,
+        },
+        {
+          name: &quot;normal_button&quot;,
+          type: &quot;button&quot;,
+          text: &quot;Normal&quot;,
+          value: &quot;Normal Button&quot;
+        },
+        {
+          name: &quot;danger_button&quot;,
+          type: &quot;button&quot;,
+          style: &quot;danger&quot;,
+          text: &quot;Danger&quot;,
+          value: &quot;Danger Button&quot;,
+          confirm: {
+            title: &quot;Really?&quot;,
+            text: &quot;This is danger&quot;,
+            ok_text: &quot;Yes&quot;,
+            dismiss_text: &quot;No&quot;
+          }
+        },
+      ]
+    }
+  ]
+})
 </code></pre>
 
-<p>logdirを指定して実行し、Tensorboardを起動。</p>
+<p>外に公開する必要があるので、メッセージの送信のエンドポイントはBasic認証をかけてみた。
+Interactive messagesのエンドポイントはVerification tokenが一致することを確認している。</p>
 
-<pre><code>flags.DEFINE_string(&quot;save_path&quot;, &quot;.&quot;, &quot;Model output directory.&quot;)
-sv = tf.train.Supervisor(logdir=FLAGS.save_path)
+<pre><code>app.use(bodyParser.urlencoded({ extended: false }));
+app.all('/auth/*', (req, res, next) =&gt; {
+  const credentials = auth(req);
+  if (!credentials || !check(credentials.name, credentials.pass)) {
+    res.status(401).send('Unauthorized');
+  } else {
+    next();
+  }
+});
 </code></pre>
 
-<pre><code># tensorboard --logdir=models/tutorials/rnn/ptb
+<pre><code>$ curl https://*****.ngrok.com/auth/message -H &quot;Authorization: Basic $(echo -n 'foobar:dolphins' | base64)&quot;
 </code></pre>
 
-<p><code>tf.summary.scalar(&quot;Training Loss&quot;, m.cost)</code>による値がリアルタイムに表示される。</p>
+<p><a href="https://api.slack.com/apps">Build</a>からWorkspaceを選択してAppを作成し、
+Appに紐づくBot Userを設定後、Install Appすると<code>Bot User OAuth Access Token</code>
+が表示されるので、これで<a href="https://api.slack.com/methods/chat.postMessage">postMessage</a>し、Basic InformationのApp Credentialsにある<code>Verification Token</code>をInteractive messagesのチェックに使う。</p>
 
-<p><img src="https://www.sambaiz.net/images/147-tensorboard.png" alt="summaryの推移" /></p>
+<h2 id="参考">参考</h2>
 
-<p>グラフのつながりや、各Operationの入出力やそのshapeを確認できる。</p>
-
-<p><img src="https://www.sambaiz.net/images/147-tensorboard3.png" alt="グラフ全体" /></p>
-
-<p><img src="https://www.sambaiz.net/images/147-tensorboard2.png" alt="Operationの入出力" /></p>
+<p><a href="http://tech.mercari.com/entry/2017/05/23/095500">GolangでSlack Interactive Messageを使ったBotを書く - Mercari Engineering Blog</a></p>
 
         </div>
       </article>
