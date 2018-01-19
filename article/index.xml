@@ -6,8 +6,124 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-01-16 21:59:00 &#43;0900 JST</updated>
+    <updated>2018-01-19 09:30:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Gooseリポジトリのmerge時にバージョンを上げmigrationボタンをSlackに出す</title>
+          <link>https://www.sambaiz.net/article/149/</link>
+          <pubDate>Fri, 19 Jan 2018 09:30:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/149/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/pressly/goose&#34;&gt;Goose&lt;/a&gt;はGo製のDB Migrationツール。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/149.gif&#34; alt=&#34;mergeされるとボタンが出る&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/mysql-migration-slack&#34;&gt;コード&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;こんなリポジトリを作成し、各自ブランチを切ってGoose形式のup/downのSQLを書き、終わったらPullRequestを出す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;goose/
+  .keep
+.circleci/config.yml
+create_test_table.sql
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat create_test_table.sql
+-- +goose Up
+-- SQL in this section is executed when the migration is applied.
+CREATE TABLE testtable (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  n INT NOT NULL,
+  c VARCHAR (20) NOT NULL UNIQUE
+);
+
+-- +goose Down
+-- SQL in this section is executed when the migration is rolled back.
+DROP TABLE testtable;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;無事Approveされ、mergeされるとCircleCIが走り、
+SQLをgooseディレクトリの中にバージョンを付けて移し、
+SlackにpostMessageするエンドポイントにリクエストを飛ばす。&lt;/p&gt;
+
+&lt;p&gt;ここでバージョンを作成することによって、並列で作業し、レビューなどの関係で適用順が前後しても修正する必要をなくしている。&lt;/p&gt;
+
+&lt;p&gt;CircleCI 2.0ではApprovalボタンが出せるんだけど、
+アクセスしにいくのがちょっと面倒なのと、周知も兼ねてSlackに出したかったので使っていない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.8
+    branches:
+      only:
+        - master
+    steps:
+      - checkout
+      - run:
+          name: Create new version
+          command: |
+            if [ -e *.sql ]; then
+              VERSION=$(ls -U1 goose | wc -l | xargs expr 1 + | xargs printf %05d)
+              FILENAME=$(find . -maxdepth 1 -name &amp;quot;*.sql&amp;quot; | head | xargs basename)
+              mv ${FILENAME} goose/${VERSION}_${FILENAME}
+              git config --global user.email &amp;quot;circleci@example.com&amp;quot;
+              git config --global user.name &amp;quot;CircleCI&amp;quot;
+              git add .
+              git commit -m &amp;quot;[CI] version ${VERSION}&amp;quot;
+              git push origin master
+              COMMIT=$(git rev-parse HEAD)
+              curl -H &amp;quot;Authorization: Basic $(echo -n &#39;foobar:dolphins&#39; | base64)&amp;quot; &amp;quot;https://*****/auth/message?version=${VERSION}&amp;amp;filename=${FILENAME}&amp;amp;commit=${COMMIT}&amp;quot;
+            fi
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;goose/
+  .keep
+  00001_create_test_table.sql
+.circleci/config.yml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Migrationボタンが押されると、まずボタンを消してRunning状態とし、
+処理が終わったら結果を上書きするようにしている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/148/&#34;&gt;SlackのInteractive messagesでボタンの入力を受け付ける - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;slackMessages.action(&#39;migrate&#39;, (payload, respond) =&amp;gt; {
+  let replacement = payload.original_message; 
+  delete replacement.attachments[0].actions; 
+  replacement.attachments[0].text = `start migration by ${payload.user.name} at ${moment().format()}`;
+  replacement.attachments[0].fields = [
+    { 
+       &amp;quot;title&amp;quot;: &amp;quot;State&amp;quot;,
+       &amp;quot;value&amp;quot;: &amp;quot;Running&amp;quot;,
+       &amp;quot;short&amp;quot;: false
+    } 
+  ]; 
+
+  exec(
+    // Attention to command injection
+    `rm -rf ${repositoryName} &amp;amp;&amp;amp; git clone git@github.com:${repositoryPath}.git &amp;amp;&amp;amp; cd ${repositoryName}/goose &amp;amp;&amp;amp; goose mysql &amp;quot;${mySQLConf}&amp;quot; up`, 
+    (err, stdout, stderr) =&amp;gt; {
+      replacement.attachments[0].fields = [
+        { 
+          &amp;quot;title&amp;quot;: &amp;quot;Result&amp;quot;,
+          &amp;quot;value&amp;quot;: (err || stderr) ? `${stderr || err}` : &amp;quot;Success&amp;quot;,
+          &amp;quot;short&amp;quot;: false
+        }
+      ];
+      respond(replacement);
+    }
+  );
+  
+  return replacement;
+});
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -94,7 +210,7 @@ app.all(&#39;/auth/*&#39;, (req, res, next) =&amp;gt; {
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://api.slack.com/apps&#34;&gt;Build&lt;/a&gt;からWorkspaceを選択してAppを作成し、
-Appに紐づくBot Userを設定後、Install Appすると&lt;code&gt;Bot User OAuth Access Token&lt;/code&gt;
+Appに紐づくBot Userを追加後、Install Appすると&lt;code&gt;Bot User OAuth Access Token&lt;/code&gt;
 が表示されるので、これで&lt;a href=&#34;https://api.slack.com/methods/chat.postMessage&#34;&gt;postMessage&lt;/a&gt;し、Basic InformationのApp Credentialsにある&lt;code&gt;Verification Token&lt;/code&gt;をInteractive messagesのチェックに使う。&lt;/p&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
@@ -20910,6 +21026,8 @@ DROP TABLE message;
 
 &lt;pre&gt;&lt;code&gt;$ goose up
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/149/&#34;&gt;Gooseリポジトリのmerge時にバージョンを上げmigrationボタンをSlackに出す - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;h2 id=&#34;テストの書き方&#34;&gt;テストの書き方&lt;/h2&gt;
 

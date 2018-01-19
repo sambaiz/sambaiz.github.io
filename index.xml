@@ -6,8 +6,124 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-01-16 21:59:00 &#43;0900 JST</updated>
+    <updated>2018-01-19 09:30:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Gooseリポジトリのmerge時にバージョンを上げmigrationボタンをSlackに出す</title>
+          <link>https://www.sambaiz.net/article/149/</link>
+          <pubDate>Fri, 19 Jan 2018 09:30:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/149/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/pressly/goose&#34;&gt;Goose&lt;/a&gt;はGo製のDB Migrationツール。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/149.gif&#34; alt=&#34;mergeされるとボタンが出る&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/mysql-migration-slack&#34;&gt;コード&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;こんなリポジトリを作成し、各自ブランチを切ってGoose形式のup/downのSQLを書き、終わったらPullRequestを出す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;goose/
+  .keep
+.circleci/config.yml
+create_test_table.sql
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat create_test_table.sql
+-- +goose Up
+-- SQL in this section is executed when the migration is applied.
+CREATE TABLE testtable (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  n INT NOT NULL,
+  c VARCHAR (20) NOT NULL UNIQUE
+);
+
+-- +goose Down
+-- SQL in this section is executed when the migration is rolled back.
+DROP TABLE testtable;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;無事Approveされ、mergeされるとCircleCIが走り、
+SQLをgooseディレクトリの中にバージョンを付けて移し、
+SlackにpostMessageするエンドポイントにリクエストを飛ばす。&lt;/p&gt;
+
+&lt;p&gt;ここでバージョンを作成することによって、並列で作業し、レビューなどの関係で適用順が前後しても修正する必要をなくしている。&lt;/p&gt;
+
+&lt;p&gt;CircleCI 2.0ではApprovalボタンが出せるんだけど、
+アクセスしにいくのがちょっと面倒なのと、周知も兼ねてSlackに出したかったので使っていない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.8
+    branches:
+      only:
+        - master
+    steps:
+      - checkout
+      - run:
+          name: Create new version
+          command: |
+            if [ -e *.sql ]; then
+              VERSION=$(ls -U1 goose | wc -l | xargs expr 1 + | xargs printf %05d)
+              FILENAME=$(find . -maxdepth 1 -name &amp;quot;*.sql&amp;quot; | head | xargs basename)
+              mv ${FILENAME} goose/${VERSION}_${FILENAME}
+              git config --global user.email &amp;quot;circleci@example.com&amp;quot;
+              git config --global user.name &amp;quot;CircleCI&amp;quot;
+              git add .
+              git commit -m &amp;quot;[CI] version ${VERSION}&amp;quot;
+              git push origin master
+              COMMIT=$(git rev-parse HEAD)
+              curl -H &amp;quot;Authorization: Basic $(echo -n &#39;foobar:dolphins&#39; | base64)&amp;quot; &amp;quot;https://*****/auth/message?version=${VERSION}&amp;amp;filename=${FILENAME}&amp;amp;commit=${COMMIT}&amp;quot;
+            fi
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;goose/
+  .keep
+  00001_create_test_table.sql
+.circleci/config.yml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Migrationボタンが押されると、まずボタンを消してRunning状態とし、
+処理が終わったら結果を上書きするようにしている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/148/&#34;&gt;SlackのInteractive messagesでボタンの入力を受け付ける - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;slackMessages.action(&#39;migrate&#39;, (payload, respond) =&amp;gt; {
+  let replacement = payload.original_message; 
+  delete replacement.attachments[0].actions; 
+  replacement.attachments[0].text = `start migration by ${payload.user.name} at ${moment().format()}`;
+  replacement.attachments[0].fields = [
+    { 
+       &amp;quot;title&amp;quot;: &amp;quot;State&amp;quot;,
+       &amp;quot;value&amp;quot;: &amp;quot;Running&amp;quot;,
+       &amp;quot;short&amp;quot;: false
+    } 
+  ]; 
+
+  exec(
+    // Attention to command injection
+    `rm -rf ${repositoryName} &amp;amp;&amp;amp; git clone git@github.com:${repositoryPath}.git &amp;amp;&amp;amp; cd ${repositoryName}/goose &amp;amp;&amp;amp; goose mysql &amp;quot;${mySQLConf}&amp;quot; up`, 
+    (err, stdout, stderr) =&amp;gt; {
+      replacement.attachments[0].fields = [
+        { 
+          &amp;quot;title&amp;quot;: &amp;quot;Result&amp;quot;,
+          &amp;quot;value&amp;quot;: (err || stderr) ? `${stderr || err}` : &amp;quot;Success&amp;quot;,
+          &amp;quot;short&amp;quot;: false
+        }
+      ];
+      respond(replacement);
+    }
+  );
+  
+  return replacement;
+});
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -94,7 +210,7 @@ app.all(&#39;/auth/*&#39;, (req, res, next) =&amp;gt; {
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://api.slack.com/apps&#34;&gt;Build&lt;/a&gt;からWorkspaceを選択してAppを作成し、
-Appに紐づくBot Userを設定後、Install Appすると&lt;code&gt;Bot User OAuth Access Token&lt;/code&gt;
+Appに紐づくBot Userを追加後、Install Appすると&lt;code&gt;Bot User OAuth Access Token&lt;/code&gt;
 が表示されるので、これで&lt;a href=&#34;https://api.slack.com/methods/chat.postMessage&#34;&gt;postMessage&lt;/a&gt;し、Basic InformationのApp Credentialsにある&lt;code&gt;Verification Token&lt;/code&gt;をInteractive messagesのチェックに使う。&lt;/p&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
@@ -7007,248 +7123,6 @@ merge stream 2-3
   concat stream 2-1 &amp;lt;- concatではstream1がcompleteしたので、stream2がemitされる
   concat stream 2-2
   concat stream 2-3
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>angular/material2でフォームを作る</title>
-          <link>https://www.sambaiz.net/article/99/</link>
-          <pubDate>Sat, 06 May 2017 22:16:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/99/</guid>
-          <description>
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/99.gif&#34; alt=&#34;フォーム&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/angular4-form&#34;&gt;コード&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;angular-material2-https-github-com-angular-material2-の準備&#34;&gt;&lt;a href=&#34;https://github.com/angular/material2&#34;&gt;angular/material2&lt;/a&gt;の準備&lt;/h2&gt;
-
-&lt;p&gt;現時点で
-&lt;a href=&#34;https://github.com/angular/material2/issues/675&#34;&gt;DatePicker&lt;/a&gt;や
-&lt;a href=&#34;https://github.com/angular/material2/issues/581&#34;&gt;Table&lt;/a&gt;など
-開発中のコンポーネントが多いため足りないものを他のライブラリで補うなどする必要がある。
-DatePickerはもう少しで出そう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install --save @angular/material
-$ npm install --save hammerjs # gesture用
-$ npm install --save @angular/animations
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Moduleで&lt;code&gt;import &#39;hammerjs&#39;;&lt;/code&gt;して、以下のModuleをimportに加える。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;BrowserAnimationsModule&lt;/code&gt;(&lt;code&gt;from &#39;@angular/platform-browser/animations&#39;&lt;/code&gt;)&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;MdButtonModule&lt;/code&gt;など使うもの(&lt;code&gt;from &#39;@angular/material&#39;&lt;/code&gt;)&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;スタイルとアイコン(md-icon)を追加。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;link href=&amp;quot;../node_modules/@angular/material/prebuilt-themes/indigo-pink.css&amp;quot; rel=&amp;quot;stylesheet&amp;quot;&amp;gt;
-&amp;lt;link href=&amp;quot;https://fonts.googleapis.com/icon?family=Material+Icons&amp;quot; rel=&amp;quot;stylesheet&amp;quot;&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;フォームを作る-https-angular-io-docs-ts-latest-guide-forms-html&#34;&gt;&lt;a href=&#34;https://angular.io/docs/ts/latest/guide/forms.html&#34;&gt;フォームを作る&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;とりあえずコンポーネントを作成。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ng g component TodoForm
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Formの値をバインドするためのクラスを作成する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;export class TodoForm {
-  constructor(
-    public id: number,
-    public title: string,
-    public active: boolean,
-    public priority?: number,
-  ) {  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まずは&lt;a href=&#34;https://material.angular.io/components&#34;&gt;material2の&lt;/a&gt;mdInput, mdSelect, mdButtonでフォームを作る。
-&lt;code&gt;#todoForm&lt;/code&gt;のように頭についている#は
-&lt;a href=&#34;https://angular.io/docs/ts/latest/guide/template-syntax.html#!#ref-vars&#34;&gt;reference variable&lt;/a&gt;で、
-titleはrequiredとしている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;div class=&amp;quot;root&amp;quot;&amp;gt;
-  &amp;lt;form (ngSubmit)=&amp;quot;onSubmit()&amp;quot; #todoForm=&amp;quot;ngForm&amp;quot;&amp;gt;
-
-    &amp;lt;div *ngIf=&amp;quot;model.id !== 0&amp;quot; class=&amp;quot;form-item&amp;quot;&amp;gt;
-      ID: {{model.id}}
-    &amp;lt;/div&amp;gt;
-
-    &amp;lt;div class=&amp;quot;form-item&amp;quot;&amp;gt;
-      &amp;lt;md-input-container&amp;gt;
-        &amp;lt;input mdInput name=&amp;quot;title&amp;quot; required placeholder=&amp;quot;やること&amp;quot; 
-          [(ngModel)]=&amp;quot;model.title&amp;quot;&amp;gt;
-      &amp;lt;/md-input-container&amp;gt;
-    &amp;lt;/div&amp;gt;
-    
-    &amp;lt;div class=&amp;quot;form-item&amp;quot;&amp;gt;
-      &amp;lt;md-select placeholder=&amp;quot;優先度&amp;quot; name=&amp;quot;priority&amp;quot; 
-        [(ngModel)]=&amp;quot;model.priority&amp;quot;&amp;gt;
-        &amp;lt;md-option [value]=&amp;quot;1&amp;quot;&amp;gt;高&amp;lt;/md-option&amp;gt;
-        &amp;lt;md-option [value]=&amp;quot;2&amp;quot;&amp;gt;中&amp;lt;/md-option&amp;gt;
-        &amp;lt;md-option [value]=&amp;quot;3&amp;quot;&amp;gt;低&amp;lt;/md-option&amp;gt;        
-      &amp;lt;/md-select&amp;gt;
-    &amp;lt;/div&amp;gt;
-
-    &amp;lt;div class=&amp;quot;form-item&amp;quot;&amp;gt;
-      &amp;lt;md-slide-toggle name=&amp;quot;active&amp;quot; [(ngModel)]=&amp;quot;model.active&amp;quot;&amp;gt;
-        有効にする
-      &amp;lt;/md-slide-toggle&amp;gt;
-    &amp;lt;/div&amp;gt;
-
-    &amp;lt;div class=&amp;quot;form-item&amp;quot;&amp;gt;
-      &amp;lt;button type=&amp;quot;submit&amp;quot; md-raised-button [disabled]=&amp;quot;!todoForm.form.valid&amp;quot;&amp;gt;
-        Submit
-      &amp;lt;/button&amp;gt;
-    &amp;lt;/div&amp;gt;
-    
-  &amp;lt;/form&amp;gt;
-&amp;lt;/div&amp;gt;
-
-&amp;lt;table&amp;gt;
-  &amp;lt;thead&amp;gt;
-    &amp;lt;tr&amp;gt;
-      &amp;lt;th&amp;gt;ID&amp;lt;/th&amp;gt;
-      &amp;lt;th&amp;gt;Title&amp;lt;/th&amp;gt;
-      &amp;lt;th&amp;gt;Active&amp;lt;/th&amp;gt;
-      &amp;lt;th&amp;gt;Priority&amp;lt;/th&amp;gt;
-  &amp;lt;/thead&amp;gt;
-  &amp;lt;tbody&amp;gt;
-    &amp;lt;tr li *ngFor=&amp;quot;let todo of todos&amp;quot;&amp;gt;
-      &amp;lt;td&amp;gt;{{todo.id}}&amp;lt;/td&amp;gt;
-      &amp;lt;td&amp;gt;{{todo.title}}&amp;lt;/td&amp;gt;
-      &amp;lt;td&amp;gt;{{todo.active}}&amp;lt;/td&amp;gt;
-      &amp;lt;td&amp;gt;{{todo.priority}}&amp;lt;/td&amp;gt;
-      &amp;lt;td&amp;gt;&amp;lt;button md-button (click)=&amp;quot;onEdit(todo.id)&amp;quot;&amp;gt;編集&amp;lt;/button&amp;gt;&amp;lt;/td&amp;gt;
-    &amp;lt;/tr&amp;gt;
-  &amp;lt;/tbody&amp;gt;
-&amp;lt;/table&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;コンポーネントはこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;@Component({
-  selector: &#39;app-todo-form&#39;,
-  templateUrl: &#39;./todo-form.component.html&#39;,
-  styleUrls: [&#39;./todo-form.component.css&#39;]
-})
-export class TodoFormComponent implements OnInit {
-
-  constructor() { }
-
-  todos: TodoForm[] = [];
-  model = new TodoForm(0, &amp;quot;&amp;quot;, false);
-
-  ngOnInit() {
-  }
-
-  onSubmit() {
-    if(this.model.id === 0) {
-      this.model.id = this.todos.length + 1;
-      this.todos.push(this.model);
-    }else{
-      this.todos[this.model.id - 1] = this.model;
-    }
-    this.model = new TodoForm(0, &amp;quot;&amp;quot;, false);
-  }
-
-  onEdit(id: number) {
-    this.model = Object.assign({}, this.todos[id - 1]);
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;autocomplete-https-material-angular-io-components-component-autocomplete&#34;&gt;&lt;a href=&#34;https://material.angular.io/components/component/autocomplete&#34;&gt;AutoComplete&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;次に人を登録するためのtextフォームを作る。これは前もって登録されている人の中からAutoCompleteさせる。&lt;/p&gt;
-
-&lt;p&gt;mdAutocompleteに候補を渡してmdInputのmdAutoCompleteにmdAutoCompleteの参照を渡す。
-&lt;a href=&#34;https://angular.io/docs/ts/latest/api/forms/index/FormControl-class.html&#34;&gt;FormControl&lt;/a&gt;を扱うためには&lt;code&gt;@angular/forms&lt;/code&gt;の&lt;code&gt;ReactiveFormsModule&lt;/code&gt;をimportする必要がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;div class=&amp;quot;form-item&amp;quot;&amp;gt;
-    &amp;lt;md-input-container&amp;gt;
-      &amp;lt;input mdInput name=&amp;quot;assignee&amp;quot; required placeholder=&amp;quot;やるひと&amp;quot; 
-        [(ngModel)]=&amp;quot;model.assignee&amp;quot;
-        [mdAutocomplete]=&amp;quot;autoAssignee&amp;quot;
-        [formControl]=&amp;quot;assigneeFormControl&amp;quot;
-      &amp;gt;
-    &amp;lt;/md-input-container&amp;gt;
-
-    &amp;lt;md-autocomplete #autoAssignee=&amp;quot;mdAutocomplete&amp;quot; [displayWith]=&amp;quot;displayAssignee&amp;quot;&amp;gt;
-      &amp;lt;md-option *ngFor=&amp;quot;let p of filteredAssignee | async&amp;quot; [value]=&amp;quot;p&amp;quot;&amp;gt;
-          {{ p.name }}
-      &amp;lt;/md-option&amp;gt;
-    &amp;lt;/md-autocomplete&amp;gt;
-  &amp;lt;/div&amp;gt;
-  
-  &amp;lt;div class=&amp;quot;form-item&amp;quot;&amp;gt;
-    &amp;lt;md-select placeholder=&amp;quot;優先度&amp;quot; name=&amp;quot;priority&amp;quot; 
-      [(ngModel)]=&amp;quot;model.priority&amp;quot;&amp;gt;
-      &amp;lt;md-option [value]=&amp;quot;1&amp;quot;&amp;gt;高&amp;lt;/md-option&amp;gt;
-      &amp;lt;md-option [value]=&amp;quot;2&amp;quot;&amp;gt;中&amp;lt;/md-option&amp;gt;
-      &amp;lt;md-option [value]=&amp;quot;3&amp;quot;&amp;gt;低&amp;lt;/md-option&amp;gt;        
-    &amp;lt;/md-select&amp;gt;
-  &amp;lt;/div&amp;gt;
-&amp;lt;/div&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;people: Person[] = [
-  {id: 1, name: &amp;quot;taro&amp;quot;},
-  {id: 2, name: &amp;quot;jiro&amp;quot;},
-  {id: 3, name: &amp;quot;ichiro&amp;quot;}
-];
-assigneeFormControl = new FormControl();
-filteredAssignee: Observable&amp;lt;Person[]&amp;gt;;
-
-ngOnInit() {
-  this.filteredAssignee = this.assigneeFormControl.valueChanges
-        .startWith(null)
-        .map(val =&amp;gt; val ? this.assigneeFilter(val) : this.people.slice());
-
-  this.assigneeFormControl.asyncValidator
-}
-
-assigneeFilter(val: string): Person[] {
-  return this.people.filter(p =&amp;gt; new RegExp(`^${val}`, &#39;gi&#39;).test(p.name)); 
-}
-
-displayAssignee(person: Person): string {
-  return person ? person.name : &#39;&#39;;
-}
-
-export class TodoForm {
-  constructor(
-    public id: number,
-    public title: string,
-    public active: boolean,
-    public priority?: number,
-    public assignee?: Person,
-  ) {  }
-}
-
-interface Person { id: number, name: string };
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;datepicker&#34;&gt;DatePicker&lt;/h2&gt;
-
-&lt;p&gt;最後に目標日を設定するためにDatePickerを用意する。
-上にも書いた通り、material2にはまだDatepickerがないので他のライブラリで代用する。
-今回はAngular v4に対応していて見た目がシンプルな&lt;a href=&#34;https://github.com/koleary94/Angular-2-Datepicker&#34;&gt;koleary94/Angular-2-Datepicker&lt;/a&gt;を使った。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install --save angular2-material-datepicker
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;div class=&amp;quot;form-item&amp;quot;&amp;gt;
-  &amp;lt;material-datepicker placeholder=&amp;quot;終了予定日&amp;quot; [(date)]=&amp;quot;model.deadline&amp;quot;&amp;gt;&amp;lt;/material-datepicker&amp;gt;
-&amp;lt;/div&amp;gt;
 &lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>
