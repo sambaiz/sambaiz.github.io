@@ -6,8 +6,186 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-01-19 09:30:00 &#43;0900 JST</updated>
+    <updated>2018-02-05 23:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>LambdaでOpenWeatherMapの気象データをDataDogに送ってアラートを飛ばす</title>
+          <link>https://www.sambaiz.net/article/152/</link>
+          <pubDate>Mon, 05 Feb 2018 23:55:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/152/</guid>
+          <description>&lt;p&gt;最近朝が寒くて起きるのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
+そこで、無料から使える気象API &lt;a href=&#34;http://openweathermap.org/&#34;&gt;OpenWeatherMap&lt;/a&gt;のデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。&lt;/p&gt;
+
+&lt;p&gt;インスタンスが立っていたらDataDog Agentの&lt;a href=&#34;https://docs.datadoghq.com/ja/guides/dogstatsd/&#34;&gt;DogStatsD&lt;/a&gt;経由で送ることができ、
+そうでなければ通常は&lt;a href=&#34;https://docs.datadoghq.com/ja/api/#metrics-post&#34;&gt;API&lt;/a&gt;を呼ぶことになるんだけど、Lambdaでは、AWS Integrationを設定すると有効になる&lt;a href=&#34;https://docs.datadoghq.com/ja/integrations/awslambda/&#34;&gt;Lambda Integration&lt;/a&gt;によって
+&lt;code&gt;MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2&lt;/code&gt;のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const axios = require(&#39;axios&#39;);
+
+const CITY = &#39;Shibuya&#39;;
+const API_KEY = &#39;*****&#39;;
+const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`;
+
+const METRIC_COUNTER = &#39;counter&#39;;
+const METRIC_GAUGE = &#39;gauge&#39;;
+
+const monitor = (metricName, metricType, value, tags) =&amp;gt; {
+  const unixEpochTimestamp = Math.floor(new Date().getTime());
+  console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&#39;,&#39;)}`);
+};
+
+exports.handler = async (event, context, callback) =&amp;gt; {
+  const data = (await axios.get(WEATHER_API)).data
+  const namePrefix = &#39;livinginfo.weather&#39;
+  monitor(`${namePrefix}.temperature`, METRIC_GAUGE, data.main.temp, [])
+  monitor(`${namePrefix}.rain`, METRIC_GAUGE, data.rain ? data.rain[&amp;quot;3h&amp;quot;] : 0, []);
+  monitor(`${namePrefix}.snow`, METRIC_GAUGE, data.snow ? data.snow[&amp;quot;3h&amp;quot;] : 0, []);
+  callback(null, &#39;done&#39;);
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;送られた。
+あとは0度を下回ったときのThreshold Alertや、前日比で下がったときのChange Alertなどを設定すれば良さそうだ。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/152.png&#34; alt=&#34;グラフ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ローカルでビルドしたimageをminikubeで使う</title>
+          <link>https://www.sambaiz.net/article/151/</link>
+          <pubDate>Thu, 01 Feb 2018 22:49:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/151/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;$ minikube version
+minikube version: v0.25.0
+
+$ kubectl version
+Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;9&amp;quot;, GitVersion:&amp;quot;v1.9.2&amp;quot;, GitCommit:&amp;quot;5fa2db2bd46ac79e5e00a4e6ed24191080aa463b&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;, BuildDate:&amp;quot;2018-01-18T21:11:08Z&amp;quot;, GoVersion:&amp;quot;go1.9.2&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;darwin/amd64&amp;quot;}
+
+$ kubectl config current-context
+minikube
+
+$ minikube status
+minikube: Running
+cluster: Running
+kubectl: Correctly Configured: pointing to minikube-vm at 192.168.99.100
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;dockerコマンドがminikube VM内で動いているdocker daemonを参照するようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube docker-env
+export DOCKER_TLS_VERIFY=&amp;quot;1&amp;quot;
+export DOCKER_HOST=&amp;quot;tcp://192.168.99.100:2376&amp;quot;
+export DOCKER_CERT_PATH=&amp;quot;/Users/sambaiz/.minikube/certs&amp;quot;
+
+$ eval $(minikube docker-env)
+$ docker info --format &#39;{{json .Name}}&#39;
+&amp;quot;minikube&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ビルドするDockerfile。nginxが立ち上がるだけ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何もタグを付けない(:latest)とcreate時にDockerレジストリからpullしにいって失敗してしまうため、タグ付きでビルドする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t my/myapp:1.0 .
+$ docker images my/myapp
+my/myapp   1.0   3f8a4339aadd   5 weeks ago   108 MB
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;deploymentとservice。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: my-app
+  labels:
+    app: my-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: my-app
+        image: my/myapp:1.0
+        ports:
+        - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+ name: my-app
+ labels:
+   app: my-app
+spec:
+ type: NodePort
+ ports:
+ - port: 80
+   nodePort: 30001
+ selector:
+   app: my-app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f deployment.yml 
+$ kubectl create -f service.yml 
+$ kubectl get pods
+NAME                      READY     STATUS    RESTARTS   AGE
+my-app-5f8c46bf95-xjvrg   1/1       Running   0          11s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ビルドしたimageでpodが動いていることを確認。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl $(minikube service my-app --url)
+&amp;lt;!DOCTYPE html&amp;gt;
+&amp;lt;html&amp;gt;
+&amp;lt;head&amp;gt;
+&amp;lt;title&amp;gt;Welcome to nginx!&amp;lt;/title&amp;gt;
+...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Chromeで任意のscriptを読み込まれる前に差し替える</title>
+          <link>https://www.sambaiz.net/article/150/</link>
+          <pubDate>Thu, 01 Feb 2018 21:54:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/150/</guid>
+          <description>&lt;p&gt;ChromeのDevToolsではSourcesからscriptを書き換えられるようになっているが、
+一行目にbreakpointを挟んで更新するとそこで止まるので読み込まれる前に差し替えることができる。
+ページの読み込み時に呼ばれるSDKやライブラリの影響範囲を調べたりデバッグしたりするのに便利。&lt;/p&gt;
+
+&lt;p&gt;確認用jsとhtml&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;console.log(&amp;quot;original&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;script src=&amp;quot;index.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;読み込み時に実行されるconsole.logの文章を変えた。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/150.gif&#34; alt=&#34;差し替えているところ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -48,7 +226,7 @@ DROP TABLE testtable;
 SQLをgooseディレクトリの中にバージョンを付けて移し、
 SlackにpostMessageするエンドポイントにリクエストを飛ばす。&lt;/p&gt;
 
-&lt;p&gt;ここでバージョンを作成することによって、並列で作業し、レビューなどの関係で適用順が前後しても修正する必要をなくしている。&lt;/p&gt;
+&lt;p&gt;ここでバージョンを作成することによって、並列で作業し、レビューなどの関係で適用順が前後しても修正する必要をなくしている。ただ、pushされる前に複数のブランチを連続でmergeする場合うまく動かないのでそれはなんとかする必要がある。&lt;/p&gt;
 
 &lt;p&gt;CircleCI 2.0ではApprovalボタンが出せるんだけど、
 アクセスしにいくのがちょっと面倒なのと、周知も兼ねてSlackに出したかったので使っていない。&lt;/p&gt;
@@ -73,7 +251,7 @@ jobs:
               git config --global user.email &amp;quot;circleci@example.com&amp;quot;
               git config --global user.name &amp;quot;CircleCI&amp;quot;
               git add .
-              git commit -m &amp;quot;[CI] version ${VERSION}&amp;quot;
+              git commit -m &amp;quot;version ${VERSION}&amp;quot;
               git push origin master
               COMMIT=$(git rev-parse HEAD)
               curl -H &amp;quot;Authorization: Basic $(echo -n &#39;foobar:dolphins&#39; | base64)&amp;quot; &amp;quot;https://*****/auth/message?version=${VERSION}&amp;amp;filename=${FILENAME}&amp;amp;commit=${COMMIT}&amp;quot;
@@ -20623,7 +20801,10 @@ $ kubectl config current-context
 minikube
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;minikubeでContainer Registryから取得できるようにsecretを作成する。&lt;/p&gt;
+&lt;p&gt;minikubeでContainer Registryから取得できるようにsecretを作成する。
+ローカルでビルドしたimageを使うこともできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/151/&#34;&gt;ローカルでビルドしたimageをminikubeで使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl create secret docker-registry myregistrykey --docker-server=https://gcr.io --docker-username=oauth2accesstoken --docker-password=&amp;quot;$(gcloud auth print-access-token)&amp;quot; --docker-email=***
 &lt;/code&gt;&lt;/pre&gt;

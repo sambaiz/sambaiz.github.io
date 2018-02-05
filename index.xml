@@ -6,8 +6,186 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-01-19 09:30:00 &#43;0900 JST</updated>
+    <updated>2018-02-05 23:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>LambdaでOpenWeatherMapの気象データをDataDogに送ってアラートを飛ばす</title>
+          <link>https://www.sambaiz.net/article/152/</link>
+          <pubDate>Mon, 05 Feb 2018 23:55:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/152/</guid>
+          <description>&lt;p&gt;最近朝が寒くて起きるのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
+そこで、無料から使える気象API &lt;a href=&#34;http://openweathermap.org/&#34;&gt;OpenWeatherMap&lt;/a&gt;のデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。&lt;/p&gt;
+
+&lt;p&gt;インスタンスが立っていたらDataDog Agentの&lt;a href=&#34;https://docs.datadoghq.com/ja/guides/dogstatsd/&#34;&gt;DogStatsD&lt;/a&gt;経由で送ることができ、
+そうでなければ通常は&lt;a href=&#34;https://docs.datadoghq.com/ja/api/#metrics-post&#34;&gt;API&lt;/a&gt;を呼ぶことになるんだけど、Lambdaでは、AWS Integrationを設定すると有効になる&lt;a href=&#34;https://docs.datadoghq.com/ja/integrations/awslambda/&#34;&gt;Lambda Integration&lt;/a&gt;によって
+&lt;code&gt;MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2&lt;/code&gt;のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const axios = require(&#39;axios&#39;);
+
+const CITY = &#39;Shibuya&#39;;
+const API_KEY = &#39;*****&#39;;
+const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`;
+
+const METRIC_COUNTER = &#39;counter&#39;;
+const METRIC_GAUGE = &#39;gauge&#39;;
+
+const monitor = (metricName, metricType, value, tags) =&amp;gt; {
+  const unixEpochTimestamp = Math.floor(new Date().getTime());
+  console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&#39;,&#39;)}`);
+};
+
+exports.handler = async (event, context, callback) =&amp;gt; {
+  const data = (await axios.get(WEATHER_API)).data
+  const namePrefix = &#39;livinginfo.weather&#39;
+  monitor(`${namePrefix}.temperature`, METRIC_GAUGE, data.main.temp, [])
+  monitor(`${namePrefix}.rain`, METRIC_GAUGE, data.rain ? data.rain[&amp;quot;3h&amp;quot;] : 0, []);
+  monitor(`${namePrefix}.snow`, METRIC_GAUGE, data.snow ? data.snow[&amp;quot;3h&amp;quot;] : 0, []);
+  callback(null, &#39;done&#39;);
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;送られた。
+あとは0度を下回ったときのThreshold Alertや、前日比で下がったときのChange Alertなどを設定すれば良さそうだ。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/152.png&#34; alt=&#34;グラフ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ローカルでビルドしたimageをminikubeで使う</title>
+          <link>https://www.sambaiz.net/article/151/</link>
+          <pubDate>Thu, 01 Feb 2018 22:49:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/151/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;$ minikube version
+minikube version: v0.25.0
+
+$ kubectl version
+Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;9&amp;quot;, GitVersion:&amp;quot;v1.9.2&amp;quot;, GitCommit:&amp;quot;5fa2db2bd46ac79e5e00a4e6ed24191080aa463b&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;, BuildDate:&amp;quot;2018-01-18T21:11:08Z&amp;quot;, GoVersion:&amp;quot;go1.9.2&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;darwin/amd64&amp;quot;}
+
+$ kubectl config current-context
+minikube
+
+$ minikube status
+minikube: Running
+cluster: Running
+kubectl: Correctly Configured: pointing to minikube-vm at 192.168.99.100
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;dockerコマンドがminikube VM内で動いているdocker daemonを参照するようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube docker-env
+export DOCKER_TLS_VERIFY=&amp;quot;1&amp;quot;
+export DOCKER_HOST=&amp;quot;tcp://192.168.99.100:2376&amp;quot;
+export DOCKER_CERT_PATH=&amp;quot;/Users/sambaiz/.minikube/certs&amp;quot;
+
+$ eval $(minikube docker-env)
+$ docker info --format &#39;{{json .Name}}&#39;
+&amp;quot;minikube&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ビルドするDockerfile。nginxが立ち上がるだけ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何もタグを付けない(:latest)とcreate時にDockerレジストリからpullしにいって失敗してしまうため、タグ付きでビルドする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t my/myapp:1.0 .
+$ docker images my/myapp
+my/myapp   1.0   3f8a4339aadd   5 weeks ago   108 MB
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;deploymentとservice。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: my-app
+  labels:
+    app: my-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: my-app
+        image: my/myapp:1.0
+        ports:
+        - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+ name: my-app
+ labels:
+   app: my-app
+spec:
+ type: NodePort
+ ports:
+ - port: 80
+   nodePort: 30001
+ selector:
+   app: my-app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f deployment.yml 
+$ kubectl create -f service.yml 
+$ kubectl get pods
+NAME                      READY     STATUS    RESTARTS   AGE
+my-app-5f8c46bf95-xjvrg   1/1       Running   0          11s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ビルドしたimageでpodが動いていることを確認。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl $(minikube service my-app --url)
+&amp;lt;!DOCTYPE html&amp;gt;
+&amp;lt;html&amp;gt;
+&amp;lt;head&amp;gt;
+&amp;lt;title&amp;gt;Welcome to nginx!&amp;lt;/title&amp;gt;
+...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Chromeで任意のscriptを読み込まれる前に差し替える</title>
+          <link>https://www.sambaiz.net/article/150/</link>
+          <pubDate>Thu, 01 Feb 2018 21:54:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/150/</guid>
+          <description>&lt;p&gt;ChromeのDevToolsではSourcesからscriptを書き換えられるようになっているが、
+一行目にbreakpointを挟んで更新するとそこで止まるので読み込まれる前に差し替えることができる。
+ページの読み込み時に呼ばれるSDKやライブラリの影響範囲を調べたりデバッグしたりするのに便利。&lt;/p&gt;
+
+&lt;p&gt;確認用jsとhtml&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;console.log(&amp;quot;original&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;script src=&amp;quot;index.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;読み込み時に実行されるconsole.logの文章を変えた。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/150.gif&#34; alt=&#34;差し替えているところ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -48,7 +226,7 @@ DROP TABLE testtable;
 SQLをgooseディレクトリの中にバージョンを付けて移し、
 SlackにpostMessageするエンドポイントにリクエストを飛ばす。&lt;/p&gt;
 
-&lt;p&gt;ここでバージョンを作成することによって、並列で作業し、レビューなどの関係で適用順が前後しても修正する必要をなくしている。&lt;/p&gt;
+&lt;p&gt;ここでバージョンを作成することによって、並列で作業し、レビューなどの関係で適用順が前後しても修正する必要をなくしている。ただ、pushされる前に複数のブランチを連続でmergeする場合うまく動かないのでそれはなんとかする必要がある。&lt;/p&gt;
 
 &lt;p&gt;CircleCI 2.0ではApprovalボタンが出せるんだけど、
 アクセスしにいくのがちょっと面倒なのと、周知も兼ねてSlackに出したかったので使っていない。&lt;/p&gt;
@@ -73,7 +251,7 @@ jobs:
               git config --global user.email &amp;quot;circleci@example.com&amp;quot;
               git config --global user.name &amp;quot;CircleCI&amp;quot;
               git add .
-              git commit -m &amp;quot;[CI] version ${VERSION}&amp;quot;
+              git commit -m &amp;quot;version ${VERSION}&amp;quot;
               git push origin master
               COMMIT=$(git rev-parse HEAD)
               curl -H &amp;quot;Authorization: Basic $(echo -n &#39;foobar:dolphins&#39; | base64)&amp;quot; &amp;quot;https://*****/auth/message?version=${VERSION}&amp;amp;filename=${FILENAME}&amp;amp;commit=${COMMIT}&amp;quot;
@@ -6853,277 +7031,6 @@ codelabsはwebに&lt;a href=&#34;https://codelabs.developers.google.com/io2017&#
 
 &lt;p&gt;これでアメリカでの予定も終わり。
 9日間ながら内容が濃い滞在だった。また行きたい。&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>io17で発表されたFirebaseのphone number authをwebで試してみた</title>
-          <link>https://www.sambaiz.net/article/102/</link>
-          <pubDate>Wed, 17 May 2017 23:34:00 -0700</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/102/</guid>
-          <description>&lt;p&gt;今日のdeveloper keynoteで発表されたphone number authを試してみた。
-Firebaseだと他にはPerformance Monitoringも発表されている。
-あとSDKをオープンソースにするとか。&lt;/p&gt;
-
-&lt;p&gt;firebase-toolsを最新版にする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;# npm install -g firebase-tools
-$ firebase -V
-3.9.0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;FirebaseUIを使う場合、これも最新版にしないと出てこない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;script src=&amp;quot;https://cdn.firebase.com/libs/firebaseui/2.0.0/firebaseui.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
-&amp;lt;link type=&amp;quot;text/css&amp;quot; rel=&amp;quot;stylesheet&amp;quot; href=&amp;quot;https://cdn.firebase.com/libs/firebaseui/2.0.0/firebaseui.css&amp;quot; /&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;firebase.auth.PhoneAuthProvider.PROVIDER_ID&lt;/code&gt;がphone number authの
-&lt;a href=&#34;https://github.com/firebase/firebaseui-web#starting-the-sign-in-flow&#34;&gt;オプション&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const uiConfig = {
-    signInOptions: [
-        firebase.auth.PhoneAuthProvider.PROVIDER_ID
-    ],
-    ...
-}
-
-const ui = new firebaseui.auth.AuthUI(firebase.auth());
-ui.start(&#39;#firebaseui-auth-container&#39;, uiConfig);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんなボタンを押すと&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/102-1.png&#34; alt=&#34;ボタン&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;電話番号とCAPTCHAが入り、&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/102-2.png&#34; alt=&#34;電話番号とCAPTCHA&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;SMSに書かれた番号を入力すると認証される。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/102-3.png&#34; alt=&#34;番号入力&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;二段階認証のようなものだと思っていたけど、そうではないみたい。&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>UWPでBLEデバイスとペアリングして値を取得する</title>
-          <link>https://www.sambaiz.net/article/101/</link>
-          <pubDate>Sat, 13 May 2017 10:57:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/101/</guid>
-          <description>
-
-&lt;p&gt;ManifestからBluetoothを許可しておく。&lt;/p&gt;
-
-&lt;h2 id=&#34;bleデバイスを見つける-https-github-com-microsoft-windows-universal-samples-blob-dev-samples-bluetoothleclient-cs-scenario1-discoverserver-xaml-cs&#34;&gt;&lt;a href=&#34;https://github.com/Microsoft/Windows-universal-samples/blob/dev/Samples/BluetoothLEClient/cs/Scenario1_DiscoverServer.xaml.cs&#34;&gt;BLEデバイスを見つける&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;&lt;code&gt;CreateWatcher&lt;/code&gt;にBluetooth LEプロトコルの&lt;a href=&#34;https://docs.microsoft.com/ja-jp/windows/uwp/devices-sensors/aep-service-class-ids&#34;&gt;AEP(Association EndPoint)サービスクラスID&lt;/a&gt;と
-requestPropaertiesで必要なデバイス情報を渡している。
-最後の&lt;code&gt;AssociationEndpoint&lt;/code&gt;は&lt;code&gt;System.Devices.Aep.ProtocolId&lt;/code&gt;のAepと&lt;a href=&#34;https://docs.microsoft.com/ja-jp/windows/uwp/devices-sensors/enumerate-devices-over-a-network&#34;&gt;対応している&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;using Windows.Devices.Enumeration;
-
-string[] requestedProperties = { &amp;quot;System.Devices.Aep.DeviceAddress&amp;quot;, &amp;quot;System.Devices.Aep.IsConnected&amp;quot; };
-
-deviceWatcher = DeviceInformation.CreateWatcher(
-                        &amp;quot;(System.Devices.Aep.ProtocolId:=\&amp;quot;{bb7bb05e-5972-42b5-94fc-76eaa7084d49}\&amp;quot;)&amp;quot;,
-                        requestedProperties,
-                        DeviceInformationKind.AssociationEndpoint);
-
-deviceWatcher.Start();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;deviceWatcher.Added += DeviceWatcher_Added;
-deviceWatcher.Removed += DeviceWatcher_Removed;
-deviceWatcher.Updated += DeviceWatcher_Updated;
-/*
-deviceWatcher.EnumerationCompleted += DeviceWatcher_EnumerationCompleted;
-deviceWatcher.Stopped += DeviceWatcher_Stopped;
-*/
-
-Dictionary&amp;lt;string, DeviceInformation&amp;gt; deviceInfos = new Dictionary&amp;lt;string, DeviceInformation&amp;gt;();
-
-private void DeviceWatcher_Added(DeviceWatcher sender, DeviceInformation deviceInfo)
-{
-
-    if (sender == deviceWatcher)
-    {
-        if (deviceInfo.Name != string.Empty)
-        {
-            deviceInfos.Add(deviceInfo.Id, deviceInfo);   
-        }
-    }
-}
-
-private void DeviceWatcher_Updated(DeviceWatcher sender, DeviceInformationUpdate deviceInfoUpdate)
-{
-    if (sender == deviceWatcher)
-    {
-        deviceInfos[deviceInfoUpdate.id].Update(deviceInfoUpdate);
-    }
-}
-
- private void DeviceWatcher_Removed(DeviceWatcher sender, DeviceInformationUpdate deviceInfoUpdate)
-{
-    if (sender == deviceWatcher)
-    {
-        deviceInfos.Remove(deviceInfoUpdate.id);
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;ペアリング&#34;&gt;ペアリング&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;DevicePairingResult result = await deviceInfo.Pairing.PairAsync();
-if (result.Status == DevicePairingResultStatus.Paired || result.Status == DevicePairingResultStatus.AlreadyPaired){
-    // success
-} else{
-    // fail
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんなウィンドウが出てくる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/101.png&#34; alt=&#34;ペアリング確認&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;OSの設定からペアリングすることもできる。&lt;/p&gt;
-
-&lt;h2 id=&#34;serviceのcharacteristicを取得する&#34;&gt;serviceのcharacteristicを取得する&lt;/h2&gt;
-
-&lt;p&gt;ペアリングしたらこんな感じで値を取得できる。
-&lt;a href=&#34;https://docs.microsoft.com/en-us/uwp/api/Windows.Devices.Bluetooth.BluetoothLEDevice#Windows_Devices_Bluetooth_BluetoothLEDevice_GetGattServicesForUuidAsync_&#34;&gt;GetGattServicesForUuidAsyc&lt;/a&gt;
-などはCreaters Update(15063)から追加されたAPI。
-Anniversary Edition(14393)まで&lt;a href=&#34;https://github.com/sambaiz/UnityBLE_UWP/tree/build_For_14393&#34;&gt;対応する場合&lt;/a&gt;
-は&lt;code&gt;GetGattService&lt;/code&gt;を使う。いずれにしても最小バージョンをそれ以上にしておく。
-deviceの値が取得できない場合はBluetoothが許可されているか確認する。
-あと、characteristicが一つも取れない場合、他のアプリケーションからアクセスしていないか注意。
-ドキュメントにも書いてあるけど、一つのサービスには一つのアプリケーションしかアクセスできない。
-そもそも接続できない場合、一旦お互いの接続設定を消して再ペアリングするとよくなることがある。
-ペアリングもできないようだったらBluetoothをオフにしてみるとか。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;var device = await BluetoothLEDevice.FromIdAsync(deviceInfo.Id);
-
-var services = await device.GetGattServicesForUuidAsync(serviceUUID);
-
-var characteristics = await services.Services[0].GetCharacteristicsForUuidAsync(characteristicUUID);
-
-characteristics.Characteristics[0].ValueChanged += characteristicChanged;
-
-await characteristics.Characteristics[0].WriteClientCharacteristicConfigurationDescriptorAsync(
-    GattClientCharacteristicConfigurationDescriptorValue.Notify
-);
-
-void characteristicChanged(
-    GattCharacteristic sender,
-    GattValueChangedEventArgs eventArgs
-){
-    byte[] data = new byte[eventArgs.CharacteristicValue.Length];
-    Streams.DataReader.FromBuffer(eventArgs.CharacteristicValue).ReadBytes(data);
-    var str = System.Text.Encoding.ASCII.GetString(data)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/105&#34;&gt;Unity/UWPでBLEを扱うプラグインを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>RxJSでObservableを結合する(merge, forkJoin, concat, combineLatest)</title>
-          <link>https://www.sambaiz.net/article/100/</link>
-          <pubDate>Tue, 09 May 2017 20:25:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/100/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/85/&#34;&gt;RxJSでRxをはじめる - sambaiz.net&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;merge-http-reactivex-io-rxjs-class-es6-observable-js-observable-html-static-method-merge&#34;&gt;&lt;a href=&#34;http://reactivex.io/rxjs/class/es6/Observable.js~Observable.html#static-method-merge&#34;&gt;merge&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;2つのstreamの両方の値がemitされる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Rx.Observable.merge(
-  stream1,
-  stream2
-).subscribe(
-  data =&amp;gt; console.log(`merge ${data}`),
-  err =&amp;gt; console.log(`merge ${err}`)
-);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;forkjoin-http-reactivex-io-rxjs-class-es6-observable-js-observable-html-static-method-forkjoin&#34;&gt;&lt;a href=&#34;http://reactivex.io/rxjs/class/es6/Observable.js~Observable.html#static-method-forkJoin&#34;&gt;forkJoin&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;completeしたときの最後の値を配列としてemitする。
-非同期で一つ値をemitするようなstreamで、Promise.allのようなことをしたいときはこれ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Rx.Observable.forkJoin(
-  stream1,
-  stream2
-).subscribe(
-  data =&amp;gt; console.log(`      forkJoin: ${data}`),
-  err =&amp;gt; console.log(`      forkJoin: ${err}`)
-)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;concat-http-reactivex-io-rxjs-class-es6-observable-js-observable-html-instance-method-concat&#34;&gt;&lt;a href=&#34;http://reactivex.io/rxjs/class/es6/Observable.js~Observable.html#instance-method-concat&#34;&gt;concat&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;前のstreamがcompleteしたら次のstreamの値がemitされる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Rx.Observable.concat(
-  stream1,
-  stream2
-).subscribe(
-  data =&amp;gt; console.log(`  concat ${data}`),
-  err =&amp;gt; console.log(`  concat ${err}`)
-);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;combinelatest-http-reactivex-io-rxjs-class-es6-observable-js-observable-html-static-method-combinelatest&#34;&gt;&lt;a href=&#34;http://reactivex.io/rxjs/class/es6/Observable.js~Observable.html#static-method-combineLatest&#34;&gt;combineLatest&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;stream自体を結合するのではなく値を結合する。
-この例だと、streamでemitされた値がa、stream2で最後のemitされた値がbになる。
-combineする値がない場合はemitされない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;stream1.combineLatest(stream2, (a, b) =&amp;gt; a + b).subscribe(
-  data =&amp;gt; console.log(`    combineLatest ${data}`),
-  err =&amp;gt; console.log(`    combineLatest ${err}`)
-);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;同時に実行したときの結果&#34;&gt;同時に実行したときの結果&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;const stream1 = Rx.Observable.interval(100).map(v =&amp;gt; `stream 1-${v+1}`).take(3);
-const stream2 = Rx.Observable.interval(100).map(v =&amp;gt; `stream 2-${v+1}`).take(3).delay(150);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/100.png&#34; alt=&#34;stream1とstream2&#34; /&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;merge stream 1-1
-  concat stream 1-1
-merge stream 1-2
-  concat stream 1-2
-merge stream 2-1 &amp;lt;- mergeではstream1はcompleteしていないが、stream2がemitされる
-merge stream 1-3
-  concat stream 1-3
-    combineLatest stream 1-3stream 2-1 &amp;lt;- stream2の値がemitされたのでcombineする
-merge stream 2-2
-    combineLatest stream 1-3stream 2-2
-      forkJoin: stream 1-3,stream 2-3 &amp;lt;- stream1とstream2がcompleteしたのでforkJoinでemitされる
-    combineLatest stream 1-3stream 2-3
-merge stream 2-3
-  concat stream 2-1 &amp;lt;- concatではstream1がcompleteしたので、stream2がemitされる
-  concat stream 2-2
-  concat stream 2-3
-&lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>
       

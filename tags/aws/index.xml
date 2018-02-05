@@ -11,6 +11,52 @@
     
       
         <item>
+          <title>LambdaでOpenWeatherMapの気象データをDataDogに送ってアラートを飛ばす</title>
+          <link>https://www.sambaiz.net/article/152/</link>
+          <pubDate>Mon, 05 Feb 2018 23:55:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/152/</guid>
+          <description>&lt;p&gt;最近朝が寒くて起きるのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
+そこで、無料から使える気象API &lt;a href=&#34;http://openweathermap.org/&#34;&gt;OpenWeatherMap&lt;/a&gt;のデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。&lt;/p&gt;
+
+&lt;p&gt;インスタンスが立っていたらDataDog Agentの&lt;a href=&#34;https://docs.datadoghq.com/ja/guides/dogstatsd/&#34;&gt;DogStatsD&lt;/a&gt;経由で送ることができ、
+そうでなければ通常は&lt;a href=&#34;https://docs.datadoghq.com/ja/api/#metrics-post&#34;&gt;API&lt;/a&gt;を呼ぶことになるんだけど、Lambdaでは、AWS Integrationを設定すると有効になる&lt;a href=&#34;https://docs.datadoghq.com/ja/integrations/awslambda/&#34;&gt;Lambda Integration&lt;/a&gt;によって
+&lt;code&gt;MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2&lt;/code&gt;のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const axios = require(&#39;axios&#39;);
+
+const CITY = &#39;Shibuya&#39;;
+const API_KEY = &#39;*****&#39;;
+const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`;
+
+const METRIC_COUNTER = &#39;counter&#39;;
+const METRIC_GAUGE = &#39;gauge&#39;;
+
+const monitor = (metricName, metricType, value, tags) =&amp;gt; {
+  const unixEpochTimestamp = Math.floor(new Date().getTime());
+  console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&#39;,&#39;)}`);
+};
+
+exports.handler = async (event, context, callback) =&amp;gt; {
+  const data = (await axios.get(WEATHER_API)).data
+  const namePrefix = &#39;livinginfo.weather&#39;
+  monitor(`${namePrefix}.temperature`, METRIC_GAUGE, data.main.temp, [])
+  monitor(`${namePrefix}.rain`, METRIC_GAUGE, data.rain ? data.rain[&amp;quot;3h&amp;quot;] : 0, []);
+  monitor(`${namePrefix}.snow`, METRIC_GAUGE, data.snow ? data.snow[&amp;quot;3h&amp;quot;] : 0, []);
+  callback(null, &#39;done&#39;);
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;送られた。
+あとは0度を下回ったときのThreshold Alertや、前日比で下がったときのChange Alertなどを設定すれば良さそうだ。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/152.png&#34; alt=&#34;グラフ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>Athenaのmigrationやpartitionするathena-adminを作った</title>
           <link>https://www.sambaiz.net/article/145/</link>
           <pubDate>Sun, 24 Dec 2017 23:31:00 &#43;0900</pubDate>

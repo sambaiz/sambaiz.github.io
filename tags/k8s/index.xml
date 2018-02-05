@@ -11,6 +11,112 @@
     
       
         <item>
+          <title>ローカルでビルドしたimageをminikubeで使う</title>
+          <link>https://www.sambaiz.net/article/151/</link>
+          <pubDate>Thu, 01 Feb 2018 22:49:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/151/</guid>
+          <description>&lt;pre&gt;&lt;code&gt;$ minikube version
+minikube version: v0.25.0
+
+$ kubectl version
+Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;9&amp;quot;, GitVersion:&amp;quot;v1.9.2&amp;quot;, GitCommit:&amp;quot;5fa2db2bd46ac79e5e00a4e6ed24191080aa463b&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;, BuildDate:&amp;quot;2018-01-18T21:11:08Z&amp;quot;, GoVersion:&amp;quot;go1.9.2&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;darwin/amd64&amp;quot;}
+
+$ kubectl config current-context
+minikube
+
+$ minikube status
+minikube: Running
+cluster: Running
+kubectl: Correctly Configured: pointing to minikube-vm at 192.168.99.100
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;dockerコマンドがminikube VM内で動いているdocker daemonを参照するようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube docker-env
+export DOCKER_TLS_VERIFY=&amp;quot;1&amp;quot;
+export DOCKER_HOST=&amp;quot;tcp://192.168.99.100:2376&amp;quot;
+export DOCKER_CERT_PATH=&amp;quot;/Users/sambaiz/.minikube/certs&amp;quot;
+
+$ eval $(minikube docker-env)
+$ docker info --format &#39;{{json .Name}}&#39;
+&amp;quot;minikube&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ビルドするDockerfile。nginxが立ち上がるだけ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何もタグを付けない(:latest)とcreate時にDockerレジストリからpullしにいって失敗してしまうため、タグ付きでビルドする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t my/myapp:1.0 .
+$ docker images my/myapp
+my/myapp   1.0   3f8a4339aadd   5 weeks ago   108 MB
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;deploymentとservice。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: my-app
+  labels:
+    app: my-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: my-app
+        image: my/myapp:1.0
+        ports:
+        - containerPort: 80
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Service
+metadata:
+ name: my-app
+ labels:
+   app: my-app
+spec:
+ type: NodePort
+ ports:
+ - port: 80
+   nodePort: 30001
+ selector:
+   app: my-app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create -f deployment.yml 
+$ kubectl create -f service.yml 
+$ kubectl get pods
+NAME                      READY     STATUS    RESTARTS   AGE
+my-app-5f8c46bf95-xjvrg   1/1       Running   0          11s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ビルドしたimageでpodが動いていることを確認。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl $(minikube service my-app --url)
+&amp;lt;!DOCTYPE html&amp;gt;
+&amp;lt;html&amp;gt;
+&amp;lt;head&amp;gt;
+&amp;lt;title&amp;gt;Welcome to nginx!&amp;lt;/title&amp;gt;
+...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>k8sのパッケージマネージャーHelmを使う</title>
           <link>https://www.sambaiz.net/article/122/</link>
           <pubDate>Wed, 26 Jul 2017 01:33:00 &#43;0900</pubDate>
@@ -300,7 +406,10 @@ $ kubectl config current-context
 minikube
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;minikubeでContainer Registryから取得できるようにsecretを作成する。&lt;/p&gt;
+&lt;p&gt;minikubeでContainer Registryから取得できるようにsecretを作成する。
+ローカルでビルドしたimageを使うこともできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/151/&#34;&gt;ローカルでビルドしたimageをminikubeで使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl create secret docker-registry myregistrykey --docker-server=https://gcr.io --docker-username=oauth2accesstoken --docker-password=&amp;quot;$(gcloud auth print-access-token)&amp;quot; --docker-email=***
 &lt;/code&gt;&lt;/pre&gt;
