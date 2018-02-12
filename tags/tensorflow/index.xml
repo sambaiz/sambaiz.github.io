@@ -11,6 +11,160 @@
     
       
         <item>
+          <title>TensorFlow/RNNで連続的な値の時系列データを予測する</title>
+          <link>https://www.sambaiz.net/article/154/</link>
+          <pubDate>Sun, 11 Feb 2018 19:49:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/154/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/146/&#34;&gt;TensorFlowのRNN(LSTM)のチュートリアルのコードを読む - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;チュートリアルで扱ったのは語彙数分の単語、つまり離散的な値だったが、今回は連続的な値を取る場合のモデルを作る。
+全体のコードは&lt;a href=&#34;https://github.com/sambaiz/my_jupyter_notebook/blob/master/rnn-continuous.ipynb&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h3 id=&#34;入力&#34;&gt;入力&lt;/h3&gt;
+
+&lt;p&gt;以下の関数によって生成した1次元のデータ列。
+これをstrideした最後のデータ、つまり時系列的に次に来るものを予測させる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def make_time_series_data(size):
+  data = []
+  for i in range(size):
+    data.append(sin(random.normalvariate(i,0.1)*0.1))
+  return np.reshape(np.array(data, dtype=np.float32), (size,1))
+
+def make_batch(data, batch_size, num_steps, num_dimensions, name=None):
+  epoch_size =  data.size // (batch_size*num_steps*num_dimensions)
+  data = np.lib.stride_tricks.as_strided(
+    data, 
+    shape=
+      (epoch_size,
+        batch_size, 
+       num_steps+1,
+       num_dimensions),
+    strides=(
+        4*batch_size*num_steps*num_dimensions, 
+        4*num_steps*num_dimensions, 
+        4*num_dimensions, 
+        4 # bytes
+    ), 
+    writeable=False
+  )
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;モデル&#34;&gt;モデル&lt;/h3&gt;
+
+&lt;p&gt;input layerでLSTMのhidden_sizeに合わせて、output layerで予測値を得ている。
+lossはMSE(Mean squared error)。Optimizerは&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/GradientDescentOptimizer&#34;&gt;GradientDecentOptimizer&lt;/a&gt;を使っている。&lt;/p&gt;
+
+&lt;p&gt;チュートリアルでは自力で各time_stepの値を&lt;a href=&#34;https://github.com/tensorflow/models/blob/12f279d6f4cb33574bc20109b41eb8a59f40cfd1/tutorials/rnn/ptb/ptb_word_lm.py#L141&#34;&gt;入れていた&lt;/a&gt;けど、
+今回は&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/nn/dynamic_rnn&#34;&gt;dynamic_rnn()&lt;/a&gt;に任せている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class Model(object):dc
+  def __init__(self, config, is_training=False):
+    # config
+    self.batch_size = config.batch_size
+    self.num_steps = config.num_steps
+    self.num_dimensions = config.num_dimensions
+    self.keep_prob = config.keep_prob
+    self.hidden_size = config.hidden_size
+    self.num_layers = config.num_layers
+    
+    # placeholder
+    self.input = tf.placeholder(tf.float32, [None, self.num_steps, self.num_dimensions], name=&amp;quot;input&amp;quot;)
+    self.input_strided = tf.placeholder(tf.float32, [self.batch_size, self.num_steps, self.num_dimensions], name=&amp;quot;input_strided&amp;quot;)
+    self.lr = tf.placeholder(tf.float32, name=&amp;quot;learning_rate&amp;quot;)
+    
+    # input layer
+    input = tf.reshape(self.input, [-1, self.num_dimensions])
+    input_w = tf.get_variable(&amp;quot;input_w&amp;quot;, [self.num_dimensions, self.hidden_size], dtype=tf.float32)
+    input_b = tf.get_variable(&amp;quot;input_b&amp;quot;, [self.hidden_size], dtype=tf.float32)
+    input = tf.nn.xw_plus_b(input, input_w, input_b)
+    input = tf.reshape(input, [self.batch_size, self.num_steps, self.hidden_size])
+    
+    # LSTM layer
+    output, state = self._build_rnn_graph(input, is_training)
+    
+    # output layer
+    output = tf.reshape(output, [-1, self.hidden_size])
+    output_w = tf.get_variable(&amp;quot;output_w&amp;quot;, [self.hidden_size, 1], dtype=tf.float32)
+    output_b = tf.get_variable(&amp;quot;output_b&amp;quot;, [1], dtype=tf.float32)
+    output = tf.nn.xw_plus_b(output, output_w, output_b)
+    self.output = tf.reshape(output, [self.batch_size, self.num_steps, 1])
+    
+    self.cost = tf.reduce_mean(tf.square(self.output[:, -1, :] - self.input_strided[:, -1, :]))
+    self.train_op = tf.train.GradientDescentOptimizer(self.lr).minimize(self.cost, global_step=tf.train.get_or_create_global_step())
+
+  def _build_rnn_graph(self, input, is_training):
+    def make_cell():
+      cell = tf.contrib.rnn.LSTMBlockCell(
+        self.hidden_size, forget_bias=0.0)
+      if is_training and self.keep_prob &amp;lt; 1:
+        cell = tf.contrib.rnn.DropoutWrapper(
+          cell, output_keep_prob=self.keep_prob)
+      return cell
+
+    cell = tf.contrib.rnn.MultiRNNCell(
+      [make_cell() for _ in range(self.num_layers)], state_is_tuple=True)
+    initial_state = cell.zero_state(self.batch_size, tf.float32)
+    output, state = tf.nn.dynamic_rnn(cell, input, initial_state=initial_state)
+    return output, state
+
+  def learn(self, session, input, input_strided, learning_rate):
+    fetches = {
+      &amp;quot;cost&amp;quot;: self.cost,
+      &amp;quot;train_op&amp;quot;: self.train_op
+    }
+    feed_dict = {
+      self.input: input,
+      self.input_strided: input_strided,
+      self.lr: learning_rate
+    }
+    vals = session.run(fetches, feed_dict=feed_dict)
+    cost = vals[&amp;quot;cost&amp;quot;]
+    return cost
+
+  def predict(self, session, input):
+    feed_dict = {
+      self.input: np.reshape(input, (1, input.shape[0], input.shape[1]))
+    }
+    return session.run(self.output, feed_dict=feed_dict)[0,-1]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;ハイパーパラメータ&#34;&gt;ハイパーパラメータ&lt;/h3&gt;
+
+&lt;p&gt;調整が難しい。&lt;code&gt;max_epoch&lt;/code&gt;は学習率の初期値(&lt;code&gt;learning_rate&lt;/code&gt;)で学習し続けるepochの数なわけなんだけど、
+これを大きくして一気にlossを減らしていこうとしたら案外簡単に収束しなくなってしまった。
+&lt;code&gt;num_steps&lt;/code&gt;、つまり予測するのに見る数は今回のデータの場合そんなに大きくある必要はなくて、
+むしろ大きくすると平たいグラフになって最大値や最小値との誤差が大きくなった。
+&lt;code&gt;hidden_size&lt;/code&gt;や&lt;code&gt;num_layers&lt;/code&gt;は増やしても良さそうだけどメモリが足りなかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class Config(object):
+  init_scale = 0.1
+  learning_rate = 1.0
+  num_layers = 2
+  num_steps = 5
+  hidden_size = 200
+  max_epoch = 3
+  batch_size = 3000
+  num_dimensions = 1
+  keep_prob = 1.0
+  lr_decay = 0.5
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;学習結果&#34;&gt;学習結果&lt;/h3&gt;
+
+&lt;p&gt;300000個のデータから学習して予測させた。
+予測値は実際の値と比べて若干振幅が少ないけど、形としては良い感じだ。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/154.png&#34; alt=&#34;実際のデータと予測結果のグラフ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>TensorBoardでsummaryやグラフを見る</title>
           <link>https://www.sambaiz.net/article/147/</link>
           <pubDate>Sun, 07 Jan 2018 21:12:00 &#43;0900</pubDate>
@@ -465,6 +619,8 @@ for step in range(model.input.epoch_size):
       sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
 &lt;/code&gt;&lt;/pre&gt;
 
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/154/&#34;&gt;TensorFlow/RNNで連続的な値を取る時系列データを予測する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://colah.github.io/posts/2015-08-Understanding-LSTMs/&#34;&gt;Understanding LSTM Networks &amp;ndash; colah&amp;rsquo;s blog&lt;/a&gt;&lt;/p&gt;
@@ -609,7 +765,7 @@ images, labels = mnist.train.next_batch(100)
 &lt;p&gt;Sonnetではニューラルネットワークの一部をModuleとして表現し、それらをTensorFlowの計算グラフに接続していく。
 Moduleはグラフに複数回接続することができ、中の変数は共有される。
 素のTensorFlowだと&lt;a href=&#34;https://www.tensorflow.org/programmers_guide/variable_scope&#34;&gt;変数のスコープ&lt;/a&gt;を作って共有するのに
-reuse=Trueで&lt;code&gt;tf.variable_scope&lt;/code&gt;して&lt;code&gt;tf.get_variable&lt;/code&gt;したりする必要があるけど、そのあたりは抽象化されているので
+reuse=Trueで&lt;code&gt;tf.variable_scope&lt;/code&gt;して&lt;code&gt;tf.get_variable&lt;/code&gt;したりするけど、そのあたりは抽象化されているので
 &lt;code&gt;tf.Variable&lt;/code&gt;を含むような処理はModuleで行う。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://github.com/deepmind/sonnet/blob/v1.8/sonnet/python/modules/basic.py&#34;&gt;Linear Module&lt;/a&gt;は

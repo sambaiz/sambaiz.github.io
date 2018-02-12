@@ -6,17 +6,347 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-02-05 23:55:00 &#43;0900 JST</updated>
+    <updated>2018-02-11 23:20:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>LambdaでOpenWeatherMapの気象データをDataDogに送ってアラートを飛ばす</title>
+          <title>Serverless FrameworkでLambdaをデプロイする</title>
+          <link>https://www.sambaiz.net/article/155/</link>
+          <pubDate>Sun, 11 Feb 2018 23:20:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/155/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless&#34;&gt;Serverless Framework&lt;/a&gt;でLambda Functionをデプロイする。
+Apexが基本的にFunction自体のデプロイしかしないのに対して、こちらはeventの設定なども諸々やってくれて強い。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/140/&#34;&gt;ApexでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install -g serverless
+$ serverless version
+1.26.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ApexではFunctionごとにディレクトリが作られたが、Serverlessでは&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/services/#services&#34;&gt;Service&lt;/a&gt;ごとに作られ、
+一つのService内で複数のFunctionを定義できる。handlerは同じでも異なっていてもよい。&lt;/p&gt;
+
+&lt;p&gt;Apexの形式の場合、共通の処理をWebpackなどで各Functionに持って来たり、
+同じような処理の複数のFunctionを立てる際はコピーする必要があったが、
+こちらは必要最小限の変更でそれらを行うことができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless/tree/master/lib/plugins/create/templates&#34;&gt;template&lt;/a&gt;からServiceをcreateする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ serverless create --template aws-nodejs --path testservice
+$ ls testservice/
+handler.js	serverless.yml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;設定ファイル&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/serverless.yml/#serverlessyml-reference&#34;&gt;serverless.yml&lt;/a&gt;
+にはLambdaの基本的なもののほかに、VPCやevent、IAM Roleなども書けて、これらはdeploy時に作られるCloudFormationのstackによって管理される。必要なら生のCloudFormationの設定も書ける。&lt;/p&gt;
+
+&lt;p&gt;ApexでもTerraformによって管理することができるが、書くのはこちらの方がはるかに楽。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/144/&#34;&gt;ApexでデプロイしたLambdaのトリガーをTerraformで管理する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat sesrverless.yml
+service: testservice
+
+provider:
+  name: aws
+  profile: foobar
+  region: ap-northeast-1
+  runtime: nodejs6.10
+  memorySize: 512
+  timeout: 10
+ 
+functions: 
+  hello: 
+    handler: handler.hello 
+    events:
+      - http:
+          path: hello/world
+          method: get
+          cors: true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;deployすると&lt;code&gt;{service}-{stage}-{function}&lt;/code&gt;のFunctionが作られる。
+今回の場合はtestservice-prd-test。stageをymlでも指定しなかった場合はデフォルト値のdevになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ serverless deploy --stage prd
+$ curl https://*****.ap-northeast-1.amazonaws.com/prd/hello/world | jq
+{
+  &amp;quot;message&amp;quot;: &amp;quot;Go Serverless v1.0! Your function executed successfully!&amp;quot;,
+  &amp;quot;input&amp;quot;: {
+    ...
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どうしてもCloudFormationを使いたくないというわけでなければ、Serverless Frameworkを使っておけばよいと思う。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>TensorFlow/RNNで連続的な値の時系列データを予測する</title>
+          <link>https://www.sambaiz.net/article/154/</link>
+          <pubDate>Sun, 11 Feb 2018 19:49:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/154/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/146/&#34;&gt;TensorFlowのRNN(LSTM)のチュートリアルのコードを読む - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;チュートリアルで扱ったのは語彙数分の単語、つまり離散的な値だったが、今回は連続的な値を取る場合のモデルを作る。
+全体のコードは&lt;a href=&#34;https://github.com/sambaiz/my_jupyter_notebook/blob/master/rnn-continuous.ipynb&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h3 id=&#34;入力&#34;&gt;入力&lt;/h3&gt;
+
+&lt;p&gt;以下の関数によって生成した1次元のデータ列。
+これをstrideした最後のデータ、つまり時系列的に次に来るものを予測させる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def make_time_series_data(size):
+  data = []
+  for i in range(size):
+    data.append(sin(random.normalvariate(i,0.1)*0.1))
+  return np.reshape(np.array(data, dtype=np.float32), (size,1))
+
+def make_batch(data, batch_size, num_steps, num_dimensions, name=None):
+  epoch_size =  data.size // (batch_size*num_steps*num_dimensions)
+  data = np.lib.stride_tricks.as_strided(
+    data, 
+    shape=
+      (epoch_size,
+        batch_size, 
+       num_steps+1,
+       num_dimensions),
+    strides=(
+        4*batch_size*num_steps*num_dimensions, 
+        4*num_steps*num_dimensions, 
+        4*num_dimensions, 
+        4 # bytes
+    ), 
+    writeable=False
+  )
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;モデル&#34;&gt;モデル&lt;/h3&gt;
+
+&lt;p&gt;input layerでLSTMのhidden_sizeに合わせて、output layerで予測値を得ている。
+lossはMSE(Mean squared error)。Optimizerは&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/GradientDescentOptimizer&#34;&gt;GradientDecentOptimizer&lt;/a&gt;を使っている。&lt;/p&gt;
+
+&lt;p&gt;チュートリアルでは自力で各time_stepの値を&lt;a href=&#34;https://github.com/tensorflow/models/blob/12f279d6f4cb33574bc20109b41eb8a59f40cfd1/tutorials/rnn/ptb/ptb_word_lm.py#L141&#34;&gt;入れていた&lt;/a&gt;けど、
+今回は&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/nn/dynamic_rnn&#34;&gt;dynamic_rnn()&lt;/a&gt;に任せている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class Model(object):dc
+  def __init__(self, config, is_training=False):
+    # config
+    self.batch_size = config.batch_size
+    self.num_steps = config.num_steps
+    self.num_dimensions = config.num_dimensions
+    self.keep_prob = config.keep_prob
+    self.hidden_size = config.hidden_size
+    self.num_layers = config.num_layers
+    
+    # placeholder
+    self.input = tf.placeholder(tf.float32, [None, self.num_steps, self.num_dimensions], name=&amp;quot;input&amp;quot;)
+    self.input_strided = tf.placeholder(tf.float32, [self.batch_size, self.num_steps, self.num_dimensions], name=&amp;quot;input_strided&amp;quot;)
+    self.lr = tf.placeholder(tf.float32, name=&amp;quot;learning_rate&amp;quot;)
+    
+    # input layer
+    input = tf.reshape(self.input, [-1, self.num_dimensions])
+    input_w = tf.get_variable(&amp;quot;input_w&amp;quot;, [self.num_dimensions, self.hidden_size], dtype=tf.float32)
+    input_b = tf.get_variable(&amp;quot;input_b&amp;quot;, [self.hidden_size], dtype=tf.float32)
+    input = tf.nn.xw_plus_b(input, input_w, input_b)
+    input = tf.reshape(input, [self.batch_size, self.num_steps, self.hidden_size])
+    
+    # LSTM layer
+    output, state = self._build_rnn_graph(input, is_training)
+    
+    # output layer
+    output = tf.reshape(output, [-1, self.hidden_size])
+    output_w = tf.get_variable(&amp;quot;output_w&amp;quot;, [self.hidden_size, 1], dtype=tf.float32)
+    output_b = tf.get_variable(&amp;quot;output_b&amp;quot;, [1], dtype=tf.float32)
+    output = tf.nn.xw_plus_b(output, output_w, output_b)
+    self.output = tf.reshape(output, [self.batch_size, self.num_steps, 1])
+    
+    self.cost = tf.reduce_mean(tf.square(self.output[:, -1, :] - self.input_strided[:, -1, :]))
+    self.train_op = tf.train.GradientDescentOptimizer(self.lr).minimize(self.cost, global_step=tf.train.get_or_create_global_step())
+
+  def _build_rnn_graph(self, input, is_training):
+    def make_cell():
+      cell = tf.contrib.rnn.LSTMBlockCell(
+        self.hidden_size, forget_bias=0.0)
+      if is_training and self.keep_prob &amp;lt; 1:
+        cell = tf.contrib.rnn.DropoutWrapper(
+          cell, output_keep_prob=self.keep_prob)
+      return cell
+
+    cell = tf.contrib.rnn.MultiRNNCell(
+      [make_cell() for _ in range(self.num_layers)], state_is_tuple=True)
+    initial_state = cell.zero_state(self.batch_size, tf.float32)
+    output, state = tf.nn.dynamic_rnn(cell, input, initial_state=initial_state)
+    return output, state
+
+  def learn(self, session, input, input_strided, learning_rate):
+    fetches = {
+      &amp;quot;cost&amp;quot;: self.cost,
+      &amp;quot;train_op&amp;quot;: self.train_op
+    }
+    feed_dict = {
+      self.input: input,
+      self.input_strided: input_strided,
+      self.lr: learning_rate
+    }
+    vals = session.run(fetches, feed_dict=feed_dict)
+    cost = vals[&amp;quot;cost&amp;quot;]
+    return cost
+
+  def predict(self, session, input):
+    feed_dict = {
+      self.input: np.reshape(input, (1, input.shape[0], input.shape[1]))
+    }
+    return session.run(self.output, feed_dict=feed_dict)[0,-1]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;ハイパーパラメータ&#34;&gt;ハイパーパラメータ&lt;/h3&gt;
+
+&lt;p&gt;調整が難しい。&lt;code&gt;max_epoch&lt;/code&gt;は学習率の初期値(&lt;code&gt;learning_rate&lt;/code&gt;)で学習し続けるepochの数なわけなんだけど、
+これを大きくして一気にlossを減らしていこうとしたら案外簡単に収束しなくなってしまった。
+&lt;code&gt;num_steps&lt;/code&gt;、つまり予測するのに見る数は今回のデータの場合そんなに大きくある必要はなくて、
+むしろ大きくすると平たいグラフになって最大値や最小値との誤差が大きくなった。
+&lt;code&gt;hidden_size&lt;/code&gt;や&lt;code&gt;num_layers&lt;/code&gt;は増やしても良さそうだけどメモリが足りなかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class Config(object):
+  init_scale = 0.1
+  learning_rate = 1.0
+  num_layers = 2
+  num_steps = 5
+  hidden_size = 200
+  max_epoch = 3
+  batch_size = 3000
+  num_dimensions = 1
+  keep_prob = 1.0
+  lr_decay = 0.5
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;学習結果&#34;&gt;学習結果&lt;/h3&gt;
+
+&lt;p&gt;300000個のデータから学習して予測させた。
+予測値は実際の値と比べて若干振幅が少ないけど、形としては良い感じだ。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/154.png&#34; alt=&#34;実際のデータと予測結果のグラフ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>xorm reverseでDBスキーマからGoのstructを生成する</title>
+          <link>https://www.sambaiz.net/article/153/</link>
+          <pubDate>Sat, 10 Feb 2018 15:55:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/153/</guid>
+          <description>&lt;p&gt;GoのORMの&lt;a href=&#34;https://github.com/go-xorm/xorm&#34;&gt;xorm&lt;/a&gt;にはxorm reverseというDBのスキーマから以下のようなテンプレートに沿ったGoのstructなどを生成する&lt;a href=&#34;https://github.com/go-xorm/cmd&#34;&gt;ツール&lt;/a&gt;がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package {{.Model}}
+
+import (
+	{{range .Imports}}&amp;quot;{{.}}&amp;quot;{{end}}
+)
+
+{{range .Tables}}
+type {{Mapper .Name}} struct {
+{{$table := .}}
+{{range .Columns}}	{{Mapper .Name}}	{{Type .}}
+{{end}}
+}
+
+{{end}}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;リポジトリにある&lt;a href=&#34;https://github.com/go-xorm/cmd/tree/master/xorm/templates&#34;&gt;テンプレート&lt;/a&gt;にxorm用テンプレートとgo用のテンプレートが用意されているように、単体で使うこともできる。
+また、テンプレートを書く言語としてもGo以外にC++もサポートしている。&lt;/p&gt;
+
+&lt;p&gt;xormのcmdとドライバをインストール。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get github.com/go-xorm/cmd/xorm
+$ go get github.com/go-sql-driver/mysql
+$ xorm
+Version:
+
+    0.2.0524
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;DBを立てて様々な型のカラムを含むテーブルを用意した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker run --name mysql-xorm -p 33306:3306 -e &amp;quot;MYSQL_ALLOW_EMPTY_PASSWORD=yes&amp;quot; -e &amp;quot;MYSQL_DATABASE=testdb&amp;quot; -d mysql:5.7
+$ cat schema.sql
+CREATE TABLE table1 (
+  n_tinyint TINYINT,
+  n_int INT,
+  n_int_unsigned INT UNSIGNED NOT NULL DEFAULT 1,
+  n_bigint BIGINT,
+  n_float FLOAT,
+  n_double DOUBLE,
+  d_date DATE,
+  d_datetime DATETIME,
+  s_char CHAR(64),
+  s_varchar VARCHAR(64),
+  s_text TEXT,
+  s_json JSON,
+  b_binary BLOB,
+  e_enum ENUM(&#39;aaa&#39;, &#39;bbb&#39;, &#39;ccc&#39;)
+)
+
+$ mysql -u root -h 0.0.0.0 -P 33306 -D testdb &amp;lt; schema.sql 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Goのテンプレートをリポジトリから持ってきてxorm reverseを実行。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls xorm-template
+config		struct.go.tpl
+
+$ xorm reverse mysql &amp;quot;root:@tcp(0.0.0.0:33306)/testdb&amp;quot; xorm-template
+$ cat model/table1.go 
+package model
+
+import (
+	&amp;quot;time&amp;quot;
+)
+
+type Table1 struct {
+	NTinyint     int
+	NInt         int
+	NIntUnsigned int
+	NBigint      int64
+	NFloat       float32
+	NDouble      float64
+	DDate        time.Time
+	DDatetime    time.Time
+	SChar        string
+	SVarchar     string
+	SText        string
+	SJson        string
+	BBinary      []byte
+	EEnum        string
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;概ねうまくいっているが、現状unsignedは無視されてしまう。
+これを修正するには依存しているcoreや&lt;a href=&#34;https://github.com/go-xorm/xorm/blob/430fbe866a716bac8e5307d0c5222346f37cf8cf/engine.go#L340&#34;&gt;xorm本体&lt;/a&gt;に手を入れる必要がありそうだ。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>DatadogのLambda Integrationで気象データを送ってアラートを飛ばす</title>
           <link>https://www.sambaiz.net/article/152/</link>
           <pubDate>Mon, 05 Feb 2018 23:55:00 &#43;0900</pubDate>
           <author></author>
           <guid>https://www.sambaiz.net/article/152/</guid>
-          <description>&lt;p&gt;最近朝が寒くて起きるのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
+          <description>&lt;p&gt;最近朝が寒くて布団から出るのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
 そこで、無料から使える気象API &lt;a href=&#34;http://openweathermap.org/&#34;&gt;OpenWeatherMap&lt;/a&gt;のデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。&lt;/p&gt;
 
 &lt;p&gt;インスタンスが立っていたらDataDog Agentの&lt;a href=&#34;https://docs.datadoghq.com/ja/guides/dogstatsd/&#34;&gt;DogStatsD&lt;/a&gt;経由で送ることができ、
@@ -853,6 +1183,8 @@ for step in range(model.input.epoch_size):
       print(&amp;quot;Saving model to %s.&amp;quot; % FLAGS.save_path)
       sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/154/&#34;&gt;TensorFlow/RNNで連続的な値を取る時系列データを予測する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
@@ -1747,6 +2079,14 @@ SlackのWebhookなどを設定できる。&lt;/p&gt;
           <guid>https://www.sambaiz.net/article/140/</guid>
           <description>&lt;p&gt;&lt;a href=&#34;https://github.com/apex/apex&#34;&gt;Apex&lt;/a&gt;でLambdaをデプロイする。
 とても簡単に使えるし、変なこともしないので良い感じ。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;Serverless Frameworkだとeventの設定までカバーできてより便利。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
 
 &lt;p&gt;インストール。ダウンロードして実行できるようにしている。&lt;/p&gt;
 
@@ -3883,7 +4223,7 @@ images, labels = mnist.train.next_batch(100)
 &lt;p&gt;Sonnetではニューラルネットワークの一部をModuleとして表現し、それらをTensorFlowの計算グラフに接続していく。
 Moduleはグラフに複数回接続することができ、中の変数は共有される。
 素のTensorFlowだと&lt;a href=&#34;https://www.tensorflow.org/programmers_guide/variable_scope&#34;&gt;変数のスコープ&lt;/a&gt;を作って共有するのに
-reuse=Trueで&lt;code&gt;tf.variable_scope&lt;/code&gt;して&lt;code&gt;tf.get_variable&lt;/code&gt;したりする必要があるけど、そのあたりは抽象化されているので
+reuse=Trueで&lt;code&gt;tf.variable_scope&lt;/code&gt;して&lt;code&gt;tf.get_variable&lt;/code&gt;したりするけど、そのあたりは抽象化されているので
 &lt;code&gt;tf.Variable&lt;/code&gt;を含むような処理はModuleで行う。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://github.com/deepmind/sonnet/blob/v1.8/sonnet/python/modules/basic.py&#34;&gt;Linear Module&lt;/a&gt;は
@@ -6484,553 +6824,6 @@ function mark_installed
 yum[1597]: Updated: *****
 ...
 &lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>Unity/UWPでBLEを扱うプラグインを作る</title>
-          <link>https://www.sambaiz.net/article/105/</link>
-          <pubDate>Sun, 04 Jun 2017 11:57:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/105/</guid>
-          <description>&lt;p&gt;コードは&lt;a href=&#34;https://github.com/sambaiz/UnityBLE_UWP&#34;&gt;ここ&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://blogs.msdn.microsoft.com/aonishi/2013/12/04/unity-on-windows-8-1/&#34;&gt;この動画&lt;/a&gt;の
-50:00あたりから説明があるように、
-ビルドされたWSAが読むUWPのdllのほかに、
-Unityエディタ上から読むための.NET Framework3.5のdllを用意する。
-こうすることで実行環境ごとの違いをUnityコード上で気にしなくてもよくなる。&lt;/p&gt;
-
-&lt;p&gt;新しいプロジェクトで&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;Visual C# から.NET Framework 3.5にしてクラスライブラリ(.NET Framework)&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;Visual C# -&amp;gt;　Windows -&amp;gt; ユニバーサルからクラスライブラリ(ユニバーサルWindows)&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;の2つのプロジェクトを同じソリューションに作成する。
-VS2017で.NET Frameworkのクラスライブラリプロジェクトを作成するためには
-Visual Studio Installerで.NET Coreのワークロードをインストールする必要がある。
-また、これとは別に動作確認用のUWPアプリケーションプロジェクトを作成した。&lt;/p&gt;
-
-&lt;p&gt;UWPの方のプロジェクトにあるClass1.csを削除し、追加 -&amp;gt; 既存の項目から、
-もう片方のClass1.csをリンクとして追加して、この共通のcsにUWPのコードを書いていくんだけど、
-そのまま書くと当然.NET Frameworkの方でビルドできないので
-実装部分を&lt;a href=&#34;https://docs.unity3d.com/Manual/PlatformDependentCompilation.html&#34;&gt;#if WINDOWS_UWP ~ #endif&lt;/a&gt;
-で囲む。UWPの方のプロジェクトにはプロパティ -&amp;gt; ビルドの条件付きコンパイルにWINDOWS_UWPが含まれているので有効になる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;public void Start()
-{
-#if WINDOWS_UWP
-    ...
-#endif
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;UWPでBLEを扱うのは前書いた通り。
-ただし、なぜかXAMLに依存しているようでD3Dビルドすると失敗する。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/101&#34;&gt;UWPでBLEデバイスとペアリングして値を取得する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;ビルドするとdllができるので.NET Frameworkの方をAssets/Pluginsに置いてInspectorからEditorにだけチェックを入れる。
-UWPの方は&lt;a href=&#34;https://docs.unity3d.com/Manual/PluginInspector.html&#34;&gt;Assets/Plugins/WSA&lt;/a&gt;に置くとWSA Playerにだけチェックが入る。&lt;/p&gt;
-
-&lt;p&gt;あとは普通にusingして使うだけ。Edit-&amp;gt;Project Settings-&amp;gt;PlayerからBluetoothのcapabilityを有効にするのを忘れずに。
-Package.appxmanifestは上書きされないようなので前にビルドしたやつがあったら一旦消す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;using UnityBLE;
-  
-public class BLE : MonoBehaviour {
-
-    string value = &amp;quot;no connection&amp;quot;;
-
-    public GameObject text;
-
-    private string serviceUUID = &amp;quot;***&amp;quot;;
-    private string characteristicUUID = &amp;quot;***&amp;quot;;
-
-    void Start() {
-        var ble = new UnityBLE.BLE();
-        ble.DeviceAdded += (sender, obj) =&amp;gt; {
-            value = &amp;quot;DeviceID: &amp;quot; + obj.DeviceID;
-            ble.Listen(obj.DeviceID, serviceUUID, characteristicUUID);
-            ble.Stop();
-        };
-        ble.CharacteristicReceived += (sender, obj) =&amp;gt;
-        {
-            if (sender == ble)
-            {
-                if (obj.ex == null)
-                {
-                    value = Encoding.UTF8.GetString(obj.Value);
-                }
-                else
-                {
-                    value = obj.ex.Message;
-                }
-            }
-        };
-        ble.Start();
-    }
-
-    void Update() {
-        text.GetComponent&amp;lt;TextMesh&amp;gt;().text = value;
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる</title>
-          <link>https://www.sambaiz.net/article/104/</link>
-          <pubDate>Sat, 27 May 2017 16:35:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/104/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap&#34;&gt;https://github.com/uber-go/zap&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get -u go.uber.org/zap
-$ go get -u gopkg.in/natefinch/lumberjack.v2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;速さの秘訣&#34;&gt;速さの秘訣&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://techblog.ca-reward.co.jp/2016/06/post-33.html&#34;&gt;Go言語のLogger「zap」は何故高速に構造化されたログを出力する事が出来るのか｜株式会社CAリワード&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;reflectionとallocationの回避。&lt;/p&gt;
-
-&lt;p&gt;一度allocateしたBufferやEncoderは
-&lt;a href=&#34;https://golang.org/pkg/sync/#Pool&#34;&gt;sync.Pool&lt;/a&gt;で使い回している。
-このPoolはまさにallocateされたアイテムを再利用するためのもので、GCの負担を緩和させることができる。
-Poolのアイテムは勝手に削除されることがあり、もし参照しか持っていなかったらそのままdeallocateされる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34&#34;&gt;https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;func NewPool() Pool {
-	return Pool{p: &amp;amp;sync.Pool{
-		New: func() interface{} {
-			return &amp;amp;Buffer{bs: make([]byte, 0, _size)}
-		},
-	}}
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;使い方&#34;&gt;使い方&lt;/h2&gt;
-
-&lt;p&gt;現状ドキュメントが乏しいのでコードから探っていく必要がある。
-まずはQuick Startから。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;zap.NewProduction()&lt;/code&gt;は&lt;code&gt;NewProductionConfig().Build(options...)&lt;/code&gt;の&lt;a href=&#34;https://github.com/uber-go/zap/blob/master/logger.go#L87&#34;&gt;ショートカット&lt;/a&gt;。
-ConfigをBuildしてLoggerを取得し、InfoやErrorで書く流れ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;logger, _ := zap.NewProduction()
-defer logger.Sync()
-logger.Info(&amp;quot;Hoge&amp;quot;,
-  // Structured context as strongly-typed Field values.
-  zap.Int(&amp;quot;attempt&amp;quot;, 3),
-  zap.Duration(&amp;quot;backoff&amp;quot;, time.Second),
-)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;{&amp;quot;level&amp;quot;:&amp;quot;info&amp;quot;,&amp;quot;ts&amp;quot;:1495870212.3378785,&amp;quot;caller&amp;quot;:&amp;quot;zap-log/main.go:36&amp;quot;,&amp;quot;msg&amp;quot;:&amp;quot;Hoge&amp;quot;,&amp;quot;attempt&amp;quot;:3,&amp;quot;backoff&amp;quot;:1}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;NewProductionConfig()&lt;/code&gt;の内容はこんな感じ。ここからOutputPathを書き換えるとファイルに出力されるようにできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;config := zap.Config{
-    Level:       zap.NewAtomicLevelAt(zap.ErrorLevel),
-    Development: false,
-    Sampling: &amp;amp;zap.SamplingConfig{
-        Initial:    100,
-        Thereafter: 100,
-    },
-    Encoding: &amp;quot;json&amp;quot;,
-    EncoderConfig: zapcore.EncoderConfig{
-        TimeKey:        &amp;quot;ts&amp;quot;,
-        LevelKey:       &amp;quot;level&amp;quot;,
-        NameKey:        &amp;quot;logger&amp;quot;,
-        CallerKey:      &amp;quot;caller&amp;quot;,
-        MessageKey:     &amp;quot;msg&amp;quot;,
-        StacktraceKey:  &amp;quot;stacktrace&amp;quot;,
-        LineEnding:     zapcore.DefaultLineEnding,
-        EncodeLevel:    zapcore.LowercaseLevelEncoder,
-        EncodeTime:     zapcore.EpochTimeEncoder,
-        EncodeDuration: zapcore.SecondsDurationEncoder,
-        EncodeCaller:   zapcore.ShortCallerEncoder,
-    },
-    OutputPaths:      []string{&amp;quot;stderr&amp;quot;},
-    ErrorOutputPaths: []string{&amp;quot;stderr&amp;quot;},
-}
-config.OutputPaths = []string{&amp;quot;./aaaa.log&amp;quot;}
-logger, _ = config.Build()
-defer logger.Sync()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Buildの引数にも渡せるOptionというのは&lt;code&gt;apply(logger)&lt;/code&gt;でloggerを操作するインタフェース。
-&lt;a href=&#34;https://github.com/uber-go/zap/blob/74ca5ef91c08e5eafb5ab9739df05d66f1b5d8da/options.go#L55&#34;&gt;zap.Fields&lt;/a&gt;は
-フィールドを追加するもの。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;logger = logger.WithOptions(zap.Fields(zap.String(&amp;quot;hoge&amp;quot;, &amp;quot;fuga&amp;quot;)))
-defer logger.Sync()
-logger.Error(&amp;quot;aaa&amp;quot;,
-    zap.String(&amp;quot;eee&amp;quot;, &amp;quot;eee&amp;quot;),
-)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/uber-go/zap/blob/v1.4.0/config.go#L154&#34;&gt;Build&lt;/a&gt;の実装をみると、
-中では&lt;code&gt;zapcore.NewCore(enc, sink, cfg.Level)&lt;/code&gt;とOptionを引数として取る&lt;code&gt;New()&lt;/code&gt;でloggerを生成している。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;enc, err := cfg.buildEncoder()
-if err != nil {
-    return nil, err
-}
-
-sink, errSink, err := cfg.openSinks()
-if err != nil {
-    return nil, err
-}
-
-log := New(
-    zapcore.NewCore(enc, sink, cfg.Level),
-    cfg.buildOptions(errSink)...,
-)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このsinkは&lt;code&gt;io.Writer&lt;/code&gt;をwrapした&lt;a href=&#34;https://github.com/uber-go/zap/blob/179e456766f6ba6d1006f432f90d52ecb6296e84/zapcore/write_syncer.go#L32&#34;&gt;WriteSyncer&lt;/a&gt;
-で、&lt;code&gt;AddSync(w io.Writer)&lt;/code&gt;で変換できる。
-これに&lt;a href=&#34;https://github.com/natefinch/lumberjack&#34;&gt;lumberjack&lt;/a&gt;を渡してやるとrotateできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;config := zap.NewProductionConfig()
-enc := zapcore.NewJSONEncoder(config.EncoderConfig)
-sink := zapcore.AddSync(
-    &amp;amp;lumberjack.Logger{
-        Filename:   &amp;quot;./aaaa.log&amp;quot;,
-        MaxSize:    500, // megabytes
-        MaxBackups: 3,
-        MaxAge:     28, //days
-    },
-)
-logger := zap.New(
-    zapcore.NewCore(enc, sink, config.Level),
-)
-defer logger.Sync()
-logger.Error(&amp;quot;aaa&amp;quot;,
-    zap.String(&amp;quot;eeef&amp;quot;, &amp;quot;eefe&amp;quot;),
-)
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>夜のNY郊外を無一文で彷徨い、Google I/OとMaker Faire Bay Areaに行ってきた</title>
-          <link>https://www.sambaiz.net/article/103/</link>
-          <pubDate>Mon, 22 May 2017 23:44:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/103/</guid>
-          <description>
-
-&lt;p&gt;Googleが毎年やっているイベント、Google I/Oのチケットが当たったのでアメリカに行ってきた。
-海外に行くのはこれが3回目でアメリカははじめて。一人での海外もはじめて。&lt;/p&gt;
-
-&lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
-
-&lt;p&gt;チケットが当たってからExpediaで航空券やホテルを取った。航空券の流れで保険にも加入した。
-アメリカの医療費は相当高いそうなので何かしらの保険に入っておかないと不安だ。&lt;/p&gt;
-
-&lt;p&gt;会期中は会場近辺のサンフランシスコ/マウンテンビューのホテルがとんでもなく値上がりしている模様。
-多分通常の倍ぐらいにはなっているので早めに取っておくとよいと思われる。&lt;/p&gt;
-
-&lt;p&gt;GoogleI/Oは週末にかけての3日間だったので、その前の週末から出発し、前半はニューヨークに行くことにして、
-マンハッタンに宿を取った。&lt;/p&gt;
-
-&lt;p&gt;アメリカに入国するのには&lt;a href=&#34;https://esta.cbp.dhs.gov/esta/application.html&#34;&gt;ESTA&lt;/a&gt;を申請する必要がある。
-申請自体は72時間以内に通るのだけど、パスポート番号が必要がなので持っていなければ先に作っておく必要がある。
-ESTAが通っていないと本当に入れないらしい。怖い。&lt;/p&gt;
-
-&lt;p&gt;現地での通信手段はT-mobileの&lt;a href=&#34;https://prepaid-phones.t-mobile.com/prepaid-international-tourist-plan&#34;&gt;Tourist plan&lt;/a&gt;($30プリペイドでSIM+2GB LTE+国内通話+SMS)
-を購入することにした。
-日本にはsimを送ってくれないので現地で調達する必要がある。モバイルルータはちょっと高いような気がして借りなかった。&lt;/p&gt;
-
-&lt;p&gt;あとは英語力をなんとかしようと付け焼刃でDMM英会話をはじめてみたが、準備期間が短すぎたかなと思う。&lt;/p&gt;
-
-&lt;h2 id=&#34;出国&#34;&gt;出国&lt;/h2&gt;
-
-&lt;p&gt;チェックインの締め切りが出発の1時間前だったので、
-余裕を持って2時間前ぐらいには着くはずだったんだけど、こんなときに限って財布を落とすわ成田エクスプレスは突然運休するわで大ピンチ。
-日暮里から京急のスカイライナーに乗ってスーツケースをかついで走ってなんとか飛行機には間に合ったが、
-両替などする時間はなく、財布に1000円しか入っていない状態で出発することになってしまった。&lt;/p&gt;
-
-&lt;p&gt;距離にして11000km、12時間のフライトの末、ニューヨークのジョン・F・ケネディ国際空港(JFK)に到着。
-時差で-13時間になるため出発よりも早い時刻に到着することになって得した気分だ。
-ついにアメリカに来た。&lt;/p&gt;
-
-&lt;h2 id=&#34;ニューヨーク&#34;&gt;ニューヨーク&lt;/h2&gt;
-
-&lt;p&gt;当初はニューヨーク観光しつつ、アムトラック(電車)でワシントンD.C.にも行っちゃおうかと考えてチケットまで買っていた。
-しかし現実は厳しい。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;現地に到着し、通信手段を調達するためT-mobileのショップに向かおうとしたが、肝心のショップの場所がわからない。
-もちろん日本のsimカードはすでに機能停止しているので空港のWifiで調べたところ、そこから一番近いところでも数km離れていることがわかった。
-タイムズスクエアの近くにはあるようだったので、まずはなんとかしてホテルに向かうことにしたが、
-JFKからマンハッタンまでは直線距離で20km以上離れている。ホテルの送迎サービスはなかった。
-それでもGoogle mapに従って、途中free wifiを乗り継いでいけばこのときはなんとかなるかなと思っていた。&lt;/p&gt;
-
-&lt;p&gt;空港から電車で行こうと思っていたところ、うかつにも謎タクシーに誘導されて乗ってしまった。
-47ドルでホテルまで行ってくれると思いきや、それはJamaica駅までの料金で、ホテルまでは100ドルという。調べていた相場の倍だ。
-傷口を広げないようJamaicaで降ろしてもらうことにした。
-乗る前に現金はないからクレジットカードで払う旨を伝えたのだけど、
-支払いの段になってクレジットカードの機械が壊れたから現金でと言い出して困った。なにせ1ドルも持っていないのだから。
-近くのATMで現金を下ろすよう言われたのでクレジットカードを入れたのだけれど
-2枚ともアウト。そこからどうやって払うんだって問いつめられるもののどうしようもない。
-結局解放してもらえたが、初っ端からほとんど心が折れてしまって国に帰りたかった。&lt;/p&gt;
-
-&lt;p&gt;それでもなんとかしてホテルにはたどり着かなくてはならないので、LIRRという電車でJamaicaからWoodside駅に向かった。
-空港で調べたGoogle mapの経路に出たからそうしたのだけど、
-マンハッタンにあるハブ駅、Pensilvania(Penn) stationまで行くほうが行き先表示に出ているので分かりやすかった。
-改札はなくて切符は車内で確認される。&lt;/p&gt;
-
-&lt;p&gt;案内の人に聞いて電車に乗ったんだけど、切符の確認の際にこの電車ではないと言われる。
-乗り間違えると、引き返すためにホームで割と長く待つことになる。5月も半ばなのに白い息が出るぐらい寒い。
-Googleで調べようにも、駅にあるWifiはどうも契約していないと使えなさそうなものしかなかった。
-地下鉄にはfree wifiが通っていたが、それも全ての駅で使えるというわけではなさそうだった。&lt;/p&gt;
-
-&lt;p&gt;Woodsideからは地下鉄に乗るのだけれど、この券売機がなぜかクレジットカードのPINをうけつけてくれずチケットを買えなかった。
-カードが止まったかと思い、しょうがないので6kmほど歩いてマンハッタンまで向かうことにした。雨が降っていて、寒くて泣きたくなった。
-空港でマップのデータを読んでいたのでGPSと合わせればオフラインでも自分の位置はわかるのが唯一の救いだ。
-電話もなかったので、道中あったスタバなどのfree wifiを外から使わせてもらって、
-家族に連絡をとって日本からクレジットカード会社に問い合わせてもらったが、
-本人からの連絡じゃないとだめとのことでどうしようもなかった。&lt;/p&gt;
-
-&lt;p&gt;マンハッタンに行くためにはイースト川を越える必要があったので、
-地図上で橋になっているところを順番に見てまわったが、車や電車でないとだめなところばかりで暗雲がただこめる。
-あとから調べたら、マンハッタンの南側、ブルックリンとマンハッタン橋は歩いて渡れたらしい。
-あの向こうがマンハッタンなのになと沿岸を眺めながら、この時点で夜中の0時を回っていて、野宿の可能性を考え始める。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-manhattan.jpg&#34; alt=&#34;マンハッタンを眺める&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;途方に暮れて彷徨っていたところ、歩いていたおじさんとたまたま目が合って、
-お金がなくて電車には乗れないんだけど、徒歩でマンハッタンに渡る方法はあるか聞いたら、
-なんと地下鉄の駅まで案内してくれて運賃を出してくれた。
-お礼するために連絡先を聞こうとしたのにすぐいなくなってしまわれた。命の恩人だ。&lt;/p&gt;
-
-&lt;p&gt;なんとかホテルに到着し、電話を借りてカード会社に連絡したところ、
-カードは普通に使える状態で電車の明細はこちらには届いていない、キャッシングは枠がないからできない、
-というまさかの事実が発覚した。
-カードが使えるとはいえ現金がないと困ることが分かったので、キャッシング枠の審査を急いでもらうよう頼んでみた。&lt;/p&gt;
-
-&lt;p&gt;もはや遠出する気が全くなくなったのでアムトラックのチケットをキャンセルしようと思ったら、システムメンテナンスでできずに諦める。
-雨の中歩き回ったのでスーツケースの中の服はほとんどびしょ濡れだった。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;次の日は昼をまわったころ目覚めて、だらだらして風呂に入ってT-mobileのショップに向かってsimを購入。
-設定は向こうの人がやってくれるので、言語を英語にしておくとスムーズだ。
-念願の通信手段を得て、Google mapがいつでも使えるようになった。つまり無敵。
-とはいえ、いまだ現金がないのでマンハッタンの中で過ごすことにした。&lt;/p&gt;
-
-&lt;p&gt;マンハッタンは高いビルが多く、GPSが大きくずれる。縦横のStreetとAvenueに番号が振られているのでそれに従うと動きやすかった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-stav.jpg&#34; alt=&#34;StreetとAvenueの表示&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;Shake Shackのハンバーガーを食べて、チェルシーマーケットでロブスターを食べた。これでもsmall。
-身はぎっしり入っていてレモンをかけて食べるとおいしい。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-bigebi.jpg&#34; alt=&#34;チェルシーマーケットのロブスター&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;それと、なぜかカードが使えなかった地下鉄に再チャレンジしてみた。
-問題になったのはこういう券売機。クレジットカードを抜き差し(dip)してPINを入力する。やっぱり買えない。
-いろいろ試して見たところPINを入力せずにENTERだけ押したら買えることがわかった。意味わからん・・・。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-ny-subway-machine.jpg&#34; alt=&#34;NYの地下鉄の券売機&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;夜にキャッシングができるようになったのでタクシードライバーに連絡をとって代金を支払って2日目も終わり。
-3日目は空港に向かう日なので、これがNY滞在の全て。次来るときはもう少しなんとかしたい。&lt;/p&gt;
-
-&lt;p&gt;到着はJFKだったけど、出発はニューアーク・リバティー空港(EWR)からで、Penn stationからNJ TRANSIT(電車)一本で行ける。
-Penn stationは上にも書いたとおりハブ駅で、アムトラック、LIRR、NJ TRANSITの駅が入っている。
-ワシントンD.C.に行くときもこの駅から出るはずだった。
-最初、画面にTrack(ホーム)が書いてなくてちょっと焦ったが、STATUSがBOARDINGになると表示される。&lt;/p&gt;
-
-&lt;p&gt;EWRの飲食店にはタブレットが置いてあって、そこで注文しカードを通すと注文される。現金は使えない。
-最初にboarding passのバーコードをかざすと乗る便の情報が表示されるので乗り遅れる心配がない。乗り遅れるどころか2時間遅延してたけど。
-終わったらtabをcloseする。チップの割合も選択できるようになっている。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-ewr.jpg&#34; alt=&#34;EWRの飲食店のタブレット&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;ここから西海岸、サンフランシスコへ。
-国内ながら3時間の時差があって、6時間のフライトなのに3時間しか進まない。&lt;/p&gt;
-
-&lt;h2 id=&#34;googlei-o&#34;&gt;GoogleI/O&lt;/h2&gt;
-
-&lt;p&gt;I/Oに参加する同僚2人と合流した。一人でないのは心強い限りだ。&lt;/p&gt;
-
-&lt;p&gt;GoogleI/O自体は3日間なのだけれど、前日に登録ができ、先着順でKeynoteの前の方の席が割り当てられる。
-今年の会場は去年と同じマウンテンビューのShoreline Amphitheatreというところで、Googleの近くにある。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-shoreline.jpg&#34; alt=&#34;Shoreline Amphitheatre&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;サンフランシスコからもサンノゼからもそれなりに離れていて、最寄りの電車の駅も少し離れているので、バスか車で来ることになると思う。
-同僚がレンタカーを借りてくれていたのでそれで向かったが、フリーウェイの、特に出口が渋滞して結構時間がかかる。
-駐車場が一杯なのではないか心配していたけど、普通の駐車場の他に滅茶苦茶広いオーバーフロー駐車場があるので問題なかった。
-どこまで駐車場なのかわからないぐらい広い。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-parking.jpg&#34; alt=&#34;オーバーフロー駐車場&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;受付を済ませると首からかけるバッジと、水筒、日焼け止め、Tシャツ、サングラスがもらえた。
-会場は基本屋外なのでかなり実用的なセットだ。一方夜は相当寒いので上着を持っていったほうがよい。
-バッジはNFCタグになっていて、セッション予約の確認に使われる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-ioset.jpg&#34; alt=&#34;もらったもの&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;ついでに近くのGoogleも見にいってきた。ショップがある。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-google.jpg&#34; alt=&#34;Google&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;その後サンフランシスコ市内の北、フィッシャーマンズワーフのBOUDINという店でパンの器のクラムチャウダーを食べた。
-おいしかった。海の方を眺めるとアルカトラズが見える。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-boudin.jpg&#34; alt=&#34;クラムチャウダー&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;夜はIntel&amp;rsquo;s Google I/O Day Zero Partyという非公式の前夜祭みたいなのに行ってきた。
-I/Oに比べると規模はそんなに大きくはないけど、それでも多くの人が集まっていて、日本勢にも出会った。
-飲み放題食べ放題で、IntelやGoogleのテクノロジーに絡んだデモが行われている。
-体験したりしてトークンを集めることで賞品と交換でき、アンドロイドのTシャツをもらった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-zero-day.jpg&#34; alt=&#34;アンドロイドのTシャツ&#34; /&gt;&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;Keynoteは一番広いアンフィシアターで行われ、内側の椅子エリアと外側の芝のエリアがある。
-遅れてしまったため芝エリアしか入れなくて午前中はそこで聞くことしたら、暑いけど寝転がりながら聞くことができるので案外悪くなかった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-keynote.jpg&#34; alt=&#34;芝席&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;食事は指定の場所で配られているので取っていって適当な場所で食べる。
-朝食も含めて食事や飲み物やお菓子は全て提供されるが、朝食は数がそんなに多くないのか、遅い時間に行くとなくなっていることがあった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-food.jpg&#34; alt=&#34;食事のリスト&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;午後のDeveloper Keynoteでは主な新機能などがざっくり発表されて、What&amp;rsquo;s newなどのセッションではそれが詳細に説明されたりする形になっている。&lt;/p&gt;
-
-&lt;p&gt;Androidは、GooglePlay Protectや、地味に長いブート時間が2倍速くなったりするAndroid Oが発表された。あと、嬉しそうにもう一つあるよって言い出して
-何かなと思ったらKotlin公式サポート。Android勢歓喜。よかったね。&lt;/p&gt;
-
-&lt;p&gt;Daydream(VR)はスマホ不要のStandaloneヘッドセットと、位置トラッキングのWorldSense。
-Tango(AR)はGPSに対して、室内で位置を知ることができるVPS(Visual Positioning Service)というのが発表されていた。これを使うと店内でナビできるすごく便利そうなやつだ。
-VR/ARは教育分野、&lt;a href=&#34;https://edu.google.com/expeditions/&#34;&gt;Google Expeditions&lt;/a&gt;でも使われているらしい。
-ARで教室に火山や竜巻を出したりできる。後のセッションで言っていたのは、どこにでもVRで行って何でもARで見れるだったかな。&lt;/p&gt;
-
-&lt;p&gt;あとはGoogle photoのサジェスト機能や、なんかすごいGoogle lensなどなど。
-Keynoteを通して、Googleっていろんなことをやっていて、世界が便利になるイメージが湧いた。&lt;/p&gt;
-
-&lt;p&gt;最後に突然のGoogle Home+GCPクレジット配布の発表。うれしい。
-日本での発売も発表されたが、一足早く手に入れることができた。何か作ってみたい。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-home.jpg&#34; alt=&#34;Google Home&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;Keynoteが終わると並行してセッション、展示やオフィスアワーなどが行われる。
-セッションは1時間区切りになっていて、移動の時間が用意されていないように見えるが、
-実際は30~40分ほどで終わるので一杯に入れても問題はない。
-ただ、一日中ずっとセッションを聞いているというのも疲れるので、
-割とみんなその辺りにある椅子や芝生に座ったり寝転がったりしてPCを開いてたり、歓談してたりする。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-relax.jpg&#34; alt=&#34;会場風景&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;セッションはAR(Tango)/VR(Daydream)、Firebase、Android Thingsなどいろいろな種類のを聞きにいった。
-全てのセッションはライブストリーミングされているので日本でも聞けるけど、
-現地だと会場の雰囲気を楽しめるのはもちろん、しなかったけどセッションの後やオフィスアワーで質問したりすることができる。
-次来るときは質問できるぐらい使い込んでいきたい。&lt;/p&gt;
-
-&lt;p&gt;Firebaseもいくつか機能追加があって、そのうちの一つがPhone number auth。早速ためしてみた。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/102/&#34;&gt;io17で発表されたFirebaseのphone number authをwebで試してみた&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;AndroidThingsはIoTのためのOS。
-Androidのエコシステムに乗れることと、プロトタイプから本番までのスケーリングしやすさ、セキュリティが特長として挙げられていた。
-せっかくなのでcodelabsで触ってきた。codelabsでは、Googleのテクノロジーのチュートリアルのコースを質問しながら進められる。
-Android端末など必要な機材は用意されているので、それらを持っていなくても問題ない。IoTはなかなかの人気コンテンツで2時間待つことになった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-codelabs.jpg&#34; alt=&#34;IOT codelab&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;コースを最後まで終えるとAndroid Things対応のハードウェアセットがもらえた。
-codelabsはwebに&lt;a href=&#34;https://codelabs.developers.google.com/io2017&#34;&gt;公開されている&lt;/a&gt;ので家でも試すことができる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-iot-omiyage.jpg&#34; alt=&#34;IOTおみやげ&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;1,2日目のセッションが終わるとAfter Hourというパーティーがある。
-朝から夜まで楽しめる、とても良いイベントだった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-party.jpg&#34; alt=&#34;After Hour&#34; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;maker-faire-bay-area&#34;&gt;Maker Faire Bay Area&lt;/h2&gt;
-
-&lt;p&gt;Google I/Oが終わった翌日、同僚を空港で見送ってSan mateoで行われるMaker Faire Bay Areaにいってきた。&lt;/p&gt;
-
-&lt;p&gt;Maker Faireは、ものづくりが好きな人たちが集まり、作ったものを展示発表したり体験したりするお祭り。
-このBay Areaからはじまり、世界中に広がっている。
-東京でも行われているんだけど、行ったことがないためこれが初参加。&lt;/p&gt;
-
-&lt;p&gt;空港から会場のSan Mateo Event Centerまではバス(SamTrans)で向かった。
-運賃は現金で払うこともできるけど、Clipperという日本のSuicaみたいなやつがあると便利。空港のInformationで買えた。
-バスの運賃は2ドルちょっと。&lt;/p&gt;
-
-&lt;p&gt;バス停は柱の上の方にある行き先が書いてある札が目印。待合所があるところもあれば、ただの柱にくっついているところもあってちょっと気づきにくい。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-busstop.jpg&#34; alt=&#34;バス停&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;乗ったらClipperをピッとやって席に座り、降りたければ黄色い紐を引くとSTOP REQUESTEDされる。
-バス停に近づいても特にアナウンスなく通過してしまうのでGPSの位置を注意して見ていた。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-stop-requested.jpg&#34; alt=&#34;STOP REUESTEDの紐&#34; /&gt;&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;会場はとても広い。何も考えずにうろうろしていたのだけど、あとでマップを見返したら、見てない場所とかがあったりしたので、最初にマップで行く場所に目星をつけておいたほうがよいと思う。
-展示のジャンルごとにテントがあって、ほかにはアクティビティやステージ、食べ物の屋台、体験コーナーなどがある。
-屋台は基本現金払いだけど、ATMが会場内にもある。
-子供連れもたくさんいて、大人子供ともに楽しめるイベントになっていた。&lt;/p&gt;
-
-&lt;p&gt;展示物は、子供が作ったものから、こんなの個人で作れるのかというようなものまで、ジャンルも電子工作からガーデニングまでいろいろ。
-日本から出している人もいて、ロボットのところにデイリーポータルZや個人のブースがいくつかあった。&lt;/p&gt;
-
-&lt;p&gt;すごい勢いで燃えながら回転する球。日本だと消防法的にまずそう。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-burning.jpg&#34; alt=&#34;燃える球&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;自転車をこいで電力を賄うステージ。ステージもいくつかあって、他では化学の実験をやっていた。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-you-are-the-power.jpg&#34; alt=&#34;YOU ARE THE POWER!&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;アクティビティをやるには自己責任的な誓約書にサインしてリストバンドをもらう必要がある。
-これは音楽に合わせて対応するところを踏んだり引いたりするゲーム。アクションは5つしかないんだけど、なかなか難しかった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-make-act.jpg&#34; alt=&#34;音ゲー&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;ドローンレースをやっているテントもあった。モニターにはドローン視点の映像が流れていて迫力がある。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-drone.jpg&#34; alt=&#34;ドローンレース&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;R2D2がいた。もちろん動く。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/104-r2d2.jpg&#34; alt=&#34;R2D2&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;せっかくAndroid Thingsのハードウェアも手に入ったことだし、何か作って出展してみたい。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;これでアメリカでの予定も終わり。
-9日間ながら内容が濃い滞在だった。また行きたい。&lt;/p&gt;
 </description>
         </item>
       

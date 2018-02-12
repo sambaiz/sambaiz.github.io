@@ -1,0 +1,630 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/lambda/index.xml</link>
+    <language>ja</language>
+    <author>sambaiz</author>
+    <rights>(C) 2018</rights>
+    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
+
+    
+      
+        <item>
+          <title>Serverless FrameworkでLambdaをデプロイする</title>
+          <link>https://www.sambaiz.net/article/155/</link>
+          <pubDate>Sun, 11 Feb 2018 23:20:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/155/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless&#34;&gt;Serverless Framework&lt;/a&gt;でLambda Functionをデプロイする。
+Apexが基本的にFunction自体のデプロイしかしないのに対して、こちらはeventの設定なども諸々やってくれて強い。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/140/&#34;&gt;ApexでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install -g serverless
+$ serverless version
+1.26.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ApexではFunctionごとにディレクトリが作られたが、Serverlessでは&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/services/#services&#34;&gt;Service&lt;/a&gt;ごとに作られ、
+一つのService内で複数のFunctionを定義できる。handlerは同じでも異なっていてもよい。&lt;/p&gt;
+
+&lt;p&gt;Apexの形式の場合、共通の処理をWebpackなどで各Functionに持って来たり、
+同じような処理の複数のFunctionを立てる際はコピーする必要があったが、
+こちらは必要最小限の変更でそれらを行うことができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless/tree/master/lib/plugins/create/templates&#34;&gt;template&lt;/a&gt;からServiceをcreateする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ serverless create --template aws-nodejs --path testservice
+$ ls testservice/
+handler.js	serverless.yml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;設定ファイル&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/serverless.yml/#serverlessyml-reference&#34;&gt;serverless.yml&lt;/a&gt;
+にはLambdaの基本的なもののほかに、VPCやevent、IAM Roleなども書けて、これらはdeploy時に作られるCloudFormationのstackによって管理される。必要なら生のCloudFormationの設定も書ける。&lt;/p&gt;
+
+&lt;p&gt;ApexでもTerraformによって管理することができるが、書くのはこちらの方がはるかに楽。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/144/&#34;&gt;ApexでデプロイしたLambdaのトリガーをTerraformで管理する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat sesrverless.yml
+service: testservice
+
+provider:
+  name: aws
+  profile: foobar
+  region: ap-northeast-1
+  runtime: nodejs6.10
+  memorySize: 512
+  timeout: 10
+ 
+functions: 
+  hello: 
+    handler: handler.hello 
+    events:
+      - http:
+          path: hello/world
+          method: get
+          cors: true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;deployすると&lt;code&gt;{service}-{stage}-{function}&lt;/code&gt;のFunctionが作られる。
+今回の場合はtestservice-prd-test。stageをymlでも指定しなかった場合はデフォルト値のdevになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ serverless deploy --stage prd
+$ curl https://*****.ap-northeast-1.amazonaws.com/prd/hello/world | jq
+{
+  &amp;quot;message&amp;quot;: &amp;quot;Go Serverless v1.0! Your function executed successfully!&amp;quot;,
+  &amp;quot;input&amp;quot;: {
+    ...
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どうしてもCloudFormationを使いたくないというわけでなければ、Serverless Frameworkを使っておけばよいと思う。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>DatadogのLambda Integrationで気象データを送ってアラートを飛ばす</title>
+          <link>https://www.sambaiz.net/article/152/</link>
+          <pubDate>Mon, 05 Feb 2018 23:55:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/152/</guid>
+          <description>&lt;p&gt;最近朝が寒くて布団から出るのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
+そこで、無料から使える気象API &lt;a href=&#34;http://openweathermap.org/&#34;&gt;OpenWeatherMap&lt;/a&gt;のデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。&lt;/p&gt;
+
+&lt;p&gt;インスタンスが立っていたらDataDog Agentの&lt;a href=&#34;https://docs.datadoghq.com/ja/guides/dogstatsd/&#34;&gt;DogStatsD&lt;/a&gt;経由で送ることができ、
+そうでなければ通常は&lt;a href=&#34;https://docs.datadoghq.com/ja/api/#metrics-post&#34;&gt;API&lt;/a&gt;を呼ぶことになるんだけど、Lambdaでは、AWS Integrationを設定すると有効になる&lt;a href=&#34;https://docs.datadoghq.com/ja/integrations/awslambda/&#34;&gt;Lambda Integration&lt;/a&gt;によって
+&lt;code&gt;MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2&lt;/code&gt;のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const axios = require(&#39;axios&#39;);
+
+const CITY = &#39;Shibuya&#39;;
+const API_KEY = &#39;*****&#39;;
+const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`;
+
+const METRIC_COUNTER = &#39;counter&#39;;
+const METRIC_GAUGE = &#39;gauge&#39;;
+
+const monitor = (metricName, metricType, value, tags) =&amp;gt; {
+  const unixEpochTimestamp = Math.floor(new Date().getTime());
+  console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&#39;,&#39;)}`);
+};
+
+exports.handler = async (event, context, callback) =&amp;gt; {
+  const data = (await axios.get(WEATHER_API)).data
+  const namePrefix = &#39;livinginfo.weather&#39;
+  monitor(`${namePrefix}.temperature`, METRIC_GAUGE, data.main.temp, [])
+  monitor(`${namePrefix}.rain`, METRIC_GAUGE, data.rain ? data.rain[&amp;quot;3h&amp;quot;] : 0, []);
+  monitor(`${namePrefix}.snow`, METRIC_GAUGE, data.snow ? data.snow[&amp;quot;3h&amp;quot;] : 0, []);
+  callback(null, &#39;done&#39;);
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;送られた。
+あとは0度を下回ったときのThreshold Alertや、前日比で下がったときのChange Alertなどを設定すれば良さそうだ。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/152.png&#34; alt=&#34;グラフ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ApexでデプロイしたLambdaのトリガーをTerraformで管理する</title>
+          <link>https://www.sambaiz.net/article/144/</link>
+          <pubDate>Sun, 12 Nov 2017 22:23:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/144/</guid>
+          <description>
+
+&lt;p&gt;Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。
+これを手作業で行うこともできるのだけど、せっかくなのでアプリケーションと一緒に管理したい。
+そんなときのために&lt;code&gt;terraform&lt;/code&gt;コマンドをラップした&lt;a href=&#34;http://apex.run/#managing-infrastructure&#34;&gt;apex infra&lt;/a&gt;が用意されている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/121/&#34;&gt;TerraformでVPCを管理するmoduleを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。
+その下に環境ごとのディレクトリを作成することもできて、その場合は&lt;code&gt;--env&lt;/code&gt;で指定した環境のものが使われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;- functions
+- infrastructure
+  main.tf
+  variables.tf
+  - modules
+    - cloudwatch_schedule
+      main.tf
+      variables.tf
+project.json 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;functionをデプロイするとそのARNが変数で取れるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex list --tfvars
+apex_function_hello=&amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_rule.html&#34;&gt;aws_cloudwatch_event_rule&lt;/a&gt;でイベントルール(今回はschedule)を作成&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_target.html&#34;&gt;aws_cloudwatch_event_target&lt;/a&gt;でルールにターゲット(今回はLambda)を設定&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/lambda_permission.html&#34;&gt;aws_lambda_permission&lt;/a&gt;でルールに対象Lambdaをinvokeする権限を付ける&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat infrastructure/modules/cloudwatch_schefule/variables.tf
+variable &amp;quot;lambda_function_name&amp;quot; {}
+variable &amp;quot;lambda_function_arn&amp;quot; {}
+variable &amp;quot;schedule_expression&amp;quot; {
+    description = &amp;quot;cloudwatch schedule expression e.g. \&amp;quot;cron(0/5 * * * ? *)\&amp;quot;&amp;quot;
+}
+
+$ cat infrastructure/modules/cloudwatch_schefule/main.tf
+resource &amp;quot;aws_cloudwatch_event_rule&amp;quot; &amp;quot;lambda&amp;quot; {
+  name        = &amp;quot;lambda_rule_${var.lambda_function_name}&amp;quot;
+  description = &amp;quot;invoke lambda ${var.lambda_function_name}&amp;quot;
+  schedule_expression = &amp;quot;${var.schedule_expression}&amp;quot;
+}
+ 
+resource &amp;quot;aws_cloudwatch_event_target&amp;quot; &amp;quot;lambda&amp;quot; {
+  target_id = &amp;quot;lambda_target_${var.lambda_function_name}&amp;quot;
+  rule      = &amp;quot;${aws_cloudwatch_event_rule.lambda.name}&amp;quot;
+  arn       = &amp;quot;${var.lambda_function_arn}&amp;quot;
+}
+ 
+resource &amp;quot;aws_lambda_permission&amp;quot; &amp;quot;lambda&amp;quot; {
+  statement_id  = &amp;quot;AllowExecutionFromCloudWatch&amp;quot;
+  action        = &amp;quot;lambda:InvokeFunction&amp;quot;
+  function_name = &amp;quot;${aws_cloudwatch_event_target.lambda.arn}&amp;quot;
+  principal     = &amp;quot;events.amazonaws.com&amp;quot;
+  source_arn    = &amp;quot;${aws_cloudwatch_event_rule.lambda.arn}&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat infrastructure/variables.tf 
+variable &amp;quot;apex_function_names&amp;quot; {
+    type=&amp;quot;map&amp;quot;
+}
+variable &amp;quot;apex_function_hello&amp;quot; {}
+
+$ cat infrastructure/main.tf
+terraform {
+  backend &amp;quot;s3&amp;quot; {
+    bucket = &amp;quot;sambaiz-terraform&amp;quot;
+    key    = &amp;quot;usetf.tfstate&amp;quot;
+    region = &amp;quot;ap-northeast-1&amp;quot;
+  }
+}
+
+module &amp;quot;hello_trigger&amp;quot; {
+  source = &amp;quot;./modules/cloudwatch_schedule&amp;quot;
+  lambda_function_name = &amp;quot;${var.apex_function_names[&amp;quot;hello&amp;quot;]}&amp;quot;
+  lambda_function_arn = &amp;quot;${var.apex_function_hello}&amp;quot;
+  schedule_expression = &amp;quot;cron(0/5 * * * ? *)&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;init&lt;/code&gt;してbackendを初期化してmoduleを準備する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra init
+$ ls infrastructure/.terraform/modules/*****
+main.tf		variables.tf
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;plan&lt;/code&gt;するとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra plan
++ module.hello_trigger.aws_cloudwatch_event_rule.lambda
+    arn:                 &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
+    description:         &amp;quot;invoke lambda usetf_hello&amp;quot;
+    is_enabled:          &amp;quot;true&amp;quot;
+    name:                &amp;quot;lambda_rule_usetf_hello&amp;quot;
+    schedule_expression: &amp;quot;cron(0/5 * * * ? *)&amp;quot;
+
++ module.hello_trigger.aws_cloudwatch_event_target.lambda
+    arn:       &amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+    rule:      &amp;quot;lambda_rule_usetf_hello&amp;quot;
+    target_id: &amp;quot;lambda_target_usetf_hello&amp;quot;
+
++ module.hello_trigger.aws_lambda_permission.lambda
+    action:        &amp;quot;lambda:InvokeFunction&amp;quot;
+    function_name: &amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
+    principal:     &amp;quot;events.amazonaws.com&amp;quot;
+    source_arn:    &amp;quot;${aws_cloudwatch_event_rule.lambda.arn}&amp;quot;
+    statement_id:  &amp;quot;AllowExecutionFromCloudWatch&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apply&lt;/code&gt;するとトリガーが登録される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex infra apply
+$ apex logs hello
+...
+/aws/lambda/usetf_hello 2017-11-12T13:20:14.561Z	37e75818-c7ac-11e7-a333-111863808b13	processing event:
+...
+/aws/lambda/usetf_hello 2017-11-12T13:25:15.182Z	eb178941-c7ac-11e7-bde0-998ea9659640 processing event:
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://dev.classmethod.jp/cloud/aws/ami-and-snapshot-delete-with-apex-and-terraform/&#34;&gt;ApexとTerraformでCloudWatch EventsによりInvokeされるLambda関数をデプロイする ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ApexでLambdaをデプロイする</title>
+          <link>https://www.sambaiz.net/article/140/</link>
+          <pubDate>Sun, 22 Oct 2017 16:06:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/140/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/apex/apex&#34;&gt;Apex&lt;/a&gt;でLambdaをデプロイする。
+とても簡単に使えるし、変なこともしないので良い感じ。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;Serverless Frameworkだとeventの設定までカバーできてより便利。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;インストール。ダウンロードして実行できるようにしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl https://raw.githubusercontent.com/apex/apex/master/install.sh | sh
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;IAMFullAccess&lt;/li&gt;
+&lt;li&gt;AWSLambdaFullAccess&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;を付けたIAMのプロファイルを登録しておく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws configure --profile apex
+$ aws configure list --profile apex
+      Name                    Value             Type    Location
+      ----                    -----             ----    --------
+   profile                     apex           manual    --profile
+access_key     ****************OVGQ shared-credentials-file    
+secret_key     ****************oi5t shared-credentials-file    
+    region           ap-northeast-1      config-file    ~/.aws/config
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apex init&lt;/code&gt;してnameとdescriptionを入れるとIAMが登録され、
+ディレクトリ構造が作られる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex init --profile apex
+Project name: try-apex
+Project description: test  
+[+] creating IAM try-apex_lambda_function role
+[+] creating IAM try-apex_lambda_logs policy
+[+] attaching policy to lambda_function role.
+[+] creating ./project.json
+[+] creating ./functions
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;package.jsonで環境変数などの設定ができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls -R
+functions	project.json
+
+./functions:
+hello
+
+./functions/hello:
+index.js
+
+$ cat project.json 
+{
+  &amp;quot;name&amp;quot;: &amp;quot;try-apex&amp;quot;,
+  &amp;quot;description&amp;quot;: &amp;quot;test&amp;quot;,
+  &amp;quot;memory&amp;quot;: 128,
+  &amp;quot;timeout&amp;quot;: 5,
+  &amp;quot;role&amp;quot;: &amp;quot;arn:aws:iam::524580158183:role/try-apex_lambda_function&amp;quot;,
+  &amp;quot;environment&amp;quot;: {}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;apex deploy&lt;/code&gt;するとlambdaが作られる。&lt;code&gt;--dry-run&lt;/code&gt;もできる。
+バージョン管理されているので&lt;code&gt;rollback&lt;/code&gt;もできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex deploy hello --profile apex
+   • creating function         env= function=hello
+   • created alias current     env= function=hello version=1
+   • function created          env= function=hello name=try-apex_hello version=1
+
+$ apex list
+
+  hello
+    runtime: nodejs6.10
+    memory: 128mb
+    timeout: 5s
+    role: arn:aws:iam::*****:role/try-apex_lambda_function
+    handler: index.handle
+    arn: arn:aws:lambda:ap-northeast-1:*****:function:try-apex_hello:current
+    aliases: current@v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;マネジメントコンソールではここでバージョンが確認できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/140.png&#34; alt=&#34;バージョンの確認&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;apex invoke&lt;/code&gt;で実行。標準入力でイベントを渡せる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ apex invoke hello
+{&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;パッケージに含めないファイルは.apexignoreに書く。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</title>
+          <link>https://www.sambaiz.net/article/132/</link>
+          <pubDate>Sun, 10 Sep 2017 23:45:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/132/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer&#34;&gt;Puppeteer&lt;/a&gt;でHeadless Chromeを動かすコードを
+Lambda上で動かすStarter Kitを作った。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit&#34;&gt;puppeteer-lambda-starter-kit&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;chromeの準備&#34;&gt;Chromeの準備&lt;/h2&gt;
+
+&lt;p&gt;Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても
+Lambdaにないshared libraryに依存しているため失敗する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Lambda上でHeadless Chromeを動かす例がないか調べたら&lt;a href=&#34;https://github.com/adieuadieu/serverless-chrome&#34;&gt;serverless-chrome&lt;/a&gt;というのがあって、
+Headless用の設定でChromeをビルドしていた。
+ほかには&lt;a href=&#34;https://github.com/graphcool/chromeless&#34;&gt;chromeless&lt;/a&gt;というのもあるけど
+これはserverless-chromeに
+&lt;a href=&#34;https://github.com/graphcool/chromeless/blob/master/serverless/serverless.yml#L46&#34;&gt;依存している&lt;/a&gt;。
+最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。&lt;/p&gt;
+
+&lt;p&gt;serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。
+基本的には&lt;a href=&#34;https://github.com/adieuadieu/serverless-chrome/tree/master/chrome&#34;&gt;書いてある&lt;/a&gt;
+通りやればうまくいく。他のプロセスとのshared memoryとして/dev/shmを使っているのを、/tmpに&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/master/chrome/buildChrome.sh#L20&#34;&gt;置き換える&lt;/a&gt;
+ようにしないと、実行時の&lt;code&gt;page.goto()&lt;/code&gt;で&lt;code&gt;Failed Provisional Load: ***, error_code: -12&lt;/code&gt;になる。&lt;/p&gt;
+
+&lt;p&gt;ビルドしたheadless_shellには問題になった依存は含まれていないようだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ldd headless_shell 
+	linux-vdso.so.1 =&amp;gt;  (0x00007ffcb6fed000)
+	libpthread.so.0 =&amp;gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000)
+	libdl.so.2 =&amp;gt; /lib64/libdl.so.2 (0x00007f5f17bba000)
+	librt.so.1 =&amp;gt; /lib64/librt.so.1 (0x00007f5f179b1000)
+	libnss3.so =&amp;gt; /usr/lib64/libnss3.so (0x00007f5f17692000)
+	libnssutil3.so =&amp;gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000)
+	libsmime3.so =&amp;gt; /usr/lib64/libsmime3.so (0x00007f5f1723e000)
+	libnspr4.so =&amp;gt; /lib64/libnspr4.so (0x00007f5f17001000)
+	libexpat.so.1 =&amp;gt; /lib64/libexpat.so.1 (0x00007f5f16dd8000)
+	libfontconfig.so.1 =&amp;gt; not found
+	libfreetype.so.6 =&amp;gt; /usr/lib64/libfreetype.so.6 (0x00007f5f16b3b000)
+	libm.so.6 =&amp;gt; /lib64/libm.so.6 (0x00007f5f16839000)
+	libstdc++.so.6 =&amp;gt; /usr/lib64/libstdc++.so.6 (0x00007f5f16533000)
+	libgcc_s.so.1 =&amp;gt; /lib64/libgcc_s.so.1 (0x00007f5f1631d000)
+	libc.so.6 =&amp;gt; /lib64/libc.so.6 (0x00007f5f15f5b000)
+	/lib64/ld-linux-x86-64.so.2 (0x000055ba0af5e000)
+	libplc4.so =&amp;gt; /lib64/libplc4.so (0x00007f5f15d55000)
+	libplds4.so =&amp;gt; /lib64/libplds4.so (0x00007f5f15b51000)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Puppetterで落としてくる普通のChromeは&lt;a href=&#34;http://docs.aws.amazon.com/lambda/latest/dg/limits.html&#34;&gt;Lambdaの制限&lt;/a&gt;の50MBを超えていたが、
+ビルドしたものはぎりぎり超えていないのでパッケージに含められるようになった。
+PuppeteerのChromeは環境変数&lt;code&gt;PUPPETEER_SKIP_CHROMIUM_DOWNLOAD&lt;/code&gt;を設定することで&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/blob/2817130fe099a7431e98c20ce1f44c6e547d4ca9/docs/api.md#puppeteer&#34;&gt;含めないようにできる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;他のパッケージのサイズによっては50MBを超えてしまうこともあるので、
+パッケージに含めず&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/v0.9.0/src/util.js#L62&#34;&gt;S3からダウンロード&lt;/a&gt;できるようにもした。&lt;/p&gt;
+
+&lt;p&gt;いずれの場合も最終的な置き先はLambdaで唯一書き込める&lt;code&gt;/tmp&lt;/code&gt;になる。
+この領域は512MBまで使えるので展開してもまだ余裕がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Error: EROFS: read-only file system, open &#39;node_modules/puppeteer/.local-chromium&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;chromeのlaunch時のoption&#34;&gt;ChromeのLaunch時のOption&lt;/h2&gt;
+
+&lt;p&gt;いろいろ試した結果、最低限必要だったのはこのあたり。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;exports.launchOptionForLambda = [
+    // error when launch(); No usable sandbox! Update your kernel
+    &#39;--no-sandbox&#39;,
+    // error when launch(); Failed to load libosmesa.so
+    &#39;--disable-gpu&#39;, 
+    // freeze when newPage()
+    &#39;--single-process&#39;
+];
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;エラーは分かりづらいものが多く、ときにはエラーすら出ずに止まってしまうこともある。
+デバッグの際はdumpioを有効にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const browser = await puppeteer.launch({
+    ...
+    dumpio: !!util.DEBUG,
+});  
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;babel&#34;&gt;Babel&lt;/h2&gt;
+
+&lt;p&gt;現在のLambdaのNodeのバージョンはv6.10.3。
+&lt;a href=&#34;http://node.green/&#34;&gt;node.green&lt;/a&gt;によるとES2015は99%対応していて、ES2016もべき乗演算子(2 ** 3 = 8)以外は対応しているが、ES2017のasync/awaitは7.6からなので、8系に対応するまではbabelにかける必要がある。
+ちなみにPuppeteerは6.4以降で&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/tree/master/utils/node6-transform&#34;&gt;動く&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yarn add --dev babel-cli babel-preset-env
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/babel/babel-preset-env&#34;&gt;babel-preset-env&lt;/a&gt;
+.babelrcはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat .babelrc
+{
+  &amp;quot;presets&amp;quot;: [
+    [&amp;quot;env&amp;quot;, {
+      &amp;quot;targets&amp;quot;: {
+        &amp;quot;node&amp;quot;: &amp;quot;6.10&amp;quot;
+      }
+    }]
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する</title>
+          <link>https://www.sambaiz.net/article/73/</link>
+          <pubDate>Sun, 26 Feb 2017 18:56:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/73/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;でKinesis Streamsに送り、Lambdaで読んでS3に保存する。
+要するにFirehoseのようなことをやりたいのだけれどTokyoリージョンにまだ来ないので自分でやる。&lt;/p&gt;
+
+&lt;h2 id=&#34;fluentdで送る&#34;&gt;fluentdで送る&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ td-agent-gem install fluent-plugin-kinesis
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;try_flush_interval&lt;/code&gt;と&lt;code&gt;queued_chunk_flush_interval&lt;/code&gt;はドキュメントには載っていないが、
+以下のページによるとそれぞれqueueに次のchunkがないときとあるときのflushする間隔。
+いずれもデフォルトは1だが、これを減らすことでもっと頻繁に吐き出されるようになるらしい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sonots/fluentd-scr/blob/master/02_out_forward_buffered.md&#34;&gt;Fluentd の out_forward と BufferedOutput&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;あとシャードに振り分けるための&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis#partition_key&#34;&gt;partition_key&lt;/a&gt;
+を指定できる。デフォルトはランダム。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+  @type tail
+  path /var/log/td-agent/hoge.log
+  pos_file /etc/td-agent/log.pos
+  tag hoge.log
+  format json
+
+  time_key timestamp
+  # 2017-01-01T01:01:01+0900
+  time_format %Y-%m-%dT%H:%M:%S%z
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match hoge.log&amp;gt;
+  @type kinesis_streams
+  region ap-northeast-1
+  stream_name teststream
+  include_time_key true
+
+  flush_interval 1
+  buffer_chunk_limit 1m
+  try_flush_interval 0.1
+  queued_chunk_flush_interval 0.01
+  num_threads 15
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;いくつか送ってみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;for i in `seq 1 1000`
+do
+  echo &#39;{&amp;quot;hoge&amp;quot;: &amp;quot;fuga&amp;quot;, &amp;quot;timestamp&amp;quot;: &amp;quot;2017-01-01T01:01:01+0900&amp;quot;}&#39; &amp;gt;&amp;gt; /var/log/td-agent/hoge.log
+done
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;kinesisのシャードが足りないと詰まってしまうので注意。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/84/&#34;&gt;FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ - sambaiz.net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;lambdaで読む&#34;&gt;Lambdaで読む&lt;/h2&gt;
+
+&lt;p&gt;Lambdaのトリガーの設定でKinesisを選ぶと、バッチサイズや開始位置を設定できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/73-lambda-kinesis.png&#34; alt=&#34;トリガーの設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;コードはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;;
+
+const zlib = require(&#39;zlib&#39;);
+const aws = require(&#39;aws-sdk&#39;);
+const s3 = new aws.S3({ apiVersion: &#39;2006-03-01&#39; });
+const BUCKET_NAME = process.env.BUCKET_NAME; // 環境変数で設定する
+
+exports.handler = (event, context, callback) =&amp;gt; {
+
+    const data = event.Records.map((record) =&amp;gt; new Buffer(record.kinesis.data, &#39;base64&#39;).toString()).join(&amp;quot;\n&amp;quot;);
+    const key = new Date().toISOString();
+    
+    putS3(key, data, true).then(
+        (data) =&amp;gt; callback(null, `Successfully processed ${event.Records.length} records.`),
+        (err) =&amp;gt; callback(err, null)
+    );
+};
+
+function putS3(key, data, gzip){    
+    return new Promise((resolve, reject) =&amp;gt; {
+        
+        const params = {
+            Bucket: BUCKET_NAME,
+            Key: key
+        };
+
+        if(gzip){
+            params.Body = zlib.gzipSync(data);
+            params.ContentEncoding = &amp;quot;gzip&amp;quot;;
+        }else{
+            params.Body = data;
+        }
+        
+        s3.putObject(params, (err, data) =&amp;gt; {
+            if (err) reject(err);
+            else resolve(data);
+        });
+    });
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;トリガーを有効にするとイベントが発火してS3に保存されるようになった。&lt;/p&gt;
+
+&lt;p&gt;ただ、Kinesisをイベントトリガーにして都度出力すると、1ファイルのサイズが非常に小さくなってしまう。
+なんとかして都度出力しないようにするか、あるいは時間トリガーで実行するか、いずれにしてもどこまで読んだか記録しておかなくちゃいけないのでちょっと面倒だ。バッファリングしてくれるFirehoseが早く日本にも来て欲しい。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+
+  </channel>
+</rss>

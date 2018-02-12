@@ -11,12 +11,89 @@
     
       
         <item>
-          <title>LambdaでOpenWeatherMapの気象データをDataDogに送ってアラートを飛ばす</title>
+          <title>Serverless FrameworkでLambdaをデプロイする</title>
+          <link>https://www.sambaiz.net/article/155/</link>
+          <pubDate>Sun, 11 Feb 2018 23:20:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/155/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless&#34;&gt;Serverless Framework&lt;/a&gt;でLambda Functionをデプロイする。
+Apexが基本的にFunction自体のデプロイしかしないのに対して、こちらはeventの設定なども諸々やってくれて強い。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/140/&#34;&gt;ApexでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install -g serverless
+$ serverless version
+1.26.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ApexではFunctionごとにディレクトリが作られたが、Serverlessでは&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/services/#services&#34;&gt;Service&lt;/a&gt;ごとに作られ、
+一つのService内で複数のFunctionを定義できる。handlerは同じでも異なっていてもよい。&lt;/p&gt;
+
+&lt;p&gt;Apexの形式の場合、共通の処理をWebpackなどで各Functionに持って来たり、
+同じような処理の複数のFunctionを立てる際はコピーする必要があったが、
+こちらは必要最小限の変更でそれらを行うことができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless/tree/master/lib/plugins/create/templates&#34;&gt;template&lt;/a&gt;からServiceをcreateする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ serverless create --template aws-nodejs --path testservice
+$ ls testservice/
+handler.js	serverless.yml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;設定ファイル&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/serverless.yml/#serverlessyml-reference&#34;&gt;serverless.yml&lt;/a&gt;
+にはLambdaの基本的なもののほかに、VPCやevent、IAM Roleなども書けて、これらはdeploy時に作られるCloudFormationのstackによって管理される。必要なら生のCloudFormationの設定も書ける。&lt;/p&gt;
+
+&lt;p&gt;ApexでもTerraformによって管理することができるが、書くのはこちらの方がはるかに楽。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/144/&#34;&gt;ApexでデプロイしたLambdaのトリガーをTerraformで管理する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat sesrverless.yml
+service: testservice
+
+provider:
+  name: aws
+  profile: foobar
+  region: ap-northeast-1
+  runtime: nodejs6.10
+  memorySize: 512
+  timeout: 10
+ 
+functions: 
+  hello: 
+    handler: handler.hello 
+    events:
+      - http:
+          path: hello/world
+          method: get
+          cors: true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;deployすると&lt;code&gt;{service}-{stage}-{function}&lt;/code&gt;のFunctionが作られる。
+今回の場合はtestservice-prd-test。stageをymlでも指定しなかった場合はデフォルト値のdevになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ serverless deploy --stage prd
+$ curl https://*****.ap-northeast-1.amazonaws.com/prd/hello/world | jq
+{
+  &amp;quot;message&amp;quot;: &amp;quot;Go Serverless v1.0! Your function executed successfully!&amp;quot;,
+  &amp;quot;input&amp;quot;: {
+    ...
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;どうしてもCloudFormationを使いたくないというわけでなければ、Serverless Frameworkを使っておけばよいと思う。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>DatadogのLambda Integrationで気象データを送ってアラートを飛ばす</title>
           <link>https://www.sambaiz.net/article/152/</link>
           <pubDate>Mon, 05 Feb 2018 23:55:00 &#43;0900</pubDate>
           <author></author>
           <guid>https://www.sambaiz.net/article/152/</guid>
-          <description>&lt;p&gt;最近朝が寒くて起きるのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
+          <description>&lt;p&gt;最近朝が寒くて布団から出るのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
 そこで、無料から使える気象API &lt;a href=&#34;http://openweathermap.org/&#34;&gt;OpenWeatherMap&lt;/a&gt;のデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。&lt;/p&gt;
 
 &lt;p&gt;インスタンスが立っていたらDataDog Agentの&lt;a href=&#34;https://docs.datadoghq.com/ja/guides/dogstatsd/&#34;&gt;DogStatsD&lt;/a&gt;経由で送ることができ、
@@ -511,6 +588,14 @@ SlackのWebhookなどを設定できる。&lt;/p&gt;
           <guid>https://www.sambaiz.net/article/140/</guid>
           <description>&lt;p&gt;&lt;a href=&#34;https://github.com/apex/apex&#34;&gt;Apex&lt;/a&gt;でLambdaをデプロイする。
 とても簡単に使えるし、変なこともしないので良い感じ。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;Serverless Frameworkだとeventの設定までカバーできてより便利。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
 
 &lt;p&gt;インストール。ダウンロードして実行できるようにしている。&lt;/p&gt;
 
