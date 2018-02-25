@@ -11,6 +11,272 @@
     
       
         <item>
+          <title>Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる</title>
+          <link>https://www.sambaiz.net/article/157/</link>
+          <pubDate>Sun, 25 Feb 2018 23:46:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/157/</guid>
+          <description>
+
+&lt;p&gt;UserPoolを作成。デフォルト設定はこんな感じ。
+必須項目や、確認メールの文面などを自由にカスタマイズでき、
+登録時などのタイミングでLambdaを発火させることもできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/157.png&#34; alt=&#34;デフォルト設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;作成したUserPoolにクライアントシークレットなしでアプリクライアントを登録する。&lt;/p&gt;
+
+&lt;h2 id=&#34;クライアント側&#34;&gt;クライアント側&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/aws/aws-amplify/tree/master/packages/amazon-cognito-identity-js&#34;&gt;amazon-cognito-identity-js&lt;/a&gt;を使う。&lt;/p&gt;
+
+&lt;p&gt;依存するjsを持ってくる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/dist/amazon-cognito-identity.min.js
+$ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/dist/aws-cognito-sdk.min.js
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Sign UpからAPIを呼ぶところまでのボタンを並べた。
+APIを呼ぶときはCognitoによって払い出されたJWTをAuthorization Headerに乗せる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;button id=&amp;quot;signUp&amp;quot;&amp;gt;Sign Up&amp;lt;/button&amp;gt;
+&amp;lt;p&amp;gt;&amp;lt;label&amp;gt;Code:&amp;lt;input type=&amp;quot;text&amp;quot; id=&amp;quot;code&amp;quot;&amp;gt;&amp;lt;/label&amp;gt;&amp;lt;/p&amp;gt;
+&amp;lt;button id=&amp;quot;confirm&amp;quot;&amp;gt;Confirm&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;signIn&amp;quot;&amp;gt;Sign In&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;whoAmI&amp;quot;&amp;gt;Who am I?&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;requestAPI&amp;quot;&amp;gt;Request API with token&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;signOut&amp;quot;&amp;gt;Sign Out&amp;lt;/button&amp;gt;
+
+&amp;lt;script src=&amp;quot;aws-cognito-sdk.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;script src=&amp;quot;amazon-cognito-identity.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;script&amp;gt;
+const USER_NAME = &amp;quot;*****&amp;quot;;
+const USER_PASSWORD = &amp;quot;*****&amp;quot;;
+const USER_EMAIL = &amp;quot;*****&amp;quot;;
+class CognitoUserPoolAuth {
+  constructor(UserPoolId, clientId, apiEndpoint) {
+    const poolData = {
+      UserPoolId : UserPoolId,
+      ClientId : clientId
+    };
+    this.userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
+    this.apiEndpoint = apiEndpoint
+  }
+  
+  signUp(userName, password, email) {
+    const attributeList = [];
+    if (email) {
+      attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({
+        Name : &#39;email&#39;,
+        Value : email
+      }));
+    }
+
+    return new Promise((resolve, reject) =&amp;gt; {
+      this.userPool.signUp(userName, password, attributeList, null, (err, result) =&amp;gt; {
+        if (err) {
+          return reject(err);
+        }
+        resolve(result);
+      });
+    });
+  }
+
+  confirmCode(userName, confirmCode) {
+    const cognitoUser = this.getCognitoUser(userName);
+    return new Promise((resolve, reject) =&amp;gt; {
+      cognitoUser.confirmRegistration(confirmCode, true, (err, result) =&amp;gt; {
+        if (err) {
+          return reject(err);
+        }
+        resolve(result);
+      });
+    })
+  }
+
+ signIn(userName, password) {
+    const authenticationData = {
+      Username : userName,
+      Password : password,
+    };
+    const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
+    const cognitoUser = this.getCognitoUser(userName);
+    return new Promise((resolve, reject) =&amp;gt; {
+      cognitoUser.authenticateUser(authenticationDetails, {
+        onSuccess: (result) =&amp;gt; {
+          resolve(result.getAccessToken().getJwtToken());
+        },
+
+        onFailure: function(err) {
+          reject(err);
+        },
+      });
+    });
+  }
+
+  signOut() {
+    const currentUser = this.currentUser();
+    if (!currentUser) return;
+    const cognitoUser = this.getCognitoUser(currentUser.username);
+    if (!cognitoUser) return;
+    cognitoUser.signOut();
+  }
+
+  getCognitoUser(userName) {
+    const userData = {
+      Username : userName,
+      Pool : this.userPool
+    };
+    return new AmazonCognitoIdentity.CognitoUser(userData);
+  }
+
+  currentUser() {
+    return this.userPool.getCurrentUser()
+  }
+  
+  getJwtToken() {
+    return new Promise((resolve, reject) =&amp;gt; {
+      const cognitoUser = this.currentUser();
+      if (!cognitoUser) {
+        return reject(&amp;quot;unauthorized&amp;quot;);
+      }
+      cognitoUser.getSession((err, result) =&amp;gt; {
+        if (err) { 
+          return reject(err);
+        }
+        resolve(result.getIdToken().getJwtToken());
+      });
+    })
+  }
+
+  async requestAPIWithToken() {
+    const token = await this.getJwtToken().catch(
+      (err) =&amp;gt; {
+        console.log(err);
+      } 
+    );
+    const headers = token ? { &#39;Authorization&#39;: token } : {};
+    return fetch(this.apiEndpoint, {
+      headers: headers
+    }).then((response) =&amp;gt; {
+      return response.json();
+    });
+  }
+}
+
+(async () =&amp;gt; {
+  const auth = new CognitoUserPoolAuth(
+    &amp;quot;&amp;lt;poolID&amp;gt;&amp;quot;, 
+    &amp;quot;&amp;lt;clientID&amp;gt;&amp;quot;,
+    &amp;quot;https://*****.execute-api.us-east-1.amazonaws.com/dev/secret&amp;quot;
+  )
+
+  document.getElementById(&amp;quot;signUp&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    const result = await auth.signUp(USER_NAME, USER_PASSWORD, USER_EMAIL).catch((err) =&amp;gt; {
+      if (err.code === &amp;quot;UsernameExistsException&amp;quot;) {
+        return Promise.reject(&amp;quot;User name is already used&amp;quot;);
+      } else {
+        return Promise.reject(err);
+      }
+    });
+    console.log(`signUp successfully`);
+  }, false);
+
+  document.getElementById(&amp;quot;confirm&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    const code = document.getElementById(&amp;quot;code&amp;quot;).value;
+    const result = await auth.confirmCode(USER_NAME, code);
+    console.log(`confirm successfully`);
+  }, false);
+
+  document.getElementById(&amp;quot;signIn&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    const result = await auth.signIn(USER_NAME, USER_PASSWORD).catch((err) =&amp;gt; {
+      if (err.code === &amp;quot;UserNotConfirmedException&amp;quot;) {
+        return Promise.reject(&amp;quot;Confirm your email&amp;quot;);
+      } else {
+        return Promise.reject(err);
+      }
+    });
+    console.log(`signIn successfully`);
+  }, false);
+
+  document.getElementById(&amp;quot;whoAmI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    console.log(auth.currentUser());
+  }, false);
+
+  document.getElementById(&amp;quot;requestAPI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    console.log(await auth.requestAPIWithToken());
+  }, false);
+
+  document.getElementById(&amp;quot;signOut&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    auth.signOut();
+    console.log(&amp;quot;signout successfully&amp;quot;);
+  }, false);
+})();
+&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;api側&#34;&gt;API側&lt;/h2&gt;
+
+&lt;p&gt;Serverless Frameworkで認証の設定をする場合は、
+authorizerのarnにUserPoolのARNを入れる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat serverless.yml
+service: cognitoapi
+
+provider:
+  name: aws
+  runtime: nodejs6.10
+
+functions:
+  createTodo:
+    handler: handler.secret
+    events:
+      - http:
+          path: secret
+          cors: true
+          method: get
+          authorizer:
+            arn: ***** # UserPool&#39;s ARN
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;JWTなので.で区切った真ん中がBase64 encodeされたpayloadになっている。これをdecodeして返すだけのAPI。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat handler.js
+&#39;use strict&#39;;
+
+module.exports.secret = (event, context, callback) =&amp;gt; {
+  const userInfo = JSON.parse(
+    new Buffer(
+      event.headers.Authorization.split(&amp;quot;.&amp;quot;)[1], 
+      &amp;quot;base64&amp;quot;
+    ).toString()
+  );
+  const response = {
+    statusCode: 200,
+    body: JSON.stringify({
+      userInfo: userInfo
+    }),
+    headers: {
+      &amp;quot;Access-Control-Allow-Origin&amp;quot;: &amp;quot;*&amp;quot;
+    },
+  };
+  callback(null, response);
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じ。Sign Upしたときにコード付きのメールが送られている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/157.gif&#34; alt=&#34;動作&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
           <title>OpenID ConnectのIDトークンの内容と検証</title>
           <link>https://www.sambaiz.net/article/136/</link>
           <pubDate>Mon, 09 Oct 2017 20:01:00 &#43;0900</pubDate>

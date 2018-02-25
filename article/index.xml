@@ -6,8 +6,454 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-02-11 23:20:00 &#43;0900 JST</updated>
+    <updated>2018-02-25 23:46:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる</title>
+          <link>https://www.sambaiz.net/article/157/</link>
+          <pubDate>Sun, 25 Feb 2018 23:46:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/157/</guid>
+          <description>
+
+&lt;p&gt;UserPoolを作成。デフォルト設定はこんな感じ。
+必須項目や、確認メールの文面などを自由にカスタマイズでき、
+登録時などのタイミングでLambdaを発火させることもできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/157.png&#34; alt=&#34;デフォルト設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;作成したUserPoolにクライアントシークレットなしでアプリクライアントを登録する。&lt;/p&gt;
+
+&lt;h2 id=&#34;クライアント側&#34;&gt;クライアント側&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/aws/aws-amplify/tree/master/packages/amazon-cognito-identity-js&#34;&gt;amazon-cognito-identity-js&lt;/a&gt;を使う。&lt;/p&gt;
+
+&lt;p&gt;依存するjsを持ってくる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/dist/amazon-cognito-identity.min.js
+$ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/dist/aws-cognito-sdk.min.js
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Sign UpからAPIを呼ぶところまでのボタンを並べた。
+APIを呼ぶときはCognitoによって払い出されたJWTをAuthorization Headerに乗せる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;button id=&amp;quot;signUp&amp;quot;&amp;gt;Sign Up&amp;lt;/button&amp;gt;
+&amp;lt;p&amp;gt;&amp;lt;label&amp;gt;Code:&amp;lt;input type=&amp;quot;text&amp;quot; id=&amp;quot;code&amp;quot;&amp;gt;&amp;lt;/label&amp;gt;&amp;lt;/p&amp;gt;
+&amp;lt;button id=&amp;quot;confirm&amp;quot;&amp;gt;Confirm&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;signIn&amp;quot;&amp;gt;Sign In&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;whoAmI&amp;quot;&amp;gt;Who am I?&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;requestAPI&amp;quot;&amp;gt;Request API with token&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;signOut&amp;quot;&amp;gt;Sign Out&amp;lt;/button&amp;gt;
+
+&amp;lt;script src=&amp;quot;aws-cognito-sdk.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;script src=&amp;quot;amazon-cognito-identity.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;script&amp;gt;
+const USER_NAME = &amp;quot;*****&amp;quot;;
+const USER_PASSWORD = &amp;quot;*****&amp;quot;;
+const USER_EMAIL = &amp;quot;*****&amp;quot;;
+class CognitoUserPoolAuth {
+  constructor(UserPoolId, clientId, apiEndpoint) {
+    const poolData = {
+      UserPoolId : UserPoolId,
+      ClientId : clientId
+    };
+    this.userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
+    this.apiEndpoint = apiEndpoint
+  }
+  
+  signUp(userName, password, email) {
+    const attributeList = [];
+    if (email) {
+      attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({
+        Name : &#39;email&#39;,
+        Value : email
+      }));
+    }
+
+    return new Promise((resolve, reject) =&amp;gt; {
+      this.userPool.signUp(userName, password, attributeList, null, (err, result) =&amp;gt; {
+        if (err) {
+          return reject(err);
+        }
+        resolve(result);
+      });
+    });
+  }
+
+  confirmCode(userName, confirmCode) {
+    const cognitoUser = this.getCognitoUser(userName);
+    return new Promise((resolve, reject) =&amp;gt; {
+      cognitoUser.confirmRegistration(confirmCode, true, (err, result) =&amp;gt; {
+        if (err) {
+          return reject(err);
+        }
+        resolve(result);
+      });
+    })
+  }
+
+ signIn(userName, password) {
+    const authenticationData = {
+      Username : userName,
+      Password : password,
+    };
+    const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
+    const cognitoUser = this.getCognitoUser(userName);
+    return new Promise((resolve, reject) =&amp;gt; {
+      cognitoUser.authenticateUser(authenticationDetails, {
+        onSuccess: (result) =&amp;gt; {
+          resolve(result.getAccessToken().getJwtToken());
+        },
+
+        onFailure: function(err) {
+          reject(err);
+        },
+      });
+    });
+  }
+
+  signOut() {
+    const currentUser = this.currentUser();
+    if (!currentUser) return;
+    const cognitoUser = this.getCognitoUser(currentUser.username);
+    if (!cognitoUser) return;
+    cognitoUser.signOut();
+  }
+
+  getCognitoUser(userName) {
+    const userData = {
+      Username : userName,
+      Pool : this.userPool
+    };
+    return new AmazonCognitoIdentity.CognitoUser(userData);
+  }
+
+  currentUser() {
+    return this.userPool.getCurrentUser()
+  }
+  
+  getJwtToken() {
+    return new Promise((resolve, reject) =&amp;gt; {
+      const cognitoUser = this.currentUser();
+      if (!cognitoUser) {
+        return reject(&amp;quot;unauthorized&amp;quot;);
+      }
+      cognitoUser.getSession((err, result) =&amp;gt; {
+        if (err) { 
+          return reject(err);
+        }
+        resolve(result.getIdToken().getJwtToken());
+      });
+    })
+  }
+
+  async requestAPIWithToken() {
+    const token = await this.getJwtToken().catch(
+      (err) =&amp;gt; {
+        console.log(err);
+      } 
+    );
+    const headers = token ? { &#39;Authorization&#39;: token } : {};
+    return fetch(this.apiEndpoint, {
+      headers: headers
+    }).then((response) =&amp;gt; {
+      return response.json();
+    });
+  }
+}
+
+(async () =&amp;gt; {
+  const auth = new CognitoUserPoolAuth(
+    &amp;quot;&amp;lt;poolID&amp;gt;&amp;quot;, 
+    &amp;quot;&amp;lt;clientID&amp;gt;&amp;quot;,
+    &amp;quot;https://*****.execute-api.us-east-1.amazonaws.com/dev/secret&amp;quot;
+  )
+
+  document.getElementById(&amp;quot;signUp&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    const result = await auth.signUp(USER_NAME, USER_PASSWORD, USER_EMAIL).catch((err) =&amp;gt; {
+      if (err.code === &amp;quot;UsernameExistsException&amp;quot;) {
+        return Promise.reject(&amp;quot;User name is already used&amp;quot;);
+      } else {
+        return Promise.reject(err);
+      }
+    });
+    console.log(`signUp successfully`);
+  }, false);
+
+  document.getElementById(&amp;quot;confirm&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    const code = document.getElementById(&amp;quot;code&amp;quot;).value;
+    const result = await auth.confirmCode(USER_NAME, code);
+    console.log(`confirm successfully`);
+  }, false);
+
+  document.getElementById(&amp;quot;signIn&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    const result = await auth.signIn(USER_NAME, USER_PASSWORD).catch((err) =&amp;gt; {
+      if (err.code === &amp;quot;UserNotConfirmedException&amp;quot;) {
+        return Promise.reject(&amp;quot;Confirm your email&amp;quot;);
+      } else {
+        return Promise.reject(err);
+      }
+    });
+    console.log(`signIn successfully`);
+  }, false);
+
+  document.getElementById(&amp;quot;whoAmI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    console.log(auth.currentUser());
+  }, false);
+
+  document.getElementById(&amp;quot;requestAPI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    console.log(await auth.requestAPIWithToken());
+  }, false);
+
+  document.getElementById(&amp;quot;signOut&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+    auth.signOut();
+    console.log(&amp;quot;signout successfully&amp;quot;);
+  }, false);
+})();
+&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;api側&#34;&gt;API側&lt;/h2&gt;
+
+&lt;p&gt;Serverless Frameworkで認証の設定をする場合は、
+authorizerのarnにUserPoolのARNを入れる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat serverless.yml
+service: cognitoapi
+
+provider:
+  name: aws
+  runtime: nodejs6.10
+
+functions:
+  createTodo:
+    handler: handler.secret
+    events:
+      - http:
+          path: secret
+          cors: true
+          method: get
+          authorizer:
+            arn: ***** # UserPool&#39;s ARN
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;JWTなので.で区切った真ん中がBase64 encodeされたpayloadになっている。これをdecodeして返すだけのAPI。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat handler.js
+&#39;use strict&#39;;
+
+module.exports.secret = (event, context, callback) =&amp;gt; {
+  const userInfo = JSON.parse(
+    new Buffer(
+      event.headers.Authorization.split(&amp;quot;.&amp;quot;)[1], 
+      &amp;quot;base64&amp;quot;
+    ).toString()
+  );
+  const response = {
+    statusCode: 200,
+    body: JSON.stringify({
+      userInfo: userInfo
+    }),
+    headers: {
+      &amp;quot;Access-Control-Allow-Origin&amp;quot;: &amp;quot;*&amp;quot;
+    },
+  };
+  callback(null, response);
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;こんな感じ。Sign Upしたときにコード付きのメールが送られている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/157.gif&#34; alt=&#34;動作&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>ブラウザのwindow間の値渡し</title>
+          <link>https://www.sambaiz.net/article/156/</link>
+          <pubDate>Fri, 23 Feb 2018 02:01:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/156/</guid>
+          <description>
+
+&lt;h2 id=&#34;直接windowを参照する&#34;&gt;直接Windowを参照する&lt;/h2&gt;
+
+&lt;p&gt;プロトコル、ポート、ドメインが全て同じ場合は、親は&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/API/window.open&#34;&gt;open()&lt;/a&gt;した返り値で、子はwindow.openerで相手のwindowが取れて、直接参照したりDOMを操作したりすることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat index.html
+&amp;lt;button id=&amp;quot;btn&amp;quot;&amp;gt;Open window&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;btn2&amp;quot;&amp;gt;Close window&amp;lt;/button&amp;gt;
+&amp;lt;div id=&amp;quot;view&amp;quot;&amp;gt;&amp;lt;/div&amp;gt;
+&amp;lt;script&amp;gt;
+  let win2;
+  const button = document.getElementById(&amp;quot;btn&amp;quot;);
+  button.addEventListener(&amp;quot;click&amp;quot;, () =&amp;gt; {
+    window.foo = &amp;quot;bar from window1&amp;quot;;
+    win2 = window.open(&amp;quot;index2.html&amp;quot;);
+  }, false);
+
+  const button2 = document.getElementById(&amp;quot;btn2&amp;quot;);
+  button2.addEventListener(&amp;quot;click&amp;quot;, () =&amp;gt; {
+    if (win2) {
+      win2.close();
+    }
+  }, false);
+&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat index2.html
+&amp;lt;button id=&amp;quot;btn&amp;quot;&amp;gt;Close window&amp;lt;/button&amp;gt;
+&amp;lt;div id=&amp;quot;view&amp;quot;&amp;gt;&amp;lt;/div&amp;gt;
+&amp;lt;script&amp;gt;
+  console.log(window.aaa);
+  const parentWindow = window.opener;
+  const view = document.getElementById(&amp;quot;view&amp;quot;);
+  view.textContent = parentWindow.foo; // window1 -&amp;gt; window2
+
+  const button = document.getElementById(&amp;quot;btn&amp;quot;);
+  button.addEventListener(&amp;quot;click&amp;quot;, () =&amp;gt; {
+    if(!parentWindow) {
+      window.close();
+    }
+    const view = parentWindow.document.getElementById(&amp;quot;view&amp;quot;);
+    if (view) {
+      view.textContent = &amp;quot;Window2 has been closed by myself&amp;quot;; // window2 -&amp;gt; window1
+    }
+    window.close();
+  }, false);
+&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;確認する際はドメインの制約を満たすため&lt;a href=&#34;https://github.com/cloudhead/node-static&#34;&gt;node-static&lt;/a&gt;などでサーバーを立てる必要がある。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/156-1.gif&#34; alt=&#34;直接Windowを参照する値渡し&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;postmessage-https-developer-mozilla-org-ja-docs-web-api-window-postmessage-を使う&#34;&gt;&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/API/Window/postMessage&#34;&gt;postMessage()&lt;/a&gt;を使う&lt;/h2&gt;
+
+&lt;p&gt;postMessageで送り、messageのeventで受け取れる。ドメインなどが異なっていてもよいが、
+ハンドリングする際はどこから送られたかを&lt;code&gt;event.origin&lt;/code&gt;でチェックしなくてはならない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat index.html
+&amp;lt;button id=&amp;quot;btn&amp;quot;&amp;gt;Open window&amp;lt;/button&amp;gt;
+&amp;lt;button id=&amp;quot;btn2&amp;quot;&amp;gt;Post to window&amp;lt;/button&amp;gt;
+&amp;lt;div id=&amp;quot;view&amp;quot;&amp;gt;&amp;lt;/div&amp;gt;
+&amp;lt;script&amp;gt;
+const view = document.getElementById(&amp;quot;view&amp;quot;);
+const receiveMessage = (event) =&amp;gt; {
+  if (event.origin === &amp;quot;http://localhost:8081&amp;quot;) {
+    view.textContent = event.data;
+  }
+}
+window.addEventListener(&amp;quot;message&amp;quot;, receiveMessage, false);
+
+let win2;
+const button = document.getElementById(&amp;quot;btn&amp;quot;);
+button.addEventListener(&amp;quot;click&amp;quot;, () =&amp;gt; {
+  win2 = window.open(&amp;quot;http://localhost:8081/index2.html&amp;quot;);
+}, false);
+
+const button2 = document.getElementById(&amp;quot;btn2&amp;quot;);
+button2.addEventListener(&amp;quot;click&amp;quot;, () =&amp;gt; {
+  win2.postMessage(&amp;quot;bar from window1&amp;quot;, &amp;quot;http://localhost:8081&amp;quot;);
+}, false);
+&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat index2.html
+&amp;lt;script&amp;gt;
+const receiveMessage = (event) =&amp;gt; {
+  if (event.origin === &amp;quot;http://localhost:8080&amp;quot;) {
+    event.source.postMessage(
+      `window2 received data: ${event.data}`,
+      event.origin
+    );
+  }
+  window.close();
+}
+window.addEventListener(&amp;quot;message&amp;quot;, receiveMessage, false);
+&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;別のポートでも値が渡されていることが確認できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/156-2.gif&#34; alt=&#34;postMessage()での値渡し&#34; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;reactでpostmessageする&#34;&gt;ReactでpostMessageする&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;componentDidMount()&lt;/code&gt;でaddEventListenerして&lt;code&gt;componentWillUnmount()&lt;/code&gt;でremoveする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat index.jsx
+class App extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {value: &#39;&#39;};
+    this.handleChange = this.handleChange.bind(this);
+    this.handleMessage = this.handleMessage.bind(this);
+    this.openWindow = this.openWindow.bind(this);
+  }
+  componentDidMount() {
+    window.addEventListener(&#39;message&#39;, this.handleMessage);
+  }
+  componentWillUnmount() {
+    window.removeEventListener(&#39;message&#39;, this.handleMessage);
+  }
+  handleMessage(event) {
+    if (
+      (window.opener &amp;amp;&amp;amp; event.origin === &amp;quot;http://localhost:8080&amp;quot;) ||
+      (!window.opener &amp;amp;&amp;amp; event.origin === &amp;quot;http://localhost:8081&amp;quot;)
+    ) {
+      this.setState({value: event.data});
+    }
+  }
+  handleChange(event) {
+    this.setState({value: event.target.value});
+    if (this.newWindow) {
+      this.newWindow.postMessage(this.state.value, &amp;quot;http://localhost:8081&amp;quot;); // window1 -&amp;gt; window2
+    } else if (window.opener) {
+      window.opener.postMessage(this.state.value, &amp;quot;http://localhost:8080&amp;quot;); // window2 -&amp;gt; window1
+    }
+  }
+  openWindow(event) {
+    this.newWindow = window.open(&#39;http://localhost:8081/index.html&#39;, &#39;_blank&#39;, &#39;width=640, height=480&#39;);
+  }
+  render() {
+    return &amp;lt;div&amp;gt;
+      { !window.opener ? &amp;lt;button onClick={this.openWindow}&amp;gt;Open Window&amp;lt;/button&amp;gt; : &amp;lt;div&amp;gt;&amp;lt;/div&amp;gt;}
+      &amp;lt;input type=&amp;quot;text&amp;quot; value={this.state.value} onChange={this.handleChange} /&amp;gt;
+    &amp;lt;/div&amp;gt;;
+  }
+}
+
+ReactDOM.render(
+  &amp;lt;App /&amp;gt;,
+  document.getElementById(&#39;root&#39;)
+);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat index.html
+&amp;lt;dic id=&amp;quot;root&amp;quot;&amp;gt;&amp;lt;/div&amp;gt;
+&amp;lt;script src=&amp;quot;https://unpkg.com/react@16/umd/react.production.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;script src=&amp;quot;https://unpkg.com/react-dom@16/umd/react-dom.production.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&amp;lt;script src=&amp;quot;index.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yarn add --dev @babel/cli @babel/core @babel/preset-react
+$ echo &#39;{ &amp;quot;presets&amp;quot;: [&amp;quot;@babel/preset-react&amp;quot;] }&#39; &amp;gt; .babelrc
+$ ./node_modules/.bin/babel index.jsx -o index.js
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/156-3.gif&#34; alt=&#34;ReactでpostMessage()での値渡し&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -16,7 +462,9 @@
           <pubDate>Sun, 11 Feb 2018 23:20:00 &#43;0900</pubDate>
           <author></author>
           <guid>https://www.sambaiz.net/article/155/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless&#34;&gt;Serverless Framework&lt;/a&gt;でLambda Functionをデプロイする。
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless&#34;&gt;Serverless Framework&lt;/a&gt;でLambda Functionをデプロイする。
 Apexが基本的にFunction自体のデプロイしかしないのに対して、こちらはeventの設定なども諸々やってくれて強い。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/140/&#34;&gt;ApexでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
@@ -81,7 +529,25 @@ $ curl https://*****.ap-northeast-1.amazonaws.com/prd/hello/world | jq
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;どうしてもCloudFormationを使いたくないというわけでなければ、Serverless Frameworkを使っておけばよいと思う。&lt;/p&gt;
+&lt;h2 id=&#34;hook&#34;&gt;hook&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless#v1-plugins&#34;&gt;Plugin&lt;/a&gt;で&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/plugins/#lifecycle-events&#34;&gt;Lifecycle Events&lt;/a&gt;を拾えるようになっている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit&#34;&gt;puppeteer-lambda-starter-kit&lt;/a&gt;は以前からpackage scriptsがあったので、これをServerlessのpackage時に呼ぶことでServerless Framework対応した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ yarn add --dev serverless-hooks-plugin
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;plugins:
+  - serverless-hooks-plugin
+
+custom:
+  hooks:
+    package:initialize:
+      - npm run build
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;とても便利なのでCloudFormationを使いたくないというわけでなければ、Serverless Frameworkを使っておけばよいと思う。&lt;/p&gt;
 </description>
         </item>
       
@@ -278,10 +744,9 @@ Version:
     0.2.0524
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;DBを立てて様々な型のカラムを含むテーブルを用意した。&lt;/p&gt;
+&lt;p&gt;様々な型のカラムを含むテーブルで試す。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;$ docker run --name mysql-xorm -p 33306:3306 -e &amp;quot;MYSQL_ALLOW_EMPTY_PASSWORD=yes&amp;quot; -e &amp;quot;MYSQL_DATABASE=testdb&amp;quot; -d mysql:5.7
-$ cat schema.sql
+&lt;pre&gt;&lt;code&gt;$ cat schema.sql
 CREATE TABLE table1 (
   n_tinyint TINYINT,
   n_int INT,
@@ -299,7 +764,12 @@ CREATE TABLE table1 (
   e_enum ENUM(&#39;aaa&#39;, &#39;bbb&#39;, &#39;ccc&#39;)
 )
 
-$ mysql -u root -h 0.0.0.0 -P 33306 -D testdb &amp;lt; schema.sql 
+$ cat setup.sh
+docker run --name mysql-xorm -p 33306:3306 -e &amp;quot;MYSQL_ALLOW_EMPTY_PASSWORD=yes&amp;quot; -e &amp;quot;MYSQL_DATABASE=testdb&amp;quot; 
+while [ $(docker inspect --format &amp;quot;{{.State.Health.Status }}&amp;quot; mysql-xorm) != &amp;quot;healthy&amp;quot; ]; do printf &amp;quot;.&amp;quot;; sleep 1; done
+mysql -u root -h 0.0.0.0 -P 33306 -D testdb &amp;lt; schema.sql
+
+$ sh setup.sh
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;Goのテンプレートをリポジトリから持ってきてxorm reverseを実行。&lt;/p&gt;
@@ -1738,6 +2208,12 @@ LZSSはバイト列を見ていって同じ部分を発見したらそこを参�
 &lt;p&gt;このLZSSにあたる部分をZopfliはがんばってやるので圧縮時間が結構かかるがサイズは小さくなるらしい。
 展開は通常のDeflate通り。上げてくれたデータを見ても大体そんな感じだ。&lt;/p&gt;
 
+&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/google/zopfli
+$ cd zopfli
+$ make zopfli
+$ ./zopfli aaaa
+&lt;/code&gt;&lt;/pre&gt;
+
 &lt;h2 id=&#34;brotli-https-github-com-google-brotli&#34;&gt;&lt;a href=&#34;https://github.com/google/brotli&#34;&gt;Brotli&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;LZ77、ハフマン記号に加えて2nd order context modelingというのを使って圧縮する
@@ -1791,6 +2267,7 @@ Cannot enlarge memory arrays. Either (1) compile with  -s TOTAL_MEMORY=X  with X
 &lt;p&gt;リポジトリをcloneしてきてmake installする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ git clone https://github.com/google/brotli.git
+$ cd brotli
 $ mkdir out &amp;amp;&amp;amp; cd out
 $ ../configure-cmake
 $ make
@@ -1825,7 +2302,7 @@ user	0m4.626s
 sys	0m1.030s
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;対応版を出そうとしたけど謎のエラーがすぐに解決できなかったので後でやる。&lt;/p&gt;
+&lt;p&gt;ということで、brotli対応版を出そうとしたが、Lambdaでdecompressしたら&lt;code&gt;JavaScript heap out of memory&lt;/code&gt;になってしまった。&lt;/p&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
@@ -22465,9 +22942,23 @@ spec:
           <guid>https://www.sambaiz.net/article/8/</guid>
           <description>
 
+&lt;h2 id=&#34;n-https-github-com-tj-n&#34;&gt;&lt;a href=&#34;https://github.com/tj/n&#34;&gt;n&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;nodeが必要だけど手軽。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;n latest&lt;/code&gt;, &lt;code&gt;n stable&lt;/code&gt;, &lt;code&gt;n lts&lt;/code&gt;でバージョンが切り替わる。
+バージョンを指定する場合、&lt;code&gt;n &amp;lt;version&amp;gt;&lt;/code&gt;でインストールし、&lt;code&gt;n&lt;/code&gt;でインストールされているバージョンの一覧から選択できる。
+バージョンの削除は&lt;code&gt;n - &amp;lt;version&amp;gt;&lt;/code&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install -g n
+$ n stable
+$ node -v
+v6.2.2
+&lt;/code&gt;&lt;/pre&gt;
+
 &lt;h2 id=&#34;nvm-https-github-com-creationix-nvm&#34;&gt;&lt;a href=&#34;https://github.com/creationix/nvm&#34;&gt;nvm&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;大体これを使っておけばよさそう。&lt;/p&gt;
+&lt;p&gt;nodeが必要ない。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.1/install.sh | bash
 $ nvm install node
@@ -22494,20 +22985,6 @@ Now using node v7.7.2 (npm v4.1.2)
 
 $ nvm use 6
 Now using node v6.10.0 (npm v3.10.10)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;n-https-github-com-tj-n&#34;&gt;&lt;a href=&#34;https://github.com/tj/n&#34;&gt;n&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;すでにnodeが入っているならこっちを使うこともできる。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;n latest&lt;/code&gt;, &lt;code&gt;n stable&lt;/code&gt;, &lt;code&gt;n lts&lt;/code&gt;でバージョンが切り替わる。
-バージョンを指定する場合、&lt;code&gt;n &amp;lt;version&amp;gt;&lt;/code&gt;でインストールし、&lt;code&gt;n&lt;/code&gt;でインストールされているバージョンの一覧から選択できる。
-バージョンの削除は&lt;code&gt;n - &amp;lt;version&amp;gt;&lt;/code&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install -g n
-$ n stable
-$ node -v
-v6.2.2
 &lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>
