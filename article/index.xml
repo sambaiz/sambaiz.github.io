@@ -24,7 +24,8 @@
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/157.png&#34; alt=&#34;デフォルト設定&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;作成したUserPoolにクライアントシークレットなしでアプリクライアントを登録する。&lt;/p&gt;
+&lt;p&gt;作成したUserPoolにアプリクライアントを追加する。
+ブラウザで使うのでクライアントシークレットはなし。&lt;/p&gt;
 
 &lt;h2 id=&#34;クライアント側&#34;&gt;クライアント側&lt;/h2&gt;
 
@@ -37,7 +38,16 @@ $ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/d
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;Sign UpからAPIを呼ぶところまでのボタンを並べた。
-APIを呼ぶときはCognitoによって払い出されたJWTをAuthorization Headerに乗せる。&lt;/p&gt;
+SignInすると以下のデータをそのページのドメインのLocal Storageに保持する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.idToken
+CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.accessToken
+CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.refreshToken
+CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.clockDrift
+CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.LastAuthUser
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;APIを呼ぶときはidToken(JWT)をAuthorization Headerに乗せる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;&amp;lt;button id=&amp;quot;signUp&amp;quot;&amp;gt;Sign Up&amp;lt;/button&amp;gt;
 &amp;lt;p&amp;gt;&amp;lt;label&amp;gt;Code:&amp;lt;input type=&amp;quot;text&amp;quot; id=&amp;quot;code&amp;quot;&amp;gt;&amp;lt;/label&amp;gt;&amp;lt;/p&amp;gt;
@@ -241,7 +251,7 @@ functions:
             arn: ***** # UserPool&#39;s ARN
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;JWTなので.で区切った真ん中がBase64 encodeされたpayloadになっている。これをdecodeして返すだけのAPI。&lt;/p&gt;
+&lt;p&gt;JWTは.で区切った真ん中がBase64 encodeされたpayloadになっている。これをdecodeして返すだけのAPI。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
@@ -249,7 +259,7 @@ functions:
 &#39;use strict&#39;;
 
 module.exports.secret = (event, context, callback) =&amp;gt; {
-  const userInfo = JSON.parse(
+  const payload = JSON.parse(
     new Buffer(
       event.headers.Authorization.split(&amp;quot;.&amp;quot;)[1], 
       &amp;quot;base64&amp;quot;
@@ -258,7 +268,7 @@ module.exports.secret = (event, context, callback) =&amp;gt; {
   const response = {
     statusCode: 200,
     body: JSON.stringify({
-      userInfo: userInfo
+      userInfo: payload
     }),
     headers: {
       &amp;quot;Access-Control-Allow-Origin&amp;quot;: &amp;quot;*&amp;quot;
@@ -339,7 +349,7 @@ module.exports.secret = (event, context, callback) =&amp;gt; {
 &lt;h2 id=&#34;postmessage-https-developer-mozilla-org-ja-docs-web-api-window-postmessage-を使う&#34;&gt;&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/API/Window/postMessage&#34;&gt;postMessage()&lt;/a&gt;を使う&lt;/h2&gt;
 
 &lt;p&gt;postMessageで送り、messageのeventで受け取れる。ドメインなどが異なっていてもよいが、
-ハンドリングする際はどこから送られたかを&lt;code&gt;event.origin&lt;/code&gt;でチェックしなくてはならない。&lt;/p&gt;
+どこからでも送れてしまうので、ハンドリングする際は&lt;code&gt;event.origin&lt;/code&gt;が意図したものかチェックしなくてはならない。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat index.html
 &amp;lt;button id=&amp;quot;btn&amp;quot;&amp;gt;Open window&amp;lt;/button&amp;gt;

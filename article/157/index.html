@@ -113,7 +113,8 @@
 
 <p><img src="https://www.sambaiz.net/images/157.png" alt="デフォルト設定" /></p>
 
-<p>作成したUserPoolにクライアントシークレットなしでアプリクライアントを登録する。</p>
+<p>作成したUserPoolにアプリクライアントを追加する。
+ブラウザで使うのでクライアントシークレットはなし。</p>
 
 <h2 id="クライアント側">クライアント側</h2>
 
@@ -126,7 +127,16 @@ $ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/d
 </code></pre>
 
 <p>Sign UpからAPIを呼ぶところまでのボタンを並べた。
-APIを呼ぶときはCognitoによって払い出されたJWTをAuthorization Headerに乗せる。</p>
+SignInすると以下のデータをそのページのドメインのLocal Storageに保持する。</p>
+
+<pre><code>CognitoIdentityServiceProvider.&lt;clientId&gt;.&lt;name&gt;.idToken
+CognitoIdentityServiceProvider.&lt;clientId&gt;.&lt;name&gt;.accessToken
+CognitoIdentityServiceProvider.&lt;clientId&gt;.&lt;name&gt;.refreshToken
+CognitoIdentityServiceProvider.&lt;clientId&gt;.&lt;name&gt;.clockDrift
+CognitoIdentityServiceProvider.&lt;clientId&gt;.LastAuthUser
+</code></pre>
+
+<p>APIを呼ぶときはidToken(JWT)をAuthorization Headerに乗せる。</p>
 
 <pre><code>&lt;button id=&quot;signUp&quot;&gt;Sign Up&lt;/button&gt;
 &lt;p&gt;&lt;label&gt;Code:&lt;input type=&quot;text&quot; id=&quot;code&quot;&gt;&lt;/label&gt;&lt;/p&gt;
@@ -330,7 +340,7 @@ functions:
             arn: ***** # UserPool's ARN
 </code></pre>
 
-<p>JWTなので.で区切った真ん中がBase64 encodeされたpayloadになっている。これをdecodeして返すだけのAPI。</p>
+<p>JWTは.で区切った真ん中がBase64 encodeされたpayloadになっている。これをdecodeして返すだけのAPI。</p>
 
 <p><a href="https://www.sambaiz.net/article/136/">OpenID ConnectのIDトークンの内容と検証 - sambaiz-net</a></p>
 
@@ -338,7 +348,7 @@ functions:
 'use strict';
 
 module.exports.secret = (event, context, callback) =&gt; {
-  const userInfo = JSON.parse(
+  const payload = JSON.parse(
     new Buffer(
       event.headers.Authorization.split(&quot;.&quot;)[1], 
       &quot;base64&quot;
@@ -347,7 +357,7 @@ module.exports.secret = (event, context, callback) =&gt; {
   const response = {
     statusCode: 200,
     body: JSON.stringify({
-      userInfo: userInfo
+      userInfo: payload
     }),
     headers: {
       &quot;Access-Control-Allow-Origin&quot;: &quot;*&quot;
