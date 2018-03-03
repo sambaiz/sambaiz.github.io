@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>fluentdのforward - sambaiz-net</title>
-    <meta name="twitter:title" content="fluentdのforward - sambaiz-net">
-    <meta property='og:title' content="fluentdのforward - sambaiz-net">
+    <title>MySQL InnoDBのロックの挙動 - sambaiz-net</title>
+    <meta name="twitter:title" content="MySQL InnoDBのロックの挙動 - sambaiz-net">
+    <meta property='og:title' content="MySQL InnoDBのロックの挙動 - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="forward">
-      <meta name="twitter:description" content="forward">
+      <meta name="description" content="共有/排他/ギャップ/ネクストキーロック">
+      <meta name="twitter:description" content="共有/排他/ギャップ/ネクストキーロック">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/51/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/158/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "fluentdのforward | sambaiz-net ",
-    "datePublished": "2017-01-25T22:25:00JST",
-    "dateModified": "2017-01-25T22:25:00JST",
+    "headline": "MySQL InnoDBのロックの挙動 | sambaiz-net ",
+    "datePublished": "2018-03-03T19:44:00JST",
+    "dateModified": "2018-03-03T19:44:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "forward"
+    "description": "共有\/排他\/ギャップ\/ネクストキーロック"
   }
 </script>
 </head>
@@ -103,129 +103,159 @@
 
       <article class="single">
         <div class="single body">
-          <h1>fluentdのforward</h1>
-          <p>(2017-01-25)</p>
+          <h1>MySQL InnoDBのロックの挙動</h1>
+          <p>(2018-03-03)</p>
           
 
-<p><a href="http://docs.fluentd.org/articles/high-availability#network-topology">td-agent間でログをやりとりするとき</a>
-に使われるforwardについて。内部では<a href="http://docs.fluentd.org/articles/in_forward#protocol">MessagePackを使っている</a>。</p>
+<p><a href="https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html">https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html</a></p>
 
-<h2 id="forward-input">forward input</h2>
+<p>トランザクション分離レベルはデフォルトの<code>REPEATABLE-READ</code>。</p>
 
-<p><a href="http://docs.fluentd.org/articles/in_forward">http://docs.fluentd.org/articles/in_forward</a></p>
-
-<p>受け取る側。</p>
-
-<pre><code>&lt;source&gt;
-  @type forward
-  port 24224
-  bind 0.0.0.0
-&lt;/source&gt;
-
-&lt;match **&gt;
-  @type stdout
-&lt;/match&gt;
+<pre><code>&gt; SELECT @@GLOBAL.tx_isolation, @@tx_isolation;
++-----------------------+-----------------+
+| @@GLOBAL.tx_isolation | @@tx_isolation  |
++-----------------------+-----------------+
+| REPEATABLE-READ       | REPEATABLE-READ |
++-----------------------+-----------------+
 </code></pre>
 
-<p><code>/etc/init.d/td-agent restart</code>してfluent-catで送ってみる。</p>
+<h2 id="準備">準備</h2>
 
-<pre><code>$ echo '{&quot;hoge&quot;: &quot;fuga&quot;}' | /opt/td-agent/embedded/bin/fluent-cat -h xx.xx.xx.xx test.tag
+<p>DBを立ち上げてテーブルとレコードを入れる。</p>
+
+<pre><code>$ cat schema_and_data.sql
+CREATE TABLE a (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL
+);
+
+INSERT INTO a (id, name) VALUES (1, '1');
+INSERT INTO a (id, name) VALUES (2, '2');
+INSERT INTO a (id, name) VALUES (3, '3');
+INSERT INTO a (id, name) VALUES (8, '8');
+INSERT INTO a (id, name) VALUES (9, '9');
+INSERT INTO a (id, name) VALUES (10, '10');
+
+$ cat start.sh
+docker rm -f try-mysql-lock
+docker run --name try-mysql-lock -p 4306:3306 -e &quot;MYSQL_ALLOW_EMPTY_PASSWORD=yes&quot; -e &quot;MYSQL_DATABASE=try-mysql-lock&quot; -e &quot;TZ=Asia/Tokyo&quot; --health-cmd='mysqladmin ping --silent' -d mysql:5.6 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+while [[ $(docker inspect --format &quot;{{.State.Health.Status}}&quot; try-mysql-lock) != &quot;healthy&quot; ]]; do printf &quot;.&quot;; sleep 1; done
+mysql -u root -h 0.0.0.0 -P 4306 -D try-mysql-lock &lt; schema_and_data.sql
 </code></pre>
 
-<p><code>/var/log/td-agent/td-agent.log</code>に出力される。</p>
+<h2 id="共有-shared-ロック">共有(Shared)ロック</h2>
 
-<pre><code>test.tag: {&quot;hoge&quot;:&quot;fuga&quot;}
+<p>その行を他がSELECTしたり共有ロックを取ることは許す。</p>
+
+<pre><code>-- Tx1
+&gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE;
 </code></pre>
 
-<h2 id="forward-output">forward output</h2>
-
-<p><a href="http://docs.fluentd.org/articles/out_forward">http://docs.fluentd.org/articles/out_forward</a></p>
-
-<p><a href="http://docs.fluentd.org/articles/buffer-plugin-overview">http://docs.fluentd.org/articles/buffer-plugin-overview</a></p>
-
-<p>送る側。</p>
-
-<p>ポートはデフォルトで24224で、イベントの送信にTCPを、heartbeatにUDP(heartbeat_typeで変えられる)を使う。</p>
-
-<p>flush_intervalははデフォルトで<a href="http://docs.fluentd.org/articles/out_forward#flushinterval">60秒</a>。
-確認のときは短くしておくと分かりやすい。
-buffer_queueの一番上のチャンクがこの時間経過するか、サイズがbuffer_chunk_limitを超えると、一番下のチャンクが書き込まれ、新しいチャンクがpushされる。
-chunkの数がbuffer_queue_limitに到達してしまうと新しいイベントは破棄されてしまうので
-リソースを圧迫(buffer_chunk_limit * buffer_queue_limit)しない程度に十分大きな数にしておき、
-スパイクや障害時に備えておく。
-buffer_typeはデフォルトがmemory。fileだと<a href="http://docs.fluentd.org/articles/out_forward#flushatshutdown">flush_at_shutdownのデフォルトがfalse</a>なので注意。</p>
-
-<pre><code>&lt;source&gt;
-  @type forward
-  port 24224
-  bind 0.0.0.0
-&lt;/source&gt;
-
-&lt;match **&gt;
-  @type forward
-
-  flush_interval 1s
-
-  buffer_type file
-  buffer_path /var/log/td-agent/forward-buf
-  flush_at_shutdown true
-  buffer_chunk_limit 256m
-
-  &lt;server&gt;
-    name log_server
-    host xx.xx.xx.xx
-    port 24224
-  &lt;/server&gt;
-&lt;/match&gt;
+<pre><code>-- Tx2
+&gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE; -- 他も共有ロックは取れる
+&gt; UPDATE a SET name='b' WHERE id = 3; -- これは通る。ロックは行単位なのでid=2だけロックされている。
+&gt; UPDATE a SET name='a' WHERE id = 2; -- これは止まる
 </code></pre>
 
-<h3 id="冗長化">冗長化</h3>
+<p>たしかに1行ロックされているようだ。</p>
 
-<p><a href="http://docs.fluentd.org/articles/out_forward#ltservergt-at-least-one-is-required">server</a>は複数書くことができ、
-それぞれにweight(デフォルトは60)を設定したり、
-<a href="http://docs.fluentd.org/articles/out_forward#standby">standby</a>を付けることでActive-Standbyの構成にすることもできる。</p>
-
-<pre><code>&lt;source&gt;
-  @type forward
-  port 24224
-  bind 0.0.0.0
-&lt;/source&gt;
-
-&lt;match **&gt;
-  @type forward
-
-  ...
-
-  &lt;server&gt;
-    name log_server
-    host xx.xx.xx.xx
-    port 24224
-    weight 60
-  &lt;/server&gt;
-
-  &lt;server&gt;
-    name log_server2
-    host yy.yy.yy.yy
-    port 24224
-    weight 60
-  &lt;/server&gt;
-&lt;/match&gt;
+<pre><code>&gt; SHOW ENGINE INNODB STATUS \G;
+...
+---TRANSACTION 2345, ACTIVE 40 sec
+2 lock struct(s), heap size 360, 1 row lock(s)
+MySQL thread id 4, OS thread handle 0x7f5de21d8700, query id 147 172.17.0.1 root init
+SHOW ENGINE INNODB STATUS
+...
 </code></pre>
 
-<p>片方のサーバーをtd-agentをstopしてstartしてみるとこんなログが出る。</p>
+<p>ロックをかけないと、ほかからCOMMITされる前後で
+SELECTがそれまでになかったファントムを返すようになるかというと、<code>REPEATABLE-READ</code>ではそうはならず、最初にSELECTしたスナップショットを返すようになっている。
+ただし、<code>LOCK IN SHARE MODE</code>や<code>FOR UPDATE</code>を付けると最新の結果が返ってくる。</p>
 
-<pre><code>detached forwarding server 'log_server2' host=&quot;yy.yy.yy.yy&quot; port=24224 phi=16.06814271743242 phi_threshold=16
-recovered forwarding server 'log_server2' host=&quot;yy.yy.yy.yy&quot; port=24224
+<p><a href="http://nippondanji.blogspot.jp/2013/12/innodbrepeatable-readlocking-read.html">漢(オトコ)のコンピュータ道: InnoDBのREPEATABLE READにおけるLocking Readについての注意点</a></p>
+
+<h2 id="排他-exclusive-ロック">排他(eXclusive)ロック</h2>
+
+<p>その行に対して他がロックを取ることを許さない。SELECTできるかは分離レベルにより、<code>REPEATABLE READ</code>では<a href="https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_exclusive_lock">できる</a>。</p>
+
+<pre><code>-- Tx1
+&gt; SELECT * FROM a WHERE id = 2 FOR UPDATE;
 </code></pre>
 
-<p>ちなみにtd-agentはrootで動かしている。</p>
-
-<pre><code>$ cat /etc/sysconfig/td-agent 
-TD_AGENT_USER=root
-TD_AGENT_GROUP=root
+<pre><code>-- Tx2
+&gt; SELECT * FROM a WHERE id = 2 FOR UPDATE; -- 止まる。同じ行の排他ロックは取れない
+&gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE; -- 止まる。共有ロックも取れない
 </code></pre>
 
-<p><a href="https://www.sambaiz.net/article/113/">fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする - sambaiz-net</a></p>
+<p>逆に、共有ロックが取られている行に排他ロックも取れない。
+ロックを取る順番によってはDeadlockになる。</p>
+
+<h2 id="ギャップロック">ギャップロック</h2>
+
+<p>存在しない範囲のindexのレコードを一部でもロックすると、行ではなく範囲がロックされる。</p>
+
+<pre><code>-- Tx1
+&gt; SELECT * FROM a WHERE id &gt; 5 FOR UPDATE;
+</code></pre>
+
+<pre><code>-- Tx2
+&gt; INSERT a (id, name) VALUE (6, 'a'); -- 止まる。
+&gt; INSERT a (id, name) VALUE (4, 'a'); -- WHEREには含まれないがこれも止まる。
+</code></pre>
+
+<p>ギャップロックの場合、同じ範囲を排他ロックできてしまう。</p>
+
+<pre><code>-- Tx1
+&gt; SELECT * FROM a WHERE id = 5 FOR UPDATE;
+</code></pre>
+
+<pre><code>-- Tx2
+&gt; SELECT * FROM a WHERE id = 5 FOR UPDATE; -- 止まらない
+&gt; INSERT a (id, name) VALUE (5, 'a'); -- 止まる(Tx1でも同じことをやるとDeadlock)
+</code></pre>
+
+<h2 id="ネクストキーロック">ネクストキーロック</h2>
+
+<p>範囲でロックすると一つ先のキーまでロックされる。</p>
+
+<pre><code>-- Tx1
+&gt; SELECT * FROM a WHERE id &lt; 6 FOR UPDATE; -- ギャップロック(id=4~7)
+</code></pre>
+
+<pre><code>-- Tx2
+&gt; UPDATE a SET name = 'b' WHERE id = 8; -- 止まる
+</code></pre>
+
+<h2 id="更新系クエリでかかるロック-https-dev-mysql-com-doc-refman-5-6-ja-innodb-locks-set-html"><a href="https://dev.mysql.com/doc/refman/5.6/ja/innodb-locks-set.html">更新系クエリでかかるロック</a></h2>
+
+<p><code>LOCK IN SHARE MODE</code>や<code>FOR UPDATE</code>を付けないSELECTは分離レベルが<code>SERIALIZABLE</code>でなければロックを取らない。</p>
+
+<h2 id="insert">INSERT</h2>
+
+<p>排他ロックがかかる。重複キーエラーになった場合は共有ロックがかかる。</p>
+
+<pre><code>-- Tx1
+&gt; INSERT INTO a (id, name) VALUE (5, 'b'); 
+&gt; INSERT INTO a (id, name) VALUE (3, 'd'); -- 重複キーエラー
+</code></pre>
+
+<pre><code>-- Tx2
+&gt; INSERT INTO a (id, name) VALUE (5, 'c'); -- 止まる
+&gt; UPDATE a SET name = 'e' WHERE id = 3; -- 止まる
+</code></pre>
+
+<h3 id="update-delete">UPDATE, DELETE</h3>
+
+<p>排他ネクストキーロックがかかる。INSERTでの<code>ON DUPLICATE KEY UPDATE</code>も同様。</p>
+
+<pre><code>-- Tx1
+&gt; UPDATE a SET name='a' WHERE id BETWEEN 8 AND 9; 
+</code></pre>
+
+<pre><code>-- Tx2
+&gt; UPDATE a SET name='a' WHERE id = 9; -- 止まる
+&gt; UPDATE a SET name='a' WHERE id = 10; -- これも止まる
+</code></pre>
 
         </div>
       </article>

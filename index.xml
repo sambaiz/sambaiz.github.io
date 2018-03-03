@@ -6,8 +6,170 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-02-25 23:46:00 &#43;0900 JST</updated>
+    <updated>2018-03-03 19:44:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>MySQL InnoDBのロックの挙動</title>
+          <link>https://www.sambaiz.net/article/158/</link>
+          <pubDate>Sat, 03 Mar 2018 19:44:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/158/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html&#34;&gt;https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;トランザクション分離レベルはデフォルトの&lt;code&gt;REPEATABLE-READ&lt;/code&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; SELECT @@GLOBAL.tx_isolation, @@tx_isolation;
++-----------------------+-----------------+
+| @@GLOBAL.tx_isolation | @@tx_isolation  |
++-----------------------+-----------------+
+| REPEATABLE-READ       | REPEATABLE-READ |
++-----------------------+-----------------+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;DBを立ち上げてテーブルとレコードを入れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat schema_and_data.sql
+CREATE TABLE a (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL
+);
+
+INSERT INTO a (id, name) VALUES (1, &#39;1&#39;);
+INSERT INTO a (id, name) VALUES (2, &#39;2&#39;);
+INSERT INTO a (id, name) VALUES (3, &#39;3&#39;);
+INSERT INTO a (id, name) VALUES (8, &#39;8&#39;);
+INSERT INTO a (id, name) VALUES (9, &#39;9&#39;);
+INSERT INTO a (id, name) VALUES (10, &#39;10&#39;);
+
+$ cat start.sh
+docker rm -f try-mysql-lock
+docker run --name try-mysql-lock -p 4306:3306 -e &amp;quot;MYSQL_ALLOW_EMPTY_PASSWORD=yes&amp;quot; -e &amp;quot;MYSQL_DATABASE=try-mysql-lock&amp;quot; -e &amp;quot;TZ=Asia/Tokyo&amp;quot; --health-cmd=&#39;mysqladmin ping --silent&#39; -d mysql:5.6 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+while [[ $(docker inspect --format &amp;quot;{{.State.Health.Status}}&amp;quot; try-mysql-lock) != &amp;quot;healthy&amp;quot; ]]; do printf &amp;quot;.&amp;quot;; sleep 1; done
+mysql -u root -h 0.0.0.0 -P 4306 -D try-mysql-lock &amp;lt; schema_and_data.sql
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;共有-shared-ロック&#34;&gt;共有(Shared)ロック&lt;/h2&gt;
+
+&lt;p&gt;その行を他がSELECTしたり共有ロックを取ることは許す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx1
+&amp;gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx2
+&amp;gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE; -- 他も共有ロックは取れる
+&amp;gt; UPDATE a SET name=&#39;b&#39; WHERE id = 3; -- これは通る。ロックは行単位なのでid=2だけロックされている。
+&amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 2; -- これは止まる
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;たしかに1行ロックされているようだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; SHOW ENGINE INNODB STATUS \G;
+...
+---TRANSACTION 2345, ACTIVE 40 sec
+2 lock struct(s), heap size 360, 1 row lock(s)
+MySQL thread id 4, OS thread handle 0x7f5de21d8700, query id 147 172.17.0.1 root init
+SHOW ENGINE INNODB STATUS
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ロックをかけないと、ほかからCOMMITされる前後で
+SELECTがそれまでになかったファントムを返すようになるかというと、&lt;code&gt;REPEATABLE-READ&lt;/code&gt;ではそうはならず、最初にSELECTしたスナップショットを返すようになっている。
+ただし、&lt;code&gt;LOCK IN SHARE MODE&lt;/code&gt;や&lt;code&gt;FOR UPDATE&lt;/code&gt;を付けると最新の結果が返ってくる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://nippondanji.blogspot.jp/2013/12/innodbrepeatable-readlocking-read.html&#34;&gt;漢(オトコ)のコンピュータ道: InnoDBのREPEATABLE READにおけるLocking Readについての注意点&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;排他-exclusive-ロック&#34;&gt;排他(eXclusive)ロック&lt;/h2&gt;
+
+&lt;p&gt;その行に対して他がロックを取ることを許さない。SELECTできるかは分離レベルにより、&lt;code&gt;REPEATABLE READ&lt;/code&gt;では&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_exclusive_lock&#34;&gt;できる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx1
+&amp;gt; SELECT * FROM a WHERE id = 2 FOR UPDATE;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx2
+&amp;gt; SELECT * FROM a WHERE id = 2 FOR UPDATE; -- 止まる。同じ行の排他ロックは取れない
+&amp;gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE; -- 止まる。共有ロックも取れない
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;逆に、共有ロックが取られている行に排他ロックも取れない。
+ロックを取る順番によってはDeadlockになる。&lt;/p&gt;
+
+&lt;h2 id=&#34;ギャップロック&#34;&gt;ギャップロック&lt;/h2&gt;
+
+&lt;p&gt;存在しない範囲のindexのレコードを一部でもロックすると、行ではなく範囲がロックされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx1
+&amp;gt; SELECT * FROM a WHERE id &amp;gt; 5 FOR UPDATE;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx2
+&amp;gt; INSERT a (id, name) VALUE (6, &#39;a&#39;); -- 止まる。
+&amp;gt; INSERT a (id, name) VALUE (4, &#39;a&#39;); -- WHEREには含まれないがこれも止まる。
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ギャップロックの場合、同じ範囲を排他ロックできてしまう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx1
+&amp;gt; SELECT * FROM a WHERE id = 5 FOR UPDATE;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx2
+&amp;gt; SELECT * FROM a WHERE id = 5 FOR UPDATE; -- 止まらない
+&amp;gt; INSERT a (id, name) VALUE (5, &#39;a&#39;); -- 止まる(Tx1でも同じことをやるとDeadlock)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ネクストキーロック&#34;&gt;ネクストキーロック&lt;/h2&gt;
+
+&lt;p&gt;範囲でロックすると一つ先のキーまでロックされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx1
+&amp;gt; SELECT * FROM a WHERE id &amp;lt; 6 FOR UPDATE; -- ギャップロック(id=4~7)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx2
+&amp;gt; UPDATE a SET name = &#39;b&#39; WHERE id = 8; -- 止まる
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;更新系クエリでかかるロック-https-dev-mysql-com-doc-refman-5-6-ja-innodb-locks-set-html&#34;&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/innodb-locks-set.html&#34;&gt;更新系クエリでかかるロック&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;LOCK IN SHARE MODE&lt;/code&gt;や&lt;code&gt;FOR UPDATE&lt;/code&gt;を付けないSELECTは分離レベルが&lt;code&gt;SERIALIZABLE&lt;/code&gt;でなければロックを取らない。&lt;/p&gt;
+
+&lt;h2 id=&#34;insert&#34;&gt;INSERT&lt;/h2&gt;
+
+&lt;p&gt;排他ロックがかかる。重複キーエラーになった場合は共有ロックがかかる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx1
+&amp;gt; INSERT INTO a (id, name) VALUE (5, &#39;b&#39;); 
+&amp;gt; INSERT INTO a (id, name) VALUE (3, &#39;d&#39;); -- 重複キーエラー
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx2
+&amp;gt; INSERT INTO a (id, name) VALUE (5, &#39;c&#39;); -- 止まる
+&amp;gt; UPDATE a SET name = &#39;e&#39; WHERE id = 3; -- 止まる
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;update-delete&#34;&gt;UPDATE, DELETE&lt;/h3&gt;
+
+&lt;p&gt;排他ネクストキーロックがかかる。INSERTでの&lt;code&gt;ON DUPLICATE KEY UPDATE&lt;/code&gt;も同様。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx1
+&amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id BETWEEN 8 AND 9; 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx2
+&amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 9; -- 止まる
+&amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 10; -- これも止まる
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -174,60 +336,62 @@ class CognitoUserPoolAuth {
   }
 }
 
-(async () =&amp;gt; {
-  const auth = new CognitoUserPoolAuth(
+// -------------
+// Handler
+// -------------
+
+const auth = new CognitoUserPoolAuth(
     &amp;quot;&amp;lt;poolID&amp;gt;&amp;quot;, 
     &amp;quot;&amp;lt;clientID&amp;gt;&amp;quot;,
     &amp;quot;https://*****.execute-api.us-east-1.amazonaws.com/dev/secret&amp;quot;
-  )
+)
 
-  document.getElementById(&amp;quot;signUp&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+document.getElementById(&amp;quot;signUp&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
     const result = await auth.signUp(USER_NAME, USER_PASSWORD, USER_EMAIL).catch((err) =&amp;gt; {
-      if (err.code === &amp;quot;UsernameExistsException&amp;quot;) {
+        if (err.code === &amp;quot;UsernameExistsException&amp;quot;) {
         return Promise.reject(&amp;quot;User name is already used&amp;quot;);
-      } else {
+        } else {
         return Promise.reject(err);
-      }
+        }
     });
     console.log(`signUp successfully`);
-  }, false);
+}, false);
 
-  document.getElementById(&amp;quot;confirm&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+document.getElementById(&amp;quot;confirm&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
     const code = document.getElementById(&amp;quot;code&amp;quot;).value;
     const result = await auth.confirmCode(USER_NAME, code);
     console.log(`confirm successfully`);
-  }, false);
+}, false);
 
-  document.getElementById(&amp;quot;signIn&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+document.getElementById(&amp;quot;signIn&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
     const result = await auth.signIn(USER_NAME, USER_PASSWORD).catch((err) =&amp;gt; {
-      if (err.code === &amp;quot;UserNotConfirmedException&amp;quot;) {
+        if (err.code === &amp;quot;UserNotConfirmedException&amp;quot;) {
         return Promise.reject(&amp;quot;Confirm your email&amp;quot;);
-      } else {
+        } else {
         return Promise.reject(err);
-      }
+        }
     });
-    console.log(`signIn successfully`);
-  }, false);
+console.log(`signIn successfully`);
+}, false);
 
-  document.getElementById(&amp;quot;whoAmI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+document.getElementById(&amp;quot;whoAmI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
     console.log(auth.currentUser());
-  }, false);
+}, false);
 
-  document.getElementById(&amp;quot;requestAPI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+document.getElementById(&amp;quot;requestAPI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
     console.log(await auth.requestAPIWithToken());
-  }, false);
+}, false);
 
-  document.getElementById(&amp;quot;signOut&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
+document.getElementById(&amp;quot;signOut&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
     auth.signOut();
     console.log(&amp;quot;signout successfully&amp;quot;);
-  }, false);
-})();
+}, false);
 &amp;lt;/script&amp;gt;
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;api側&#34;&gt;API側&lt;/h2&gt;
 
-&lt;p&gt;Serverless Frameworkで認証の設定をする場合は、
+&lt;p&gt;Serverless FrameworkでCognitoのJWTを認証に使うには
 authorizerのarnにUserPoolのARNを入れる。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
@@ -251,7 +415,8 @@ functions:
             arn: ***** # UserPool&#39;s ARN
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;JWTは.で区切った真ん中がBase64 encodeされたpayloadになっている。これをdecodeして返すだけのAPI。&lt;/p&gt;
+&lt;p&gt;JWTは.で区切った真ん中がBase64 encodeされたpayloadになっている。
+これをdecodeして返してみる。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
@@ -6950,196 +7115,6 @@ NON-HEAP MEMORY USED: 51MB (23.8%), COMMITTED: 81MB, MAX: 214MB
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;1Gbps、1Mevent/sを超えるような高トラフィックではStormなどのフレームワークを使えとのこと。&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>fluentdでKinesis streamsに送るときの性能確認</title>
-          <link>https://www.sambaiz.net/article/108/</link>
-          <pubDate>Mon, 05 Jun 2017 23:48:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/108/</guid>
-          <description>
-
-&lt;h2 id=&#34;localでのstreamsとproducerのbenchmark&#34;&gt;localでのstreamsとproducerのbenchmark&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;の
-&lt;code&gt;make benchmark&lt;/code&gt;はlocalにDummyServerを&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis/blob/v1.1.3/benchmark/task.rake#L18&#34;&gt;立ち上げて&lt;/a&gt;送っている。&lt;/p&gt;
-
-&lt;p&gt;空でもいいのでroleをつけておく必要がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/awslabs/aws-fluent-plugin-kinesis.git
-$ cd aws-fluent-plugin-kinesis
-$ yum install -y ruby-devel gcc
-$ echo &#39;gem &amp;quot;io-console&amp;quot;&#39; &amp;gt;&amp;gt; Gemfile
-$ make
-$ make benchmark
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;RATEを指定しなければデフォルトで&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis/blob/v1.1.3/benchmark/task.rake#L19&#34;&gt;秒間1000レコード&lt;/a&gt;が送られる設定。
-fluentdを起動してから10秒後にプロセスをkillし、そのレコード数などを出力している。&lt;/p&gt;
-
-&lt;p&gt;t2.microでデフォルト(RATE=1000)で実行した結果がこれ。
-固める分producerの方はややパフォーマンスが落ちる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
-Results: requets: 20, raw_records: 9400, records: 9400
-bundle exec rake benchmark TYPE=producer
-Results: requets: 14, raw_records: 1005, records: 8900
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。
-streamsだとシャードを増やしていく必要があるけど、producerの方は当分大丈夫そうだ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
-Results: requets: 57, raw_records: 27600, records: 27600
-bundle exec rake benchmark TYPE=producer
-Results: requets: 12, raw_records: 241, records: 25200
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;RATE=10000のとき。raw_records, requestの圧縮率はさらに上がり、
-パフォーマンスの差が大きくなってきている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
-Results: requets: 177, raw_records: 88000, records: 88000
-bundle exec rake benchmark TYPE=producer
-Results: requets: 26, raw_records: 385, records: 75000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;実際にkinesis-streamsに送ってみる&#34;&gt;実際にkinesis streamsに送ってみる&lt;/h2&gt;
-
-&lt;p&gt;ap-northeast-1でシャードは3のKinesis streamsにt2.microインスタンス1台から送る。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
-  @type dummy
-  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
-  tag dummy
-  rate 1000
-&amp;lt;/source&amp;gt;
-
-&amp;lt;source&amp;gt;
-  @type monitor_agent
-  bind 0.0.0.0
-  port 24220
-&amp;lt;/source&amp;gt;
-
-&amp;lt;match **&amp;gt;
-  @type kinesis_streams
-  region ap-northeast-1
-  stream_name test
-
-  flush_interval 1
-  buffer_chunk_limit 1m
-  try_flush_interval 0.1
-  queued_chunk_flush_interval 0.01
-  num_threads 15
-&amp;lt;/match&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;秒間3000まではほとんどキューにたまらず送れる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl localhost:24220/api/plugins.json | jq
-{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-      &amp;quot;buffer_queue_length&amp;quot;: 0,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 17500,
-      &amp;quot;retry_count&amp;quot;: 0,
-      &amp;quot;retry&amp;quot;: {}
-    }
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;4000にするとそのうちretryが発生してしまう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-     &amp;quot;buffer_queue_length&amp;quot;: 60,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 56544178,
-      &amp;quot;retry_count&amp;quot;: 5,
-      &amp;quot;retry&amp;quot;: {
-        &amp;quot;steps&amp;quot;: 5,
-        &amp;quot;next_time&amp;quot;: &amp;quot;2017-06-05 14:05:38 +0000&amp;quot;
-      }
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;たしかにスループットが超過している。スペック通りだ。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/108.png&#34; alt=&#34;書き込みスループットの超過&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;次に30シャードにしてみる。一度にシャード数は倍から半分にしかできないので作り直し。&lt;/p&gt;
-
-&lt;p&gt;これに秒間30000を送ってみると、キューにいくらか溜まった。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-      &amp;quot;buffer_queue_length&amp;quot;: 7,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 7752600,
-      &amp;quot;retry_count&amp;quot;: 0,
-      &amp;quot;retry&amp;quot;: {}
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さらに倍にして60シャード。これに秒間60000で送ってみる。キューに溜まるものの増え続けはしないのでなんとか送れてそうだ。
-td-agentのプロセスがCPUを99%使っているので、このインスタンスではこの辺が限界かもしれない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-      &amp;quot;buffer_queue_length&amp;quot;: 15,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 16105807,
-      &amp;quot;retry_count&amp;quot;: 0,
-      &amp;quot;retry&amp;quot;: {}
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ついでにus-east-1にも30シャードのStreamsを作成して30000送ってみたところ、キューに溜まる量が格段に増えた。
-早くFirehoseやAnalyticsが東京リージョンにも来てほしい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-      &amp;quot;buffer_queue_length&amp;quot;: 50,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 52432436,
-      &amp;quot;retry_count&amp;quot;: 0,
-      &amp;quot;retry&amp;quot;: {}
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>
       
