@@ -68,7 +68,7 @@ mysql -u root -h 0.0.0.0 -P 4306 -D try-mysql-lock &amp;lt; schema_and_data.sql
 &amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 2; -- これは止まる
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;たしかに1行ロックされているようだ。&lt;/p&gt;
+&lt;p&gt;たしかに1行ロックされている。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;&amp;gt; SHOW ENGINE INNODB STATUS \G;
 ...
@@ -79,9 +79,11 @@ SHOW ENGINE INNODB STATUS
 ...
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;ロックをかけないと、ほかからCOMMITされる前後で
-SELECTがそれまでになかったファントムを返すようになるかというと、&lt;code&gt;REPEATABLE-READ&lt;/code&gt;ではそうはならず、最初にSELECTしたスナップショットを返すようになっている。
-ただし、&lt;code&gt;LOCK IN SHARE MODE&lt;/code&gt;や&lt;code&gt;FOR UPDATE&lt;/code&gt;を付けると最新の結果が返ってくる。&lt;/p&gt;
+&lt;p&gt;ただのSELECTは分離レベルが&lt;code&gt;SERIALIZABLE&lt;/code&gt;でない限りロックをとらない。
+ロックしないと、他のトランザクションのCOMMITで
+追加されたデータ(ファントム)を読んでしまったりするかというと、
+MySQLの&lt;code&gt;REPEATABLE-READ&lt;/code&gt;ではそうはならず、最初にSELECTしたときのスナップショットを返すようになっている。
+ただし、&lt;code&gt;LOCK IN SHARE MODE&lt;/code&gt;や&lt;code&gt;FOR UPDATE&lt;/code&gt;を付けると&lt;code&gt;READ-COMMITED&lt;/code&gt;のように最新の結果を返す。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;http://nippondanji.blogspot.jp/2013/12/innodbrepeatable-readlocking-read.html&#34;&gt;漢(オトコ)のコンピュータ道: InnoDBのREPEATABLE READにおけるLocking Readについての注意点&lt;/a&gt;&lt;/p&gt;
 
@@ -127,7 +129,8 @@ SELECTがそれまでになかったファントムを返すようになるか�
 
 &lt;h2 id=&#34;ネクストキーロック&#34;&gt;ネクストキーロック&lt;/h2&gt;
 
-&lt;p&gt;範囲でロックすると一つ先のキーまでロックされる。&lt;/p&gt;
+&lt;p&gt;範囲でロックすると一つ先のキーまでロックされる。
+ギャップにファントムを発生させないためのもの。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;-- Tx1
 &amp;gt; SELECT * FROM a WHERE id &amp;lt; 6 FOR UPDATE; -- ギャップロック(id=4~7)
@@ -139,9 +142,7 @@ SELECTがそれまでになかったファントムを返すようになるか�
 
 &lt;h2 id=&#34;更新系クエリでかかるロック-https-dev-mysql-com-doc-refman-5-6-ja-innodb-locks-set-html&#34;&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/innodb-locks-set.html&#34;&gt;更新系クエリでかかるロック&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;&lt;code&gt;LOCK IN SHARE MODE&lt;/code&gt;や&lt;code&gt;FOR UPDATE&lt;/code&gt;を付けないSELECTは分離レベルが&lt;code&gt;SERIALIZABLE&lt;/code&gt;でなければロックを取らない。&lt;/p&gt;
-
-&lt;h2 id=&#34;insert&#34;&gt;INSERT&lt;/h2&gt;
+&lt;h3 id=&#34;insert&#34;&gt;INSERT&lt;/h3&gt;
 
 &lt;p&gt;排他ロックがかかる。重複キーエラーになった場合は共有ロックがかかる。&lt;/p&gt;
 
