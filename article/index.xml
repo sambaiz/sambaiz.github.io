@@ -6,8 +6,174 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-03-03 19:44:00 &#43;0900 JST</updated>
+    <updated>2018-03-13 01:04:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る</title>
+          <link>https://www.sambaiz.net/article/159/</link>
+          <pubDate>Tue, 13 Mar 2018 01:04:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/159/</guid>
+          <description>
+
+&lt;p&gt;Logging AgentをNodeレベルの&lt;a href=&#34;https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/&#34;&gt;DaemonSet&lt;/a&gt;として動かすのではなく、Podの中に&lt;a href=&#34;https://kubernetes.io/docs/concepts/cluster-administration/logging/#using-a-sidecar-container-with-the-logging-agent&#34;&gt;Sidecar Container&lt;/a&gt;として動かす。その分リソースは食うけど、独自の設定で動かせる。&lt;/p&gt;
+
+&lt;h2 id=&#34;アプリケーション&#34;&gt;アプリケーション&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/go-logging-sample&#34;&gt;https://github.com/sambaiz/go-logging-sample&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Goで定期的にログを出すサンプルコードを書いたのでこれを使う。
+&lt;a href=&#34;https://github.com/spf13/viper&#34;&gt;viper&lt;/a&gt;で設定を持ち、
+&lt;a href=&#34;https://github.com/uber-go/zap&#34;&gt;zap&lt;/a&gt;でログを出力する。
+あとSIGINTを拾ってSync()してGraceful Shutdownするようにしている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/104/&#34;&gt;Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.docker.com/develop/develop-images/multistage-build/#name-your-build-stages&#34;&gt;multistage-build&lt;/a&gt;でビルドして、GKEで動かすのでContainer Registryに上げる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t go-logging-sample .
+$ docker tag go-logging-sample gcr.io/&amp;lt;project_id&amp;gt;/go-logging-sample:v1 
+$ gcloud docker -- push gcr.io/&amp;lt;project_id&amp;gt;/go-logging-sample
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;fluentdの設定&#34;&gt;Fluentdの設定&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/kaizenplatform/fluent-plugin-bigquery&#34;&gt;fluent-plugin-bigquery&lt;/a&gt;プラグインを使う。&lt;/p&gt;
+
+&lt;p&gt;projectとdataset、パーティションの&lt;a href=&#34;https://cloud.google.com/bigquery/docs/creating-partitioned-tables&#34;&gt;日付分割テーブル&lt;/a&gt;に入れる場合は、auto_create_table&lt;a href=&#34;https://github.com/kaizenplatform/fluent-plugin-bigquery#date-partitioned-table-support&#34;&gt;できない&lt;/a&gt;のでtableも作成しておく。&lt;/p&gt;
+
+&lt;p&gt;fluentdの設定は&lt;a href=&#34;https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/&#34;&gt;ConfigMap&lt;/a&gt;で持つ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+data:
+  fluent.conf: |
+    &amp;lt;source&amp;gt;
+      @type tail
+      format json
+      path /var/log/app.log
+      pos_file /var/log/app.log.pos
+      tag bigquery 
+    &amp;lt;/source&amp;gt;
+
+    &amp;lt;match bigquery&amp;gt;
+      @type bigquery
+
+      method load
+
+      &amp;lt;buffer time&amp;gt;
+        @type file
+        path /var/log/bigquery.*.buffer
+        timekey 1d
+        flush_at_shutdown true
+      &amp;lt;/buffer&amp;gt;
+
+      auth_method	compute_engine
+
+      project &amp;lt;project-name&amp;gt;
+      dataset &amp;lt;dataset-name&amp;gt;
+      table &amp;lt;table-name&amp;gt;$%Y%m%d
+      fetch_schema true 
+      ignore_unknown_values true	  
+    &amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;プラグイン入りのfluentdイメージもビルドして上げる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM fluent/fluentd:v1.1-onbuild
+
+RUN apk add --update --virtual .build-deps \
+        sudo build-base ruby-dev \
+
+ # cutomize following instruction as you wish
+ &amp;amp;&amp;amp; sudo gem install \
+        bigdecimal fluent-plugin-bigquery:1.2.0 \
+
+ &amp;amp;&amp;amp; sudo gem sources --clear-all \
+ &amp;amp;&amp;amp; apk del .build-deps \
+ &amp;amp;&amp;amp; rm -rf /var/cache/apk/* \
+           /home/fluent/.gem/ruby/*/cache/*.gem
+
+EXPOSE 24284
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ touch fluent.conf
+$ mkdir plugins
+$ docker build -t fluentd-bigquery .
+$ docker tag fluentd-bigquery gcr.io/&amp;lt;project_id&amp;gt;/fluentd-bigquery:v1 
+$ gcloud docker -- push gcr.io/&amp;lt;project_id&amp;gt;/fluentd-bigquery
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;podの設定&#34;&gt;Podの設定&lt;/h2&gt;
+
+&lt;p&gt;ConfigMapの&lt;a href=&#34;https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#add-configmap-data-to-a-volume&#34;&gt;Volume&lt;/a&gt;と、ログが書かれるVolumeを定義し、
+これを各コンテナでマウントする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Pod
+metadata:
+  name: something-collector
+spec:
+  containers:
+  - name: collector
+    image: gcr.io/&amp;lt;project_id&amp;gt;/go-logging-sample:v1
+    env:
+    - name: SAMPLE_LOG_PATH
+      value: /var/log/app.log
+    volumeMounts:
+    - name: varlog
+      mountPath: /var/log
+  - name: fluentd
+    image: gcr.io/&amp;lt;project_id&amp;gt;/fluentd-bigquery:v1
+    volumeMounts:
+    - name: varlog
+      mountPath: /var/log
+    - name: config-volume
+      mountPath: /fluentd/etc
+  volumes:
+  - name: varlog
+    emptyDir: {}
+  - name: config-volume
+    configMap:
+      name: fluentd-config
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;動かす&#34;&gt;動かす&lt;/h2&gt;
+
+&lt;p&gt;BigQueryの権限が付いたGKEのクラスタにデプロイ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud container clusters get-credentials &amp;lt;cluster-name&amp;gt; --zone &amp;lt;zone&amp;gt; --project &amp;lt;project-name&amp;gt;
+$ kubectl config current-context
+gke_***
+
+$ kubectl create -f fluentd-configmap.yaml
+$ kubectl create -f something-collector-pod.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;立ち上がらないときは&lt;code&gt;-c&lt;/code&gt;でコンテナのnameを指定してログを見る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl logs something-collector -c fluentd
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;OptionのUse Legacy SQLのチェックを外して&lt;a href=&#34;https://cloud.google.com/bigquery/docs/reference/standard-sql/migrating-from-legacy-sql&#34;&gt;標準SQL&lt;/a&gt;でBigQueryに入っていることを確認した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;SELECT
+  *
+FROM
+  `&amp;lt;dataset-name&amp;gt;.&amp;lt;table-name&amp;gt;` 
+WHERE
+  _PARTITIONTIME BETWEEN 
+  TIMESTAMP_TRUNC(TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 * 24 HOUR),DAY)
+  AND 
+  TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(),DAY);
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -38,6 +204,12 @@
 CREATE TABLE a (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(128) NOT NULL
+);
+
+CREATE TABLE b (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    a_id BIGINT UNSIGNED NOT NULL,
+    FOREIGN KEY (a_id) REFERENCES a (id)
 );
 
 INSERT INTO a (id, name) VALUES (1, &#39;1&#39;);
@@ -156,6 +328,12 @@ MySQLの&lt;code&gt;REPEATABLE-READ&lt;/code&gt;ではそうはならず、最�
 &amp;gt; UPDATE a SET name = &#39;e&#39; WHERE id = 3; -- 止まる
 &lt;/code&gt;&lt;/pre&gt;
 
+&lt;p&gt;&lt;code&gt;INSERT IGNORE&lt;/code&gt;しても同じ。そもそもこれは重複キー以外のエラーも無視した結果、変なデータが入ってしまうことがあるため、使わない方がよい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; INSERT INTO a (name) VALUE (NULL);  -- Column &#39;name&#39; cannot be null
+&amp;gt; INSERT IGNORE INTO a (name) VALUE (NULL); -- Query OKで空文字が入ってしまう
+&lt;/code&gt;&lt;/pre&gt;
+
 &lt;h3 id=&#34;update-delete&#34;&gt;UPDATE, DELETE&lt;/h3&gt;
 
 &lt;p&gt;排他ネクストキーロックがかかる。INSERTでの&lt;code&gt;ON DUPLICATE KEY UPDATE&lt;/code&gt;も同様。&lt;/p&gt;
@@ -167,6 +345,19 @@ MySQLの&lt;code&gt;REPEATABLE-READ&lt;/code&gt;ではそうはならず、最�
 &lt;pre&gt;&lt;code&gt;-- Tx2
 &amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 9; -- 止まる
 &amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 10; -- これも止まる
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;外部キー制約&#34;&gt;外部キー制約&lt;/h3&gt;
+
+&lt;p&gt;さらに外部キー制約がかかるレコードを追加/更新/削除すると、参照するレコードも共有ロックされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx1
+&amp;gt; INSERT INTO b (a_id) VALUES (1);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;-- Tx2
+&amp;gt; SELECT * FROM a WHERE id = 1 LOCK IN SHARE MODE; -- 通る
+&amp;gt; SELECT * FROM a WHERE id = 1 FOR UPDATE; -- 止まる
 &lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>
