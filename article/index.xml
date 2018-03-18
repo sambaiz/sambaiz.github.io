@@ -6,8 +6,213 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-03-13 01:04:00 &#43;0900 JST</updated>
+    <updated>2018-03-18 22:35:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Kubernetes,Helmで負荷試験ツールLocustを立てる</title>
+          <link>https://www.sambaiz.net/article/161/</link>
+          <pubDate>Sun, 18 Mar 2018 22:35:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/161/</guid>
+          <description>&lt;p&gt;OSSの負荷試験ツール&lt;a href=&#34;https://locust.io/&#34;&gt;Locust&lt;/a&gt;をK8sクラスタに立てる。
+K8sならworkerの増減も簡単だし、HelmのChartもあるので立てるのも楽。&lt;/p&gt;
+
+&lt;p&gt;LocustはPython製で、以下のような&lt;a href=&#34;https://docs.locust.io/en/latest/writing-a-locustfile.html&#34;&gt;コード&lt;/a&gt;で処理を書くことができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;@task(10)&lt;/code&gt;のように括弧の中に数字を書いて実行される割合を偏らせることもできる。
+ユーザー数はあとでWeb上から入力する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir tasks
+$ cat tasks/tasks.py
+from locust import HttpLocust, TaskSet, task
+
+class ElbTasks(TaskSet):
+  @task
+  def task1(self):
+    with client.get(&amp;quot;/&amp;quot;, catch_response=True) as response:
+    if response.content != &amp;quot;Success&amp;quot;:
+        response.failure(&amp;quot;Got wrong response&amp;quot;)
+
+class ElbWarmer(HttpLocust):
+  task_set = ElbTasks
+  min_wait = 1000
+  max_wait = 3000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;stableに&lt;a href=&#34;https://github.com/kubernetes/charts/tree/master/stable/locust&#34;&gt;Chart&lt;/a&gt;はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、&lt;code&gt;helm repo add&lt;/code&gt;するために&lt;code&gt;package&lt;/code&gt;して、これを参照する&lt;code&gt;index.yaml&lt;/code&gt;を生成した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm package .
+$ helm repo index .
+$ ls locust-0.1.2.tgz index.yaml 
+index.yaml		locust-0.1.2.tgz
+$ cat index.yaml
+apiVersion: v1
+entries:
+  locust:
+    ...
+    urls:
+    - locust-0.1.2.tgz
+    version: 0.1.2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm repo add my-locust &#39;https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust&#39;
+$ helm repo list
+NAME     	URL                                                                     
+stable   	https://kubernetes-charts.storage.googleapis.com
+local    	http://127.0.0.1:8879/charts    
+my-locust	https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GKEのようなRBACが有効な環境でHelmを使う場合、TillerにServiceAccountを設定しておく。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/160/&#34;&gt;RBACが有効なGKEでHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;addしたrepoからinstallする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm install -n my-locust --set master.config.target-host=**** my-locust/locust 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;masterとworker(デフォルトで2つ)が立った。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get pods
+NAME                                READY     STATUS    RESTARTS   AGE
+my-locust-master-7f7d57f5dc-k966s   1/1       Running   0          1m
+my-locust-worker-66cc964748-7ff5w   1/1       Running   0          1m
+my-locust-worker-66cc964748-wx5hf   1/1       Running   0          1m
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;port-forwardしてweb-uiにアクセスしてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl port-forward $POD_NAME 8089
+$ open localhost:8089
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/161.png&#34; alt=&#34;User数と生成速度の設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;実行開始するとRPSなどがリアルタイムで表示される。
+1000Users、50spawned/sで始めてみたところ、200Userにも到達せずにリクエスト自体が止まってしまった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/161-2.png&#34; alt=&#34;実行結果&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;少なく再設定してもUsersはそのままでよく分からない。
+一旦立ち上げ直して100,10で実行してみたら100Userまで行くことは確認できた。&lt;/p&gt;
+
+&lt;p&gt;再び止まるまで上げてみたところ、途中でOOMになっていることが分かった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl describe pod my-locust-worker-****
+Containers:
+  locust:
+    ...
+    Last State:     Terminated
+      Reason:       OOMKilled
+      Exit Code:    137
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CPU(割り当て100&lt;a href=&#34;https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu&#34;&gt;millicores&lt;/a&gt;)もメモリ(割り当て128mi)もそれなりに使われていて、単純にreplica数を増やす必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ watch kubectl top node
+NAME                                CPU(cores)   MEMORY(bytes)
+my-locust-master-7f7d57f5dc-h9mvt   1m           19Mi
+my-locust-worker-66cc964748-9dp8n   72m          112Mi
+my-locust-worker-66cc964748-h94v9   61m          114Mi
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ということでworkerを2から5に増やしてみたところUser数を増やしても止まらなくなった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl scale deployment my-locust-worker --replicas=5
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>RBACが有効なGKEでHelmを使う</title>
+          <link>https://www.sambaiz.net/article/160/</link>
+          <pubDate>Sun, 18 Mar 2018 01:04:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/160/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/122/&#34;&gt;k8sのパッケージマネージャーHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm version
+Client: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+Server: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GKEで&lt;code&gt;helm init&lt;/code&gt;して&lt;code&gt;helm install&lt;/code&gt;したところ以下のエラーが返ってきた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Error: release my-locust failed: namespaces &amp;quot;default&amp;quot; is forbidden: User &amp;quot;system:serviceaccount:kube-system:default&amp;quot; cannot get namespaces in the namespace &amp;quot;default&amp;quot;: Unknown user &amp;quot;system:serviceaccount:kube-system:default&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が&lt;a href=&#34;https://cloud.google.com/kubernetes-engine/docs/role-based-access-control&#34;&gt;有効になっている&lt;/a&gt;ため、&lt;a href=&#34;https://github.com/kubernetes/helm/blob/master/docs/rbac.md&#34;&gt;Tillerインスタンスに権限を与える&lt;/a&gt;必要がある。&lt;/p&gt;
+
+&lt;p&gt;ということでTiller用にnamespaceを切って、その中では好きにできる&lt;a href=&#34;https://kubernetes.io/docs/admin/authorization/rbac/#role-and-clusterrole&#34;&gt;Role&lt;/a&gt;と、Tillerが使う&lt;a href=&#34;https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/&#34;&gt;ServiceAccount&lt;/a&gt;を作成し、RoleBindingで紐づける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: tiller-manager
+  namespace: tiller-world
+rules:
+- apiGroups: [&amp;quot;&amp;quot;, &amp;quot;extensions&amp;quot;, &amp;quot;apps&amp;quot;]
+  resources: [&amp;quot;*&amp;quot;]
+  verbs: [&amp;quot;*&amp;quot;]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiller
+  namespace: tiller-world
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: tiller-binding
+  namespace: tiller-world
+subjects:
+- kind: ServiceAccount
+  name: tiller
+  namespace: tiller-world
+roleRef:
+  kind: Role
+  name: tiller-manager
+  apiGroup: rbac.authorization.k8s.io
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Roleを追加するため、自分自身にsuper-user相当の&lt;code&gt;cluster-admin&lt;/code&gt;roleをbindする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=&amp;lt;email&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create namespace tiller-world
+$ kubectl create -f tiller-rbac.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;helm init&lt;/code&gt;時に作ったServiceAccountを渡す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm init --tiller-namespace tiller-world --service-account tiller
+$ kubectl get deployment -n tiller-world
+NAME            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+tiller-deploy   1         1         1            1           1m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Prometheusをinstallしてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm install --name my-prometheus stable/prometheus --tiller-namespace tiller-world --namespace tiller-world
+$ kubectl get pods -n tiller-world
+NAME                                                           READY     STATUS    RESTARTS   AGE
+my-prometheus-prometheus-alertmanager-85f75879db-9r9z2         2/2       Running   0          1m
+my-prometheus-prometheus-kube-state-metrics-65dfc57897-95ts7   1/1       Running   0          1m
+my-prometheus-prometheus-server-7c98fb8ffb-s7jpq               2/2       Running   0          1m
+tiller-deploy-57dbcb6bbc-6srlt                                 1/1       Running   0          2m
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>

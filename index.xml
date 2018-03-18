@@ -6,8 +6,213 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-03-13 01:04:00 &#43;0900 JST</updated>
+    <updated>2018-03-18 22:35:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Kubernetes,Helmで負荷試験ツールLocustを立てる</title>
+          <link>https://www.sambaiz.net/article/161/</link>
+          <pubDate>Sun, 18 Mar 2018 22:35:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/161/</guid>
+          <description>&lt;p&gt;OSSの負荷試験ツール&lt;a href=&#34;https://locust.io/&#34;&gt;Locust&lt;/a&gt;をK8sクラスタに立てる。
+K8sならworkerの増減も簡単だし、HelmのChartもあるので立てるのも楽。&lt;/p&gt;
+
+&lt;p&gt;LocustはPython製で、以下のような&lt;a href=&#34;https://docs.locust.io/en/latest/writing-a-locustfile.html&#34;&gt;コード&lt;/a&gt;で処理を書くことができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;@task(10)&lt;/code&gt;のように括弧の中に数字を書いて実行される割合を偏らせることもできる。
+ユーザー数はあとでWeb上から入力する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir tasks
+$ cat tasks/tasks.py
+from locust import HttpLocust, TaskSet, task
+
+class ElbTasks(TaskSet):
+  @task
+  def task1(self):
+    with client.get(&amp;quot;/&amp;quot;, catch_response=True) as response:
+    if response.content != &amp;quot;Success&amp;quot;:
+        response.failure(&amp;quot;Got wrong response&amp;quot;)
+
+class ElbWarmer(HttpLocust):
+  task_set = ElbTasks
+  min_wait = 1000
+  max_wait = 3000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;stableに&lt;a href=&#34;https://github.com/kubernetes/charts/tree/master/stable/locust&#34;&gt;Chart&lt;/a&gt;はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、&lt;code&gt;helm repo add&lt;/code&gt;するために&lt;code&gt;package&lt;/code&gt;して、これを参照する&lt;code&gt;index.yaml&lt;/code&gt;を生成した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm package .
+$ helm repo index .
+$ ls locust-0.1.2.tgz index.yaml 
+index.yaml		locust-0.1.2.tgz
+$ cat index.yaml
+apiVersion: v1
+entries:
+  locust:
+    ...
+    urls:
+    - locust-0.1.2.tgz
+    version: 0.1.2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm repo add my-locust &#39;https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust&#39;
+$ helm repo list
+NAME     	URL                                                                     
+stable   	https://kubernetes-charts.storage.googleapis.com
+local    	http://127.0.0.1:8879/charts    
+my-locust	https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GKEのようなRBACが有効な環境でHelmを使う場合、TillerにServiceAccountを設定しておく。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/160/&#34;&gt;RBACが有効なGKEでHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;addしたrepoからinstallする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm install -n my-locust --set master.config.target-host=**** my-locust/locust 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;masterとworker(デフォルトで2つ)が立った。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get pods
+NAME                                READY     STATUS    RESTARTS   AGE
+my-locust-master-7f7d57f5dc-k966s   1/1       Running   0          1m
+my-locust-worker-66cc964748-7ff5w   1/1       Running   0          1m
+my-locust-worker-66cc964748-wx5hf   1/1       Running   0          1m
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;port-forwardしてweb-uiにアクセスしてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl port-forward $POD_NAME 8089
+$ open localhost:8089
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/161.png&#34; alt=&#34;User数と生成速度の設定&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;実行開始するとRPSなどがリアルタイムで表示される。
+1000Users、50spawned/sで始めてみたところ、200Userにも到達せずにリクエスト自体が止まってしまった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/161-2.png&#34; alt=&#34;実行結果&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;少なく再設定してもUsersはそのままでよく分からない。
+一旦立ち上げ直して100,10で実行してみたら100Userまで行くことは確認できた。&lt;/p&gt;
+
+&lt;p&gt;再び止まるまで上げてみたところ、途中でOOMになっていることが分かった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl describe pod my-locust-worker-****
+Containers:
+  locust:
+    ...
+    Last State:     Terminated
+      Reason:       OOMKilled
+      Exit Code:    137
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CPU(割り当て100&lt;a href=&#34;https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu&#34;&gt;millicores&lt;/a&gt;)もメモリ(割り当て128mi)もそれなりに使われていて、単純にreplica数を増やす必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ watch kubectl top node
+NAME                                CPU(cores)   MEMORY(bytes)
+my-locust-master-7f7d57f5dc-h9mvt   1m           19Mi
+my-locust-worker-66cc964748-9dp8n   72m          112Mi
+my-locust-worker-66cc964748-h94v9   61m          114Mi
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ということでworkerを2から5に増やしてみたところUser数を増やしても止まらなくなった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl scale deployment my-locust-worker --replicas=5
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>RBACが有効なGKEでHelmを使う</title>
+          <link>https://www.sambaiz.net/article/160/</link>
+          <pubDate>Sun, 18 Mar 2018 01:04:00 &#43;0900</pubDate>
+          <author></author>
+          <guid>https://www.sambaiz.net/article/160/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/122/&#34;&gt;k8sのパッケージマネージャーHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm version
+Client: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+Server: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GKEで&lt;code&gt;helm init&lt;/code&gt;して&lt;code&gt;helm install&lt;/code&gt;したところ以下のエラーが返ってきた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Error: release my-locust failed: namespaces &amp;quot;default&amp;quot; is forbidden: User &amp;quot;system:serviceaccount:kube-system:default&amp;quot; cannot get namespaces in the namespace &amp;quot;default&amp;quot;: Unknown user &amp;quot;system:serviceaccount:kube-system:default&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が&lt;a href=&#34;https://cloud.google.com/kubernetes-engine/docs/role-based-access-control&#34;&gt;有効になっている&lt;/a&gt;ため、&lt;a href=&#34;https://github.com/kubernetes/helm/blob/master/docs/rbac.md&#34;&gt;Tillerインスタンスに権限を与える&lt;/a&gt;必要がある。&lt;/p&gt;
+
+&lt;p&gt;ということでTiller用にnamespaceを切って、その中では好きにできる&lt;a href=&#34;https://kubernetes.io/docs/admin/authorization/rbac/#role-and-clusterrole&#34;&gt;Role&lt;/a&gt;と、Tillerが使う&lt;a href=&#34;https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/&#34;&gt;ServiceAccount&lt;/a&gt;を作成し、RoleBindingで紐づける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;kind: Role
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: tiller-manager
+  namespace: tiller-world
+rules:
+- apiGroups: [&amp;quot;&amp;quot;, &amp;quot;extensions&amp;quot;, &amp;quot;apps&amp;quot;]
+  resources: [&amp;quot;*&amp;quot;]
+  verbs: [&amp;quot;*&amp;quot;]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiller
+  namespace: tiller-world
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: tiller-binding
+  namespace: tiller-world
+subjects:
+- kind: ServiceAccount
+  name: tiller
+  namespace: tiller-world
+roleRef:
+  kind: Role
+  name: tiller-manager
+  apiGroup: rbac.authorization.k8s.io
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Roleを追加するため、自分自身にsuper-user相当の&lt;code&gt;cluster-admin&lt;/code&gt;roleをbindする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=&amp;lt;email&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl create namespace tiller-world
+$ kubectl create -f tiller-rbac.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;helm init&lt;/code&gt;時に作ったServiceAccountを渡す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm init --tiller-namespace tiller-world --service-account tiller
+$ kubectl get deployment -n tiller-world
+NAME            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+tiller-deploy   1         1         1            1           1m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Prometheusをinstallしてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm install --name my-prometheus stable/prometheus --tiller-namespace tiller-world --namespace tiller-world
+$ kubectl get pods -n tiller-world
+NAME                                                           READY     STATUS    RESTARTS   AGE
+my-prometheus-prometheus-alertmanager-85f75879db-9r9z2         2/2       Running   0          1m
+my-prometheus-prometheus-kube-state-metrics-65dfc57897-95ts7   1/1       Running   0          1m
+my-prometheus-prometheus-server-7c98fb8ffb-s7jpq               2/2       Running   0          1m
+tiller-deploy-57dbcb6bbc-6srlt                                 1/1       Running   0          2m
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -6785,235 +6990,6 @@ Make Transitionで相互に結ぶと、オレンジになっているデフォ�
 &lt;p&gt;作ったAnimationを違うモーションで再利用することができる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/112-override.png&#34; alt=&#34;Animator Override Controller&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>NorikraでログをJOINする</title>
-          <link>https://www.sambaiz.net/article/111/</link>
-          <pubDate>Thu, 15 Jun 2017 00:17:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/111/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/109/&#34;&gt;NorikraとFluentdで流れてきたログをリアルタイムに集計する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;適当なログを出すコードを書いた。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/lottery-log&#34;&gt;sambaiz/lottery-log&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;これは以下のようなlottery.logを出力し続け、数秒後に一定確率で同じuidのreceived.logを出力するもの。
-広告的に言えば、lotteryがimpで、receivedがclickといった感じかな。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;// lottery.log
-{&amp;quot;ts&amp;quot;:1497453504.6818597,&amp;quot;uid&amp;quot;:&amp;quot;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&amp;quot;,&amp;quot;prize&amp;quot;:855,&amp;quot;isWin&amp;quot;:true}
-// received.log
-{&amp;quot;ts&amp;quot;:1497453515.932101,&amp;quot;uid&amp;quot;:&amp;quot;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&amp;quot;}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
-received_rateの計算にはサブクエリも使っている。
-received_rateの計算で分母に小さな値を足しているのはNaNやInfinityにならないようにするため。
-receivedログは最大30秒遅れて出力されるため、40秒前までのreceivedログをwin:timeで見ている。
-これをtime_batchにしてしまうと期待通りの結果にならないので注意。&lt;/p&gt;
-
-&lt;p&gt;もう一つはJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ docker exec norikra norikra-client query add lottery_agg &#39;
-SELECT COUNT(*) as received_count, (COUNT(*) / (SELECT COUNT(*) + 0.00001 FROM lottery.win:time_batch(1 sec, 0).std:unique(uid))) as received_rate, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time(40 sec).std:unique(uid) as a, received.win:time_batch(1 sec, 0).std:unique(uid) as b WHERE a.uid = b.uid&#39;
-
-$ docker exec norikra norikra-client query add lottery_win_rate &#39;SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;で、このクエリの結果をElasticsearchに送って可視化してみたのがこれ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
-  @type tail
-  path /var/log/lottery.log
-  pos_file /etc/td-agent/log.pos
-  tag event.lottery
-  format json
-&amp;lt;/source&amp;gt;
-
-&amp;lt;source&amp;gt;
-  @type tail
-  path /var/log/received.log
-  pos_file /etc/td-agent/log.pos
-  tag event.received
-  format json
-&amp;lt;/source&amp;gt;
-
-&amp;lt;match event.*&amp;gt;
-  @type   norikra
-  norikra localhost:26571
-  
-  remove_tag_prefix event # event.*の部分が
-  target_map_tag    yes   # targetになる
-
-  &amp;lt;default&amp;gt;
-    auto_field false 
-  &amp;lt;/default&amp;gt;
-&amp;lt;/match&amp;gt;
-
-&amp;lt;source&amp;gt;
-  @type   norikra
-  norikra localhost:26571
-  &amp;lt;fetch&amp;gt;
-    method   event
-    target   lottery_agg
-    tag      string data.lottery_agg
-    interval 1m
-  &amp;lt;/fetch&amp;gt;
-  &amp;lt;fetch&amp;gt;
-    method   event
-    target   lottery_win_rate
-    tag      string data.lottery_win_rate
-    interval 1m
-  &amp;lt;/fetch&amp;gt;
-&amp;lt;/source&amp;gt;
-
-&amp;lt;match data.lottery_agg&amp;gt;
-  @type elasticsearch
-  host 172.31.5.20
-  port 9200
-  logstash_prefix lottery
-  type_name lottery_agg
-  logstash_format true
-&amp;lt;/match&amp;gt;
-
-&amp;lt;match data.lottery_win_rate&amp;gt;
-  @type elasticsearch
-  host 172.31.5.20
-  port 9200
-  logstash_prefix lottery
-  type_name lottery_win_rate
-  logstash_format true
-&amp;lt;/match&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;received_rateを計算するときのウィンドウが1secと小さく、タイミングによってはreceivedの数がlotteryの数を上回ることがあるため1以下で絞っている。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/111v.png&#34; alt=&#34;可視化したもの&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
-    
-      
-        <item>
-          <title>VSでのネイティブプラグインのビルドからUnityでのWSAのビルドまでをバッチでする</title>
-          <link>https://www.sambaiz.net/article/110/</link>
-          <pubDate>Tue, 13 Jun 2017 00:32:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/110/</guid>
-          <description>
-
-&lt;h2 id=&#34;vsでのネイティブプラグインのビルド&#34;&gt;VSでのネイティブプラグインのビルド&lt;/h2&gt;
-
-&lt;p&gt;VSが使っているビルドツール
-&lt;a href=&#34;https://docs.microsoft.com/ja-jp/visualstudio/msbuild/msbuild&#34;&gt;MSBuild&lt;/a&gt;を使う。
-VSのプロジェクトファイルにはMSBuildのXMLが含まれている。
-これ自体はVSに依存していないため、単体で動かすこともできる。&lt;/p&gt;
-
-&lt;p&gt;パスが通ってなかったらパスを通す。管理者権限が必要。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; MSBuild
-&#39;MSBuild&#39; は、内部コマンドまたは外部コマンド、
-操作可能なプログラムまたはバッチ ファイルとして認識されていません。
-
-&amp;gt;　SETX /M PATH &amp;quot;%PATH%;C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin&amp;quot;
-
-成功: 指定した値は保存されました。
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;別プロセスから適用されるので立ち上げ直すとパスが通っていることを確認できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; MSBuild /version
-Microsoft (R) Build Engine バージョン 15.1.1012.6693
-Copyright (C) Microsoft Corporation.All rights reserved.
-
-15.1.1012.6693
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ビルドして&lt;code&gt;Assets\Plugins&lt;/code&gt;に配置する。これは前作ったBLEのネイティブプラグインのもの。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/105/&#34;&gt;Unity/UWPでBLEを扱うプラグインを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; git clone git@github.com:sambaiz/UnityBLE_UWP.git
-&amp;gt; cd UnityBLE_UWP
-&amp;gt; MSBuild UnityBLE_UWP\UnityBLE_UWP.csproj /t:restore;build /p:Configuration=Release;Platform=&amp;quot;x86&amp;quot;
-&amp;gt; MSBuild UnityBLE_Editor\UnityBLE_Editor.csproj /t:restore;build /p:Configuration=Release
-&amp;gt; copy /Y UnityBLE_UWP\bin\x86\Release\UnityBLE_UWP.dll ..\Assets\Plugins\WSA
-&amp;gt; copy /Y UnityBLE_Editor\bin\Release\UnityBLE_Editor.dll ..\Assets\Plugins
-&amp;gt; cd ..
-&amp;gt; rmdir /S /Q UnityBLE_UWP
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんなエラーが出てきたらmscorlib.dllをインポートできていないのが原因のようで、
-restoreしたらうまくいった。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;error CS0518: 定義済みの型 &#39;System.Object&#39; は定義、またはインポートされていません
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;unityでのwsaのビルド&#34;&gt;UnityでのWSAのビルド&lt;/h2&gt;
-
-&lt;p&gt;同様にUnityもパスが通ってなかったら通す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; Unity
-&#39;Unity&#39; は、内部コマンドまたは外部コマンド、
-操作可能なプログラムまたはバッチ ファイルとして認識されていません。
-
-&amp;gt;　SETX /M PATH &amp;quot;%PATH%;C:\Program Files\Unity\Editor&amp;quot;
-
-成功: 指定した値は保存されました。
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな
-&lt;a href=&#34;https://docs.unity3d.com/ja/current/ScriptReference/BuildPipeline.BuildPlayer.html&#34;&gt;スクリプト&lt;/a&gt;
-をAssets/Editorの中に置く。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;using UnityEditor;
-
-public class Build {
-
-    static void PerformBuild()
-    {
-        string[] scenes = { &amp;quot;Assets/main.unity&amp;quot; };
-        BuildPipeline.BuildPlayer(scenes, &amp;quot;build&amp;quot;,
-            BuildTarget.WSAPlayer, BuildOptions.None);
-
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このstaticメソッドを&lt;a href=&#34;https://docs.unity3d.com/ja/540/Manual/CommandLineArguments.html&#34;&gt;executeMethod&lt;/a&gt;
-で渡してビルドする。Unityを開いたままだと失敗するので閉じる必要がある。&lt;/p&gt;
-
-&lt;p&gt;この例だとbuildディレクトリに出力される。もし出力されなかったらEditorログを見る。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; Unity -quit -batchmode -executeMethod Build.PerformBuild
-&amp;gt; type C:\Users\(username)\AppData\Local\Unity\Editor\Editor.log
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;まとめたもの&#34;&gt;まとめたもの&lt;/h2&gt;
-
-&lt;p&gt;ということでこんなバッチをUnityプロジェクトの直下に置いておくことにした。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;git clone git@github.com:sambaiz/UnityBLE_UWP.git
-cd UnityBLE_UWP
-MSBuild UnityBLE_UWP\UnityBLE_UWP.csproj /t:restore;build /p:Configuration=Release;Platform=&amp;quot;x86&amp;quot;
-MSBuild UnityBLE_Editor\UnityBLE_Editor.csproj /t:restore;build /p:Configuration=Release
-copy /Y UnityBLE_UWP\bin\x86\Release\UnityBLE_UWP.dll ..\Assets\Plugins\WSA
-copy /Y UnityBLE_Editor\bin\Release\UnityBLE_Editor.dll ..\Assets\Plugins
-cd ..
-rmdir /S /Q UnityBLE_UWP
-
-rmdir /S /Q build
-Unity -quit -batchmode -executeMethod Build.PerformBuild
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://sh-yoshida.hatenablog.com/entry/2017/05/27/012755&#34;&gt;MSBuildでコマンドラインからビルドする - 1.21 jigowatts&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
