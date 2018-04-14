@@ -1,499 +1,67 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz-net</title>
-    <link>https://www.sambaiz.net/tags/python/index.xml</link>
-    <language>ja</language>
-    <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
-
+    <title>Python on sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/python/</link>
+    <description>Recent content in Python on sambaiz-net</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <copyright>sambaiz-net</copyright>
+    <lastBuildDate>Sat, 14 Apr 2018 13:37:00 +0900</lastBuildDate>
     
-      
-        <item>
-          <title>Kubernetes,Helmで負荷試験ツールLocustを立てる</title>
-          <link>https://www.sambaiz.net/article/161/</link>
-          <pubDate>Sun, 18 Mar 2018 22:35:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/161/</guid>
-          <description>&lt;p&gt;OSSの負荷試験ツール&lt;a href=&#34;https://locust.io/&#34;&gt;Locust&lt;/a&gt;をK8sクラスタに立てる。
-K8sならworkerの増減も簡単だし、HelmのChartもあるので立てるのも楽。&lt;/p&gt;
-
-&lt;p&gt;LocustはPython製で、以下のような&lt;a href=&#34;https://docs.locust.io/en/latest/writing-a-locustfile.html&#34;&gt;コード&lt;/a&gt;で処理を書くことができる。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;@task(10)&lt;/code&gt;のように括弧の中に数字を書いて実行される割合を偏らせることもできる。
-ユーザー数はあとでWeb上から入力する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ mkdir tasks
-$ cat tasks/tasks.py
-from locust import HttpLocust, TaskSet, task
-
-class ElbTasks(TaskSet):
-  @task
-  def task1(self):
-    with client.get(&amp;quot;/&amp;quot;, catch_response=True) as response:
-    if response.content != &amp;quot;Success&amp;quot;:
-        response.failure(&amp;quot;Got wrong response&amp;quot;)
-
-class ElbWarmer(HttpLocust):
-  task_set = ElbTasks
-  min_wait = 1000
-  max_wait = 3000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;stableに&lt;a href=&#34;https://github.com/kubernetes/charts/tree/master/stable/locust&#34;&gt;Chart&lt;/a&gt;はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、&lt;code&gt;helm repo add&lt;/code&gt;するために&lt;code&gt;package&lt;/code&gt;して、これを参照する&lt;code&gt;index.yaml&lt;/code&gt;を生成した。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm package .
-$ helm repo index .
-$ ls locust-0.1.2.tgz index.yaml 
-index.yaml		locust-0.1.2.tgz
-$ cat index.yaml
-apiVersion: v1
-entries:
-  locust:
-    ...
-    urls:
-    - locust-0.1.2.tgz
-    version: 0.1.2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm repo add my-locust &#39;https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust&#39;
-$ helm repo list
-NAME     	URL                                                                     
-stable   	https://kubernetes-charts.storage.googleapis.com
-local    	http://127.0.0.1:8879/charts    
-my-locust	https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;GKEのようなRBACが有効な環境でHelmを使う場合、TillerにServiceAccountを設定しておく。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/160/&#34;&gt;RBACが有効なGKEでHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;addしたrepoからinstallする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm install -n my-locust --set master.config.target-host=**** my-locust/locust 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;masterとworker(デフォルトで2つ)が立った。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl get pods
-NAME                                READY     STATUS    RESTARTS   AGE
-my-locust-master-7f7d57f5dc-k966s   1/1       Running   0          1m
-my-locust-worker-66cc964748-7ff5w   1/1       Running   0          1m
-my-locust-worker-66cc964748-wx5hf   1/1       Running   0          1m
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;port-forwardしてweb-uiにアクセスしてみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl port-forward $POD_NAME 8089
-$ open localhost:8089
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/161.png&#34; alt=&#34;User数と生成速度の設定&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;実行開始するとRPSなどがリアルタイムで表示される。
-1000Users、50spawned/sで始めてみたところ、200Userにも到達せずにリクエスト自体が止まってしまった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/161-2.png&#34; alt=&#34;実行結果&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;少なく再設定してもUsersはそのままでよく分からない。
-一旦立ち上げ直して100,10で実行してみたら100Userまで行くことは確認できた。&lt;/p&gt;
-
-&lt;p&gt;再び止まるまで上げてみたところ、途中でOOMになっていることが分かった。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl describe pod my-locust-worker-****
-Containers:
-  locust:
-    ...
-    Last State:     Terminated
-      Reason:       OOMKilled
-      Exit Code:    137
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;CPU(割り当て100&lt;a href=&#34;https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu&#34;&gt;millicores&lt;/a&gt;)もメモリ(割り当て128mi)もそれなりに使われていて、単純にreplica数を増やす必要がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ watch kubectl top node
-NAME                                CPU(cores)   MEMORY(bytes)
-my-locust-master-7f7d57f5dc-h9mvt   1m           19Mi
-my-locust-worker-66cc964748-9dp8n   72m          112Mi
-my-locust-worker-66cc964748-h94v9   61m          114Mi
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ということでworkerを2から5に増やしてみたところUser数を増やしても止まらなくなった。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl scale deployment my-locust-worker --replicas=5
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+	<atom:link href="https://www.sambaiz.net/tags/python/index.xml" rel="self" type="application/rss+xml" />
     
-      
-        <item>
-          <title>Pythonのインタラクティブな可視化ライブラリBokehでグラフを描く</title>
-          <link>https://www.sambaiz.net/article/129/</link>
-          <pubDate>Sat, 26 Aug 2017 18:02:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/129/</guid>
-          <description>
-
-&lt;p&gt;Pythonの可視化というと&lt;a href=&#34;https://github.com/matplotlib/matplotlib&#34;&gt;matplotlib&lt;/a&gt;や、
-そのラッパーの&lt;a href=&#34;https://github.com/mwaskom/seaborn&#34;&gt;seaborn&lt;/a&gt;、
-データ解析ライブラリの&lt;a href=&#34;https://github.com/pandas-dev/pandas&#34;&gt;Pandas&lt;/a&gt;にもそういう機能があるけど、
-これらが表示するのが静止画なのに対して、&lt;a href=&#34;https://github.com/bokeh/bokeh&#34;&gt;Bokeh&lt;/a&gt;はD3.jsで描画し、
-拡大したりスクロールしたり、動的に何か表示することができる。Bokehはカメラのボケ。
-似たようなのに&lt;a href=&#34;https://github.com/plotly/plotly.py&#34;&gt;Plotly&lt;/a&gt;というのもあるけど、
-こちらはPandasと同じpydata.orgドメインで、スターが多い。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://hub.docker.com/r/jupyter/datascience-notebook/&#34;&gt;jupyter/datascience-notebook&lt;/a&gt;イメージにもBokehがインストールされている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ docker run -d -p 8888:8888 jupyter/datascience-notebook start-notebook.sh
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;簡単なグラフを描く&#34;&gt;簡単なグラフを描く&lt;/h2&gt;
-
-&lt;p&gt;&lt;code&gt;output_notebook&lt;/code&gt;でJupytor Notebokに出力する。ファイルに出力する場合は&lt;code&gt;ouput_file&lt;/code&gt;を呼ぶ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;from bokeh.plotting import figure
-from bokeh.io import output_notebook, show
-output_notebook()
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://bokeh.pydata.org/en/latest/docs/reference/plotting.html#bokeh.plotting.figure.figure&#34;&gt;figure()&lt;/a&gt;でplotするFigureオブジェクトを作成する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;p = figure(
-    title=&amp;quot;Hoge&amp;quot;, 
-    x_axis_label=&#39;x&#39;, 
-    y_axis_label=&#39;y&#39;,
-    y_axis_type=&amp;quot;log&amp;quot;
-)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://bokeh.pydata.org/en/latest/docs/reference/plotting.html#bokeh.plotting.figure.Figure.line&#34;&gt;line()&lt;/a&gt;で線をつないで&lt;a href=&#34;http://bokeh.pydata.org/en/latest/docs/reference/plotting.html#bokeh.plotting.figure.Figure.circle&#34;&gt;circle()&lt;/a&gt;で円を描く。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-y0 = [i**2 for i in x]
-y1 = [10**i for i in x]
-y2 = [10**(i**2) for i in x]
-
-p.line(x, x, legend=&amp;quot;y=x&amp;quot;)
-p.circle(x, x, legend=&amp;quot;y=x&amp;quot;, fill_color=&amp;quot;white&amp;quot;, size=8)
-
-p.line(x, y0, legend=&amp;quot;y=x^2&amp;quot;, line_width=3)
-
-p.line(x, y1, legend=&amp;quot;y=10^x&amp;quot;, line_color=&amp;quot;red&amp;quot;)
-p.circle(x, y1, legend=&amp;quot;y=10^x&amp;quot;, fill_color=&amp;quot;red&amp;quot;, line_color=&amp;quot;red&amp;quot;, size=6)
-
-p.line(x, y2, legend=&amp;quot;y=10^x^2&amp;quot;, line_color=&amp;quot;orange&amp;quot;, line_dash=&amp;quot;4 4&amp;quot;)
-
-show(p)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/129.png&#34; alt=&#34;折れ線グラフ&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://bokeh.pydata.org/en/latest/docs/reference/plotting.html#bokeh.plotting.figure.Figure.vbar&#34;&gt;vbar()&lt;/a&gt;で
-縦棒を描く。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-
-p.vbar(x, top=x, width=0.2, bottom=0, color=&amp;quot;#CAB2D6&amp;quot;)
-
-show(p)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/129-vbar.png&#34; alt=&#34;棒グラフ&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://bokeh.pydata.org/en/latest/docs/reference/plotting.html#bokeh.plotting.figure.Figure.annular_wedge&#34;&gt;annular_wedge()&lt;/a&gt;で弧を描く。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;import math
-from collections import namedtuple
-
-Data = namedtuple(&#39;Data&#39;, (&#39;name&#39;, &#39;value&#39;, &#39;color&#39;))
-rates = [Data(&amp;quot;A&amp;quot;, 0.6, &amp;quot;#7FC97F&amp;quot;), Data(&amp;quot;B&amp;quot;, 0.4, &amp;quot;#DD1C77&amp;quot;)]
-
-start_angle = 0
-
-for rate in rates:
-    p.annular_wedge(
-            x=0, 
-            y=0,
-            inner_radius=0.2, 
-            outer_radius=0.5, 
-            start_angle=math.pi * 2 * start_angle, 
-            end_angle=math.pi * 2 * (start_angle + rate.value),
-            color=rate.color,
-            legend=rate.name
-    )
-    start_angle += rate.value
-
-show(p)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/129-c.png&#34; alt=&#34;円グラフ&#34; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;複数のグラフを連動させる&#34;&gt;複数のグラフを連動させる&lt;/h2&gt;
-
-&lt;p&gt;複数のfigureでrangeを合わせると連動する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;x = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-
-left = figure(
-    title=&amp;quot;Left&amp;quot;, 
-    width=400,
-    y_axis_type=&amp;quot;log&amp;quot;, 
-    x_axis_label=&#39;x&#39;, 
-    y_axis_label=&#39;y&#39;
-)
-
-right = figure(
-    title=&amp;quot;Right&amp;quot;, 
-    width=400,
-    x_range=left.x_range,
-    x_axis_label=&#39;x&#39;, 
-    y_axis_label=&#39;y&#39;
-)
-
-left.line(x, x, legend=&amp;quot;y=x&amp;quot;)
-right.line(x, x, legend=&amp;quot;y=x&amp;quot;)
-
-p = gridplot([[left, right]])
-
-show(p)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/129.gif&#34; alt=&#34;連動するグラフ&#34; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;ホバーで情報を表示する&#34;&gt;ホバーで情報を表示する&lt;/h2&gt;
-
-&lt;p&gt;figureのtoolsにhoverを追加し、sourceに&lt;code&gt;CoulumnDataSource&lt;/code&gt;を渡して、
-以下のように&lt;code&gt;select_one(HoverTool)&lt;/code&gt;するとホバーで情報を表示できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;import math
-from bokeh.models import HoverTool, ColumnDataSource
-from collections import namedtuple
-
-p = figure(
-    title=&amp;quot;Hoge&amp;quot;, 
-    x_axis_label=&#39;x&#39;, 
-    y_axis_label=&#39;y&#39;,
-    tools=&amp;quot;hover,save&amp;quot;
-)
-
-Data = namedtuple(&#39;Data&#39;, (&#39;name&#39;, &#39;value&#39;, &#39;color&#39;))
-rates = [Data(&amp;quot;A&amp;quot;, 0.6, &amp;quot;#7FC97F&amp;quot;), Data(&amp;quot;B&amp;quot;, 0.4, &amp;quot;#DD1C77&amp;quot;)]
-
-start_angle = 0
-
-for rate in rates:
     
-    source = ColumnDataSource(
-        data=dict(
-            value=[rate.value],
-        )
-    )
-    
-    p.annular_wedge(
-            x=0, 
-            y=0,
-            inner_radius=0.2, 
-            outer_radius=0.5, 
-            start_angle=math.pi * 2 * start_angle, 
-            end_angle=math.pi * 2 * (start_angle + rate.value),
-            color=rate.color,
-            legend=rate.name,
-            source=source
-    )
-    start_angle += rate.value
-
-p.select_one(HoverTool).tooltips = [
-    (&amp;quot;value&amp;quot;, &amp;quot;@value&amp;quot;)
-]
-
-show(p)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/129-c2.png&#34; alt=&#34;Tooltips&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
+    <item>
+      <title>Pythonのasyncioで非同期にリクエストを飛ばす</title>
+      <link>https://www.sambaiz.net/article/162/</link>
+      <pubDate>Sat, 14 Apr 2018 13:37:00 +0900</pubDate>
       
+      <guid>https://www.sambaiz.net/article/162/</guid>
+      <description>Pythonのasyncioはイベントループを回してシングルスレッドで並行に非同期処理を行う。 マルチスレッドで並列に実行するのがthreadingで、 マルチプロセスで並列に実行するのがmultiprocessing。
+import asyncio async def sleep(s): await asyncio.sleep(s) print(s) return s loop = asyncio.get_event_loop() loop.run_until_complete(sleep(5)) coros = [sleep(3), sleep(2)] futures = asyncio.gather(*coros) loop.run_until_complete(futures) print(futures.result()) loop.close()  $ python main.py 5 2 3 [3, 2]  get_event_loop() でイベントループを取得し、 gather()で処理をまとめたりして、 run_until_complete()で Futureの完了を待ち、 結果を取得してイベントループをclose()している。
+async defを付けた関数はCoroutineとなり、 ensure_future()でFutureのサブクラスの、イベントループで実行させるTaskにすることができる。 run_until_complete()はそのままCoroutineを投げてもensure_future()でwrapしてくれる。
+httpクライアントrequestsはBlockingするようなので、asyncioに対応しているaiohttpを使ってリクエストしてみる。
+import aiohttp import asyncio import async_timeout async def fetch(session, url): print(&amp;quot;{} start&amp;quot;.format(url)) async with async_timeout.timeout(10): async with session.get(url) as response: text = await response.</description>
+    </item>
     
+    <item>
+      <title>Kubernetes,Helmで負荷試験ツールLocustを立てる</title>
+      <link>https://www.sambaiz.net/article/161/</link>
+      <pubDate>Sun, 18 Mar 2018 22:35:00 +0900</pubDate>
       
-        <item>
-          <title>PythonのLintとFormatter</title>
-          <link>https://www.sambaiz.net/article/125/</link>
-          <pubDate>Fri, 11 Aug 2017 14:57:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/125/</guid>
-          <description>
-
-&lt;h2 id=&#34;yapf-https-github-com-google-yapf&#34;&gt;&lt;a href=&#34;https://github.com/google/yapf&#34;&gt;YAPF&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;スタイルに沿って整形してくれる、Goでいう&lt;code&gt;go fmt&lt;/code&gt;みたいなもの。
-デフォルトはPython公式のスタイルガイド&lt;a href=&#34;https://www.python.org/dev/peps/pep-0008/&#34;&gt;PEP8&lt;/a&gt;でフォーマットされる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ pip install yapf
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;VSCodeでPythonを書くときは、
-&lt;a href=&#34;https://github.com/DonJayamanne/pythonVSCode/wiki&#34;&gt;Pythonプラグイン&lt;/a&gt;
-を入れてこんな設定をWorkspaceのconfigに入れておいて、
-保存した時にフォーマットがかかるようにすると快適。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;quot;editor.formatOnSave&amp;quot;: true,
-&amp;quot;python.formatting.provider&amp;quot;: &amp;quot;yapf&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;lint&#34;&gt;Lint&lt;/h2&gt;
-
-&lt;p&gt;YAPFでフォーマットされた以下のコードにLintをかける。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;class FizzBuzz:
-    def __init__(self, start=0):
-        self.num = start
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        self.num += 1
-        if self.num % 15 == 0:
-            return &amp;quot;FizzBuzz&amp;quot;
-        if self.num % 3 == 0:
-            return &amp;quot;Fizz&amp;quot;
-        if self.num % 5 == 0:
-            return &amp;quot;Buzz&amp;quot;
-        return self.num
-
-
-if __name__ == &amp;quot;__main__&amp;quot;:
-    fizzBuzz = FizzBuzz()
-    for i in range(100):
-        print(next(fizzBuzz))
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;pylint&#34;&gt;Pylint&lt;/h3&gt;
-
-&lt;p&gt;Pythonプラグインではデフォルトで&lt;a href=&#34;https://github.com/PyCQA/pylint/&#34;&gt;Pylint&lt;/a&gt;が使われる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ pip install pylint
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;必要ならパスをUserのconfigでパスを指定する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;quot;python.linting.pylintPath&amp;quot;: &amp;quot;***&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;コマンドライン上で実行するとこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ pylint main.py 
-No config file found, using default configuration
-************* Module main
-C: 22, 0: Final newline missing (missing-final-newline)
-C:  1, 0: Missing module docstring (missing-docstring)
-C:  1, 0: Missing class docstring (missing-docstring)
-R:  1, 0: Too few public methods (0/2) (too-few-public-methods)
-C: 20, 4: Invalid constant name &amp;quot;fizzBuzz&amp;quot; (invalid-name)
-
------------------------------------
-Your code has been rated at 7.22/10
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;指摘された項目を見ると下の二つは余計かなと感じる。
-そんな場合、コメントで&lt;code&gt;# pylint: disable=invalid-name&lt;/code&gt;のように書くか、
-設定ファイル&lt;code&gt;pylintrc&lt;/code&gt;のdisableに追加すれば無視できる。
-&lt;code&gt;--generate-rc-file&lt;/code&gt;でとても長い設定ファイルが生成される。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ pylint --generate-rcfile &amp;gt; pylintrc
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;10点満点にしたのがこれ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;quot;&amp;quot;&amp;quot;
-FizzBuzz main
-&amp;quot;&amp;quot;&amp;quot;
-
-class FizzBuzz: # pylint: disable=too-few-public-methods
-    &amp;quot;&amp;quot;&amp;quot;
-    FizzBuzz is incrementing a number and
-    if the number is divisible by both 3 and 5, output &amp;quot;FizzBuzz&amp;quot;,
-    if divisible by 3, &amp;quot;Fizz&amp;quot;,
-    if divisible by 5, &amp;quot;Buzz&amp;quot;,
-    Otherwise, output the number.
-    &amp;quot;&amp;quot;&amp;quot;
-
-    def __init__(self, start=0):
-        self.num = start
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        self.num += 1
-        if self.num % 15 == 0:
-            return &amp;quot;FizzBuzz&amp;quot;
-        if self.num % 3 == 0:
-            return &amp;quot;Fizz&amp;quot;
-        if self.num % 5 == 0:
-            return &amp;quot;Buzz&amp;quot;
-        return self.num
-
-if __name__ == &amp;quot;__main__&amp;quot;:
-    fizzBuzz = FizzBuzz() # pylint: disable=invalid-name
-    for i in range(100):
-        print(next(fizzBuzz))
-        
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;flake8-https-github-com-pycqa-flake8&#34;&gt;&lt;a href=&#34;https://github.com/PyCQA/flake8&#34;&gt;Flake8&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;他のLintとしてFlake8を使うこともできる。これは&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/PyCQA/pyflakes&#34;&gt;PyFlakes&lt;/a&gt;: エラー&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/PyCQA/pycodestyle&#34;&gt;pycodestyle&lt;/a&gt;(元pep8): PEP8&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/pycqa/mccabe&#34;&gt;Ned Batchelder&amp;rsquo;s McCabe script&lt;/a&gt;: &lt;a href=&#34;https://ja.wikipedia.org/wiki/%E5%BE%AA%E7%92%B0%E7%9A%84%E8%A4%87%E9%9B%91%E5%BA%A6&#34;&gt;循環的複雑度&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;のチェッカーを合わせたもの。
-&lt;a href=&#34;https://github.com/PyCQA/flake8-docstrings&#34;&gt;docstring&lt;/a&gt;は別に入れる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ pip install flake8 flake8_docstrings
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;VSCodeでの設定はこんな感じ。Pylintと同時に使うこともできなくはない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;quot;python.linting.pylintEnabled&amp;quot;: false
-&amp;quot;python.linting.flake8Enabled&amp;quot;: true
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;同じコードにLintをかけてみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ flake8 main.py
-main.py:1:1: D100 Missing docstring in public module
-main.py:1:1: D101 Missing docstring in public class
-main.py:2:1: D102 Missing docstring in public method
-main.py:5:1: D105 Missing docstring in magic method
-main.py:8:1: D105 Missing docstring in magic method
-main.py:22:30: W292 no newline at end of file
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;flake8-docstringは&lt;a href=&#34;https://www.python.org/dev/peps/pep-0257/&#34;&gt;PEP257&lt;/a&gt;に忠実にチェックしているのでちょっと厳しめ。&lt;code&gt;# flake8: noqa:D105&lt;/code&gt;のように無視することもできるし、
-設定ファイル&lt;code&gt;.flake8&lt;/code&gt;に書くこともできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;[flake8]
-ignore = D105
-exclude =
-    .git,
-    __pycache__,
-    build,
-    dist
-max-complexity = 10
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/161/</guid>
+      <description>OSSの負荷試験ツールLocustをK8sクラスタに立てる。 K8sならworkerの増減も簡単だし、HelmのChartもあるので立てるのも楽。
+LocustはPython製で、以下のようなコードで処理を書くことができる。
+@task(10)のように括弧の中に数字を書いて実行される割合を偏らせることもできる。 異なるTaskSetに対応するユーザーを複数作ることもできて、こちらもweightで重みを付けられる。 ユーザー数はあとでWeb上から入力する。
+$ mkdir tasks $ cat tasks/tasks.py from locust import HttpLocust, TaskSet, task class ElbTasks(TaskSet): @task def task1(self): with client.get(&amp;quot;/&amp;quot;, catch_response=True) as response: if response.content != &amp;quot;Success&amp;quot;: response.failure(&amp;quot;Got wrong response&amp;quot;) class ElbWarmer(HttpLocust): task_set = ElbTasks min_wait = 1000 max_wait = 3000  stableにChartはあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、helm repo addするためにpackageして、これを参照するindex.yamlを生成した。
+$ helm package . $ helm repo index . $ ls locust-0.1.2.tgz index.yaml index.yaml	locust-0.1.2.tgz $ cat index.yaml apiVersion: v1 entries: locust: .</description>
+    </item>
     
-
+    <item>
+      <title>Pythonのインタラクティブな可視化ライブラリBokehでグラフを描く</title>
+      <link>https://www.sambaiz.net/article/129/</link>
+      <pubDate>Sat, 26 Aug 2017 18:02:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/129/</guid>
+      <description>Pythonの可視化というとmatplotlibや、 そのラッパーのseaborn、 データ解析ライブラリのPandasにもそういう機能があるけど、 これらが表示するのが静止画なのに対して、BokehはD3.jsで描画し、 拡大したりスクロールしたり、動的に何か表示することができる。Bokehはカメラのボケ。 似たようなのにPlotlyというのもあるけど、 こちらはPandasと同じpydata.orgドメインで、スターが多い。
+jupyter/datascience-notebookイメージにもBokehがインストールされている。
+$ docker run -d -p 8888:8888 jupyter/datascience-notebook start-notebook.sh  簡単なグラフを描く output_notebookでJupytor Notebokに出力する。ファイルに出力する場合はouput_fileを呼ぶ。
+from bokeh.plotting import figure from bokeh.io import output_notebook, show output_notebook()  figure()でplotするFigureオブジェクトを作成する。
+p = figure( title=&amp;quot;Hoge&amp;quot;, x_axis_label=&#39;x&#39;, y_axis_label=&#39;y&#39;, y_axis_type=&amp;quot;log&amp;quot; )  line()で線をつないでcircle()で円を描く。
+x = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0] y0 = [i**2 for i in x] y1 = [10**i for i in x] y2 = [10**(i**2) for i in x] p.</description>
+    </item>
+    
+    <item>
+      <title>PythonのLintとFormatter</title>
+      <link>https://www.sambaiz.net/article/125/</link>
+      <pubDate>Fri, 11 Aug 2017 14:57:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/125/</guid>
+      <description>YAPF スタイルに沿って整形してくれる、Goでいうgo fmtみたいなもの。 デフォルトはPython公式のスタイルガイドPEP8でフォーマットされる。
+$ pip install yapf  VSCodeでPythonを書くときは、 Pythonプラグイン を入れてこんな設定をWorkspaceのconfigに入れておいて、 保存した時にフォーマットがかかるようにすると快適。
+&amp;quot;editor.formatOnSave&amp;quot;: true, &amp;quot;python.formatting.provider&amp;quot;: &amp;quot;yapf&amp;quot;  Lint YAPFでフォーマットされた以下のコードにLintをかける。
+class FizzBuzz: def __init__(self, start=0): self.num = start def __iter__(self): return self def __next__(self): self.num += 1 if self.num % 15 == 0: return &amp;quot;FizzBuzz&amp;quot; if self.num % 3 == 0: return &amp;quot;Fizz&amp;quot; if self.num % 5 == 0: return &amp;quot;Buzz&amp;quot; return self.num if __name__ == &amp;quot;__main__&amp;quot;: fizzBuzz = FizzBuzz() for i in range(100): print(next(fizzBuzz))  Pylint PythonプラグインではデフォルトでPylintが使われる。</description>
+    </item>
+    
   </channel>
 </rss>

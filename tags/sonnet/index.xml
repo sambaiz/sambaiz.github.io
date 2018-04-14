@@ -1,167 +1,30 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz-net</title>
-    <link>https://www.sambaiz.net/tags/sonnet/index.xml</link>
-    <language>ja</language>
-    <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
-
+    <title>Sonnet on sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/sonnet/</link>
+    <description>Recent content in Sonnet on sambaiz-net</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <copyright>sambaiz-net</copyright>
+    <lastBuildDate>Sun, 06 Aug 2017 23:54:00 +0900</lastBuildDate>
     
-      
-        <item>
-          <title>DeepMindのTensorFlowライブラリSonnetを使う</title>
-          <link>https://www.sambaiz.net/article/124/</link>
-          <pubDate>Sun, 06 Aug 2017 23:54:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/124/</guid>
-          <description>
-
-&lt;p&gt;AlphaGoを開発したGoogle DeepMind社のTensorFlowライブラリ&lt;a href=&#34;https://github.com/deepmind/sonnet&#34;&gt;Sonnet&lt;/a&gt;を使う。
-当初はPython2しか対応していないようだったけど、今は3にも対応している。&lt;/p&gt;
-
-&lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
-
-&lt;p&gt;TensorFlowを使うライブラリはほかにもいくつかあるのだけど、
-&lt;a href=&#34;https://github.com/fchollet/keras&#34;&gt;Keras&lt;/a&gt;と比較してみると、
-KerasがTensorFlowの部分を完全にラップしているのに対して、
-Sonnetは必要に応じてTensorFlowの関数も呼ぶ、比較的抽象度が低いライブラリのようだ。&lt;/p&gt;
-
-&lt;p&gt;SonnetとTensorFlowとPython3入りイメージをDockerHubに&lt;a href=&#34;https://hub.docker.com/r/sambaiz/sonnet/&#34;&gt;上げた&lt;/a&gt;。
-Dockerfileは&lt;a href=&#34;https://github.com/sambaiz/docker-sonnet&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;内容は基本的にREADME通りだけど、
-configureのところで対話的に聞かれないように前もって環境変数で設定を与えている。
-あとは、&lt;a href=&#34;https://github.com/deepmind/sonnet/issues/25&#34;&gt;TensorFlowのビルドに使われているGCCのバージョンが古い&lt;/a&gt;ようで、sonnetをimportするときに以下のエラーが出たため、bazelのオプションに&lt;code&gt;--copt=&amp;quot;-D_GLIBCXX_USE_CXX11_ABI=0&amp;quot;&lt;/code&gt;を付けている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;tensorflow.python.framework.errors_impl.NotFoundError: /usr/local/lib/python3.5/dist-packages/sonnet/python/ops/_resampler.so: undefined symbol: _ZN10tensorflow7strings6StrCatB5cxx11ERKNS0_8AlphaNumES3_S3_S3_
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;起動。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ docker run -itd --name sonnet -p 6006:6006 -p 8888:8888 sambaiz/sonnet
-$ docker logs sonnet
-...
-   Copy/paste this URL into your browser when you connect for the first time,
-    to login with a token:
-        http://localhost:8888/?token=*****
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Jupyter Notebookを開いてSonnetとTensorFlowがimportできることを確認する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;import sonnet as snt
-import tensorflow as tf
-snt.resampler(tf.constant([0.]), tf.constant([0.]))
-# =&amp;gt; &amp;lt;tf.Tensor &#39;resampler/Resampler:0&#39; shape=(1,) dtype=float32&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;mnist&#34;&gt;MNIST&lt;/h2&gt;
-
-&lt;p&gt;TensorFlowのチュートリアルのデータを使って、畳み込みを行わない簡単なMNISTをやってみる。
-このデータはtrain、validation、test用に最初から&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/v1.2.1/tensorflow/contrib/learn/python/learn/datasets/base.py#L37&#34;&gt;分かれていて&lt;/a&gt;、
-それぞれピクセル濃度配列の画像データと、その画像がどの数字なのかを表すone-hot vectorのラベルを&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/v1.2.1/tensorflow/contrib/learn/python/learn/datasets/mnist.py#L105&#34;&gt;含んでいる&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets(&amp;quot;MNIST_data/&amp;quot;, one_hot=True)
-train, validation, test = mnist
-print(train.images[0]) # ピクセルの濃度を[0,1]の値で表した配列: [0, 0, ..., 0.41568631  0.6156863, 0.99607849, ...]
-print(len(train.images[0])) # 28 * 28 = 784
-print(train.labels[0]) # 正解のみ1のone-hot vector: [ 0.  0.  0.  0.  0.  0.  0.  1.  0.  0.]
-images, labels = mnist.train.next_batch(100)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Sonnetではニューラルネットワークの一部をModuleとして表現し、それらをTensorFlowの計算グラフに接続していく。
-Moduleはグラフに複数回接続することができ、中の変数は共有される。
-素のTensorFlowだと&lt;a href=&#34;https://www.tensorflow.org/programmers_guide/variable_scope&#34;&gt;変数のスコープ&lt;/a&gt;を作って共有するのに
-reuse=Trueで&lt;code&gt;tf.variable_scope&lt;/code&gt;して&lt;code&gt;tf.get_variable&lt;/code&gt;したりするけど、そのあたりは抽象化されているので
-&lt;code&gt;tf.Variable&lt;/code&gt;を含むような処理はModuleで行う。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/deepmind/sonnet/blob/v1.8/sonnet/python/modules/basic.py&#34;&gt;Linear Module&lt;/a&gt;は
-重みの乗算とバイアスの加算をするもの。
-これに&lt;code&gt;tf.Sigmoid&lt;/code&gt;のような活性化関数を適用するのを繰り返し、最後に出力層とつなげるとMulti Layer Perceptronを構築できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;import sonnet as snt
-import tensorflow as tf
-from tensorflow.examples.tutorials.mnist import input_data
-
-FLAGS = tf.flags.FLAGS
-
-tf.flags.DEFINE_integer(&amp;quot;hidden_size&amp;quot;, 100, &amp;quot;Size of hidden layer.&amp;quot;)
-tf.flags.DEFINE_integer(&amp;quot;output_size&amp;quot;, 10, &amp;quot;Size of output layer.&amp;quot;)
-
-mnist = input_data.read_data_sets(&amp;quot;MNIST_data/&amp;quot;, one_hot=True)
-
-x = tf.placeholder(tf.float32, [None, 784])
-y_ = tf.placeholder(tf.float32, [None, 10])
-lin_to_hidden = snt.Linear(output_size=FLAGS.hidden_size, name=&#39;inp_to_hidden&#39;)
-hidden_to_out = snt.Linear(output_size=FLAGS.output_size, name=&#39;hidden_to_out&#39;)
-mlp = snt.Sequential([lin_to_hidden, tf.sigmoid, hidden_to_out, tf.nn.softmax])
-y = mlp(x)
-cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y), reduction_indices=[1]))
-train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
-
-with tf.Session() as sess:
-    sess.run(tf.global_variables_initializer())
-    for i in range(1000):
-        images, labels = mnist.train.next_batch(100)
-        sess.run(train_step, feed_dict={x: mnist.train.images, y_: mnist.train.labels})
-    correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    print(sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
-    # =&amp;gt; 0.9307
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;moduleを作る&#34;&gt;Moduleを作る&lt;/h2&gt;
-
-&lt;p&gt;Moduleを作るには&lt;code&gt;snt.AbstractModule&lt;/code&gt;を継承し、
-スーパークラスのコンストラクタを呼んで、グラフに接続されるたびに呼ばれる&lt;code&gt;_build&lt;/code&gt;メソッドを実装する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;class MyMLP(snt.AbstractModule):
-  &amp;quot;&amp;quot;&amp;quot;test mlp module&amp;quot;&amp;quot;&amp;quot;
-  def __init__(self, hidden_size, output_size,
-               nonlinearity=tf.sigmoid, name=&amp;quot;my_mlp&amp;quot;):
-    &amp;quot;&amp;quot;&amp;quot;hidden_size &amp;amp; output_size is required&amp;quot;&amp;quot;&amp;quot;
-    super(MyMLP, self).__init__(name=name)
-    self._hidden_size = hidden_size
-    self._output_size = output_size
-    self._nonlinearity = nonlinearity
-  
-  def _build(self, inputs):
-    &amp;quot;&amp;quot;&amp;quot;Compute output Tensor from input Tensor.&amp;quot;&amp;quot;&amp;quot;
-    lin_to_hidden = snt.Linear(output_size=self._hidden_size, name=&#39;inp_to_hidden&#39;)
-    hidden_to_out = snt.Linear(output_size=self._output_size, name=&#39;hidden_to_out&#39;)
-    return snt.Sequential([lin_to_hidden, self._nonlinearity, hidden_to_out, tf.nn.softmax])(inputs)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このModuleを使うとこんな感じ。
-&lt;a href=&#34;https://github.com/deepmind/sonnet/blob/v1.8/sonnet/examples/dataset_shakespeare.py#L177&#34;&gt;example&lt;/a&gt;のように
-データセットもModuleにすることができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;mnist = input_data.read_data_sets(&amp;quot;MNIST_data/&amp;quot;, one_hot=True)
-
-mymlp = MyMLP(hidden_size=FLAGS.hidden_size, output_size=FLAGS.output_size)
-
-x = tf.placeholder(tf.float32, [None, 784])
-y_ = tf.placeholder(tf.float32, [None, 10])
-y = mymlp(x)
-cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y), reduction_indices=[1]))
-train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
-
-with tf.Session() as sess:
-    sess.run(tf.global_variables_initializer())
-    for i in range(1000):
-        images, labels = mnist.train.next_batch(100)
-        sess.run(train_step, feed_dict={x: mnist.train.images, y_: mnist.train.labels})
-    correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    print(sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
-    # =&amp;gt; 0.9307
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+	<atom:link href="https://www.sambaiz.net/tags/sonnet/index.xml" rel="self" type="application/rss+xml" />
     
-
+    
+    <item>
+      <title>DeepMindのTensorFlowライブラリSonnetを使う</title>
+      <link>https://www.sambaiz.net/article/124/</link>
+      <pubDate>Sun, 06 Aug 2017 23:54:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/124/</guid>
+      <description>AlphaGoを開発したGoogle DeepMind社のTensorFlowライブラリSonnetを使う。 当初はPython2しか対応していないようだったけど、今は3にも対応している。
+準備 TensorFlowを使うライブラリはほかにもいくつかあるのだけど、 Kerasと比較してみると、 KerasがTensorFlowの部分を完全にラップしているのに対して、 Sonnetは必要に応じてTensorFlowの関数も呼ぶ、比較的抽象度が低いライブラリのようだ。
+SonnetとTensorFlowとPython3入りイメージをDockerHubに上げた。 Dockerfileはここ。
+内容は基本的にREADME通りだけど、 configureのところで対話的に聞かれないように前もって環境変数で設定を与えている。 あとは、TensorFlowのビルドに使われているGCCのバージョンが古いようで、sonnetをimportするときに以下のエラーが出たため、bazelのオプションに--copt=&amp;quot;-D_GLIBCXX_USE_CXX11_ABI=0&amp;quot;を付けている。
+tensorflow.python.framework.errors_impl.NotFoundError: /usr/local/lib/python3.5/dist-packages/sonnet/python/ops/_resampler.so: undefined symbol: _ZN10tensorflow7strings6StrCatB5cxx11ERKNS0_8AlphaNumES3_S3_S3_  起動。
+$ docker run -itd --name sonnet -p 6006:6006 -p 8888:8888 sambaiz/sonnet $ docker logs sonnet ... Copy/paste this URL into your browser when you connect for the first time, to login with a token: http://localhost:8888/?token=*****  Jupyter Notebookを開いてSonnetとTensorFlowがimportできることを確認する。
+import sonnet as snt import tensorflow as tf snt.resampler(tf.constant([0.]), tf.constant([0.])) # =&amp;gt; &amp;lt;tf.</description>
+    </item>
+    
   </channel>
 </rss>

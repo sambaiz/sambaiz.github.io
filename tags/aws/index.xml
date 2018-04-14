@@ -1,2934 +1,346 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz-net</title>
-    <link>https://www.sambaiz.net/tags/aws/index.xml</link>
-    <language>ja</language>
-    <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
-
+    <title>Aws on sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/aws/</link>
+    <description>Recent content in Aws on sambaiz-net</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <copyright>sambaiz-net</copyright>
+    <lastBuildDate>Sat, 14 Apr 2018 14:22:00 +0900</lastBuildDate>
     
-      
-        <item>
-          <title>Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる</title>
-          <link>https://www.sambaiz.net/article/157/</link>
-          <pubDate>Sun, 25 Feb 2018 23:46:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/157/</guid>
-          <description>
-
-&lt;p&gt;UserPoolを作成。デフォルト設定はこんな感じ。
-必須項目や、確認メールの文面などを自由にカスタマイズでき、
-登録時などのタイミングでLambdaを発火させることもできる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/157.png&#34; alt=&#34;デフォルト設定&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;作成したUserPoolにアプリクライアントを追加する。
-ブラウザで使うのでクライアントシークレットはなし。&lt;/p&gt;
-
-&lt;h2 id=&#34;クライアント側&#34;&gt;クライアント側&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/aws/aws-amplify/tree/master/packages/amazon-cognito-identity-js&#34;&gt;amazon-cognito-identity-js&lt;/a&gt;を使う。&lt;/p&gt;
-
-&lt;p&gt;依存するjsを持ってくる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/dist/amazon-cognito-identity.min.js
-$ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/dist/aws-cognito-sdk.min.js
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Sign UpからAPIを呼ぶところまでのボタンを並べた。
-SignInすると以下のデータをそのページのドメインのLocal Storageに保持する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.idToken
-CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.accessToken
-CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.refreshToken
-CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.clockDrift
-CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.LastAuthUser
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;APIを呼ぶときはidToken(JWT)をAuthorization Headerに乗せる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;button id=&amp;quot;signUp&amp;quot;&amp;gt;Sign Up&amp;lt;/button&amp;gt;
-&amp;lt;p&amp;gt;&amp;lt;label&amp;gt;Code:&amp;lt;input type=&amp;quot;text&amp;quot; id=&amp;quot;code&amp;quot;&amp;gt;&amp;lt;/label&amp;gt;&amp;lt;/p&amp;gt;
-&amp;lt;button id=&amp;quot;confirm&amp;quot;&amp;gt;Confirm&amp;lt;/button&amp;gt;
-&amp;lt;button id=&amp;quot;signIn&amp;quot;&amp;gt;Sign In&amp;lt;/button&amp;gt;
-&amp;lt;button id=&amp;quot;whoAmI&amp;quot;&amp;gt;Who am I?&amp;lt;/button&amp;gt;
-&amp;lt;button id=&amp;quot;requestAPI&amp;quot;&amp;gt;Request API with token&amp;lt;/button&amp;gt;
-&amp;lt;button id=&amp;quot;signOut&amp;quot;&amp;gt;Sign Out&amp;lt;/button&amp;gt;
-
-&amp;lt;script src=&amp;quot;aws-cognito-sdk.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
-&amp;lt;script src=&amp;quot;amazon-cognito-identity.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;
-&amp;lt;script&amp;gt;
-const USER_NAME = &amp;quot;*****&amp;quot;;
-const USER_PASSWORD = &amp;quot;*****&amp;quot;;
-const USER_EMAIL = &amp;quot;*****&amp;quot;;
-class CognitoUserPoolAuth {
-  constructor(UserPoolId, clientId, apiEndpoint) {
-    const poolData = {
-      UserPoolId : UserPoolId,
-      ClientId : clientId
-    };
-    this.userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
-    this.apiEndpoint = apiEndpoint
-  }
-  
-  signUp(userName, password, email) {
-    const attributeList = [];
-    if (email) {
-      attributeList.push(new AmazonCognitoIdentity.CognitoUserAttribute({
-        Name : &#39;email&#39;,
-        Value : email
-      }));
-    }
-
-    return new Promise((resolve, reject) =&amp;gt; {
-      this.userPool.signUp(userName, password, attributeList, null, (err, result) =&amp;gt; {
-        if (err) {
-          return reject(err);
-        }
-        resolve(result);
-      });
-    });
-  }
-
-  confirmCode(userName, confirmCode) {
-    const cognitoUser = this.getCognitoUser(userName);
-    return new Promise((resolve, reject) =&amp;gt; {
-      cognitoUser.confirmRegistration(confirmCode, true, (err, result) =&amp;gt; {
-        if (err) {
-          return reject(err);
-        }
-        resolve(result);
-      });
-    })
-  }
-
- signIn(userName, password) {
-    const authenticationData = {
-      Username : userName,
-      Password : password,
-    };
-    const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
-    const cognitoUser = this.getCognitoUser(userName);
-    return new Promise((resolve, reject) =&amp;gt; {
-      cognitoUser.authenticateUser(authenticationDetails, {
-        onSuccess: (result) =&amp;gt; {
-          resolve(result.getAccessToken().getJwtToken());
-        },
-
-        onFailure: function(err) {
-          reject(err);
-        },
-      });
-    });
-  }
-
-  signOut() {
-    const currentUser = this.currentUser();
-    if (!currentUser) return;
-    const cognitoUser = this.getCognitoUser(currentUser.username);
-    if (!cognitoUser) return;
-    cognitoUser.signOut();
-  }
-
-  getCognitoUser(userName) {
-    const userData = {
-      Username : userName,
-      Pool : this.userPool
-    };
-    return new AmazonCognitoIdentity.CognitoUser(userData);
-  }
-
-  currentUser() {
-    return this.userPool.getCurrentUser()
-  }
-  
-  getJwtToken() {
-    return new Promise((resolve, reject) =&amp;gt; {
-      const cognitoUser = this.currentUser();
-      if (!cognitoUser) {
-        return reject(&amp;quot;unauthorized&amp;quot;);
-      }
-      cognitoUser.getSession((err, result) =&amp;gt; {
-        if (err) { 
-          return reject(err);
-        }
-        resolve(result.getIdToken().getJwtToken());
-      });
-    })
-  }
-
-  async requestAPIWithToken() {
-    const token = await this.getJwtToken().catch(
-      (err) =&amp;gt; {
-        console.log(err);
-      } 
-    );
-    const headers = token ? { &#39;Authorization&#39;: token } : {};
-    return fetch(this.apiEndpoint, {
-      headers: headers
-    }).then((response) =&amp;gt; {
-      return response.json();
-    });
-  }
-}
-
-// -------------
-// Handler
-// -------------
-
-const auth = new CognitoUserPoolAuth(
-    &amp;quot;&amp;lt;poolID&amp;gt;&amp;quot;, 
-    &amp;quot;&amp;lt;clientID&amp;gt;&amp;quot;,
-    &amp;quot;https://*****.execute-api.us-east-1.amazonaws.com/dev/secret&amp;quot;
-)
-
-document.getElementById(&amp;quot;signUp&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
-    const result = await auth.signUp(USER_NAME, USER_PASSWORD, USER_EMAIL).catch((err) =&amp;gt; {
-        if (err.code === &amp;quot;UsernameExistsException&amp;quot;) {
-        return Promise.reject(&amp;quot;User name is already used&amp;quot;);
-        } else {
-        return Promise.reject(err);
-        }
-    });
-    console.log(`signUp successfully`);
-}, false);
-
-document.getElementById(&amp;quot;confirm&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
-    const code = document.getElementById(&amp;quot;code&amp;quot;).value;
-    const result = await auth.confirmCode(USER_NAME, code);
-    console.log(`confirm successfully`);
-}, false);
-
-document.getElementById(&amp;quot;signIn&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
-    const result = await auth.signIn(USER_NAME, USER_PASSWORD).catch((err) =&amp;gt; {
-        if (err.code === &amp;quot;UserNotConfirmedException&amp;quot;) {
-        return Promise.reject(&amp;quot;Confirm your email&amp;quot;);
-        } else {
-        return Promise.reject(err);
-        }
-    });
-console.log(`signIn successfully`);
-}, false);
-
-document.getElementById(&amp;quot;whoAmI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
-    console.log(auth.currentUser());
-}, false);
-
-document.getElementById(&amp;quot;requestAPI&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
-    console.log(await auth.requestAPIWithToken());
-}, false);
-
-document.getElementById(&amp;quot;signOut&amp;quot;).addEventListener(&amp;quot;click&amp;quot;, async () =&amp;gt; {
-    auth.signOut();
-    console.log(&amp;quot;signout successfully&amp;quot;);
-}, false);
-&amp;lt;/script&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;api側&#34;&gt;API側&lt;/h2&gt;
-
-&lt;p&gt;Serverless FrameworkでCognitoのJWTを認証に使うには
-authorizerのarnにUserPoolのARNを入れる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat serverless.yml
-service: cognitoapi
-
-provider:
-  name: aws
-  runtime: nodejs6.10
-
-functions:
-  createTodo:
-    handler: handler.secret
-    events:
-      - http:
-          path: secret
-          cors: true
-          method: get
-          authorizer:
-            arn: ***** # UserPool&#39;s ARN
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;JWTは.で区切った真ん中がBase64 encodeされたpayloadになっている。
-これをdecodeして返してみる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat handler.js
-&#39;use strict&#39;;
-
-module.exports.secret = (event, context, callback) =&amp;gt; {
-  const payload = JSON.parse(
-    new Buffer(
-      event.headers.Authorization.split(&amp;quot;.&amp;quot;)[1], 
-      &amp;quot;base64&amp;quot;
-    ).toString()
-  );
-  const response = {
-    statusCode: 200,
-    body: JSON.stringify({
-      userInfo: payload
-    }),
-    headers: {
-      &amp;quot;Access-Control-Allow-Origin&amp;quot;: &amp;quot;*&amp;quot;
-    },
-  };
-  callback(null, response);
-};
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな感じ。Sign Upしたときにコード付きのメールが送られている。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/157.gif&#34; alt=&#34;動作&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+	<atom:link href="https://www.sambaiz.net/tags/aws/index.xml" rel="self" type="application/rss+xml" />
     
-      
-        <item>
-          <title>Serverless FrameworkでLambdaをデプロイする</title>
-          <link>https://www.sambaiz.net/article/155/</link>
-          <pubDate>Sun, 11 Feb 2018 23:20:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/155/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless&#34;&gt;Serverless Framework&lt;/a&gt;でLambda Functionをデプロイする。
-Apexが基本的にFunction自体のデプロイしかしないのに対して、こちらはeventの設定なども諸々やってくれて強い。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/140/&#34;&gt;ApexでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install -g serverless
-$ serverless version
-1.26.0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ApexではFunctionごとにディレクトリが作られたが、Serverlessでは&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/services/#services&#34;&gt;Service&lt;/a&gt;ごとに作られ、
-一つのService内で複数のFunctionを定義できる。handlerは同じでも異なっていてもよい。&lt;/p&gt;
-
-&lt;p&gt;Apexの形式の場合、共通の処理をWebpackなどで各Functionに持って来たり、
-同じような処理の複数のFunctionを立てる際はコピーする必要があったが、
-こちらは必要最小限の変更でそれらを行うことができる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless/tree/master/lib/plugins/create/templates&#34;&gt;template&lt;/a&gt;からServiceをcreateする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ serverless create --template aws-nodejs --path testservice
-$ ls testservice/
-handler.js	serverless.yml
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;設定ファイル&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/serverless.yml/#serverlessyml-reference&#34;&gt;serverless.yml&lt;/a&gt;
-にはLambdaの基本的なもののほかに、VPCやevent、IAM Roleなども書けて、これらはdeploy時に作られるCloudFormationのstackによって管理される。必要なら生のCloudFormationの設定も書ける。&lt;/p&gt;
-
-&lt;p&gt;ApexでもTerraformによって管理することができるが、書くのはこちらの方がはるかに楽。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/144/&#34;&gt;ApexでデプロイしたLambdaのトリガーをTerraformで管理する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat sesrverless.yml
-service: testservice
-
-provider:
-  name: aws
-  profile: foobar
-  region: ap-northeast-1
-  runtime: nodejs6.10
-  memorySize: 512
-  timeout: 10
- 
-functions: 
-  hello: 
-    handler: handler.hello 
-    events:
-      - http:
-          path: hello/world
-          method: get
-          cors: true
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;deployすると&lt;code&gt;{service}-{stage}-{function}&lt;/code&gt;のFunctionが作られる。
-今回の場合はtestservice-prd-test。stageをymlでも指定しなかった場合はデフォルト値のdevになる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ serverless deploy --stage prd
-$ curl https://*****.ap-northeast-1.amazonaws.com/prd/hello/world | jq
-{
-  &amp;quot;message&amp;quot;: &amp;quot;Go Serverless v1.0! Your function executed successfully!&amp;quot;,
-  &amp;quot;input&amp;quot;: {
-    ...
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;hook&#34;&gt;hook&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/serverless/serverless#v1-plugins&#34;&gt;Plugin&lt;/a&gt;で&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/guide/plugins/#lifecycle-events&#34;&gt;Lifecycle Events&lt;/a&gt;を拾えるようになっている。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit&#34;&gt;puppeteer-lambda-starter-kit&lt;/a&gt;は以前からpackage scriptsがあったので、これをServerlessのpackage時に呼ぶことでServerless Framework対応した。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ yarn add --dev serverless-hooks-plugin
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;plugins:
-  - serverless-hooks-plugin
-
-custom:
-  hooks:
-    package:initialize:
-      - npm run build
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;とても便利なのでCloudFormationを使いたくないというわけでなければ、Serverless Frameworkを使っておけばよいと思う。&lt;/p&gt;
-</description>
-        </item>
-      
     
+    <item>
+      <title>Macでの開発環境構築メモ</title>
+      <link>https://www.sambaiz.net/article/163/</link>
+      <pubDate>Sat, 14 Apr 2018 14:22:00 +0900</pubDate>
       
-        <item>
-          <title>DatadogのLambda Integrationで気象データを送ってアラートを飛ばす</title>
-          <link>https://www.sambaiz.net/article/152/</link>
-          <pubDate>Mon, 05 Feb 2018 23:55:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/152/</guid>
-          <description>&lt;p&gt;最近朝が寒くて布団から出るのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。
-そこで、無料から使える気象API &lt;a href=&#34;http://openweathermap.org/&#34;&gt;OpenWeatherMap&lt;/a&gt;のデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。&lt;/p&gt;
-
-&lt;p&gt;インスタンスが立っていたらDataDog Agentの&lt;a href=&#34;https://docs.datadoghq.com/ja/guides/dogstatsd/&#34;&gt;DogStatsD&lt;/a&gt;経由で送ることができ、
-そうでなければ通常は&lt;a href=&#34;https://docs.datadoghq.com/ja/api/#metrics-post&#34;&gt;API&lt;/a&gt;を呼ぶことになるんだけど、Lambdaでは、AWS Integrationを設定すると有効になる&lt;a href=&#34;https://docs.datadoghq.com/ja/integrations/awslambda/&#34;&gt;Lambda Integration&lt;/a&gt;によって
-&lt;code&gt;MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2&lt;/code&gt;のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const axios = require(&#39;axios&#39;);
-
-const CITY = &#39;Shibuya&#39;;
-const API_KEY = &#39;*****&#39;;
-const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`;
-
-const METRIC_COUNTER = &#39;counter&#39;;
-const METRIC_GAUGE = &#39;gauge&#39;;
-
-const monitor = (metricName, metricType, value, tags) =&amp;gt; {
-  const unixEpochTimestamp = Math.floor(new Date().getTime());
-  console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&#39;,&#39;)}`);
-};
-
-exports.handler = async (event, context, callback) =&amp;gt; {
-  const data = (await axios.get(WEATHER_API)).data
-  const namePrefix = &#39;livinginfo.weather&#39;
-  monitor(`${namePrefix}.temperature`, METRIC_GAUGE, data.main.temp, [])
-  monitor(`${namePrefix}.rain`, METRIC_GAUGE, data.rain ? data.rain[&amp;quot;3h&amp;quot;] : 0, []);
-  monitor(`${namePrefix}.snow`, METRIC_GAUGE, data.snow ? data.snow[&amp;quot;3h&amp;quot;] : 0, []);
-  callback(null, &#39;done&#39;);
-};
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;送られた。
-あとは0度を下回ったときのThreshold Alertや、前日比で下がったときのChange Alertなどを設定すれば良さそうだ。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;http://sambaiz.net/images/152.png&#34; alt=&#34;グラフ&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/163/</guid>
+      <description>新しいMBPを買ったので開発環境の構築でやったことを残しておく
+設定  アクセシビリティから3本指スクロールを有効にする ホットコーナーの左上にLaunchPad、右上にデスクトップを割り当てている 画面をなるべく広く使うためにDockは左に置いて自動的に隠す  bash_profile パッケージマネージャ以外で持ってきたバイナリは${HOME}/binに置くことにする。
+touch ~/.bash_profile mkdir ${HOME}/bin echo &amp;quot;export PATH=\$PATH:${HOME}/bin&amp;quot; &amp;gt;&amp;gt; ~/.bash_profile  HomeBrew &amp;amp; Cask /usr/bin/ruby -e &amp;quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)&amp;quot; brew tap caskroom/cask  一般的なアプリケーション/コマンドのインストール XcodeとUnityとLINEは手動で入れる。
+brew cask install google-chrome kap visual-studio-code slack kindle brew install jq gibo mysql wget  Git git config --global user.name sambaiz git config --global user.email godgourd@gmail.com  Docker &amp;amp; K8s brew cask install docker virtualbox minikube brew install docker  fish bash前提で書かれたスクリプトも多いので、デフォルトシェルにはしない。</description>
+    </item>
     
+    <item>
+      <title>Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる</title>
+      <link>https://www.sambaiz.net/article/157/</link>
+      <pubDate>Sun, 25 Feb 2018 23:46:00 +0900</pubDate>
       
-        <item>
-          <title>Athenaのmigrationやpartitionするathena-adminを作った</title>
-          <link>https://www.sambaiz.net/article/145/</link>
-          <pubDate>Sun, 24 Dec 2017 23:31:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/145/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/athena-admin&#34;&gt;https://github.com/sambaiz/athena-admin&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;AthenaはS3をデータソースとするマネージドなデータ分析基盤。Prestoベースで標準SQLを実行できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/athena/pricing/&#34;&gt;料金&lt;/a&gt;はスキャンしたデータ量にかかり、$5/TB。1MB切り上げで、10MB以下のクエリは10MBになる。
-データ量に対してかなり安く使えるものの、フルスキャンしてしまうとBigQueryと同様にお金が溶けてしまうので、大抵はパーティションを切ることになるのだけど都度locationを指定して&lt;code&gt;ADD PARTITION&lt;/code&gt;を実行するのは大変。さらにスキーマを変更するのにも&lt;code&gt;ALTER TABLE ADD COLUMNS&lt;/code&gt;などはないのでテーブルを作り直すことになるが、当然パーティションも全部作り直すことになる。&lt;/p&gt;
-
-&lt;p&gt;ではどうしようもないかというと&lt;code&gt;MSCK REPAIR TABLE&lt;/code&gt;というのがあって、
-これはS3のObjectの&lt;code&gt;dt=YYYY-MM-DD&lt;/code&gt;のようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだけど、勝手に&lt;code&gt;YYYY/MM/DD/HH&lt;/code&gt;のprefixを付けてしまうFirehoseのようなのもある。&lt;/p&gt;
-
-&lt;p&gt;今回作った&lt;a href=&#34;https://github.com/sambaiz/athena-admin&#34;&gt;athena-admin&lt;/a&gt;は以下のような定義ファイルから、
-パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationする。
-このファイルを書き換えるだけで基本的にどうにかなるし、バージョン管理すればテーブル定義の変更を追うことができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;general&amp;quot;: {
-    &amp;quot;athenaRegion&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
-    &amp;quot;databaseName&amp;quot;: &amp;quot;aaaa&amp;quot;,
-    &amp;quot;saveDefinitionLocation&amp;quot;: &amp;quot;s3://saveDefinitionBucket/aaaa.json&amp;quot;
-  },
-  &amp;quot;tables&amp;quot;: {
-    &amp;quot;sample_data&amp;quot;: {
-      &amp;quot;columns&amp;quot;: {
-        &amp;quot;user_id&amp;quot;: &amp;quot;int&amp;quot;,
-        &amp;quot;value&amp;quot;: {
-          &amp;quot;score&amp;quot;: &amp;quot;int&amp;quot;,
-          &amp;quot;category&amp;quot;: &amp;quot;string&amp;quot;
-        } /* &amp;quot;struct&amp;lt;score:int,category:string&amp;gt;&amp;quot; のように書くこともできる */
-      },
-      &amp;quot;srcLocation&amp;quot;: &amp;quot;s3://src/location/&amp;quot;,
-      &amp;quot;partition&amp;quot;: {
-        &amp;quot;prePartitionLocation&amp;quot;: &amp;quot;s3://pre/partition/&amp;quot;, /* optional */
-        &amp;quot;regexp&amp;quot;: &amp;quot;(\\d{4})/(\\d{2})/(\\d{2})/&amp;quot;, /* optional */
-        &amp;quot;keys&amp;quot;: [
-          {
-            &amp;quot;name&amp;quot;: &amp;quot;dt&amp;quot;,
-            &amp;quot;type&amp;quot;: &amp;quot;string&amp;quot;,
-            &amp;quot;format&amp;quot;: &amp;quot;{1}-{2}-{3}&amp;quot;, /* optional */
-          }
-        ]
-      }
-    }
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;使い方はこんな感じ。使い方によっては&lt;code&gt;migrate()&lt;/code&gt;だけ呼ぶこともあると思う。
-&lt;code&gt;replaceObjects()&lt;/code&gt;にはmatchedHandlerというのを渡すこともできて、
-UTCからJSTに変換するといったこともできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install athena-admin
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;const AthenaAdmin = require(&#39;athena-admin&#39;).AthenaAdmin;
-const dbDef = require(&#39;./sampledatabase.json&#39;);
-const admin = new AthenaAdmin(dbDef);
-await admin.replaceObjects();
-await admin.migrate();
-await admin.partition();
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/157/</guid>
+      <description>UserPoolを作成。デフォルト設定はこんな感じ。 必須項目や、確認メールの文面などを自由にカスタマイズでき、 登録時などのタイミングでLambdaを発火させることもできる。
+作成したUserPoolにアプリクライアントを追加する。 ブラウザで使うのでクライアントシークレットはなし。
+クライアント側 amazon-cognito-identity-jsを使う。
+依存するjsを持ってくる。
+$ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/dist/amazon-cognito-identity.min.js $ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/dist/aws-cognito-sdk.min.js  Sign UpからAPIを呼ぶところまでのボタンを並べた。 SignInすると以下のデータをそのページのドメインのLocal Storageに保持する。
+CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.idToken CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.accessToken CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.refreshToken CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.clockDrift CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.LastAuthUser  APIを呼ぶときはidToken(JWT)をAuthorization Headerに乗せる。
+&amp;lt;button id=&amp;quot;signUp&amp;quot;&amp;gt;Sign Up&amp;lt;/button&amp;gt; &amp;lt;p&amp;gt;&amp;lt;label&amp;gt;Code:&amp;lt;input type=&amp;quot;text&amp;quot; id=&amp;quot;code&amp;quot;&amp;gt;&amp;lt;/label&amp;gt;&amp;lt;/p&amp;gt; &amp;lt;button id=&amp;quot;confirm&amp;quot;&amp;gt;Confirm&amp;lt;/button&amp;gt; &amp;lt;button id=&amp;quot;signIn&amp;quot;&amp;gt;Sign In&amp;lt;/button&amp;gt; &amp;lt;button id=&amp;quot;whoAmI&amp;quot;&amp;gt;Who am I?&amp;lt;/button&amp;gt; &amp;lt;button id=&amp;quot;requestAPI&amp;quot;&amp;gt;Request API with token&amp;lt;/button&amp;gt; &amp;lt;button id=&amp;quot;signOut&amp;quot;&amp;gt;Sign Out&amp;lt;/button&amp;gt; &amp;lt;script src=&amp;quot;aws-cognito-sdk.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt; &amp;lt;script src=&amp;quot;amazon-cognito-identity.min.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt; &amp;lt;script&amp;gt; const USER_NAME = &amp;quot;*****&amp;quot;; const USER_PASSWORD = &amp;quot;*****&amp;quot;; const USER_EMAIL = &amp;quot;*****&amp;quot;; class CognitoUserPoolAuth { constructor(UserPoolId, clientId, apiEndpoint) { const poolData = { UserPoolId : UserPoolId, ClientId : clientId }; this.</description>
+    </item>
     
+    <item>
+      <title>Serverless FrameworkでLambdaをデプロイする</title>
+      <link>https://www.sambaiz.net/article/155/</link>
+      <pubDate>Sun, 11 Feb 2018 23:20:00 +0900</pubDate>
       
-        <item>
-          <title>ApexでデプロイしたLambdaのトリガーをTerraformで管理する</title>
-          <link>https://www.sambaiz.net/article/144/</link>
-          <pubDate>Sun, 12 Nov 2017 22:23:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/144/</guid>
-          <description>
-
-&lt;p&gt;Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。
-これを手作業で行うこともできるのだけど、せっかくなのでアプリケーションと一緒に管理したい。
-そんなときのために&lt;code&gt;terraform&lt;/code&gt;コマンドをラップした&lt;a href=&#34;http://apex.run/#managing-infrastructure&#34;&gt;apex infra&lt;/a&gt;が用意されている。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/121/&#34;&gt;TerraformでVPCを管理するmoduleを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。
-その下に環境ごとのディレクトリを作成することもできて、その場合は&lt;code&gt;--env&lt;/code&gt;で指定した環境のものが使われる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;- functions
-- infrastructure
-  main.tf
-  variables.tf
-  - modules
-    - cloudwatch_schedule
-      main.tf
-      variables.tf
-project.json 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;functionをデプロイするとそのARNが変数で取れるようになる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ apex list --tfvars
-apex_function_hello=&amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_rule.html&#34;&gt;aws_cloudwatch_event_rule&lt;/a&gt;でイベントルール(今回はschedule)を作成&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_target.html&#34;&gt;aws_cloudwatch_event_target&lt;/a&gt;でルールにターゲット(今回はLambda)を設定&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/lambda_permission.html&#34;&gt;aws_lambda_permission&lt;/a&gt;でルールに対象Lambdaをinvokeする権限を付ける&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat infrastructure/modules/cloudwatch_schefule/variables.tf
-variable &amp;quot;lambda_function_name&amp;quot; {}
-variable &amp;quot;lambda_function_arn&amp;quot; {}
-variable &amp;quot;schedule_expression&amp;quot; {
-    description = &amp;quot;cloudwatch schedule expression e.g. \&amp;quot;cron(0/5 * * * ? *)\&amp;quot;&amp;quot;
-}
-
-$ cat infrastructure/modules/cloudwatch_schefule/main.tf
-resource &amp;quot;aws_cloudwatch_event_rule&amp;quot; &amp;quot;lambda&amp;quot; {
-  name        = &amp;quot;lambda_rule_${var.lambda_function_name}&amp;quot;
-  description = &amp;quot;invoke lambda ${var.lambda_function_name}&amp;quot;
-  schedule_expression = &amp;quot;${var.schedule_expression}&amp;quot;
-}
- 
-resource &amp;quot;aws_cloudwatch_event_target&amp;quot; &amp;quot;lambda&amp;quot; {
-  target_id = &amp;quot;lambda_target_${var.lambda_function_name}&amp;quot;
-  rule      = &amp;quot;${aws_cloudwatch_event_rule.lambda.name}&amp;quot;
-  arn       = &amp;quot;${var.lambda_function_arn}&amp;quot;
-}
- 
-resource &amp;quot;aws_lambda_permission&amp;quot; &amp;quot;lambda&amp;quot; {
-  statement_id  = &amp;quot;AllowExecutionFromCloudWatch&amp;quot;
-  action        = &amp;quot;lambda:InvokeFunction&amp;quot;
-  function_name = &amp;quot;${aws_cloudwatch_event_target.lambda.arn}&amp;quot;
-  principal     = &amp;quot;events.amazonaws.com&amp;quot;
-  source_arn    = &amp;quot;${aws_cloudwatch_event_rule.lambda.arn}&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat infrastructure/variables.tf 
-variable &amp;quot;apex_function_names&amp;quot; {
-    type=&amp;quot;map&amp;quot;
-}
-variable &amp;quot;apex_function_hello&amp;quot; {}
-
-$ cat infrastructure/main.tf
-terraform {
-  backend &amp;quot;s3&amp;quot; {
-    bucket = &amp;quot;sambaiz-terraform&amp;quot;
-    key    = &amp;quot;usetf.tfstate&amp;quot;
-    region = &amp;quot;ap-northeast-1&amp;quot;
-  }
-}
-
-module &amp;quot;hello_trigger&amp;quot; {
-  source = &amp;quot;./modules/cloudwatch_schedule&amp;quot;
-  lambda_function_name = &amp;quot;${var.apex_function_names[&amp;quot;hello&amp;quot;]}&amp;quot;
-  lambda_function_arn = &amp;quot;${var.apex_function_hello}&amp;quot;
-  schedule_expression = &amp;quot;cron(0/5 * * * ? *)&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;init&lt;/code&gt;してbackendを初期化してmoduleを準備する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ apex infra init
-$ ls infrastructure/.terraform/modules/*****
-main.tf		variables.tf
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;plan&lt;/code&gt;するとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ apex infra plan
-+ module.hello_trigger.aws_cloudwatch_event_rule.lambda
-    arn:                 &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    description:         &amp;quot;invoke lambda usetf_hello&amp;quot;
-    is_enabled:          &amp;quot;true&amp;quot;
-    name:                &amp;quot;lambda_rule_usetf_hello&amp;quot;
-    schedule_expression: &amp;quot;cron(0/5 * * * ? *)&amp;quot;
-
-+ module.hello_trigger.aws_cloudwatch_event_target.lambda
-    arn:       &amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
-    rule:      &amp;quot;lambda_rule_usetf_hello&amp;quot;
-    target_id: &amp;quot;lambda_target_usetf_hello&amp;quot;
-
-+ module.hello_trigger.aws_lambda_permission.lambda
-    action:        &amp;quot;lambda:InvokeFunction&amp;quot;
-    function_name: &amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;
-    principal:     &amp;quot;events.amazonaws.com&amp;quot;
-    source_arn:    &amp;quot;${aws_cloudwatch_event_rule.lambda.arn}&amp;quot;
-    statement_id:  &amp;quot;AllowExecutionFromCloudWatch&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;apply&lt;/code&gt;するとトリガーが登録される。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ apex infra apply
-$ apex logs hello
-...
-/aws/lambda/usetf_hello 2017-11-12T13:20:14.561Z	37e75818-c7ac-11e7-a333-111863808b13	processing event:
-...
-/aws/lambda/usetf_hello 2017-11-12T13:25:15.182Z	eb178941-c7ac-11e7-bde0-998ea9659640 processing event:
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://dev.classmethod.jp/cloud/aws/ami-and-snapshot-delete-with-apex-and-terraform/&#34;&gt;ApexとTerraformでCloudWatch EventsによりInvokeされるLambda関数をデプロイする ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/155/</guid>
+      <description>Serverless FrameworkでLambda Functionをデプロイする。 Apexが基本的にFunction自体のデプロイしかしないのに対して、こちらはeventの設定なども諸々やってくれて強い。
+ApexでLambdaをデプロイする - sambaiz-net
+$ npm install -g serverless $ serverless version 1.26.0  ApexではFunctionごとにディレクトリが作られたが、ServerlessではServiceごとに作られ、 一つのService内で複数のFunctionを定義できる。handlerは同じでも異なっていてもよい。
+Apexの形式の場合、共通の処理をWebpackなどで各Functionに持って来たり、 同じような処理の複数のFunctionを立てる際はコピーする必要があったが、 こちらは必要最小限の変更でそれらを行うことができる。
+templateからServiceをcreateする。
+$ serverless create --template aws-nodejs --path testservice $ ls testservice/ handler.js	serverless.yml  設定ファイルserverless.yml にはLambdaの基本的なもののほかに、VPCやevent、IAM Roleなども書けて、これらはdeploy時に作られるCloudFormationのstackによって管理される。必要なら生のCloudFormationの設定も書ける。
+ApexでもTerraformによって管理することができるが、書くのはこちらの方がはるかに楽。
+ApexでデプロイしたLambdaのトリガーをTerraformで管理する - sambaiz-net
+$ cat sesrverless.yml service: testservice provider: name: aws profile: foobar region: ap-northeast-1 runtime: nodejs6.10 memorySize: 512 timeout: 10 functions: hello: handler: handler.hello events: - http: path: hello/world method: get cors: true  deployすると{service}-{stage}-{function}のFunctionが作られる。 今回の場合はtestservice-prd-test。stageをymlでも指定しなかった場合はデフォルト値のdevになる。</description>
+    </item>
     
+    <item>
+      <title>DatadogのLambda Integrationで気象データを送ってアラートを飛ばす</title>
+      <link>https://www.sambaiz.net/article/152/</link>
+      <pubDate>Mon, 05 Feb 2018 23:55:00 +0900</pubDate>
       
-        <item>
-          <title>Redashでデータを可視化する</title>
-          <link>https://www.sambaiz.net/article/141/</link>
-          <pubDate>Mon, 23 Oct 2017 23:59:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/141/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/getredash/redash&#34;&gt;Redash&lt;/a&gt;はOSSのデータ可視化ツール。
-BIツールのようにパラメータを変えながら指標を探っていくというよりは、分かっている指標を見るのに使うイメージ。
-比較的機能が少ない分処理がわかりやすく、
-クエリが自動生成されないため時間がかかるものを実行する前にある程度気づけるのが良いと思う。&lt;/p&gt;
-
-&lt;p&gt;docker-composeで立ち上げることもできるけど、
-AWSの各リージョンに&lt;a href=&#34;https://redash.io/help-onpremise/setup/setting-up-redash-instance.html&#34;&gt;AMIが用意されている&lt;/a&gt;のでそれで立ち上げる。&lt;/p&gt;
-
-&lt;p&gt;sshで入って以下のようなのを必要に応じて設定する。
-メールを送る場合はSESでメールアドレスをVerifyしてやるのが簡単。
-GSuiteを使っている場合、OAuthのClientID、Secretを発行しドメインを登録するとそれで認証できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ssh ubuntu@*****
-$ sudo vi /opt/redash/.env
-export REDASH_MAIL_SERVER=&amp;quot;email-smtp.us-east-1.amazonaws.com&amp;quot;
-export REDASH_MAIL_USE_TLS=&amp;quot;true&amp;quot;
-export REDASH_MAIL_USERNAME=&amp;quot;*****&amp;quot;
-export REDASH_MAIL_PASSWORD=&amp;quot;*****&amp;quot;
-export REDASH_MAIL_DEFAULT_SENDER=&amp;quot;*****&amp;quot; # Email address to send from
-
-export REDASH_GOOGLE_CLIENT_ID=&amp;quot;&amp;quot;
-export REDASH_GOOGLE_CLIENT_SECRET=&amp;quot;&amp;quot;
-
-$ cd /opt/redash/current
-$ sudo -u redash bin/run ./manage.py org set_google_apps_domains {{domains}}
-$ sudo supervisorctl restart all
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;HTTPS対応するのに&lt;code&gt;/etc/nginx/sites-available/redash&lt;/code&gt;を編集する。crtとkeyの場所は変える。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;upstream rd_servers {
-  server 127.0.0.1:5000;
-}
-
-server {
-
-  server_tokens off;
-
-  listen 80 default;
-
-  access_log /var/log/nginx/rd.access.log;
-
-  gzip on;
-  gzip_types *;
-  gzip_proxied any;
-
-  location /ping {
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass       http://rd_servers;
-  }
-  
-  location / {
-    return 301 https://$host$request_uri; 
-  }
-}
-
-server {
-  listen 443 ssl;
-
-  # Make sure to set paths to your certificate .pem and .key files.
-  ssl on;
-  ssl_certificate /path-to/cert.pem; # or crt
-  ssl_certificate_key /path-to/cert.key;
-
-  # Specifies that we don&#39;t want to use SSLv2 (insecure) or SSLv3 (exploitable)
-  ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-  # Uses the server&#39;s ciphers rather than the client&#39;s
-  ssl_prefer_server_ciphers on;
-  # Specifies which ciphers are okay and which are not okay. List taken from https://raymii.org/s/tutorials/Strong_SSL_Security_On_nginx.html
-  ssl_ciphers &amp;quot;EECDH+AESGCM:EDH+AESGCM:ECDHE-RSA-AES128-GCM-SHA256:AES256+EECDH:DHE-RSA-AES128-GCM-SHA256:AES256+EDH:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4&amp;quot;;
-
-  access_log /var/log/nginx/redash.access.log;
-
-  gzip on;
-  gzip_types *;
-  gzip_proxied any;
-
-  location / {
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass       http://rd_servers;
-    proxy_redirect   off;
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;諸々のデータはローカルで動いているPostgreSQLに入っている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;redash-# \d
-                       List of relations
- Schema |               Name               |   Type   | Owner  
---------+----------------------------------+----------+--------
- public | access_permissions               | table    | redash
- public | access_permissions_id_seq        | sequence | redash
- public | alembic_version                  | table    | redash
- public | alert_subscriptions              | table    | redash
- public | alert_subscriptions_id_seq       | sequence | redash
- public | alerts                           | table    | redash
- public | alerts_id_seq                    | sequence | redash
- public | api_keys                         | table    | redash
- public | api_keys_id_seq                  | sequence | redash
- public | changes                          | table    | redash
- public | changes_id_seq                   | sequence | redash
- public | dashboards                       | table    | redash
- public | dashboards_id_seq                | sequence | redash
- public | data_source_groups               | table    | redash
- public | data_source_groups_id_seq        | sequence | redash
- public | data_sources                     | table    | redash
- public | data_sources_id_seq              | sequence | redash
- public | events                           | table    | redash
- public | events_id_seq                    | sequence | redash
- public | groups                           | table    | redash
- public | groups_id_seq                    | sequence | redash
- public | notification_destinations        | table    | redash
- public | notification_destinations_id_seq | sequence | redash
- public | organizations                    | table    | redash
- public | organizations_id_seq             | sequence | redash
- public | queries                          | table    | redash
- public | queries_id_seq                   | sequence | redash
- public | query_results                    | table    | redash
- public | query_results_id_seq             | sequence | redash
- public | query_snippets                   | table    | redash
- public | query_snippets_id_seq            | sequence | redash
- public | users                            | table    | redash
- public | users_id_seq                     | sequence | redash
- public | visualizations                   | table    | redash
- public | visualizations_id_seq            | sequence | redash
- public | widgets                          | table    | redash
- public | widgets_id_seq                   | sequence | redash
-(37 rows)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;なので&lt;a href=&#34;https://redash.io/help-onpremise/misc/backup-your-redash-database-and-restore-it-on-a-different-server.html&#34;&gt;他の環境に移すとき&lt;/a&gt;はこのdumpを取ってリストアする。バックアップを取っておくと良い。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-start.png&#34; alt=&#34;最初の画面&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;データソースを登録する。MySQLやRedshift、AthenaやBigQueryのほかにHive、ElasticSearchなども選べる。
-今回はMySQL(Amazon RDS)を選択した。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-datasource.png&#34; alt=&#34;データソースの登録&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;適当なデータをいれる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const mysql = require(&#39;mysql&#39;);
-const connection = mysql.createConnection({
-  host     : &#39;*****&#39;,
-  user     : &#39;*****&#39;,
-  password : &#39;*****&#39;,
-  database : &#39;*****&#39;
-});
-
-const query = (connection, query, params) =&amp;gt; {
-  return new Promise((resolve, reject) =&amp;gt; {
-    connection.query(query, params, (error, results, fields) =&amp;gt; {
-      if (error) reject(error);
-      resolve(results);
-    });
-  });
-};
-
-(async () =&amp;gt; {
-  connection.connect();
-
-  await query(connection,
-    `DROP TABLE IF EXISTS hoge`
-  );
-
-  await query(connection, 
-    `CREATE TABLE hoge (
-      id int,
-      fuga_id int,
-      piyo_id int,
-      value int,
-      created_at datetime
-    )`
-  );
-
-  for (let i = 0; i &amp;lt; 100; i++) {
-    console.log(i);
-    await query(connection,
-      `INSERT INTO hoge SET ?`,
-      {
-       id: i, 
-       fuga_id: Math.floor(Math.random() * 3), 
-       piyo_id: Math.floor(Math.random() * 10),
-       value: Math.floor(Math.random() * 100),
-       created_at: new Date(),
-      }
-    );
-  };
-
-  connection.end();
-})();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;クエリを登録する。エディタがあってフォーマットもしてくれる。
-毎分や特定の時刻に実行するスケジュール機能もあるので、
-重いクエリも事前に実行しておいて必要なときにすぐに見られるようにすることができる。
-&lt;code&gt;{{name}}&lt;/code&gt;のようにパラメータを入れることもできる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-query.png&#34; alt=&#34;クエリの登録&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;実行して得られたデータからChartを作る。データはCSVでダウンロードもできる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-visualization.png&#34; alt=&#34;Chart&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;このChartをDashboardに貼る。
-パラメータがある場合は入力するフォームが出るので、クエリを書かない人に使ってもらうこともできる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-dashboard.png&#34; alt=&#34;Dashbord&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;あとは簡単なAlertも登録することができて、
-飛ばす先はSettingsのALERT DISTINATIONSに
-SlackのWebhookなどを設定できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-alert.png&#34; alt=&#34;Alert&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/141-slack.png&#34; alt=&#34;Slackに飛ぶメッセージ&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/152/</guid>
+      <description>最近朝が寒くて布団から出るのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。 そこで、無料から使える気象API OpenWeatherMapのデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。
+インスタンスが立っていたらDataDog AgentのDogStatsD経由で送ることができ、 そうでなければ通常はAPIを呼ぶことになるんだけど、Lambdaでは、AWS Integrationを設定すると有効になるLambda Integrationによって MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。
+const axios = require(&#39;axios&#39;); const CITY = &#39;Shibuya&#39;; const API_KEY = &#39;*****&#39;; const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`; const METRIC_COUNTER = &#39;counter&#39;; const METRIC_GAUGE = &#39;gauge&#39;; const monitor = (metricName, metricType, value, tags) =&amp;gt; { const unixEpochTimestamp = Math.floor(new Date().getTime()); console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&#39;,&#39;)}`); }; exports.handler = async (event, context, callback) =&amp;gt; { const data = (await axios.get(WEATHER_API)).data const namePrefix = &#39;livinginfo.weather&#39; monitor(`${namePrefix}.temperature`, METRIC_GAUGE, data.main.temp, []) monitor(`${namePrefix}.</description>
+    </item>
     
+    <item>
+      <title>Athenaのmigrationやpartitionするathena-adminを作った</title>
+      <link>https://www.sambaiz.net/article/145/</link>
+      <pubDate>Sun, 24 Dec 2017 23:31:00 +0900</pubDate>
       
-        <item>
-          <title>ApexでLambdaをデプロイする</title>
-          <link>https://www.sambaiz.net/article/140/</link>
-          <pubDate>Sun, 22 Oct 2017 16:06:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/140/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/apex/apex&#34;&gt;Apex&lt;/a&gt;でLambdaをデプロイする。
-とても簡単に使えるし、変なこともしないので良い感じ。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;Serverless Frameworkだとeventの設定までカバーできてより便利。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;インストール。ダウンロードして実行できるようにしている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl https://raw.githubusercontent.com/apex/apex/master/install.sh | sh
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
-&lt;li&gt;IAMFullAccess&lt;/li&gt;
-&lt;li&gt;AWSLambdaFullAccess&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;を付けたIAMのプロファイルを登録しておく。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ aws configure --profile apex
-$ aws configure list --profile apex
-      Name                    Value             Type    Location
-      ----                    -----             ----    --------
-   profile                     apex           manual    --profile
-access_key     ****************OVGQ shared-credentials-file    
-secret_key     ****************oi5t shared-credentials-file    
-    region           ap-northeast-1      config-file    ~/.aws/config
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;apex init&lt;/code&gt;してnameとdescriptionを入れるとIAMが登録され、
-ディレクトリ構造が作られる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ apex init --profile apex
-Project name: try-apex
-Project description: test  
-[+] creating IAM try-apex_lambda_function role
-[+] creating IAM try-apex_lambda_logs policy
-[+] attaching policy to lambda_function role.
-[+] creating ./project.json
-[+] creating ./functions
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;package.jsonで環境変数などの設定ができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ls -R
-functions	project.json
-
-./functions:
-hello
-
-./functions/hello:
-index.js
-
-$ cat project.json 
-{
-  &amp;quot;name&amp;quot;: &amp;quot;try-apex&amp;quot;,
-  &amp;quot;description&amp;quot;: &amp;quot;test&amp;quot;,
-  &amp;quot;memory&amp;quot;: 128,
-  &amp;quot;timeout&amp;quot;: 5,
-  &amp;quot;role&amp;quot;: &amp;quot;arn:aws:iam::524580158183:role/try-apex_lambda_function&amp;quot;,
-  &amp;quot;environment&amp;quot;: {}
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;apex deploy&lt;/code&gt;するとlambdaが作られる。&lt;code&gt;--dry-run&lt;/code&gt;もできる。
-バージョン管理されているので&lt;code&gt;rollback&lt;/code&gt;もできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ apex deploy hello --profile apex
-   • creating function         env= function=hello
-   • created alias current     env= function=hello version=1
-   • function created          env= function=hello name=try-apex_hello version=1
-
-$ apex list
-
-  hello
-    runtime: nodejs6.10
-    memory: 128mb
-    timeout: 5s
-    role: arn:aws:iam::*****:role/try-apex_lambda_function
-    handler: index.handle
-    arn: arn:aws:lambda:ap-northeast-1:*****:function:try-apex_hello:current
-    aliases: current@v1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;マネジメントコンソールではここでバージョンが確認できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/140.png&#34; alt=&#34;バージョンの確認&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;apex invoke&lt;/code&gt;で実行。標準入力でイベントを渡せる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ apex invoke hello
-{&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;パッケージに含めないファイルは.apexignoreに書く。&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/145/</guid>
+      <description>https://github.com/sambaiz/athena-admin
+AthenaはS3をデータソースとするマネージドなデータ分析基盤。Prestoベースで標準SQLを実行できる。
+料金はスキャンしたデータ量にかかり、$5/TB。1MB切り上げで、10MB以下のクエリは10MBになる。 データ量に対してかなり安く使えるものの、フルスキャンしてしまうとBigQueryと同様にお金が溶けてしまうので、大抵はパーティションを切ることになるのだけど都度locationを指定してADD PARTITIONを実行するのは大変。さらにスキーマを変更するのにもALTER TABLE ADD COLUMNSなどはないのでテーブルを作り直すことになるが、当然パーティションも全部作り直すことになる。
+ではどうしようもないかというとMSCK REPAIR TABLEというのがあって、 これはS3のObjectのdt=YYYY-MM-DDのようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだけど、勝手にYYYY/MM/DD/HHのprefixを付けてしまうFirehoseのようなのもある。
+今回作ったathena-adminは以下のような定義ファイルから、 パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationする。 このファイルを書き換えるだけで基本的にどうにかなるし、バージョン管理すればテーブル定義の変更を追うことができる。
+{ &amp;quot;general&amp;quot;: { &amp;quot;athenaRegion&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;, &amp;quot;databaseName&amp;quot;: &amp;quot;aaaa&amp;quot;, &amp;quot;saveDefinitionLocation&amp;quot;: &amp;quot;s3://saveDefinitionBucket/aaaa.json&amp;quot; }, &amp;quot;tables&amp;quot;: { &amp;quot;sample_data&amp;quot;: { &amp;quot;columns&amp;quot;: { &amp;quot;user_id&amp;quot;: &amp;quot;int&amp;quot;, &amp;quot;value&amp;quot;: { &amp;quot;score&amp;quot;: &amp;quot;int&amp;quot;, &amp;quot;category&amp;quot;: &amp;quot;string&amp;quot; } /* &amp;quot;struct&amp;lt;score:int,category:string&amp;gt;&amp;quot; のように書くこともできる */ }, &amp;quot;srcLocation&amp;quot;: &amp;quot;s3://src/location/&amp;quot;, &amp;quot;partition&amp;quot;: { &amp;quot;prePartitionLocation&amp;quot;: &amp;quot;s3://pre/partition/&amp;quot;, /* optional */ &amp;quot;regexp&amp;quot;: &amp;quot;(\\d{4})/(\\d{2})/(\\d{2})/&amp;quot;, /* optional */ &amp;quot;keys&amp;quot;: [ { &amp;quot;name&amp;quot;: &amp;quot;dt&amp;quot;, &amp;quot;type&amp;quot;: &amp;quot;string&amp;quot;, &amp;quot;format&amp;quot;: &amp;quot;{1}-{2}-{3}&amp;quot;, /* optional */ } ] } } } }  使い方はこんな感じ。使い方によってはmigrate()だけ呼ぶこともあると思う。 replaceObjects()にはmatchedHandlerというのを渡すこともできて、 UTCからJSTに変換するといったこともできる。</description>
+    </item>
     
+    <item>
+      <title>ApexでデプロイしたLambdaのトリガーをTerraformで管理する</title>
+      <link>https://www.sambaiz.net/article/144/</link>
+      <pubDate>Sun, 12 Nov 2017 22:23:00 +0900</pubDate>
       
-        <item>
-          <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</title>
-          <link>https://www.sambaiz.net/article/132/</link>
-          <pubDate>Sun, 10 Sep 2017 23:45:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/132/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer&#34;&gt;Puppeteer&lt;/a&gt;でHeadless Chromeを動かすコードを
-Lambda上で動かすStarter Kitを作った。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit&#34;&gt;puppeteer-lambda-starter-kit&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;chromeの準備&#34;&gt;Chromeの準備&lt;/h2&gt;
-
-&lt;p&gt;Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても
-Lambdaにないshared libraryに依存しているため失敗する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Lambda上でHeadless Chromeを動かす例がないか調べたら&lt;a href=&#34;https://github.com/adieuadieu/serverless-chrome&#34;&gt;serverless-chrome&lt;/a&gt;というのがあって、
-Headless用の設定でChromeをビルドしていた。
-ほかには&lt;a href=&#34;https://github.com/graphcool/chromeless&#34;&gt;chromeless&lt;/a&gt;というのもあるけど
-これはserverless-chromeに
-&lt;a href=&#34;https://github.com/graphcool/chromeless/blob/master/serverless/serverless.yml#L46&#34;&gt;依存している&lt;/a&gt;。
-最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。&lt;/p&gt;
-
-&lt;p&gt;serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。
-基本的には&lt;a href=&#34;https://github.com/adieuadieu/serverless-chrome/tree/master/chrome&#34;&gt;書いてある&lt;/a&gt;
-通りやればうまくいく。他のプロセスとのshared memoryとして/dev/shmを使っているのを、/tmpに&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/master/chrome/buildChrome.sh#L20&#34;&gt;置き換える&lt;/a&gt;
-ようにしないと、実行時の&lt;code&gt;page.goto()&lt;/code&gt;で&lt;code&gt;Failed Provisional Load: ***, error_code: -12&lt;/code&gt;になる。&lt;/p&gt;
-
-&lt;p&gt;ビルドしたheadless_shellには問題になった依存は含まれていないようだ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ldd headless_shell 
-	linux-vdso.so.1 =&amp;gt;  (0x00007ffcb6fed000)
-	libpthread.so.0 =&amp;gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000)
-	libdl.so.2 =&amp;gt; /lib64/libdl.so.2 (0x00007f5f17bba000)
-	librt.so.1 =&amp;gt; /lib64/librt.so.1 (0x00007f5f179b1000)
-	libnss3.so =&amp;gt; /usr/lib64/libnss3.so (0x00007f5f17692000)
-	libnssutil3.so =&amp;gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000)
-	libsmime3.so =&amp;gt; /usr/lib64/libsmime3.so (0x00007f5f1723e000)
-	libnspr4.so =&amp;gt; /lib64/libnspr4.so (0x00007f5f17001000)
-	libexpat.so.1 =&amp;gt; /lib64/libexpat.so.1 (0x00007f5f16dd8000)
-	libfontconfig.so.1 =&amp;gt; not found
-	libfreetype.so.6 =&amp;gt; /usr/lib64/libfreetype.so.6 (0x00007f5f16b3b000)
-	libm.so.6 =&amp;gt; /lib64/libm.so.6 (0x00007f5f16839000)
-	libstdc++.so.6 =&amp;gt; /usr/lib64/libstdc++.so.6 (0x00007f5f16533000)
-	libgcc_s.so.1 =&amp;gt; /lib64/libgcc_s.so.1 (0x00007f5f1631d000)
-	libc.so.6 =&amp;gt; /lib64/libc.so.6 (0x00007f5f15f5b000)
-	/lib64/ld-linux-x86-64.so.2 (0x000055ba0af5e000)
-	libplc4.so =&amp;gt; /lib64/libplc4.so (0x00007f5f15d55000)
-	libplds4.so =&amp;gt; /lib64/libplds4.so (0x00007f5f15b51000)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Puppetterで落としてくる普通のChromeは&lt;a href=&#34;http://docs.aws.amazon.com/lambda/latest/dg/limits.html&#34;&gt;Lambdaの制限&lt;/a&gt;の50MBを超えていたが、
-ビルドしたものはぎりぎり超えていないのでパッケージに含められるようになった。
-PuppeteerのChromeは環境変数&lt;code&gt;PUPPETEER_SKIP_CHROMIUM_DOWNLOAD&lt;/code&gt;を設定することで&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/blob/2817130fe099a7431e98c20ce1f44c6e547d4ca9/docs/api.md#puppeteer&#34;&gt;含めないようにできる&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;他のパッケージのサイズによっては50MBを超えてしまうこともあるので、
-パッケージに含めず&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/v0.9.0/src/util.js#L62&#34;&gt;S3からダウンロード&lt;/a&gt;できるようにもした。&lt;/p&gt;
-
-&lt;p&gt;いずれの場合も最終的な置き先はLambdaで唯一書き込める&lt;code&gt;/tmp&lt;/code&gt;になる。
-この領域は512MBまで使えるので展開してもまだ余裕がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Error: EROFS: read-only file system, open &#39;node_modules/puppeteer/.local-chromium&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;chromeのlaunch時のoption&#34;&gt;ChromeのLaunch時のOption&lt;/h2&gt;
-
-&lt;p&gt;いろいろ試した結果、最低限必要だったのはこのあたり。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;exports.launchOptionForLambda = [
-    // error when launch(); No usable sandbox! Update your kernel
-    &#39;--no-sandbox&#39;,
-    // error when launch(); Failed to load libosmesa.so
-    &#39;--disable-gpu&#39;, 
-    // freeze when newPage()
-    &#39;--single-process&#39;
-];
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;エラーは分かりづらいものが多く、ときにはエラーすら出ずに止まってしまうこともある。
-デバッグの際はdumpioを有効にする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const browser = await puppeteer.launch({
-    ...
-    dumpio: !!util.DEBUG,
-});  
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;babel&#34;&gt;Babel&lt;/h2&gt;
-
-&lt;p&gt;現在のLambdaのNodeのバージョンはv6.10.3。
-&lt;a href=&#34;http://node.green/&#34;&gt;node.green&lt;/a&gt;によるとES2015は99%対応していて、ES2016もべき乗演算子(2 ** 3 = 8)以外は対応しているが、ES2017のasync/awaitは7.6からなので、8系に対応するまではbabelにかける必要がある。
-ちなみにPuppeteerは6.4以降で&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/tree/master/utils/node6-transform&#34;&gt;動く&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ yarn add --dev babel-cli babel-preset-env
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/babel/babel-preset-env&#34;&gt;babel-preset-env&lt;/a&gt;
-.babelrcはこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat .babelrc
-{
-  &amp;quot;presets&amp;quot;: [
-    [&amp;quot;env&amp;quot;, {
-      &amp;quot;targets&amp;quot;: {
-        &amp;quot;node&amp;quot;: &amp;quot;6.10&amp;quot;
-      }
-    }]
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/144/</guid>
+      <description>Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。 これを手作業で行うこともできるのだけど、せっかくなのでアプリケーションと一緒に管理したい。 そんなときのためにterraformコマンドをラップしたapex infraが用意されている。
+TerraformでVPCを管理するmoduleを作る - sambaiz-net
+functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。 その下に環境ごとのディレクトリを作成することもできて、その場合は--envで指定した環境のものが使われる。
+- functions - infrastructure main.tf variables.tf - modules - cloudwatch_schedule main.tf variables.tf project.json  functionをデプロイするとそのARNが変数で取れるようになる。
+$ apex list --tfvars apex_function_hello=&amp;quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&amp;quot;  今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。
+ aws_cloudwatch_event_ruleでイベントルール(今回はschedule)を作成 aws_cloudwatch_event_targetでルールにターゲット(今回はLambda)を設定 aws_lambda_permissionでルールに対象Lambdaをinvokeする権限を付ける  $ cat infrastructure/modules/cloudwatch_schefule/variables.tf variable &amp;quot;lambda_function_name&amp;quot; {} variable &amp;quot;lambda_function_arn&amp;quot; {} variable &amp;quot;schedule_expression&amp;quot; { description = &amp;quot;cloudwatch schedule expression e.g. \&amp;quot;cron(0/5 * * * ? *)\&amp;quot;&amp;quot; } $ cat infrastructure/modules/cloudwatch_schefule/main.tf resource &amp;quot;aws_cloudwatch_event_rule&amp;quot; &amp;quot;lambda&amp;quot; { name = &amp;quot;lambda_rule_${var.</description>
+    </item>
     
+    <item>
+      <title>Redashでデータを可視化する</title>
+      <link>https://www.sambaiz.net/article/141/</link>
+      <pubDate>Mon, 23 Oct 2017 23:59:00 +0900</pubDate>
       
-        <item>
-          <title>TerraformでVPCを管理するmoduleを作る</title>
-          <link>https://www.sambaiz.net/article/121/</link>
-          <pubDate>Sun, 23 Jul 2017 02:54:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/121/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://www.terraform.io/&#34;&gt;Terraform&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ brew install terraform
-$ terraform -v
-Terraform v0.9.11
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;terraformの設定要素&#34;&gt;Terraformの設定要素&lt;/h2&gt;
-
-&lt;h3 id=&#34;provider-https-www-terraform-io-docs-providers-index-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/index.html&#34;&gt;provider&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;IaaS(e.g. AWS)、PaaS(e.g. Heroku)、SaaS(e.g. CloudFlare)など。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/&#34;&gt;AWS Provider&lt;/a&gt;はこんな感じ。
-ここに直接access_keyやsecret_keyを書くこともできるけど、誤って公開されてしまわないように環境変数か
-variableで渡す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;provider &amp;quot;aws&amp;quot; {
-  # access_key = &amp;quot;${var.access_key}&amp;quot;
-  # secret_key = &amp;quot;${var.secret_key}&amp;quot;
-  region = &amp;quot;us-east-1&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ export AWS_ACCESS_KEY_ID=&amp;quot;anaccesskey&amp;quot;
-$ export AWS_SECRET_ACCESS_KEY=&amp;quot;asecretkey&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;varibale-https-www-terraform-io-docs-configuration-variables-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/configuration/variables.html&#34;&gt;varibale&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;CLIでオーバーライドできるパラメーター。typeにはstringのほかにmapやlistを渡すことができ、
-何も渡さないとdefault値のものが、それもなければstringになる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;variable &amp;quot;key&amp;quot; {
-  type    = &amp;quot;string&amp;quot;
-  default = &amp;quot;value&amp;quot;
-  description = &amp;quot;description&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;値を渡す方法はTF_VAR_をprefixとする環境変数、-var、-var-fileがある。
-また、moduleのinputとして渡されることもある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ export TF_VAR_somelist=&#39;[&amp;quot;ami-abc123&amp;quot;, &amp;quot;ami-bcd234&amp;quot;]&#39;
-$ terraform apply -var foo=bar -var foo=baz
-$ terraform apply -var-file=foo.tfvars -var-file=bar.tfvars
-$ cat foo.tfvars
-foo = &amp;quot;bar&amp;quot;
-xyz = &amp;quot;abc&amp;quot;
-
-somelist = [
-  &amp;quot;one&amp;quot;,
-  &amp;quot;two&amp;quot;,
-]
-
-somemap = {
-  foo = &amp;quot;bar&amp;quot;
-  bax = &amp;quot;qux&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h4 id=&#34;output-https-www-terraform-io-docs-configuration-outputs-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/configuration/outputs.html&#34;&gt;output&lt;/a&gt;&lt;/h4&gt;
-
-&lt;p&gt;variableがinputなのに対して、こちらはoutput。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;output &amp;quot;ip&amp;quot; {
-  value = &amp;quot;${aws_eip.ip.public_ip}&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実行した後に取得できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ terraform apply
-...
-
-$ terraform output ip
-50.17.232.209
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;resource-https-www-terraform-io-docs-configuration-resources-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/configuration/resources.html&#34;&gt;resource&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;物理サーバーやVMのような低レベルのものからDNSレコードのような高レベルのものまで含むインフラのコンポーネント。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_instance&amp;quot; &amp;quot;web&amp;quot; {
-  ami           = &amp;quot;ami-408c7f28&amp;quot;
-  instance_type = &amp;quot;t1.micro&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h4 id=&#34;provisioner-https-www-terraform-io-docs-provisioners-index-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/provisioners/index.html&#34;&gt;provisioner&lt;/a&gt;&lt;/h4&gt;
-
-&lt;p&gt;デフォルトでは作成されたときに実行されるコマンド。&lt;code&gt;when = &amp;quot;destroy&amp;quot;&lt;/code&gt;で終了時に実行させることもできる。
-on_failureで失敗したときの挙動を設定することができ、デフォルトはコマンド自体が失敗する&amp;rdquo;fail&amp;rdquo;になっている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_instance&amp;quot; &amp;quot;web&amp;quot; {
-  # ...
-
-  provisioner &amp;quot;local-exec&amp;quot; {
-    command = &amp;quot;echo ${self.private_ip_address} &amp;gt; file.txt&amp;quot;
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;data-https-www-terraform-io-docs-configuration-data-sources-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/configuration/data-sources.html&#34;&gt;data&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;情報を取得する。Terraform以外で作られたリソースのものも取れる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;data &amp;quot;aws_ami&amp;quot; &amp;quot;web&amp;quot; {
-  filter {
-    name   = &amp;quot;state&amp;quot;
-    values = [&amp;quot;available&amp;quot;]
-  }
-
-  filter {
-    name   = &amp;quot;tag:Component&amp;quot;
-    values = [&amp;quot;web&amp;quot;]
-  }
-
-  most_recent = true
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;module-https-www-terraform-io-docs-modules-index-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/modules/index.html&#34;&gt;module&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;設定をまとめたもの。variableの値を渡すことができ、再利用することができる。
-GitHubのurlをsourceに指定することもできる。最初に&lt;code&gt;terraform get&lt;/code&gt;する必要がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;module &amp;quot;assets_bucket&amp;quot; {
-  source = &amp;quot;./publish_bucket&amp;quot;
-  name   = &amp;quot;assets&amp;quot;
-}
-
-module &amp;quot;media_bucket&amp;quot; {
-  source = &amp;quot;./publish_bucket&amp;quot;
-  name   = &amp;quot;media&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;# publish_bucket/bucket-and-cloudfront.tf
-variable &amp;quot;name&amp;quot; {} # this is the input parameter of the module
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;backend-https-www-terraform-io-docs-backends-index-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/backends/index.html&#34;&gt;backend&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;0.9.0から&lt;code&gt;terraform remote&lt;/code&gt;の代わりに使われるようになったもの。
-管理下のresourceと今の状態を表すtfstateファイルを各自のローカルではなくリモートで一元的に管理する。
-オプションではあるけど、applyしたあとにtfstateを上げるのを忘れたりするのを防ぐこともできるため
-相当変わった用途でもない限り使わない理由がないと思う。最初に&lt;code&gt;terraform init&lt;/code&gt;する必要がある。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.terraform.io/docs/backends/types/s3.html&#34;&gt;S3&lt;/a&gt;に置く場合はこんな感じ。
-DynamoDBでロックをかけられる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;terraform {
-  backend &amp;quot;s3&amp;quot; {
-    bucket = &amp;quot;mybucket&amp;quot;
-    key    = &amp;quot;path/to/my/key&amp;quot;
-    region = &amp;quot;us-east-1&amp;quot;
-    dynamodb_table = &amp;quot;tflocktable&amp;quot;
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;vpcのmoduleを作る&#34;&gt;VPCのmoduleを作る&lt;/h2&gt;
-
-&lt;p&gt;コードは&lt;a href=&#34;https://github.com/sambaiz/terraform-example-vpc&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;community-moduleにも&lt;a href=&#34;https://github.com/terraform-community-modules/tf_aws_vpc&#34;&gt;VPCのモジュール&lt;/a&gt;があるんだけど、今回は自分で作ってみる。&lt;/p&gt;
-
-&lt;p&gt;variableはこんな感じ。同じファイルに書くこともできるが別に分けた方が見やすい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;variable &amp;quot;vpc_name&amp;quot; {
-    description = &amp;quot;vpc&#39;s name, e.g. main-vpc&amp;quot;
-}
-
-variable &amp;quot;vpc_cidr_block&amp;quot; {
-    description = &amp;quot;vpc&#39;s cidr block, e.g. 10.0.0.0/16&amp;quot;
-}
-
-variable &amp;quot;public_subnet_cidr_blocks&amp;quot; {
-    type = &amp;quot;list&amp;quot;
-    description = &amp;quot;public subnets&#39; cidr blocks, e.g. [\&amp;quot;10.0.0.0/24\&amp;quot;, \&amp;quot;10.0.1.0/24\&amp;quot;]&amp;quot;
-}
-
-variable &amp;quot;public_subnet_availability_zones&amp;quot; {
-    type = &amp;quot;list&amp;quot;
-    description = &amp;quot;public subnets&#39; cidr blocks, e.g. [\&amp;quot;ap-northeast-1a\&amp;quot;,\&amp;quot;ap-northeast-1c\&amp;quot;]&amp;quot;
-}
-
-variable &amp;quot;private_subnet_cidr_blocks&amp;quot; {
-    type = &amp;quot;list&amp;quot;
-    description = &amp;quot;private subnets&#39; cidr blocks, e.g. [\&amp;quot;10.0.2.0/24\&amp;quot;, \&amp;quot;10.0.3.0/24\&amp;quot;]&amp;quot;
-}
-
-variable &amp;quot;private_subnet_availability_zones&amp;quot; {
-    type = &amp;quot;list&amp;quot;
-    description = &amp;quot;public subnets&#39; cidr blocks, e.g. [\&amp;quot;ap-northeast-1a\&amp;quot;,\&amp;quot;ap-northeast-1c\&amp;quot;]&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まず&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/d/vpc.html&#34;&gt;VPC&lt;/a&gt;を作成する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_vpc&amp;quot; &amp;quot;vpc&amp;quot; {
-    cidr_block = &amp;quot;${var.vpc_cidr_block}&amp;quot;
-    enable_dns_hostnames = true
-    tags {
-        Name = &amp;quot;${var.vpc_name}&amp;quot;
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;次にVPCにpublicとprivate用の&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/d/subnet.html&#34;&gt;サブネット&lt;/a&gt;を、
-それぞれcidr_block分作成する。&lt;/p&gt;
-
-&lt;p&gt;vpc_idでvpcのresourceを参照している。したがって、これを実行するためには既にvpcが作られている必要がある。
-&lt;code&gt;depends_on&lt;/code&gt;で明示的に依存関係を示すこともできるのだけど、
-大抵はそうする必要がなくて&lt;a href=&#34;https://www.terraform.io/intro/getting-started/dependencies.html#implicit-and-explicit-dependencies&#34;&gt;暗黙的な依存関係&lt;/a&gt;をterraformが解決してくれる。
-これは&lt;a href=&#34;https://www.terraform.io/docs/commands/graph.html&#34;&gt;terraform graph&lt;/a&gt;で確認できる。&lt;/p&gt;
-
-&lt;p&gt;AZで使われている&lt;a href=&#34;https://www.terraform.io/docs/configuration/interpolation.html#element-list-index-&#34;&gt;element(list, index)&lt;/a&gt;
-は要素数以上のindexを渡してもmodの要領で選ぶので数を合わせなくてもよい。&lt;/p&gt;
-
-&lt;p&gt;複数作ったものは&lt;code&gt;aws_subnet.public-subnet.0&lt;/code&gt;のように0から始まるindexで&lt;a href=&#34;https://www.terraform.io/docs/configuration/interpolation.html#attributes-of-other-resources&#34;&gt;参照でき&lt;/a&gt;、
-&lt;code&gt;aws_subnet.public-subnet.*.id&lt;/code&gt;のようにすると要素のリストを得られる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_subnet&amp;quot; &amp;quot;public-subnet&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    count = &amp;quot;${length(var.public_subnet_cidr_blocks)}&amp;quot;
-    cidr_block = &amp;quot;${var.public_subnet_cidr_blocks[count.index]}&amp;quot;
-    availability_zone = &amp;quot;${element(var.public_subnet_availability_zones, count.index)}&amp;quot;
-    map_public_ip_on_launch = true
-    tags {
-        Name = &amp;quot;${var.vpc_name}-public-${element(var.public_subnet_availability_zones, count.index)}&amp;quot;
-    }
-}
-
-resource &amp;quot;aws_subnet&amp;quot; &amp;quot;private-subnet&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    count = &amp;quot;${length(var.private_subnet_cidr_blocks)}&amp;quot;
-    cidr_block = &amp;quot;${var.private_subnet_cidr_blocks[count.index]}&amp;quot;
-    availability_zone = &amp;quot;${element(var.private_subnet_availability_zones, count.index)}&amp;quot;
-    tags {
-        Name = &amp;quot;${var.vpc_name}-private-${element(var.private_subnet_availability_zones, count.index)}&amp;quot;
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;public用のサブネットが外と通信できるように&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/internet_gateway.html&#34;&gt;インターネットゲートウェイ&lt;/a&gt;をVPCにアタッチし、
-これを登録した&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/d/route_table.html&#34;&gt;カスタムルートテーブル&lt;/a&gt;
-をサブネットに&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/route_table_association.html&#34;&gt;関連付ける&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_internet_gateway&amp;quot; &amp;quot;igw&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    tags {
-        Name = &amp;quot;${var.vpc_name}-igw&amp;quot;
-    }
-}
-
-resource &amp;quot;aws_route_table&amp;quot; &amp;quot;public-route-table&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    route {
-        cidr_block = &amp;quot;0.0.0.0/0&amp;quot;
-        gateway_id = &amp;quot;${aws_internet_gateway.igw.id}&amp;quot;
-    }
-    tags {
-        Name = &amp;quot;${var.vpc_name}-public-route-table&amp;quot;
-    }
-}
-
-resource &amp;quot;aws_route_table_association&amp;quot; &amp;quot;route-table-association&amp;quot; {
-    count          = &amp;quot;${length(var.public_subnet_cidr_blocks)}&amp;quot;
-    subnet_id      = &amp;quot;${element(aws_subnet.public-subnet.*.id, count.index)}&amp;quot;
-    route_table_id = &amp;quot;${aws_route_table.public-route-table.id}&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;privateのサブネットからはNATして外に出られるようにする。
-publicなサブネットにNATする&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AmazonVPC/latest/UserGuide/vpc-nat-comparison.html&#34;&gt;インスタンス&lt;/a&gt;を立ててもいいけど、&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AmazonVPC/latest/UserGuide/vpc-nat-gateway.html&#34;&gt;NATゲートウェイ&lt;/a&gt;を使うと自分でメンテする必要がなくて楽。
-&lt;a href=&#34;https://aws.amazon.com/jp/vpc/pricing/&#34;&gt;料金&lt;/a&gt;は時間と通信量による。&lt;/p&gt;
-
-&lt;p&gt;ということで、&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/eip.html&#34;&gt;EIP&lt;/a&gt;を割り当て、
-適当なpublicのサブネットに&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/nat_gateway.html&#34;&gt;NATゲートウェイ&lt;/a&gt;を作成する。
-ドキュメントに書いてある通り、明示的にigwを依存に入れている。&lt;/p&gt;
-
-&lt;p&gt;NATゲートウェイを&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/main_route_table_assoc.html&#34;&gt;メインルートテーブル&lt;/a&gt;に登録する。
-これは&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AmazonVPC/latest/UserGuide/vpc-nat-gateway.html#nat-gateway-basics&#34;&gt;AWSのドキュメント&lt;/a&gt;に書いてある通りの構成で、
-明示的にルートテーブルと関連付けていないサブネットは
-メインルートテーブルに
-&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AmazonVPC/latest/UserGuide/VPC_Route_Tables.html#RouteTables&#34;&gt;関連付けられる&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_eip&amp;quot; &amp;quot;nat&amp;quot; {
-    vpc = true
-}
-
-resource &amp;quot;aws_nat_gateway&amp;quot; &amp;quot;ngw&amp;quot; {
-    allocation_id = &amp;quot;${aws_eip.nat.id}&amp;quot;
-    subnet_id     = &amp;quot;${aws_subnet.public-subnet.0.id}&amp;quot;
-    depends_on = [&amp;quot;aws_internet_gateway.igw&amp;quot;]
-}
-
-resource &amp;quot;aws_route_table&amp;quot; &amp;quot;main-route-table&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    route {
-        cidr_block = &amp;quot;0.0.0.0/0&amp;quot;
-        nat_gateway_id = &amp;quot;${aws_nat_gateway.ngw.id}&amp;quot;
-    }
-    tags {
-        Name = &amp;quot;${var.vpc_name}-main-route-table&amp;quot;
-    }
-}
-
-resource &amp;quot;aws_main_route_table_association&amp;quot; &amp;quot;main-route-table-association&amp;quot; {
-  vpc_id         = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-  route_table_id = &amp;quot;${aws_route_table.main-route-table.id}&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;実行&#34;&gt;実行&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;terraform {
-  backend &amp;quot;s3&amp;quot; {
-    bucket = &amp;quot;terraform&amp;quot;
-    key    = &amp;quot;terraform.tfstate&amp;quot;
-    region = &amp;quot;ap-northeast-1&amp;quot;
-  }
-}
-
-provider &amp;quot;aws&amp;quot; {
-  region = &amp;quot;ap-northeast-1&amp;quot;
-}
-
-module &amp;quot;test-vpc&amp;quot; {
-  source                            = &amp;quot;./vpc&amp;quot;
-  vpc_name                          = &amp;quot;test-vpc&amp;quot;
-  vpc_cidr_block                    = &amp;quot;10.0.0.0/16&amp;quot;
-  public_subnet_cidr_blocks         = [&amp;quot;10.0.0.0/24&amp;quot;, &amp;quot;10.0.1.0/24&amp;quot;]
-  public_subnet_availability_zones  = [&amp;quot;ap-northeast-1a&amp;quot;, &amp;quot;ap-northeast-1c&amp;quot;]
-  private_subnet_cidr_blocks        = [&amp;quot;10.0.2.0/24&amp;quot;, &amp;quot;10.0.3.0/24&amp;quot;]
-  private_subnet_availability_zones = [&amp;quot;ap-northeast-1a&amp;quot;, &amp;quot;ap-northeast-1c&amp;quot;]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;planして問題なければapplyする流れ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ terraform init
-$ terraform get
-$ terraform plan
-+ module.test-vpc.aws_eip.nat
-    allocation_id:     &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    association_id:    &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    domain:            &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    instance:          &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    network_interface: &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    private_ip:        &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    public_ip:         &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    vpc:               &amp;quot;true&amp;quot;
-
-+ module.test-vpc.aws_internet_gateway.igw
-    tags.%:    &amp;quot;1&amp;quot;
-    tags.Name: &amp;quot;test-vpc-igw&amp;quot;
-    vpc_id:    &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-
-...
-Plan: 13 to add, 0 to change, 0 to destroy.
-
-$ terraform apply
-...
-Apply complete! Resources: 13 added, 0 changed, 0 destroyed.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;applyするとresourceが作成・更新され、tfstateファイルがbackendまたはローカルに出力される。
-次回以降はこのtfstateとの差分を取って変更されるので、このファイルがないとまた同じものが作成されてしまう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-    &amp;quot;version&amp;quot;: 3,
-    &amp;quot;terraform_version&amp;quot;: &amp;quot;0.9.11&amp;quot;,
-    &amp;quot;serial&amp;quot;: 1,
-    &amp;quot;lineage&amp;quot;: &amp;quot;f97ad997-5a19-4a3d-9921-b553c5f2532b&amp;quot;,
-    &amp;quot;modules&amp;quot;: [
-        {
-            &amp;quot;path&amp;quot;: [
-                &amp;quot;root&amp;quot;
-            ],
-            &amp;quot;outputs&amp;quot;: {},
-            &amp;quot;resources&amp;quot;: {},
-            &amp;quot;depends_on&amp;quot;: []
-        },
-        {
-            &amp;quot;path&amp;quot;: [
-                &amp;quot;root&amp;quot;,
-                &amp;quot;test-vpc&amp;quot;
-            ],
-            &amp;quot;outputs&amp;quot;: {},
-            &amp;quot;resources&amp;quot;: {
-                &amp;quot;aws_eip.nat&amp;quot;: {
-                    &amp;quot;type&amp;quot;: &amp;quot;aws_eip&amp;quot;,
-                    &amp;quot;depends_on&amp;quot;: [],
-                    &amp;quot;primary&amp;quot;: {
-                        &amp;quot;id&amp;quot;: &amp;quot;eipalloc-3046f054&amp;quot;,
-                        &amp;quot;attributes&amp;quot;: {
-                            &amp;quot;association_id&amp;quot;: &amp;quot;&amp;quot;,
-                            &amp;quot;domain&amp;quot;: &amp;quot;vpc&amp;quot;,
-                            &amp;quot;id&amp;quot;: &amp;quot;eipalloc-3046f054&amp;quot;,
-                            &amp;quot;instance&amp;quot;: &amp;quot;&amp;quot;,
-                            &amp;quot;network_interface&amp;quot;: &amp;quot;&amp;quot;,
-                            &amp;quot;private_ip&amp;quot;: &amp;quot;&amp;quot;,
-                            &amp;quot;public_ip&amp;quot;: &amp;quot;13.114.59.186&amp;quot;,
-                            &amp;quot;vpc&amp;quot;: &amp;quot;true&amp;quot;
-                        },
-                        &amp;quot;meta&amp;quot;: {},
-                        &amp;quot;tainted&amp;quot;: false
-                    },
-                    &amp;quot;deposed&amp;quot;: [],
-                    &amp;quot;provider&amp;quot;: &amp;quot;&amp;quot;
-                },
-                &amp;quot;aws_internet_gateway.igw&amp;quot;: {
-                    &amp;quot;type&amp;quot;: &amp;quot;aws_internet_gateway&amp;quot;,
-                    &amp;quot;depends_on&amp;quot;: [
-                        &amp;quot;aws_vpc.vpc&amp;quot;
-                    ],
-                    &amp;quot;primary&amp;quot;: {
-                        &amp;quot;id&amp;quot;: &amp;quot;igw-d2659bb6&amp;quot;,
-                        &amp;quot;attributes&amp;quot;: {
-                            &amp;quot;id&amp;quot;: &amp;quot;igw-d2659bb6&amp;quot;,
-                            &amp;quot;tags.%&amp;quot;: &amp;quot;1&amp;quot;,
-                            &amp;quot;tags.Name&amp;quot;: &amp;quot;test-vpc-igw&amp;quot;,
-                            &amp;quot;vpc_id&amp;quot;: &amp;quot;vpc-3cf6a358&amp;quot;
-                        },
-                        &amp;quot;meta&amp;quot;: {},
-                        &amp;quot;tainted&amp;quot;: false
-                    },
-                    &amp;quot;deposed&amp;quot;: [],
-                    &amp;quot;provider&amp;quot;: &amp;quot;&amp;quot;
-                },
-                ...
-            },
-            &amp;quot;depends_on&amp;quot;: []
-        }
-    ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;planすると変更なしになっている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ terraform plan
-...
-No changes. Infrastructure is up-to-date.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;terafform destroy&lt;/code&gt;で管理下のresourceを消すことができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ terraform plan -destroy
-...
-Plan: 0 to add, 0 to change, 13 to destroy.
-
-$ terraform destroy
-...
-Destroy complete! Resources: 13 destroyed.
-
-$ terraform plan
-...
-Plan: 13 to add, 0 to change, 0 to destroy.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://qiita.com/CkReal/items/1dbbc78888e157a80668&#34;&gt;お金をかけずに、TerraformでAWSのVPC環境を準備する - Qiita&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/141/</guid>
+      <description>RedashはOSSのデータ可視化ツール。 BIツールのようにパラメータを変えながら指標を探っていくというよりは、分かっている指標を見るのに使うイメージ。 比較的機能が少ない分処理がわかりやすく、 クエリが自動生成されないため時間がかかるものを実行する前にある程度気づけるのが良いと思う。
+docker-composeで立ち上げることもできるけど、 AWSの各リージョンにAMIが用意されているのでそれで立ち上げる。
+sshで入って以下のようなのを必要に応じて設定する。 メールを送る場合はSESでメールアドレスをVerifyしてやるのが簡単。 GSuiteを使っている場合、OAuthのClientID、Secretを発行しドメインを登録するとそれで認証できる。
+$ ssh ubuntu@***** $ sudo vi /opt/redash/.env export REDASH_MAIL_SERVER=&amp;quot;email-smtp.us-east-1.amazonaws.com&amp;quot; export REDASH_MAIL_USE_TLS=&amp;quot;true&amp;quot; export REDASH_MAIL_USERNAME=&amp;quot;*****&amp;quot; export REDASH_MAIL_PASSWORD=&amp;quot;*****&amp;quot; export REDASH_MAIL_DEFAULT_SENDER=&amp;quot;*****&amp;quot; # Email address to send from export REDASH_GOOGLE_CLIENT_ID=&amp;quot;&amp;quot; export REDASH_GOOGLE_CLIENT_SECRET=&amp;quot;&amp;quot; $ cd /opt/redash/current $ sudo -u redash bin/run ./manage.py org set_google_apps_domains {{domains}} $ sudo supervisorctl restart all  HTTPS対応するのに/etc/nginx/sites-available/redashを編集する。crtとkeyの場所は変える。
+upstream rd_servers { server 127.0.0.1:5000; } server { server_tokens off; listen 80 default; access_log /var/log/nginx/rd.access.log; gzip on; gzip_types *; gzip_proxied any; location /ping { proxy_set_header Host $http_host; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; proxy_pass http://rd_servers; } location / { return 301 https://$host$request_uri; } } server { listen 443 ssl; # Make sure to set paths to your certificate .</description>
+    </item>
     
+    <item>
+      <title>ApexでLambdaをデプロイする</title>
+      <link>https://www.sambaiz.net/article/140/</link>
+      <pubDate>Sun, 22 Oct 2017 16:06:00 +0900</pubDate>
       
-        <item>
-          <title>fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする</title>
-          <link>https://www.sambaiz.net/article/113/</link>
-          <pubDate>Sun, 25 Jun 2017 00:35:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/113/</guid>
-          <description>
-
-&lt;p&gt;デプロイやスループットの調整を簡単にするため、BeanstalkでAggregatorを立ち上げた。&lt;/p&gt;
-
-&lt;h2 id=&#34;負荷分散&#34;&gt;負荷分散&lt;/h2&gt;
-
-&lt;p&gt;TCPの24224(設定による)が通るようにEC2,ELBのSGとリスナーの設定をする必要があって、
-ELBのSGのアウトバウンドの設定が見落とされがち。ELBのクロスゾーン分散は有効になっている。&lt;/p&gt;
-
-&lt;p&gt;まず、ELBに3台、それぞれ別のAZ(1b, 1c, 1d)に配置されている状態でログを送り始めるとそれぞれ均等にログが届いた。
-その状態から4台(1b * 2, 1c, 1d)にすると、2つのインスタンス(1b, 1c)のみに均等にログが届くようになった。
-4台になると(1b, 1c)と(1b, 1d)に分けられてELBのノードがそれらの組に紐づいたということだと思う。
-各ノードにはDNSラウンドロビンするようになっている。実際restartすると今度は別の組の方に送られた。&lt;/p&gt;
-
-&lt;p&gt;では、なぜ一度送り始めると同じ方にしか飛ばないかというと、forwardプラグインの&lt;a href=&#34;http://docs.fluentd.org/v0.12/articles/out_forward#expirednscache&#34;&gt;expire_dns_cache&lt;/a&gt;がデフォルトでnilになっていて、
-heartbeatが届いている間は&lt;a href=&#34;https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L688&#34;&gt;無期限にDNSキャッシュする&lt;/a&gt;ようになっているため。これに0(キャッシュしない)か秒数を指定すると、
-その間隔で他の組のインスタンスにもログが届くようになった。
-&lt;code&gt;expire_dns_cache&lt;/code&gt;しなくても複数のインスタンスからラウンドロビンされるため全体でいえば分散される。&lt;/p&gt;
-
-&lt;h2 id=&#34;heartbeat&#34;&gt;heartbeat&lt;/h2&gt;
-
-&lt;p&gt;ELB配下のEC2を全て落としても&lt;a href=&#34;https://github.com/fluent/fluentd/blob/v0.14.18/lib/fluent/plugin/out_forward.rb#L665&#34;&gt;heartbeat&lt;/a&gt;に失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまうようだ。
-ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。
-全てのインスタンスが同時に落ちるというのは滅多に起きないだろうけど、少なくとも検知できるようにはしておく。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;server&amp;gt;
-    name td1
-    host autoscale-td1.us-east-1.elasticbeanstalk.com
-    port 24224
-&amp;lt;/server&amp;gt;
-&amp;lt;server&amp;gt;
-    name td2
-    host autoscale-td2.us-east-1.elasticbeanstalk.com
-    port 24224
-    standby
-&amp;lt;/server&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;blue-green-deployment&#34;&gt;Blue/Green Deployment&lt;/h2&gt;
-
-&lt;p&gt;Blue-Green Deploymentというのは、2つの系を用意し、activeでない方にデプロイし、
-スワップして反映させるもの。ダウンタイムなしで問題が起きた際にもすぐに切り戻すことができる。
-スワップして向き先を変えるには&lt;code&gt;expire_dns_cache&lt;/code&gt;を設定する必要がある。&lt;/p&gt;
-
-&lt;h2 id=&#34;auto-scaling&#34;&gt;Auto Scaling&lt;/h2&gt;
-
-&lt;p&gt;増えるのはいいとして減るときに、
-送り先で一時的に障害が起きていたりするとバッファをflushできずにログがロストする可能性がある。
-それでいうとログの送り元でも同じことが起こりうるんだけど、通常Aggregatorにしか送らないので比較的問題になりにくい。&lt;/p&gt;
-
-&lt;p&gt;これを避けたい場合、Auto Scalingグループの設定で
-&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/autoscaling/latest/userguide/as-instance-termination.html#instance-protection&#34;&gt;スケールインから保護&lt;/a&gt;を有効にして
-これから立ち上がるインスタンスはスケールインしなくすることができる。
-それまでに立ち上がっていたインスタンスには適用されないので注意。&lt;/p&gt;
-
-&lt;p&gt;スケールインしないということは最大の台数で止まってしまうので、
-ピークを過ぎたらスワップしてバッファが全て掃けたことを確認してからTerminateすることになる。
-これを日常的にやるのは面倒なので、実際は予期しない流量の増加に備えて一応設定しておき、
-普段はしきい値にひっかからないような最低台数で待ち構えておくことにするかな。&lt;/p&gt;
-
-&lt;p&gt;あとはヘルスチェックによって潰される可能性はなくもないけど、それはもうやむなし・・・。&lt;/p&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/elb-configuration-guide-1&#34;&gt;AWS ELBの社内向け構成ガイドを公開してみる 負荷分散編 – Cross-Zone Routingを踏まえて ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/140/</guid>
+      <description>ApexでLambdaをデプロイする。 とても簡単に使えるし、変なこともしないので良い感じ。
+Serverless Frameworkだとeventの設定までカバーできてより便利。
+Serverless FrameworkでLambdaをデプロイする - sambaiz-net
+インストール。ダウンロードして実行できるようにしている。
+$ curl https://raw.githubusercontent.com/apex/apex/master/install.sh | sh   IAMFullAccess AWSLambdaFullAccess  を付けたIAMのプロファイルを登録しておく。
+$ aws configure --profile apex $ aws configure list --profile apex Name Value Type Location ---- ----- ---- -------- profile apex manual --profile access_key ****************OVGQ shared-credentials-file secret_key ****************oi5t shared-credentials-file region ap-northeast-1 config-file ~/.aws/config  apex initしてnameとdescriptionを入れるとIAMが登録され、 ディレクトリ構造が作られる。
+$ apex init --profile apex Project name: try-apex Project description: test [+] creating IAM try-apex_lambda_function role [+] creating IAM try-apex_lambda_logs policy [+] attaching policy to lambda_function role.</description>
+    </item>
     
+    <item>
+      <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</title>
+      <link>https://www.sambaiz.net/article/132/</link>
+      <pubDate>Sun, 10 Sep 2017 23:45:00 +0900</pubDate>
       
-        <item>
-          <title>fluentdでKinesis streamsに送るときの性能確認</title>
-          <link>https://www.sambaiz.net/article/108/</link>
-          <pubDate>Mon, 05 Jun 2017 23:48:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/108/</guid>
-          <description>
-
-&lt;h2 id=&#34;localでのstreamsとproducerのbenchmark&#34;&gt;localでのstreamsとproducerのbenchmark&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;の
-&lt;code&gt;make benchmark&lt;/code&gt;はlocalにDummyServerを&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis/blob/v1.1.3/benchmark/task.rake#L18&#34;&gt;立ち上げて&lt;/a&gt;送っている。&lt;/p&gt;
-
-&lt;p&gt;空でもいいのでroleをつけておく必要がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/awslabs/aws-fluent-plugin-kinesis.git
-$ cd aws-fluent-plugin-kinesis
-$ yum install -y ruby-devel gcc
-$ echo &#39;gem &amp;quot;io-console&amp;quot;&#39; &amp;gt;&amp;gt; Gemfile
-$ make
-$ make benchmark
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;RATEを指定しなければデフォルトで&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis/blob/v1.1.3/benchmark/task.rake#L19&#34;&gt;秒間1000レコード&lt;/a&gt;が送られる設定。
-fluentdを起動してから10秒後にプロセスをkillし、そのレコード数などを出力している。&lt;/p&gt;
-
-&lt;p&gt;t2.microでデフォルト(RATE=1000)で実行した結果がこれ。
-固める分producerの方はややパフォーマンスが落ちる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
-Results: requets: 20, raw_records: 9400, records: 9400
-bundle exec rake benchmark TYPE=producer
-Results: requets: 14, raw_records: 1005, records: 8900
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。
-streamsだとシャードを増やしていく必要があるけど、producerの方は当分大丈夫そうだ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
-Results: requets: 57, raw_records: 27600, records: 27600
-bundle exec rake benchmark TYPE=producer
-Results: requets: 12, raw_records: 241, records: 25200
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;RATE=10000のとき。raw_records, requestの圧縮率はさらに上がり、
-パフォーマンスの差が大きくなってきている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;bundle exec rake benchmark TYPE=streams
-Results: requets: 177, raw_records: 88000, records: 88000
-bundle exec rake benchmark TYPE=producer
-Results: requets: 26, raw_records: 385, records: 75000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;実際にkinesis-streamsに送ってみる&#34;&gt;実際にkinesis streamsに送ってみる&lt;/h2&gt;
-
-&lt;p&gt;ap-northeast-1でシャードは3のKinesis streamsにt2.microインスタンス1台から送る。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
-  @type dummy
-  dummy {&amp;quot;hello&amp;quot;:&amp;quot;world&amp;quot;}
-  tag dummy
-  rate 1000
-&amp;lt;/source&amp;gt;
-
-&amp;lt;source&amp;gt;
-  @type monitor_agent
-  bind 0.0.0.0
-  port 24220
-&amp;lt;/source&amp;gt;
-
-&amp;lt;match **&amp;gt;
-  @type kinesis_streams
-  region ap-northeast-1
-  stream_name test
-
-  flush_interval 1
-  buffer_chunk_limit 1m
-  try_flush_interval 0.1
-  queued_chunk_flush_interval 0.01
-  num_threads 15
-&amp;lt;/match&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;秒間3000まではほとんどキューにたまらず送れる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl localhost:24220/api/plugins.json | jq
-{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-      &amp;quot;buffer_queue_length&amp;quot;: 0,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 17500,
-      &amp;quot;retry_count&amp;quot;: 0,
-      &amp;quot;retry&amp;quot;: {}
-    }
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;4000にするとそのうちretryが発生してしまう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-     &amp;quot;buffer_queue_length&amp;quot;: 60,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 56544178,
-      &amp;quot;retry_count&amp;quot;: 5,
-      &amp;quot;retry&amp;quot;: {
-        &amp;quot;steps&amp;quot;: 5,
-        &amp;quot;next_time&amp;quot;: &amp;quot;2017-06-05 14:05:38 +0000&amp;quot;
-      }
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;たしかにスループットが超過している。スペック通りだ。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/108.png&#34; alt=&#34;書き込みスループットの超過&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;次に30シャードにしてみる。一度にシャード数は倍から半分にしかできないので作り直し。&lt;/p&gt;
-
-&lt;p&gt;これに秒間30000を送ってみると、キューにいくらか溜まった。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-      &amp;quot;buffer_queue_length&amp;quot;: 7,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 7752600,
-      &amp;quot;retry_count&amp;quot;: 0,
-      &amp;quot;retry&amp;quot;: {}
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;さらに倍にして60シャード。これに秒間60000で送ってみる。キューに溜まるものの増え続けはしないのでなんとか送れてそうだ。
-td-agentのプロセスがCPUを99%使っているので、このインスタンスではこの辺が限界かもしれない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-      &amp;quot;buffer_queue_length&amp;quot;: 15,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 16105807,
-      &amp;quot;retry_count&amp;quot;: 0,
-      &amp;quot;retry&amp;quot;: {}
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ついでにus-east-1にも30シャードのStreamsを作成して30000送ってみたところ、キューに溜まる量が格段に増えた。
-早くFirehoseやAnalyticsが東京リージョンにも来てほしい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  ...
-  &amp;quot;plugins&amp;quot;: [
-    {
-      &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3fc0dfac66a8&amp;quot;,
-      &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;,
-      &amp;quot;type&amp;quot;: &amp;quot;kinesis_streams&amp;quot;,
-      ...
-      &amp;quot;buffer_queue_length&amp;quot;: 50,
-      &amp;quot;buffer_total_queued_size&amp;quot;: 52432436,
-      &amp;quot;retry_count&amp;quot;: 0,
-      &amp;quot;retry&amp;quot;: {}
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/132/</guid>
+      <description>PuppeteerでHeadless Chromeを動かすコードを Lambda上で動かすStarter Kitを作った。
+puppeteer-lambda-starter-kit
+Chromeの準備 Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても Lambdaにないshared libraryに依存しているため失敗する。
+error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory  Lambda上でHeadless Chromeを動かす例がないか調べたらserverless-chromeというのがあって、 Headless用の設定でChromeをビルドしていた。 ほかにはchromelessというのもあるけど これはserverless-chromeに 依存している。 最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。
+serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。 基本的には書いてある 通りやればうまくいく。他のプロセスとのshared memoryとして/dev/shmを使っているのを、/tmpに置き換える ようにしないと、実行時のpage.goto()でFailed Provisional Load: ***, error_code: -12になる。
+ビルドしたheadless_shellには問題になった依存は含まれていないようだ。
+$ ldd headless_shell linux-vdso.so.1 =&amp;gt; (0x00007ffcb6fed000) libpthread.so.0 =&amp;gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000) libdl.so.2 =&amp;gt; /lib64/libdl.so.2 (0x00007f5f17bba000) librt.so.1 =&amp;gt; /lib64/librt.so.1 (0x00007f5f179b1000) libnss3.so =&amp;gt; /usr/lib64/libnss3.so (0x00007f5f17692000) libnssutil3.so =&amp;gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000) libsmime3.</description>
+    </item>
     
+    <item>
+      <title>TerraformでVPCを管理するmoduleを作る</title>
+      <link>https://www.sambaiz.net/article/121/</link>
+      <pubDate>Sun, 23 Jul 2017 02:54:00 +0900</pubDate>
       
-        <item>
-          <title>BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因</title>
-          <link>https://www.sambaiz.net/article/106/</link>
-          <pubDate>Sun, 04 Jun 2017 23:40:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/106/</guid>
-          <description>
-
-&lt;h2 id=&#34;user-dataとは-http-docs-aws-amazon-com-ja-jp-awsec2-latest-userguide-user-data-html&#34;&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/user-data.html&#34;&gt;User-Dataとは&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;EC2インスタンス起動時に、シェルスクリプトを走らせたりcloud-initディレクティブを適用できる機能。
-コンソールではインスタンスの詳細の設定の、高度な詳細のところから設定できる。&lt;/p&gt;
-
-&lt;h2 id=&#34;beanstalkでのuser-data&#34;&gt;BeanstalkでのUser-Data&lt;/h2&gt;
-
-&lt;p&gt;実はBeanstalkでも使われていて、CloudFormationで設定されている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;quot;    /bin/bash /tmp/ebbootstrap.sh &amp;quot;,
-
-...
-
-&amp;quot;Fn::FindInMap&amp;quot;: [
-    &amp;quot;AWSEBOptions&amp;quot;,
-    &amp;quot;options&amp;quot;,
-    &amp;quot;UserDataScript&amp;quot;
-]
-&amp;quot; &amp;gt; /tmp/ebbootstrap.sh &amp;quot;,
-
-...
-
-&amp;quot;AWSEBOptions&amp;quot;: {
-    &amp;quot;options&amp;quot;: {
-        &amp;quot;UserDataScript&amp;quot;: &amp;quot;https://s3-ap-northeast-1.amazonaws.com/elasticbeanstalk-env-resources-ap-northeast-1/stalks/eb_node_js_4.0.1.90.2/lib/UserDataScript.sh&amp;quot;,
-        &amp;quot;guid&amp;quot;: &amp;quot;f08557fc43ac&amp;quot;,
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このshellの中では、時計を同期させたり、awsebユーザーを作成したりするほかに、
-非Beanstalk AMI(is_baked=false)ではyum updateが走るようになっている。
-そのため、AMIでのバージョンとBeanstalkで立ち上がったときのバージョンが異なることがあるようだ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;GUID=$7
-
-function update_yum_packages
-{
-  if is_baked update_yum_packages_$GUID; then
-    log yum update has already been done.
-  else
-    log Updating yum packages.
-    yum --exclude=aws-cfn-bootstrap update -y || echo Warning: cannot update yum packages. Continue...
-    mark_installed update_yum_packages_$GUID
-
-    # Update system-release RPM package will reset the .repo files
-    # Update the mirror list again after yum update
-    update_mirror_list
-
-    log Completed updating yum packages. 
-  fi
-}
-
-function is_baked
-{
-	if [[ -f /etc/elasticbeanstalk/baking_manifest/$1 ]]; then
-    true
-	else
-    false
-	fi
-}
-
-function mark_installed
-{
-    mkdir -p /etc/elasticbeanstalk/baking_manifest/
-    echo `date -u` &amp;gt; /etc/elasticbeanstalk/baking_manifest/$1-manifest
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Beanstalk AMIでのログ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat /var/log/messages | grep yum
-[eb-cfn-init]: yum repo has already been locked to f08557fc43ac.
-[eb-cfn-init]: yum update has already been done.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;非Beanstalk AMIでのログ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat /var/log/messages | grep yum
-[eb-cfn-init]: Completed yum repo version locking.
-[eb-cfn-init]: Updating yum packages.
-yum[1597]: Updated: *****
-...
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/121/</guid>
+      <description>Terraform
+$ brew install terraform $ terraform -v Terraform v0.9.11  Terraformの設定要素 provider IaaS(e.g. AWS)、PaaS(e.g. Heroku)、SaaS(e.g. CloudFlare)など。
+AWS Providerはこんな感じ。 ここに直接access_keyやsecret_keyを書くこともできるけど、誤って公開されてしまわないように環境変数か variableで渡す。
+provider &amp;quot;aws&amp;quot; { # access_key = &amp;quot;${var.access_key}&amp;quot; # secret_key = &amp;quot;${var.secret_key}&amp;quot; region = &amp;quot;us-east-1&amp;quot; }  $ export AWS_ACCESS_KEY_ID=&amp;quot;anaccesskey&amp;quot; $ export AWS_SECRET_ACCESS_KEY=&amp;quot;asecretkey&amp;quot;  varibale CLIでオーバーライドできるパラメーター。typeにはstringのほかにmapやlistを渡すことができ、 何も渡さないとdefault値のものが、それもなければstringになる。
+variable &amp;quot;key&amp;quot; { type = &amp;quot;string&amp;quot; default = &amp;quot;value&amp;quot; description = &amp;quot;description&amp;quot; }  値を渡す方法はTF_VAR_をprefixとする環境変数、-var、-var-fileがある。 また、moduleのinputとして渡されることもある。
+$ export TF_VAR_somelist=&#39;[&amp;quot;ami-abc123&amp;quot;, &amp;quot;ami-bcd234&amp;quot;]&#39; $ terraform apply -var foo=bar -var foo=baz $ terraform apply -var-file=foo.</description>
+    </item>
     
+    <item>
+      <title>fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする</title>
+      <link>https://www.sambaiz.net/article/113/</link>
+      <pubDate>Sun, 25 Jun 2017 00:35:00 +0900</pubDate>
       
-        <item>
-          <title>Node.jsでの文字コードの変換</title>
-          <link>https://www.sambaiz.net/article/89/</link>
-          <pubDate>Tue, 28 Mar 2017 21:36:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/89/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/bnoordhuis/node-iconv&#34;&gt;node-iconv&lt;/a&gt;を使う。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install iconv
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;SHIFT_JISからUTF-8への変換はこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const Iconv  = require(&#39;iconv&#39;).Iconv;
-
-const before = new Buffer([
-    0x8b, 0x8d, 
-    0x8e, 0x4d, 
-    0x26,
-    0x82, 0xb2,
-    0x94, 0xd1
-]);
-
-const iconv = new Iconv(&#39;SHIFT_JIS&#39;, &#39;UTF-8&#39;);
-console.log(`before: ${before.toString(&#39;hex&#39;)} ${before.toString()}`)
-const after = iconv.convert(before);
-console.log(`after:  ${after.toString(&#39;hex&#39;)} ${after.toString()}`);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;before: 8b8d8e4d2682b294d1 ���M&amp;amp;����
-after:  e7899be79abf26e38194e9a3af 牛皿&amp;amp;ご飯
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;文字コードによっては変換後に表せないことがある。
-例えば、UTF-8からSHIFT_JISへの変換でサロゲートペア🍚を渡すと変換できず、エラーになる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;throw errnoException(&#39;EILSEQ&#39;, &#39;Illegal character sequence.&#39;);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;//IGNORE&lt;/code&gt;を&lt;a href=&#34;https://www.npmjs.com/package/iconv#dealing-with-untranslatable-characters&#34;&gt;付ける&lt;/a&gt;ことで
-そのような文字があった場合でもエラーにしないようにできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const Iconv  = require(&#39;iconv&#39;).Iconv;
-
-const before = &amp;quot;牛皿&amp;amp;🍚&amp;quot;;
-
-const iconv = new Iconv(&#39;UTF-8&#39;, &#39;SHIFT_JIS//IGNORE&#39;);
-console.log(`before: ${new Buffer(before).toString(&#39;hex&#39;)} ${before.toString()}`)
-const conv = iconv.convert(before);
-const iconv2 = new Iconv(&#39;SHIFT_JIS&#39;, &#39;UTF-8&#39;);
-const after = iconv2.convert(conv);
-console.log(`after:  ${after.toString(&#39;hex&#39;)} ${after.toString()}`);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;変換できないものは無視される。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;before: e7899be79abf26f09f8d9a 牛皿&amp;amp;🍚
-after:  e7899be79abf26 牛皿&amp;amp;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;lambdaでは&#34;&gt;Lambdaでは&lt;/h2&gt;
-
-&lt;p&gt;Lambdaではインストールされているiconvコマンドを使うことができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;return new Promise((resolve, reject) =&amp;gt; {
-    let filePath = &amp;quot;/tmp/shiftjis&amp;quot;;
-    fs.writeFileSync(filePath, shiftjis);
-    var exec = require(&#39;child_process&#39;).exec;
-    var cmd = `iconv -c -f sjis -t utf-8 ${filePath}`;
-    var child = exec(cmd, (err, stdout, stderr) =&amp;gt; {
-      if (err) reject(err);
-      else resolve(stdout);
-    });
-});
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.bokukoko.info/entry/2015/08/30/AWS_Lambda%E5%86%85%E3%81%A7%E6%96%87%E5%AD%97%E3%82%B3%E3%83%BC%E3%83%89%E3%82%92%E5%A4%89%E6%8F%9B%E3%81%99%E3%82%8B%E6%96%B9%E6%B3%95&#34;&gt;AWS Lambda内で文字コードを変換する方法 - ボクココ&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/113/</guid>
+      <description>デプロイやスループットの調整を簡単にするため、BeanstalkでAggregatorを立ち上げた。
+負荷分散 TCPの24224(設定による)が通るようにEC2,ELBのSGとリスナーの設定をする必要があって、 ELBのSGのアウトバウンドの設定が見落とされがち。ELBのクロスゾーン分散は有効になっている。
+まず、ELBに3台、それぞれ別のAZ(1b, 1c, 1d)に配置されている状態でログを送り始めるとそれぞれ均等にログが届いた。 その状態から4台(1b * 2, 1c, 1d)にすると、2つのインスタンス(1b, 1c)のみに均等にログが届くようになった。 4台になると(1b, 1c)と(1b, 1d)に分けられてELBのノードがそれらの組に紐づいたということだと思う。 各ノードにはDNSラウンドロビンするようになっている。実際restartすると今度は別の組の方に送られた。
+では、なぜ一度送り始めると同じ方にしか飛ばないかというと、forwardプラグインのexpire_dns_cacheがデフォルトでnilになっていて、 heartbeatが届いている間は無期限にDNSキャッシュするようになっているため。これに0(キャッシュしない)か秒数を指定すると、 その間隔で他の組のインスタンスにもログが届くようになった。 expire_dns_cacheしなくても複数のインスタンスからラウンドロビンされるため全体でいえば分散される。
+heartbeat ELB配下のEC2を全て落としてもheartbeatに失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまうようだ。 ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。 全てのインスタンスが同時に落ちるというのは滅多に起きないだろうけど、少なくとも検知できるようにはしておく。
+&amp;lt;server&amp;gt; name td1 host autoscale-td1.us-east-1.elasticbeanstalk.com port 24224 &amp;lt;/server&amp;gt; &amp;lt;server&amp;gt; name td2 host autoscale-td2.us-east-1.elasticbeanstalk.com port 24224 standby &amp;lt;/server&amp;gt;  Blue/Green Deployment Blue-Green Deploymentというのは、2つの系を用意し、activeでない方にデプロイし、 スワップして反映させるもの。ダウンタイムなしで問題が起きた際にもすぐに切り戻すことができる。 スワップして向き先を変えるにはexpire_dns_cacheを設定する必要がある。
+Auto Scaling 増えるのはいいとして減るときに、 送り先で一時的に障害が起きていたりするとバッファをflushできずにログがロストする可能性がある。 それでいうとログの送り元でも同じことが起こりうるんだけど、通常Aggregatorにしか送らないので比較的問題になりにくい。
+これを避けたい場合、Auto Scalingグループの設定で スケールインから保護を有効にして これから立ち上がるインスタンスはスケールインしなくすることができる。 それまでに立ち上がっていたインスタンスには適用されないので注意。
+スケールインしないということは最大の台数で止まってしまうので、 ピークを過ぎたらスワップしてバッファが全て掃けたことを確認してからTerminateすることになる。 これを日常的にやるのは面倒なので、実際は予期しない流量の増加に備えて一応設定しておき、 普段はしきい値にひっかからないような最低台数で待ち構えておくことにするかな。
+あとはヘルスチェックによって潰される可能性はなくもないけど、それはもうやむなし・・・。
+参考 AWS ELBの社内向け構成ガイドを公開してみる 負荷分散編 – Cross-Zone Routingを踏まえて ｜ Developers.</description>
+    </item>
     
+    <item>
+      <title>fluentdでKinesis streamsに送るときの性能確認</title>
+      <link>https://www.sambaiz.net/article/108/</link>
+      <pubDate>Mon, 05 Jun 2017 23:48:00 +0900</pubDate>
       
-        <item>
-          <title>FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ</title>
-          <link>https://www.sambaiz.net/article/84/</link>
-          <pubDate>Wed, 15 Mar 2017 23:00:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/84/</guid>
-          <description>
-
-&lt;h2 id=&#34;kpl-kinesis-producer-library-とは&#34;&gt;KPL(Kinesis Producer Library)とは&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/streams/latest/dev/developing-producers-with-kpl.html&#34;&gt;Developing Amazon Kinesis Streams Producers Using the Amazon Kinesis Producer Library - Amazon Kinesis Streams&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;Kinesisに送るとき、自動リトライしてくれたり、レコードをまとめてスループットを向上してくれたりするアプリケーション。Protobufを使っている。
-普通に送るとどんなに小さくてもシャード*1000レコード/秒しか最大でPUTできないのを、KPLを使ってまとめることで増やすことができる。&lt;/p&gt;
-
-&lt;h2 id=&#34;fluentdで送る&#34;&gt;fluentdで送る&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;で&lt;code&gt;kinesis_producer&lt;/code&gt;を指定するとKPLを使って送信する。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;&amp;lt;kinesis_producer&amp;gt;&lt;/code&gt;の中にKPLの設定を書くことができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;kinesis_producer&amp;gt;
-    record_max_buffered_time 10
-&amp;lt;/kinesis_producer&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L239&#34;&gt;record_max_bufferd_time&lt;/a&gt;
-はバッファされたレコードが送られるまでの最大時間(ms)。デフォルトは100ms。この時間が経つか、他のリミットに当たったらレコードは送られる。&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L30&#34;&gt;AggregationMaxCount&lt;/a&gt;: 一つのレコードにまとめる最大レコード数&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L44&#34;&gt;AggregationMaxSize&lt;/a&gt;: まとめたレコードの最大バイト数&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L54&#34;&gt;CollectionMaxCount&lt;/a&gt;: PutRecordsで送る最大アイテム数&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L67&#34;&gt;CollectionMaxSize&lt;/a&gt;: PutRecordsで送るデータ量&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;CloudWatchに送る&lt;a href=&#34;https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L158&#34;&gt;metrics_level&lt;/a&gt;はデフォルトでdetailedになっていて、
-コンソールのメトリクスからstream名で検索すると
-&lt;code&gt;KinesisProducerLibrary&lt;/code&gt;に&lt;code&gt;UserRecordsPerKinesisRecord&lt;/code&gt;や、&lt;code&gt;UserRecordsDataPut&lt;/code&gt;、&lt;code&gt;BufferingTime&lt;/code&gt;、&lt;code&gt;RequestTime&lt;/code&gt;などいろいろ表示される。&lt;/p&gt;
-
-&lt;p&gt;とりあえず試しにこんな設定で送ってみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;match hoge.log&amp;gt;
-  @type kinesis_producer
-  region ap-northeast-1
-  stream_name teststream
-  include_time_key true
-
-  flush_interval 1
-  buffer_chunk_limit 1m
-  try_flush_interval 0.1
-  queued_chunk_flush_interval 0.01
-  num_threads 15
-&amp;lt;/match&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;lambdaで読む&#34;&gt;Lambdaで読む&lt;/h2&gt;
-
-&lt;p&gt;まとめられたレコードを&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation&#34;&gt;kinesis-aggregation&lt;/a&gt;で分解して読む。
-今回は&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation/tree/master/node&#34;&gt;Node.js&lt;/a&gt;でやる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install --save aws-kinesis-agg
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;注意する必要があるのは&lt;a href=&#34;https://github.com/awslabs/kinesis-aggregation/issues/16&#34;&gt;ドキュメントの情報が古く&lt;/a&gt;て、
-関数の引数が足りないこと。第二引数のcomputeChecksumsが抜けているので気付かないと一つずつずれていくことになる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;;
-
-const agg = require(&#39;aws-kinesis-agg&#39;);
-
-exports.handler = (event, context, callback) =&amp;gt; {
-    Promise.all(
-        event.Records.map(
-            (record) =&amp;gt; deaggregate(record)
-        )
-    ).then(
-        (records) =&amp;gt; {
-            // LambdaのNode.jsはまだ4.3なのでSpread operatorが使えない・・・
-            // const message = `${[].concat(...records).length} came in`; 
-            let sumCount = 0;
-            records.forEach((r) =&amp;gt; sumCount += r.length);
-            const message = `${records.length} aggregated records and ${sumCount} records come in`; 
-            console.log(message);
-            callback(null, message);
-        },
-        (err) =&amp;gt; callback(err)
-    );
-};
-
-function deaggregate(record){
-    return new Promise((resolve, reject) =&amp;gt; {
-        agg.deaggregateSync(record.kinesis, true, (err, userRecords) =&amp;gt; {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(userRecords);
-            }
-        });
-    });
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;175レコードが10レコードにまとめられた。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;10 aggregated records and 175 records come in
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/high-throughput-messaging-system-with-kinesis-kpl-fluentd-lambda/&#34;&gt;Kinesis Producer Library(KPL)とfluentdとLambdaを連携してKinesisのスループットを上げる ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/108/</guid>
+      <description>localでのstreamsとproducerのbenchmark aws-fluent-plugin-kinesisの make benchmarkはlocalにDummyServerを立ち上げて送っている。
+空でもいいのでroleをつけておく必要がある。
+$ git clone https://github.com/awslabs/aws-fluent-plugin-kinesis.git $ cd aws-fluent-plugin-kinesis $ yum install -y ruby-devel gcc $ echo &#39;gem &amp;quot;io-console&amp;quot;&#39; &amp;gt;&amp;gt; Gemfile $ make $ make benchmark  RATEを指定しなければデフォルトで秒間1000レコードが送られる設定。 fluentdを起動してから10秒後にプロセスをkillし、そのレコード数などを出力している。
+t2.microでデフォルト(RATE=1000)で実行した結果がこれ。 固める分producerの方はややパフォーマンスが落ちる。
+bundle exec rake benchmark TYPE=streams Results: requets: 20, raw_records: 9400, records: 9400 bundle exec rake benchmark TYPE=producer Results: requets: 14, raw_records: 1005, records: 8900  RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。 streamsだとシャードを増やしていく必要があるけど、producerの方は当分大丈夫そうだ。
+bundle exec rake benchmark TYPE=streams Results: requets: 57, raw_records: 27600, records: 27600 bundle exec rake benchmark TYPE=producer Results: requets: 12, raw_records: 241, records: 25200  RATE=10000のとき。raw_records, requestの圧縮率はさらに上がり、 パフォーマンスの差が大きくなってきている。</description>
+    </item>
     
+    <item>
+      <title>BeanstalkでのパッケージのバージョンがAMIでのバージョンと異なる原因</title>
+      <link>https://www.sambaiz.net/article/106/</link>
+      <pubDate>Sun, 04 Jun 2017 23:40:00 +0900</pubDate>
       
-        <item>
-          <title>fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する</title>
-          <link>https://www.sambaiz.net/article/73/</link>
-          <pubDate>Sun, 26 Feb 2017 18:56:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/73/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis&#34;&gt;aws-fluent-plugin-kinesis&lt;/a&gt;でKinesis Streamsに送り、Lambdaで読んでS3に保存する。
-要するにFirehoseのようなことをやりたいのだけれどTokyoリージョンにまだ来ないので自分でやる。&lt;/p&gt;
-
-&lt;h2 id=&#34;fluentdで送る&#34;&gt;fluentdで送る&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;$ td-agent-gem install fluent-plugin-kinesis
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;try_flush_interval&lt;/code&gt;と&lt;code&gt;queued_chunk_flush_interval&lt;/code&gt;はドキュメントには載っていないが、
-以下のページによるとそれぞれqueueに次のchunkがないときとあるときのflushする間隔。
-いずれもデフォルトは1だが、これを減らすことでもっと頻繁に吐き出されるようになるらしい。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sonots/fluentd-scr/blob/master/02_out_forward_buffered.md&#34;&gt;Fluentd の out_forward と BufferedOutput&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;あとシャードに振り分けるための&lt;a href=&#34;https://github.com/awslabs/aws-fluent-plugin-kinesis#partition_key&#34;&gt;partition_key&lt;/a&gt;
-を指定できる。デフォルトはランダム。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
-  @type tail
-  path /var/log/td-agent/hoge.log
-  pos_file /etc/td-agent/log.pos
-  tag hoge.log
-  format json
-
-  time_key timestamp
-  # 2017-01-01T01:01:01+0900
-  time_format %Y-%m-%dT%H:%M:%S%z
-&amp;lt;/source&amp;gt;
-
-&amp;lt;match hoge.log&amp;gt;
-  @type kinesis_streams
-  region ap-northeast-1
-  stream_name teststream
-  include_time_key true
-
-  flush_interval 1
-  buffer_chunk_limit 1m
-  try_flush_interval 0.1
-  queued_chunk_flush_interval 0.01
-  num_threads 15
-&amp;lt;/match&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;いくつか送ってみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;for i in `seq 1 1000`
-do
-  echo &#39;{&amp;quot;hoge&amp;quot;: &amp;quot;fuga&amp;quot;, &amp;quot;timestamp&amp;quot;: &amp;quot;2017-01-01T01:01:01+0900&amp;quot;}&#39; &amp;gt;&amp;gt; /var/log/td-agent/hoge.log
-done
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;kinesisのシャードが足りないと詰まってしまうので注意。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/84/&#34;&gt;FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ - sambaiz.net&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;lambdaで読む&#34;&gt;Lambdaで読む&lt;/h2&gt;
-
-&lt;p&gt;Lambdaのトリガーの設定でKinesisを選ぶと、バッチサイズや開始位置を設定できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/73-lambda-kinesis.png&#34; alt=&#34;トリガーの設定&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;コードはこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&#39;use strict&#39;;
-
-const zlib = require(&#39;zlib&#39;);
-const aws = require(&#39;aws-sdk&#39;);
-const s3 = new aws.S3({ apiVersion: &#39;2006-03-01&#39; });
-const BUCKET_NAME = process.env.BUCKET_NAME; // 環境変数で設定する
-
-exports.handler = (event, context, callback) =&amp;gt; {
-
-    const data = event.Records.map((record) =&amp;gt; new Buffer(record.kinesis.data, &#39;base64&#39;).toString()).join(&amp;quot;\n&amp;quot;);
-    const key = new Date().toISOString();
+      <guid>https://www.sambaiz.net/article/106/</guid>
+      <description>User-Dataとは EC2インスタンス起動時に、シェルスクリプトを走らせたりcloud-initディレクティブを適用できる機能。 コンソールではインスタンスの詳細の設定の、高度な詳細のところから設定できる。
+BeanstalkでのUser-Data 実はBeanstalkでも使われていて、CloudFormationで設定されている。
+&amp;quot; /bin/bash /tmp/ebbootstrap.sh &amp;quot;, ... &amp;quot;Fn::FindInMap&amp;quot;: [ &amp;quot;AWSEBOptions&amp;quot;, &amp;quot;options&amp;quot;, &amp;quot;UserDataScript&amp;quot; ] &amp;quot; &amp;gt; /tmp/ebbootstrap.sh &amp;quot;, ... &amp;quot;AWSEBOptions&amp;quot;: { &amp;quot;options&amp;quot;: { &amp;quot;UserDataScript&amp;quot;: &amp;quot;https://s3-ap-northeast-1.amazonaws.com/elasticbeanstalk-env-resources-ap-northeast-1/stalks/eb_node_js_4.0.1.90.2/lib/UserDataScript.sh&amp;quot;, &amp;quot;guid&amp;quot;: &amp;quot;f08557fc43ac&amp;quot;, } }  このshellの中では、時計を同期させたり、awsebユーザーを作成したりするほかに、 非Beanstalk AMI(is_baked=false)ではyum updateが走るようになっている。 そのため、AMIでのバージョンとBeanstalkで立ち上がったときのバージョンが異なることがあるようだ。
+GUID=$7 function update_yum_packages { if is_baked update_yum_packages_$GUID; then log yum update has already been done. else log Updating yum packages. yum --exclude=aws-cfn-bootstrap update -y || echo Warning: cannot update yum packages. Continue... mark_installed update_yum_packages_$GUID # Update system-release RPM package will reset the .</description>
+    </item>
     
-    putS3(key, data, true).then(
-        (data) =&amp;gt; callback(null, `Successfully processed ${event.Records.length} records.`),
-        (err) =&amp;gt; callback(err, null)
-    );
-};
-
-function putS3(key, data, gzip){    
-    return new Promise((resolve, reject) =&amp;gt; {
-        
-        const params = {
-            Bucket: BUCKET_NAME,
-            Key: key
-        };
-
-        if(gzip){
-            params.Body = zlib.gzipSync(data);
-            params.ContentEncoding = &amp;quot;gzip&amp;quot;;
-        }else{
-            params.Body = data;
-        }
-        
-        s3.putObject(params, (err, data) =&amp;gt; {
-            if (err) reject(err);
-            else resolve(data);
-        });
-    });
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;トリガーを有効にするとイベントが発火してS3に保存されるようになった。&lt;/p&gt;
-
-&lt;p&gt;ただ、Kinesisをイベントトリガーにして都度出力すると、1ファイルのサイズが非常に小さくなってしまう。
-なんとかして都度出力しないようにするか、あるいは時間トリガーで実行するか、いずれにしてもどこまで読んだか記録しておかなくちゃいけないのでちょっと面倒だ。バッファリングしてくれるFirehoseが早く日本にも来て欲しい。&lt;/p&gt;
-</description>
-        </item>
+    <item>
+      <title>Node.jsでの文字コードの変換</title>
+      <link>https://www.sambaiz.net/article/89/</link>
+      <pubDate>Tue, 28 Mar 2017 21:36:00 +0900</pubDate>
       
+      <guid>https://www.sambaiz.net/article/89/</guid>
+      <description>node-iconvを使う。
+$ npm install iconv  SHIFT_JISからUTF-8への変換はこんな感じ。
+const Iconv = require(&#39;iconv&#39;).Iconv; const before = new Buffer([ 0x8b, 0x8d, 0x8e, 0x4d, 0x26, 0x82, 0xb2, 0x94, 0xd1 ]); const iconv = new Iconv(&#39;SHIFT_JIS&#39;, &#39;UTF-8&#39;); console.log(`before: ${before.toString(&#39;hex&#39;)} ${before.toString()}`) const after = iconv.convert(before); console.log(`after: ${after.toString(&#39;hex&#39;)} ${after.toString()}`);  before: 8b8d8e4d2682b294d1 ���M&amp;amp;���� after: e7899be79abf26e38194e9a3af 牛皿&amp;amp;ご飯  文字コードによっては変換後に表せないことがある。 例えば、UTF-8からSHIFT_JISへの変換でサロゲートペア🍚を渡すと変換できず、エラーになる。
+throw errnoException(&#39;EILSEQ&#39;, &#39;Illegal character sequence.&#39;);  //IGNOREを付けることで そのような文字があった場合でもエラーにしないようにできる。
+const Iconv = require(&#39;iconv&#39;).Iconv; const before = &amp;quot;牛皿&amp;amp;🍚&amp;quot;; const iconv = new Iconv(&#39;UTF-8&#39;, &#39;SHIFT_JIS//IGNORE&#39;); console.</description>
+    </item>
     
+    <item>
+      <title>FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ</title>
+      <link>https://www.sambaiz.net/article/84/</link>
+      <pubDate>Wed, 15 Mar 2017 23:00:00 +0900</pubDate>
       
-        <item>
-          <title>AWSのAssumeRole</title>
-          <link>https://www.sambaiz.net/article/72/</link>
-          <pubDate>Sat, 25 Feb 2017 20:40:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/72/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/id_credentials_temp.html&#34;&gt;AWS Security Token Service&lt;/a&gt;による、
-RoleArn(&lt;code&gt;arn:aws:iam::&amp;lt;account id&amp;gt;:role/&amp;lt;role name&amp;gt;&lt;/code&gt;)から一時的なCredentialを取得する仕組み。
-前もって発行したAPIキーとは違い、有効期限が存在するため続けて呼ぶ場合は失効する前に再発行する必要がある。&lt;/p&gt;
-
-&lt;p&gt;ではRoleArnを知っていたら誰でも取得できるかというと、もちろんそうではなく、
-ロールの信頼関係、&lt;code&gt;&amp;quot;Action&amp;quot;: &amp;quot;sts:AssumeRole&amp;quot;&lt;/code&gt;のPrincipalのところで信頼する対象を設定する。
-例えば、&lt;code&gt;Service&lt;/code&gt;で&lt;code&gt;ec2.amazonaws.com&lt;/code&gt;を指定してEC2がAssumeRoleするのを許可したり、
-&lt;code&gt;AWS&lt;/code&gt;で(他の)アカウントやユーザーを指定してそのAPIキーでこのRoleのCredentialを取得できるようにしたりといった感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;Version&amp;quot;: &amp;quot;2012-10-17&amp;quot;,
-  &amp;quot;Statement&amp;quot;: [
-    {
-      &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;,
-      &amp;quot;Principal&amp;quot;: {
-        &amp;quot;Service&amp;quot;: &amp;quot;ec2.amazonaws.com&amp;quot;
-      },
-      &amp;quot;Action&amp;quot;: &amp;quot;sts:AssumeRole&amp;quot;
-    }
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;EC2にロールを設定すると、実はそのロールについてAssumeRoleして自動でCredentialを取得している。
-EC2にロールを設定するにはロールとは別に
-&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html&#34;&gt;インスタンスプロファイルを作成&lt;/a&gt;
-する必要があるが、コンソールでEC2のサービスロールを作ると同名のインスタンスプロファイルが自動で作成される。
-さらに、AssumeRoleのServiceとして&lt;code&gt;ec2.amazonaws.com&lt;/code&gt;が追加されている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl http://169.254.169.254/latest/meta-data/iam/info
-{
-  &amp;quot;Code&amp;quot; : &amp;quot;Success&amp;quot;,
-  &amp;quot;LastUpdated&amp;quot; : &amp;quot;2017-02-25T10:56:33Z&amp;quot;,
-  &amp;quot;InstanceProfileArn&amp;quot; : &amp;quot;arn:aws:iam::*****:instance-profile/assume_role_test&amp;quot;,
-  &amp;quot;InstanceProfileId&amp;quot; : &amp;quot;*****&amp;quot;
-}
-
-$ curl http://169.254.169.254/latest/meta-data/iam/security-credentials/assume_role_test
-{
-  &amp;quot;Code&amp;quot; : &amp;quot;Success&amp;quot;,
-  &amp;quot;LastUpdated&amp;quot; : &amp;quot;2017-02-25T10:56:23Z&amp;quot;,
-  &amp;quot;Type&amp;quot; : &amp;quot;AWS-HMAC&amp;quot;,
-  &amp;quot;AccessKeyId&amp;quot; : &amp;quot;*****&amp;quot;,
-  &amp;quot;SecretAccessKey&amp;quot; : &amp;quot;*****&amp;quot;,
-  &amp;quot;Token&amp;quot; : &amp;quot;*****&amp;quot;,
-  &amp;quot;Expiration&amp;quot; : &amp;quot;2017-02-25T17:26:07Z&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/iam-role-and-assumerole/&#34;&gt;IAMロール徹底理解 〜 AssumeRoleの正体 ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/id_credentials_temp_use-resources.html&#34;&gt;一時的なセキュリティ認証情報を使用して AWS リソースへのアクセスをリクエストする - AWS Identity and Access Management&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/84/</guid>
+      <description>KPL(Kinesis Producer Library)とは Developing Amazon Kinesis Streams Producers Using the Amazon Kinesis Producer Library - Amazon Kinesis Streams
+Kinesisに送るとき、自動リトライしてくれたり、レコードをまとめてスループットを向上してくれたりするアプリケーション。Protobufを使っている。 普通に送るとどんなに小さくてもシャード*1000レコード/秒しか最大でPUTできないのを、KPLを使ってまとめることで増やすことができる。
+fluentdで送る aws-fluent-plugin-kinesisでkinesis_producerを指定するとKPLを使って送信する。
+&amp;lt;kinesis_producer&amp;gt;の中にKPLの設定を書くことができる。
+&amp;lt;kinesis_producer&amp;gt; record_max_buffered_time 10 &amp;lt;/kinesis_producer&amp;gt;  record_max_bufferd_time はバッファされたレコードが送られるまでの最大時間(ms)。デフォルトは100ms。この時間が経つか、他のリミットに当たったらレコードは送られる。
+ AggregationMaxCount: 一つのレコードにまとめる最大レコード数 AggregationMaxSize: まとめたレコードの最大バイト数 CollectionMaxCount: PutRecordsで送る最大アイテム数 CollectionMaxSize: PutRecordsで送るデータ量  CloudWatchに送るmetrics_levelはデフォルトでdetailedになっていて、 コンソールのメトリクスからstream名で検索すると KinesisProducerLibraryにUserRecordsPerKinesisRecordや、UserRecordsDataPut、BufferingTime、RequestTimeなどいろいろ表示される。
+とりあえず試しにこんな設定で送ってみる。
+&amp;lt;match hoge.log&amp;gt; @type kinesis_producer region ap-northeast-1 stream_name teststream include_time_key true flush_interval 1 buffer_chunk_limit 1m try_flush_interval 0.1 queued_chunk_flush_interval 0.01 num_threads 15 &amp;lt;/match&amp;gt;  Lambdaで読む まとめられたレコードをkinesis-aggregationで分解して読む。 今回はNode.jsでやる。</description>
+    </item>
     
+    <item>
+      <title>fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する</title>
+      <link>https://www.sambaiz.net/article/73/</link>
+      <pubDate>Sun, 26 Feb 2017 18:56:00 +0900</pubDate>
       
-        <item>
-          <title>ELBのスケーリングとsurge queue</title>
-          <link>https://www.sambaiz.net/article/68/</link>
-          <pubDate>Tue, 21 Feb 2017 19:48:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/68/</guid>
-          <description>
-
-&lt;p&gt;バックエンドだけではなくELB自体もスケーリングし、内部node数はdigで調べることができる。
-このnode数は自分ではコントロールできず、基本的に意識することはない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ dig ****.ap-northeast-1.elb.amazonaws.com
-
-;; ANSWER SECTION:
-*****.elb.amazonaws.com. 60 IN A xxx.xxx.xxx.xxx
-*****.elb.amazonaws.com. 60 IN A yyy.yyy.yyy.yyy
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;nodeが増えるのにはある程度時間がかかるので、
-アクセスが急増(5分間で50%以上のトラフィック増加が&lt;a href=&#34;http://aws.typepad.com/sajp/2015/05/aws-black-belt-elb.html&#34;&gt;目安&lt;/a&gt;)
-したら捌ききれず、503を返すことがある。
-前もって多量のアクセスが来ることが分かっていて、
-&lt;a href=&#34;https://aws.amazon.com/jp/premiumsupport/signup/&#34;&gt;AWSサポート&lt;/a&gt;がBusiness以上なら
-pre-warming申請することでnodeが増えた状態で待ち構えられる。&lt;/p&gt;
-
-&lt;p&gt;バックエンドのアプリケーションがリクエストを処理できない場合、ELBのsurge queueに溜まっていく。
-この数はCloudWatchのSurgeQueueLength(キュー長の急増)メトリクスで確認できる。
-また、SurgeQueueLengthの最大値1024を超えるとリクエストは拒否され、その数はSpoiloverCount(過剰数)メトリクスに出る。&lt;/p&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://dev.classmethod.jp/cloud/aws/elb-and-cloudwatch-metrics-in-depth/&#34;&gt;ELBの挙動とCloudWatchメトリクスの読み方を徹底的に理解する ｜ Developers.IO&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/premiumsupport/knowledge-center/elb-latency-troubleshooting/&#34;&gt;Elastic Load Balancing でのレイテンシーのトラブルシューティング&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/73/</guid>
+      <description>aws-fluent-plugin-kinesisでKinesis Streamsに送り、Lambdaで読んでS3に保存する。 要するにFirehoseのようなことをやりたいのだけれどTokyoリージョンにまだ来ないので自分でやる。
+fluentdで送る $ td-agent-gem install fluent-plugin-kinesis  try_flush_intervalとqueued_chunk_flush_intervalはドキュメントには載っていないが、 以下のページによるとそれぞれqueueに次のchunkがないときとあるときのflushする間隔。 いずれもデフォルトは1だが、これを減らすことでもっと頻繁に吐き出されるようになるらしい。
+Fluentd の out_forward と BufferedOutput
+あとシャードに振り分けるためのpartition_key を指定できる。デフォルトはランダム。
+&amp;lt;source&amp;gt; @type tail path /var/log/td-agent/hoge.log pos_file /etc/td-agent/log.pos tag hoge.log format json time_key timestamp # 2017-01-01T01:01:01+0900 time_format %Y-%m-%dT%H:%M:%S%z &amp;lt;/source&amp;gt; &amp;lt;match hoge.log&amp;gt; @type kinesis_streams region ap-northeast-1 stream_name teststream include_time_key true flush_interval 1 buffer_chunk_limit 1m try_flush_interval 0.1 queued_chunk_flush_interval 0.01 num_threads 15 &amp;lt;/match&amp;gt;  いくつか送ってみる。
+for i in `seq 1 1000` do echo &#39;{&amp;quot;hoge&amp;quot;: &amp;quot;fuga&amp;quot;, &amp;quot;timestamp&amp;quot;: &amp;quot;2017-01-01T01:01:01+0900&amp;quot;}&#39; &amp;gt;&amp;gt; /var/log/td-agent/hoge.</description>
+    </item>
     
+    <item>
+      <title>AWSのAssumeRole</title>
+      <link>https://www.sambaiz.net/article/72/</link>
+      <pubDate>Sat, 25 Feb 2017 20:40:00 +0900</pubDate>
       
-        <item>
-          <title>Kinesis Streams/Firehose/Analyticsを試す</title>
-          <link>https://www.sambaiz.net/article/67/</link>
-          <pubDate>Mon, 20 Feb 2017 21:15:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/67/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/&#34;&gt;https://aws.amazon.com/jp/kinesis/&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;リアルタイムのストリーミングデータを扱うサービス群。
-いまのところTokyoリージョンではKinesis Streamsしか使えない。&lt;/p&gt;
-
-&lt;h3 id=&#34;kinesis-firehose-https-aws-amazon-com-jp-kinesis-firehose&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/&#34;&gt;Kinesis Firehose&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;AWSのデータストアに送るストリーム。自分でデータを読む処理を書かなくてよく、スケーリングも勝手にやってくれるので簡単に使える。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/faqs/&#34;&gt;https://aws.amazon.com/jp/kinesis/firehose/faqs/&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Q: 送信先とは何ですか?
-送信先はデータが配信されるデータストアです。Amazon Kinesis Firehose では、
-現在送信先として Amazon S3、Amazon Redshift、Amazon Elasticsearch Service がサポートされています。
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/firehose/pricing/&#34;&gt;料金&lt;/a&gt;は取り込まれたデータ量による。&lt;/p&gt;
-
-&lt;p&gt;今回はS3に送ってみる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/64-create-firehose.png&#34; alt=&#34;firehose作成&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;圧縮方法を設定したり、Lambdaを噛ませたりすることができる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/64-create-firehose2.png&#34; alt=&#34;firehose作成2&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;StatusがActiveになったら&lt;a href=&#34;http://docs.aws.amazon.com/firehose/latest/dev/writing-with-agents.html&#34;&gt;Kinesis Agent&lt;/a&gt;で送ってみる。
-CloudWatchとFirehoseにPutする権限が必要。Firehoseはkinesis:ではなくfirehose:なので注意。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sudo yum install –y aws-kinesis-agent
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;/etc/aws-kinesis/agent.json&lt;/code&gt;を編集する。リージョンごとのエンドポイントは
-&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/general/latest/gr/rande.html#fh_region&#34;&gt;ここ&lt;/a&gt;
-にある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-    &amp;quot;awsAccessKeyId&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;awsSecretAccessKey&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;firehose.endpoint&amp;quot;: &amp;quot;https://firehose.us-east-1.amazonaws.com&amp;quot;, 
-    &amp;quot;flows&amp;quot;: [
-        {
-            &amp;quot;filePattern&amp;quot;: &amp;quot;/tmp/hoge.log&amp;quot;, 
-            &amp;quot;deliveryStream&amp;quot;: &amp;quot;hogefugastream&amp;quot;
-        }
-    ] 
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ sudo service aws-kinesis-agent start
-$ sudo chkconfig aws-kinesis-agent on
-$ echo &amp;quot;aaa&amp;quot; &amp;gt;&amp;gt; /tmp/hoge.log
-$ tail /var/log/aws-kinesis-agent/aws-kinesis-agent.log
-com.amazon.kinesis.streaming.agent.Agent [INFO] Agent: Progress: 2 records parsed (168 bytes), 
-and 2 records sent successfully to destinations. Uptime: 300044ms
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;S3に保存されているのを確認。&lt;/p&gt;
-
-&lt;h3 id=&#34;kinesis-streams-https-aws-amazon-com-jp-kinesis-streams&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/streams/&#34;&gt;Kinesis Streams&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;用途を制限しないストリーム。データは保持期間の間、何度でも読むことができるので、
-とりあえず必要なだけシャードを増やしてデータを入れておけばどうにかなる。
-データを扱う側はそれぞれ独立に必要なタイミングで必要なだけpullするため、スケールするにあたってその先は別に考えることができ、
-高負荷なシステムのlog aggregatorとして使われる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/streams/pricing/&#34;&gt;料金&lt;/a&gt;は&lt;/p&gt;
-
-&lt;ul&gt;
-&lt;li&gt;時間単位のシャード速度： 1シャードは最大1000件/秒の1MB/秒の入力と2MB/秒の出力能力がある。&lt;/li&gt;
-&lt;li&gt;PUTペイロードユニット: 追加する25KBのチャンクの数。5KBでも1チャンク。&lt;/li&gt;
-&lt;li&gt;データ保持期間: デフォルトで24時間。7日まで延長可能。シャード時間ごとに課金。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;による。&lt;/p&gt;
-
-&lt;p&gt;ストリーム作成時はシャード数を入れる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/64-create-streams.png&#34; alt=&#34;streams作成&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;Firehoseと同じくKinesis Agentで送ってみる。
-エンドポイントは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/general/latest/gr/rande.html#ak_region&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-    &amp;quot;awsAccessKeyId&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;awsSecretAccessKey&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;kinesis.endpoint&amp;quot;: &amp;quot;https://kinesis.us-east-1.amazonaws.com&amp;quot;, 
-    &amp;quot;flows&amp;quot;: [
-        {
-            &amp;quot;filePattern&amp;quot;: &amp;quot;/tmp/hoge.log&amp;quot;, 
-            &amp;quot;kinesisStream&amp;quot;: &amp;quot;fugafugastream&amp;quot;
-        }
-    ] 
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;aws-cliでデータを&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/streams/latest/dev/fundamental-stream.html#get-records&#34;&gt;取得する&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;まず、シャードイテレーターを取得する。有効時間は300秒。
-&lt;a href=&#34;http://docs.aws.amazon.com/kinesis/latest/APIReference/API_GetShardIterator.html#API_GetShardIterator_RequestSyntax&#34;&gt;TRIM_HORIZON&lt;/a&gt;
-で最も古い方からデータを取得していく。SequenceNumberを指定して途中から読むこともできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ aws kinesis get-shard-iterator --shard-id shardId-000000000000 --shard-iterator-type TRIM_HORIZON --stream-name fugafugastream
-{
-    &amp;quot;ShardIterator&amp;quot;: &amp;quot;AAAAAAAAAAFjKI0neNqY2N5HzGljYFCzoFqpQsdncdC6xE+ylnqvZpmusNfyViY3hBSS8WQXa67gvtkF0f2eKzxQ/Fd7SXZG8Inkb8l1UDF5t+jHgErA28gVSWyT4uYxTzzbnhm9AhcbztyQrjqehYcjEfpWIz5XmhY9K3Kjp0Crygy+OYNSS5PoQFcB1PZ7xMFE8zLTxJXLv1ANRu0Q+1m/JFxKQ3WS&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このシャードイテレータを使ってget-recordsする。データはBase64で入っているのでデコードして確認する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ aws kinesis get-records --shard-iterator AAAAAAAAAAFjKI0neNqY2N5HzGljYFCzoFqpQsdncdC6xE+ylnqvZpmusNfyViY3hBSS8WQXa67gvtkF0f2eKzxQ/Fd7SXZG8Inkb8l1UDF5t+jHgErA28gVSWyT4uYxTzzbnhm9AhcbztyQrjqehYcjEfpWIz5XmhY9K3Kjp0Crygy+OYNSS5PoQFcB1PZ7xMFE8zLTxJXLv1ANRu0Q+1m/JFxKQ3WS
-{
-    &amp;quot;Records&amp;quot;: [
-        {
-            &amp;quot;Data&amp;quot;: &amp;quot;YWFhCg==&amp;quot;, 
-            &amp;quot;PartitionKey&amp;quot;: &amp;quot;999679.8130737302&amp;quot;, 
-            &amp;quot;ApproximateArrivalTimestamp&amp;quot;: 1487082145.518, 
-            &amp;quot;SequenceNumber&amp;quot;: &amp;quot;49570460043263608661463102123405561406360875697772167170&amp;quot;
-        }, 
-        ...
-    ], 
-    &amp;quot;NextShardIterator&amp;quot;: &amp;quot;AAAAAAAAAAE08GRdLF1d76L1wCyLIiuAgpSEkKZSkUEO0VdUt3EOfdm1oOSXA1Xc4+tJPkSmB8g5NaQqDPRS/67u5IXermTUiAj6g2lgvDCGCqWFcYMAxIwIKZjKluCPQjL9kRaUqfVAaElRoKjp4Gv7JmuBDjKpxsbF2yk4uJJDAcevqH/VVkala8UbdhTweGyFgf9VhP/ljzXlrqkZ8wbD0eFwtZ3x&amp;quot;, 
-    &amp;quot;MillisBehindLatest&amp;quot;: 0
-}
-
-$ echo &amp;quot;YWFhCg==&amp;quot; | base64 -d
-aaa
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;kinesis-analytics-https-aws-amazon-com-jp-kinesis-analytics&#34;&gt;&lt;a href=&#34;https://aws.amazon.com/jp/kinesis/analytics/&#34;&gt;Kinesis Analytics&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;SourceとなるKinesis Streamsか、Firehoseを指定し、SQLを実行できる。そして必要なら次のストリームに入れることができる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/64-create-analytics.png&#34; alt=&#34;analytics作成&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;今回はSourceとしてjsonで株価のデータが入っているDemo streamを使う。
-いくつかSQLテンプレートが用意されていて、その中のContinuous Filterを選択。
-Streamに入ってきたものをTECHで絞って出力する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- ** Continuous Filter ** 
--- Performs a continuous filter based on a WHERE condition.
---          .----------.   .----------.   .----------.              
---          |  SOURCE  |   |  INSERT  |   |  DESTIN. |              
--- Source--&amp;gt;|  STREAM  |--&amp;gt;| &amp;amp; SELECT |--&amp;gt;|  STREAM  |--&amp;gt;Destination
---          |          |   |  (PUMP)  |   |          |              
---          &#39;----------&#39;   &#39;----------&#39;   &#39;----------&#39;               
--- STREAM (in-application): a continuously updated entity that you can SELECT from and INSERT into like a TABLE
--- PUMP: an entity used to continuously &#39;SELECT ... FROM&#39; a source STREAM, and INSERT SQL results into an output STREAM
--- Create output stream, which can be used to send to a destination
-CREATE OR REPLACE STREAM &amp;quot;DESTINATION_SQL_STREAM&amp;quot; (ticker_symbol VARCHAR(4), sector VARCHAR(12), change REAL, price REAL);
--- Create pump to insert into output 
-CREATE OR REPLACE PUMP &amp;quot;STREAM_PUMP&amp;quot; AS INSERT INTO &amp;quot;DESTINATION_SQL_STREAM&amp;quot;
--- Select all columns from source stream
-SELECT STREAM ticker_symbol, sector, change, price
-FROM &amp;quot;SOURCE_SQL_STREAM_001&amp;quot;
--- LIKE compares a string to a string pattern (_ matches all char, % matches substring)
--- SIMILAR TO compares string to a regex, may use ESCAPE
-WHERE sector SIMILAR TO &#39;%TECH%&#39;;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/64-run-analytics.png&#34; alt=&#34;analytics実行&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/72/</guid>
+      <description>AWS Security Token Serviceによる、 RoleArn(arn:aws:iam::&amp;lt;account id&amp;gt;:role/&amp;lt;role name&amp;gt;)から一時的なCredentialを取得する仕組み。 前もって発行したAPIキーとは違い、有効期限が存在するため続けて呼ぶ場合は失効する前に再発行する必要がある。
+ではRoleArnを知っていたら誰でも取得できるかというと、もちろんそうではなく、 ロールの信頼関係、&amp;quot;Action&amp;quot;: &amp;quot;sts:AssumeRole&amp;quot;のPrincipalのところで信頼する対象を設定する。 例えば、Serviceでec2.amazonaws.comを指定してEC2がAssumeRoleするのを許可したり、 AWSで(他の)アカウントやユーザーを指定してそのAPIキーでこのRoleのCredentialを取得できるようにしたりといった感じ。
+{ &amp;quot;Version&amp;quot;: &amp;quot;2012-10-17&amp;quot;, &amp;quot;Statement&amp;quot;: [ { &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Principal&amp;quot;: { &amp;quot;Service&amp;quot;: &amp;quot;ec2.amazonaws.com&amp;quot; }, &amp;quot;Action&amp;quot;: &amp;quot;sts:AssumeRole&amp;quot; } ] }  EC2にロールを設定すると、実はそのロールについてAssumeRoleして自動でCredentialを取得している。 EC2にロールを設定するにはロールとは別に インスタンスプロファイルを作成 する必要があるが、コンソールでEC2のサービスロールを作ると同名のインスタンスプロファイルが自動で作成される。 さらに、AssumeRoleのServiceとしてec2.amazonaws.comが追加されている。
+$ curl http://169.254.169.254/latest/meta-data/iam/info { &amp;quot;Code&amp;quot; : &amp;quot;Success&amp;quot;, &amp;quot;LastUpdated&amp;quot; : &amp;quot;2017-02-25T10:56:33Z&amp;quot;, &amp;quot;InstanceProfileArn&amp;quot; : &amp;quot;arn:aws:iam::*****:instance-profile/assume_role_test&amp;quot;, &amp;quot;InstanceProfileId&amp;quot; : &amp;quot;*****&amp;quot; } $ curl http://169.254.169.254/latest/meta-data/iam/security-credentials/assume_role_test { &amp;quot;Code&amp;quot; : &amp;quot;Success&amp;quot;, &amp;quot;LastUpdated&amp;quot; : &amp;quot;2017-02-25T10:56:23Z&amp;quot;, &amp;quot;Type&amp;quot; : &amp;quot;AWS-HMAC&amp;quot;, &amp;quot;AccessKeyId&amp;quot; : &amp;quot;*****&amp;quot;, &amp;quot;SecretAccessKey&amp;quot; : &amp;quot;*****&amp;quot;, &amp;quot;Token&amp;quot; : &amp;quot;*****&amp;quot;, &amp;quot;Expiration&amp;quot; : &amp;quot;2017-02-25T17:26:07Z&amp;quot; }  参考 IAMロール徹底理解 〜 AssumeRoleの正体 ｜ Developers.</description>
+    </item>
     
+    <item>
+      <title>ELBのスケーリングとsurge queue</title>
+      <link>https://www.sambaiz.net/article/68/</link>
+      <pubDate>Tue, 21 Feb 2017 19:48:00 +0900</pubDate>
       
-        <item>
-          <title>GoでDynamoDBを使う</title>
-          <link>https://www.sambaiz.net/article/63/</link>
-          <pubDate>Sun, 12 Feb 2017 23:15:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/63/</guid>
-          <description>
-
-&lt;h2 id=&#34;テーブルを作成する&#34;&gt;テーブルを作成する&lt;/h2&gt;
-
-&lt;h3 id=&#34;プライマリキー&#34;&gt;プライマリキー&lt;/h3&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/GuidelinesForTables.html&#34;&gt;テーブルの操作のガイドライン - Amazon DynamoDB&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;プライマリキーとしてパーティションキー(ハッシュキー)とオプションのソートキー(レンジキー)を設定する。
-DynamoDBはこのパーティションキーに基づいて、複数のパーティションに分散して保存する。
-テーブルにプロビジョニングされたスループット性能はパーティション間で均等に使われるので、
-ソートキーを設定する場合にこれを最大限に活用するためには、
-あるパーティションにリクエストが集中しないよう、パーティションキーに特定の値ばかり集中しないようなフィールドを
-選ぶ必要がある。&lt;/p&gt;
-
-&lt;h3 id=&#34;セカンダリインデックス&#34;&gt;セカンダリインデックス&lt;/h3&gt;
-
-&lt;p&gt;パーティションキーのグローバルセカンダリインデックス(GSI)と
-ソートキーのローカルセカンダリインデックス(LSI)がある。
-射影されるフィールドを選択でき、ここに含まれないフィールドは返さない。
-ただし、すべてをインデックスに書き込むのはコストが高いのでなるべく絞る。&lt;/p&gt;
-
-&lt;h3 id=&#34;キャパシティユニット-http-docs-aws-amazon-com-ja-jp-amazondynamodb-latest-developerguide-limits-html-limits-capacity-units-provisioned-throughpu&#34;&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/Limits.html#limits-capacity-units-provisioned-throughpu&#34;&gt;キャパシティユニット&lt;/a&gt;&lt;/h3&gt;
-
-&lt;ul&gt;
-&lt;li&gt;1読み込みキャパシティユニット: 4kbを超えないデータを1秒に1~2回(整合性による)読み込める&lt;/li&gt;
-&lt;li&gt;1書き込みキャパシティユニット: 1kbを超えないデータを1秒に1回書き込める&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;ユニットに応じて1時間あたりで&lt;a href=&#34;https://aws.amazon.com/jp/dynamodb/pricing/&#34;&gt;課金&lt;/a&gt;される。&lt;/p&gt;
-
-&lt;p&gt;未使用のキャパシティがある場合、最大5分保持して&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/GuidelinesForTables.html#GuidelinesForTables.Bursting&#34;&gt;バーストに備えてくれる&lt;/a&gt;。&lt;/p&gt;
-
-&lt;h2 id=&#34;読み書きする&#34;&gt;読み書きする&lt;/h2&gt;
-
-&lt;p&gt;aws-sdk-goを直接使ってもいいけど、簡単に扱えるラッパー
-&lt;a href=&#34;https://github.com/guregu/dynamo&#34;&gt;guregu/dynamo&lt;/a&gt;
-を使うことにした。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;type Data struct {
-	ID   int64 `dynamo:&amp;quot;id&amp;quot;`
-	Name string
-	Age  int
-}
-
-db := dynamo.New(session.New(), &amp;amp;aws.Config{Region: aws.String(&amp;quot;ap-northeast-1&amp;quot;)})
-table := db.Table(&amp;quot;testtable&amp;quot;)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;create-update&#34;&gt;Create &amp;amp; Update&lt;/h3&gt;
-
-&lt;pre&gt;&lt;code&gt;d := Data{ID: 1, Name: &amp;quot;hogefuga&amp;quot;, Age: 123}
-if err := table.Put(d).Run(); err != nil {
-    return err
-}
-
-if err := table.Update(&amp;quot;id&amp;quot;, 1).Set(&amp;quot;name&amp;quot;, &amp;quot;fugafuga&amp;quot;).Run(); err != nil {
-    return err
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;get&#34;&gt;Get&lt;/h3&gt;
-
-&lt;pre&gt;&lt;code&gt;var data Data
-// 結果整合性がある読み込み(1秒に2回/ユニット)　.Consistent(true)で強い整合性のある読み込み(1秒に1回/ユニット)にできる
-if err := table.Get(&amp;quot;id&amp;quot;, 1).One(&amp;amp;data); err != nil {
-    return err
-}
-fmt.Println(data)
-
-if err := table.Get(&amp;quot;id&amp;quot;, 2).One(&amp;amp;data); err != nil {
-    return err // dynamo: no item found
-}
-fmt.Println(data)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/AmazonWebServicesJapan/20150805-aws-blackbeltdynamodb&#34;&gt;AWS Black Belt Tech シリーズ 2015 - Amazon DynamoDB&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/68/</guid>
+      <description>バックエンドだけではなくELB自体もスケーリングし、内部node数はdigで調べることができる。 このnode数は自分ではコントロールできず、基本的に意識することはない。
+$ dig ****.ap-northeast-1.elb.amazonaws.com ;; ANSWER SECTION: *****.elb.amazonaws.com. 60 IN A xxx.xxx.xxx.xxx *****.elb.amazonaws.com. 60 IN A yyy.yyy.yyy.yyy  nodeが増えるのにはある程度時間がかかるので、 アクセスが急増(5分間で50%以上のトラフィック増加が目安) したら捌ききれず、503を返すことがある。 前もって多量のアクセスが来ることが分かっていて、 AWSサポートがBusiness以上なら pre-warming申請することでnodeが増えた状態で待ち構えられる。
+バックエンドのアプリケーションがリクエストを処理できない場合、ELBのsurge queueに溜まっていく。 この数はCloudWatchのSurgeQueueLength(キュー長の急増)メトリクスで確認できる。 また、SurgeQueueLengthの最大値1024を超えるとリクエストは拒否され、その数はSpoiloverCount(過剰数)メトリクスに出る。
+参考 ELBの挙動とCloudWatchメトリクスの読み方を徹底的に理解する ｜ Developers.IO
+Elastic Load Balancing でのレイテンシーのトラブルシューティング</description>
+    </item>
     
+    <item>
+      <title>Kinesis Streams/Firehose/Analyticsを試す</title>
+      <link>https://www.sambaiz.net/article/67/</link>
+      <pubDate>Mon, 20 Feb 2017 21:15:00 +0900</pubDate>
       
-        <item>
-          <title>EC2のインスタンスストア</title>
-          <link>https://www.sambaiz.net/article/58/</link>
-          <pubDate>Mon, 06 Feb 2017 21:52:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/58/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/InstanceStorage.html&#34;&gt;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/InstanceStorage.html&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;EC2ではインスタンスタイプによってはEBSに加えてインスタンスストアが使える。しかも追加料金なし。
-対象はストレージが&amp;rdquo;EBSのみ&amp;rdquo;でないもの。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/ec2/instance-types/&#34;&gt;https://aws.amazon.com/jp/ec2/instance-types/&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;インスタンスストアはインスタンスが停止したり、障害が起きると消える一時ストレージ。再起動では消えない。
-ホストに物理的にアタッチされているので、バッファやキャッシュなどの頻繁に読み書きされ、消えてもいいデータに最適。
-他のインスタンスにアタッチすることはできない。容量や性能もインスタンスタイプに依存する。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/add-instance-store-volumes.html&#34;&gt;インスタンスストアボリュームの追加&lt;/a&gt;は
-インスタンスの起動時に、新しいボリュームを追加し、ボリュームタイプをインスタンスストアにすることで行うことができる。&lt;/p&gt;
-
-&lt;p&gt;今回はSSDストレージ1 x 4のm3.mediumで試す。これは4gbのボリュームが一つ追加できるという意味。&lt;/p&gt;
-
-&lt;p&gt;まずはインスタンスストアを追加してないインスタンス。
-lsblkというのはlist block devicesの略。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ df -h
-ファイルシス   サイズ  使用  残り 使用% マウント位置
-/dev/xvda1       7.8G  1.2G  6.6G   15% /
-...
-$ dd if=/dev/zero of=hoge bs=1M count=1000
-$ ls -sh
-合計 1001M
-1001M hoge
-
-$ df -h
-ファイルシス   サイズ  使用  残り 使用% マウント位置
-/dev/xvda1       7.8G  2.2G  5.6G   28% /
-...
-
-$ lsblk
-NAME    MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
-xvda    202:0    0   8G  0 disk 
-└─xvda1 202:1    0   8G  0 part /
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;それに対してインスタンスストア(/dev/xvdb)を追加したインスタンス。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ df -h
-ファイルシス   サイズ  使用  残り 使用% マウント位置
-/dev/xvda1       7.8G  1.2G  6.6G   15% /
-/dev/xvdb        4.0G   73M  3.7G    2% /media/ephemeral0
-
-$ lsblk
-NAME    MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
-xvda    202:0    0   8G  0 disk 
-└─xvda1 202:1    0   8G  0 part /
-xvdb    202:16   0   4G  0 disk /media/ephemeral0
-
-$ dd if=/dev/zero of=/media/ephemeral0/hoge bs=1M count=1000
-$ df -h
-ファイルシス   サイズ  使用  残り 使用% マウント位置
-/dev/xvda1       7.8G  1.2G  6.6G   15% /
-/dev/xvdb        4.0G  1.1G  2.7G   29% /media/ephemeral0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.slideshare.net/imaifactory/ephemeral-ssd&#34;&gt;EC2のストレージどう使う? -Instance Storageを理解して高速IOを上手に活用!-&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/67/</guid>
+      <description>https://aws.amazon.com/jp/kinesis/
+リアルタイムのストリーミングデータを扱うサービス群。 いまのところTokyoリージョンではKinesis Streamsしか使えない。
+Kinesis Firehose AWSのデータストアに送るストリーム。自分でデータを読む処理を書かなくてよく、スケーリングも勝手にやってくれるので簡単に使える。
+https://aws.amazon.com/jp/kinesis/firehose/faqs/
+Q: 送信先とは何ですか? 送信先はデータが配信されるデータストアです。Amazon Kinesis Firehose では、 現在送信先として Amazon S3、Amazon Redshift、Amazon Elasticsearch Service がサポートされています。  料金は取り込まれたデータ量による。
+今回はS3に送ってみる。
+圧縮方法を設定したり、Lambdaを噛ませたりすることができる。
+StatusがActiveになったらKinesis Agentで送ってみる。 CloudWatchとFirehoseにPutする権限が必要。Firehoseはkinesis:ではなくfirehose:なので注意。
+$ sudo yum install –y aws-kinesis-agent  /etc/aws-kinesis/agent.jsonを編集する。リージョンごとのエンドポイントは ここ にある。
+{ &amp;quot;awsAccessKeyId&amp;quot;: &amp;quot;&amp;quot;, &amp;quot;awsSecretAccessKey&amp;quot;: &amp;quot;&amp;quot;, &amp;quot;firehose.endpoint&amp;quot;: &amp;quot;https://firehose.us-east-1.amazonaws.com&amp;quot;, &amp;quot;flows&amp;quot;: [ { &amp;quot;filePattern&amp;quot;: &amp;quot;/tmp/hoge.log&amp;quot;, &amp;quot;deliveryStream&amp;quot;: &amp;quot;hogefugastream&amp;quot; } ] }  $ sudo service aws-kinesis-agent start $ sudo chkconfig aws-kinesis-agent on $ echo &amp;quot;aaa&amp;quot; &amp;gt;&amp;gt; /tmp/hoge.</description>
+    </item>
     
+    <item>
+      <title>GoでDynamoDBを使う</title>
+      <link>https://www.sambaiz.net/article/63/</link>
+      <pubDate>Sun, 12 Feb 2017 23:15:00 +0900</pubDate>
       
-        <item>
-          <title>複数EC2インスタンスを立ち上げてvegetaで負荷試験する</title>
-          <link>https://www.sambaiz.net/article/43/</link>
-          <pubDate>Sun, 18 Dec 2016 20:52:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/43/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/tsenart/vegeta&#34;&gt;vegeta&lt;/a&gt;で負荷をかける。&lt;/p&gt;
-
-&lt;h2 id=&#34;インスタンスを立ち上げるスクリプト&#34;&gt;インスタンスを立ち上げるスクリプト&lt;/h2&gt;
-
-&lt;p&gt;コードはここ。 &lt;a href=&#34;https://github.com/sambaiz/loadtest&#34;&gt;sambaiz/loadtest&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;まずキーペアを作成し、EC2インスタンスを立ち上げて、全てのインスタンスが使えるようになるまで待つ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;aws ec2 create-key-pair --key-name LoadTestKeyPare --query &#39;KeyMaterial&#39; --output text &amp;gt; LoadTestKeyPare.pem
-chmod 400 LoadTestKeyPare.pem
-aws ec2 run-instances --image-id $AMI_ID --count $INSTANCE_NUM --instance-type t2.micro --key-name LoadTestKeyPare --security-group-ids $SECURITY_GROUP_IDS --subnet-id $SUBNET_ID
-...
-aws ec2 wait instance-status-ok --instance-ids $INSTANCE_IDS
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このAMIは事前にPackerでつくったもの。vegetaをインストールしてファイルディスクリプタの上限を増やしている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;variables&amp;quot;: {
-    &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot;
-  },
-  &amp;quot;builders&amp;quot;: [{
-    &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;,
-    &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;,
-    &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;,
-    &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
-    &amp;quot;source_ami&amp;quot;: &amp;quot;ami-0c11b26d&amp;quot;,
-    &amp;quot;instance_type&amp;quot;: &amp;quot;t2.micro&amp;quot;,
-    &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;,
-    &amp;quot;ami_name&amp;quot;: &amp;quot;loadtest {{timestamp}}&amp;quot;
-  }],
-  &amp;quot;provisioners&amp;quot;: [{
-    &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;,
-    &amp;quot;inline&amp;quot;: [
-      &amp;quot;wget https://github.com/tsenart/vegeta/releases/download/v6.1.1/vegeta-v6.1.1-linux-amd64.tar.gz&amp;quot;,
-      &amp;quot;sudo tar xzf vegeta-v6.1.1-linux-amd64.tar.gz -C /usr/local/bin/&amp;quot;,
-      &amp;quot;sudo sh -c \&amp;quot;echo &#39;* hard nofile 65536&#39; &amp;gt;&amp;gt; /etc/security/limits.conf\&amp;quot;&amp;quot;,
-      &amp;quot;sudo sh -c \&amp;quot;echo &#39;* soft nofile 65536&#39; &amp;gt;&amp;gt; /etc/security/limits.conf\&amp;quot;&amp;quot;
-    ]
-  }]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;立ち上がったインスタンスに対して&lt;a href=&#34;https://code.google.com/p/pdsh/&#34;&gt;pdsh&lt;/a&gt;で
-各マシンでvegetaを実行させ($VEGETA_CMD)、結果のファイルを集めてreportのinputsで指定すると
-まとめてレポートを出力してくれる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;pdsh -l ec2-user -w `echo &amp;quot;$PUBLIC_DNS_NAMES&amp;quot; |  paste -d, -s -` &amp;quot;$VEGETA_CMD &amp;gt; result.bin&amp;quot;
-
-for machine in $PUBLIC_DNS_NAMES; do
-  scp -i ./LoadTestKeyPare.pem -oStrictHostKeyChecking=no ec2-user@$machine:~/result.bin $machine
-done
-
-vegeta report -inputs=`echo $PUBLIC_DNS_NAMES |  paste -d, -s -`
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;終わったら後片付けをする。trapでCtrl+C等での終了時もインスタンスが残らないようにする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;cleanup() {
-  echo &amp;quot;---- Clean up ----&amp;quot;
-  aws ec2 terminate-instances --instance-ids $INSTANCE_IDS
-  aws ec2 delete-key-pair --key-name LoadTestKeyPare
-  rm -f LoadTestKeyPare.pem
-  rm $PUBLIC_DNS_NAMES
-}
-trap cleanup EXIT SIGHUP SIGINT SIGQUIT SIGTERM
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;実行する&#34;&gt;実行する&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;$ brew install awscli pdsh jq vegeta packer
-$ aws configure
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな感じのスクリプト(sample/sample.sh)から実行する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;#!/bin/bash
-
-export INSTANCE_NUM=3
-
-export AMI_ID=ami-*****
-export SECURITY_GROUP_IDS=sg-*****
-export SUBNET_ID=subnet-*****
-
-export RESOURCES_DIR=res
-
-# https://github.com/tsenart/vegeta#attack
-export VEGETA_CMD=&#39;vegeta attack -targets=res/targets.txt -rate=1000 -duration=10s&#39;
-
-sh run.sh
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;sample/res/targets.txt&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;GET http://example.com/
-
-POST http://example.com/
-@res/post.json
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;結果&#34;&gt;結果&lt;/h2&gt;
-
-&lt;p&gt;何も指定しないとこんな感じ(-reporter=text)。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Requests      [total, rate]            10000, 1000.10
-Duration      [total, attack, wait]    10.011642793s, 9.998999835s, 12.642958ms
-Latencies     [mean, 50, 95, 99, max]  14.781775ms, 4.262304ms, 68.475899ms, 97.492882ms, 1.096072997s
-Bytes In      [total, mean]            15285000, 1528.50
-Bytes Out     [total, mean]            110000, 11.00
-Success       [ratio]                  100.00%
-Status Codes  [code:count]             200:10000  
-Error Set:
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;他にもjsonだったり、plotを指定するとレイテンシのグラフのhtmlが出力される。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/43_plot.jpg&#34; alt=&#34;グラフ&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/63/</guid>
+      <description>テーブルを作成する プライマリキー テーブルの操作のガイドライン - Amazon DynamoDB
+プライマリキーとしてパーティションキー(ハッシュキー)とオプションのソートキー(レンジキー)を設定する。 DynamoDBはこのパーティションキーに基づいて、複数のパーティションに分散して保存する。 テーブルにプロビジョニングされたスループット性能はパーティション間で均等に使われるので、 ソートキーを設定する場合にこれを最大限に活用するためには、 あるパーティションにリクエストが集中しないよう、パーティションキーに特定の値ばかり集中しないようなフィールドを 選ぶ必要がある。
+セカンダリインデックス パーティションキーのグローバルセカンダリインデックス(GSI)と ソートキーのローカルセカンダリインデックス(LSI)がある。 射影されるフィールドを選択でき、ここに含まれないフィールドは返さない。 ただし、すべてをインデックスに書き込むのはコストが高いのでなるべく絞る。
+キャパシティユニット  1読み込みキャパシティユニット: 4kbを超えないデータを1秒に1~2回(整合性による)読み込める 1書き込みキャパシティユニット: 1kbを超えないデータを1秒に1回書き込める  ユニットに応じて1時間あたりで課金される。
+未使用のキャパシティがある場合、最大5分保持してバーストに備えてくれる。
+読み書きする aws-sdk-goを直接使ってもいいけど、簡単に扱えるラッパー guregu/dynamo を使うことにした。
+type Data struct { ID int64 `dynamo:&amp;quot;id&amp;quot;` Name string Age int } db := dynamo.New(session.New(), &amp;amp;aws.Config{Region: aws.String(&amp;quot;ap-northeast-1&amp;quot;)}) table := db.Table(&amp;quot;testtable&amp;quot;)  Create &amp;amp; Update d := Data{ID: 1, Name: &amp;quot;hogefuga&amp;quot;, Age: 123} if err := table.Put(d).Run(); err != nil { return err } if err := table.</description>
+    </item>
     
+    <item>
+      <title>EC2のインスタンスストア</title>
+      <link>https://www.sambaiz.net/article/58/</link>
+      <pubDate>Mon, 06 Feb 2017 21:52:00 +0900</pubDate>
       
-        <item>
-          <title>PackerでAMIを作る</title>
-          <link>https://www.sambaiz.net/article/24/</link>
-          <pubDate>Tue, 18 Oct 2016 22:37:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/24/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://www.packer.io/&#34;&gt;https://www.packer.io/&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;いろんなプラットフォームのイメージを作ることができるツール。
-これでfluentdのログサーバーのAMIを作る。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ brew install packer # mac
-$ packer -v
-0.10.1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;設定ファイルはこんな感じ。&lt;code&gt;variables&lt;/code&gt;の値は&lt;code&gt;{{user ... }}&lt;/code&gt;のところで使われる。
-&lt;code&gt;builders&lt;/code&gt;に作るイメージの情報を書いて、&lt;code&gt;provisioners&lt;/code&gt;で環境を作る。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;provisioners&lt;/code&gt;にはchefやansibleなども指定できるが、
-継ぎ足し継ぎ足しで秘伝のタレ化したAMIも最初は、&lt;/p&gt;
-
-&lt;p&gt;「コマンドいくつか実行するだけなのでとりあえず手作業で作った、後でなんとかする」&lt;/p&gt;
-
-&lt;p&gt;なんてものもあったりして、
-そういうものは無理にchefなどで始めず、手軽にshellでpacker buildするといいと思う。
-手作業よりも楽だし、ソースが別にあるので使われていないAMIを消すのも簡単だ。&lt;/p&gt;
-
-&lt;p&gt;fileではpermissionがないところに置くことができないので、一旦置いてshellで移動する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;variables&amp;quot;: {
-    &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot;
-  },
-  &amp;quot;builders&amp;quot;: [{
-    &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;,
-    &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;,
-    &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;,
-    &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
-    &amp;quot;source_ami&amp;quot;: &amp;quot;ami-1a15c77b&amp;quot;,
-    &amp;quot;instance_type&amp;quot;: &amp;quot;t2.small&amp;quot;,
-    &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;,
-    &amp;quot;ami_name&amp;quot;: &amp;quot;fluentd-logserver {{timestamp}}&amp;quot;
-  }],
-  &amp;quot;provisioners&amp;quot;: [{
-    &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;,
-    &amp;quot;source&amp;quot;: &amp;quot;td-agent.conf&amp;quot;,
-    &amp;quot;destination&amp;quot;: &amp;quot;/home/ec2-user/td-agent.conf&amp;quot;
-  },
-  {
-    &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;,
-    &amp;quot;inline&amp;quot;: [
-      &amp;quot;curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh&amp;quot;,
-      &amp;quot;sudo mv /home/ec2-user/td-agent.conf /etc/td-agent/td-agent.conf&amp;quot;,
-      &amp;quot;sudo /etc/init.d/td-agent restart&amp;quot;
-    ]
-  }]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ packer validate fluentd-logserver.json
-Template validated successfully.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;buildのとき&lt;code&gt;-var&lt;/code&gt;でvariablesを渡すことができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ packer build \
-    -var &#39;aws_access_key=YOUR ACCESS KEY&#39; \
-    -var &#39;aws_secret_key=YOUR SECRET KEY&#39; \
-    fluentd-logserver.json
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これを実行すると実際にインスタンスを立ち上げ、AMIを作成し始める。&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/58/</guid>
+      <description>http://docs.aws.amazon.com/ja_jp/AWSEC2/latest/UserGuide/InstanceStorage.html
+EC2ではインスタンスタイプによってはEBSに加えてインスタンスストアが使える。しかも追加料金なし。 対象はストレージが&amp;rdquo;EBSのみ&amp;rdquo;でないもの。
+https://aws.amazon.com/jp/ec2/instance-types/
+インスタンスストアはインスタンスが停止したり、障害が起きると消える一時ストレージ。再起動では消えない。 ホストに物理的にアタッチされているので、バッファやキャッシュなどの頻繁に読み書きされ、消えてもいいデータに最適。 他のインスタンスにアタッチすることはできない。容量や性能もインスタンスタイプに依存する。
+インスタンスストアボリュームの追加は インスタンスの起動時に、新しいボリュームを追加し、ボリュームタイプをインスタンスストアにすることで行うことができる。
+今回はSSDストレージ1 x 4のm3.mediumで試す。これは4gbのボリュームが一つ追加できるという意味。
+まずはインスタンスストアを追加してないインスタンス。 lsblkというのはlist block devicesの略。
+$ df -h ファイルシス サイズ 使用 残り 使用% マウント位置 /dev/xvda1 7.8G 1.2G 6.6G 15% / ... $ dd if=/dev/zero of=hoge bs=1M count=1000 $ ls -sh 合計 1001M 1001M hoge $ df -h ファイルシス サイズ 使用 残り 使用% マウント位置 /dev/xvda1 7.8G 2.2G 5.6G 28% / ... $ lsblk NAME MAJ:MIN RM SIZE RO TYPE MOUNTPOINT xvda 202:0 0 8G 0 disk └─xvda1 202:1 0 8G 0 part /  それに対してインスタンスストア(/dev/xvdb)を追加したインスタンス。</description>
+    </item>
     
-
+    <item>
+      <title>複数EC2インスタンスを立ち上げてvegetaで負荷試験する</title>
+      <link>https://www.sambaiz.net/article/43/</link>
+      <pubDate>Sun, 18 Dec 2016 20:52:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/43/</guid>
+      <description>vegetaで負荷をかける。
+インスタンスを立ち上げるスクリプト コードはここ。 sambaiz/loadtest
+まずキーペアを作成し、EC2インスタンスを立ち上げて、全てのインスタンスが使えるようになるまで待つ。
+aws ec2 create-key-pair --key-name LoadTestKeyPare --query &#39;KeyMaterial&#39; --output text &amp;gt; LoadTestKeyPare.pem chmod 400 LoadTestKeyPare.pem aws ec2 run-instances --image-id $AMI_ID --count $INSTANCE_NUM --instance-type t2.micro --key-name LoadTestKeyPare --security-group-ids $SECURITY_GROUP_IDS --subnet-id $SUBNET_ID ... aws ec2 wait instance-status-ok --instance-ids $INSTANCE_IDS  このAMIは事前にPackerでつくったもの。vegetaをインストールしてファイルディスクリプタの上限を増やしている。
+{ &amp;quot;variables&amp;quot;: { &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;, &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot; }, &amp;quot;builders&amp;quot;: [{ &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;, &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;, &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;, &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;, &amp;quot;source_ami&amp;quot;: &amp;quot;ami-0c11b26d&amp;quot;, &amp;quot;instance_type&amp;quot;: &amp;quot;t2.micro&amp;quot;, &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;, &amp;quot;ami_name&amp;quot;: &amp;quot;loadtest {{timestamp}}&amp;quot; }], &amp;quot;provisioners&amp;quot;: [{ &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;, &amp;quot;inline&amp;quot;: [ &amp;quot;wget https://github.</description>
+    </item>
+    
+    <item>
+      <title>PackerでAMIを作る</title>
+      <link>https://www.sambaiz.net/article/24/</link>
+      <pubDate>Tue, 18 Oct 2016 22:37:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/24/</guid>
+      <description>https://www.packer.io/
+いろんなプラットフォームのイメージを作ることができるツール。 これでfluentdのログサーバーのAMIを作る。
+$ brew install packer # mac $ packer -v 0.10.1  設定ファイルはこんな感じ。variablesの値は{{user ... }}のところで使われる。 buildersに作るイメージの情報を書いて、provisionersで環境を作る。
+provisionersにはchefやansibleなども指定できるが、 継ぎ足し継ぎ足しで秘伝のタレ化したAMIも最初は、
+「コマンドいくつか実行するだけなのでとりあえず手作業で作った、後でなんとかする」
+なんてものもあったりして、 そういうものは無理にchefなどで始めず、手軽にshellでpacker buildするといいと思う。 手作業よりも楽だし、ソースが別にあるので使われていないAMIを消すのも簡単だ。
+fileではpermissionがないところに置くことができないので、一旦置いてshellで移動する。
+{ &amp;quot;variables&amp;quot;: { &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;, &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot; }, &amp;quot;builders&amp;quot;: [{ &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;, &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;, &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;, &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;, &amp;quot;source_ami&amp;quot;: &amp;quot;ami-1a15c77b&amp;quot;, &amp;quot;instance_type&amp;quot;: &amp;quot;t2.small&amp;quot;, &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;, &amp;quot;ami_name&amp;quot;: &amp;quot;fluentd-logserver {{timestamp}}&amp;quot; }], &amp;quot;provisioners&amp;quot;: [{ &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;, &amp;quot;source&amp;quot;: &amp;quot;td-agent.conf&amp;quot;, &amp;quot;destination&amp;quot;: &amp;quot;/home/ec2-user/td-agent.conf&amp;quot; }, { &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;, &amp;quot;inline&amp;quot;: [ &amp;quot;curl -L https://toolbelt.</description>
+    </item>
+    
   </channel>
 </rss>

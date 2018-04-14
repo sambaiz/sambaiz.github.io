@@ -1,151 +1,31 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz-net</title>
-    <link>https://www.sambaiz.net/tags/compress/index.xml</link>
-    <language>ja</language>
-    <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
-
+    <title>Compress on sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/compress/</link>
+    <description>Recent content in Compress on sambaiz-net</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <copyright>sambaiz-net</copyright>
+    <lastBuildDate>Fri, 03 Nov 2017 15:00:00 +0900</lastBuildDate>
     
-      
-        <item>
-          <title>圧縮アルゴリズムZopfliとBrotli</title>
-          <link>https://www.sambaiz.net/article/142/</link>
-          <pubDate>Fri, 03 Nov 2017 15:00:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/142/</guid>
-          <description>
-
-&lt;p&gt;どちらもGoogleが開発した圧縮アルゴリズム。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit&#34;&gt;puppetter-lambda-starter-kit&lt;/a&gt;
-の&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/issues/2&#34;&gt;issue&lt;/a&gt;に
-現在使っているgzipと、Zopfli、Brotliを比較したデータが上がっていたので調べてみた。&lt;/p&gt;
-
-&lt;h2 id=&#34;zopfli-https-github-com-google-zopfli&#34;&gt;&lt;a href=&#34;https://github.com/google/zopfli&#34;&gt;Zopfli&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;出力としてDeflateに対応している。&lt;/p&gt;
-
-&lt;h3 id=&#34;deflate&#34;&gt;Deflate&lt;/h3&gt;
-
-&lt;p&gt;LZ77(実際は改良版のLZSS)とハフマン記号による可逆圧縮アルゴリズム。
-zip、zlib、gzip、pngなどで使われていて、これらはヘッダーやフッターが異なる。
-LZSSはバイト列を見ていって同じ部分を発見したらそこを参照するように置き換えていく。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;a b c a b c a b c d d d
-=&amp;gt; a b c (距離3, 長さ6) d (距離１, 長さ2)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このLZSSにあたる部分をZopfliはがんばってやるので圧縮時間が結構かかるがサイズは小さくなるらしい。
-展開は通常のDeflate通り。上げてくれたデータを見ても大体そんな感じだ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/google/zopfli
-$ cd zopfli
-$ make zopfli
-$ ./zopfli aaaa
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;brotli-https-github-com-google-brotli&#34;&gt;&lt;a href=&#34;https://github.com/google/brotli&#34;&gt;Brotli&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;LZ77、ハフマン記号に加えて2nd order context modelingというのを使って圧縮する
-Deflateではない可逆圧縮アルゴリズム。
-Safari以外のモダンなブラウザで既に対応しているか対応しているところ。
-対応している場合、&lt;code&gt;Accept-Encoding&lt;/code&gt;や&lt;code&gt;Content-Encoding&lt;/code&gt;ヘッダに含まれるのは&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/HTTP/Headers/Content-Encoding&#34;&gt;br&lt;/a&gt;。
-圧縮率も展開時間もかなり良さそう。&lt;/p&gt;
-
-&lt;p&gt;Nodeにもblotliのライブラリが&lt;a href=&#34;https://github.com/devongovett/brotli.js&#34;&gt;あって&lt;/a&gt;、
-圧縮はEmscriptenで&lt;a href=&#34;https://github.com/google/brotli&#34;&gt;本家のC++コード&lt;/a&gt;から変換し、
-展開は手で移植しているようだ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install blotli
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;const fs = require(&#39;fs&#39;);
-const brotli = require(&#39;brotli&#39;);
-const TARGET = process.env.TARGET;
-const MODE = process.env.MODE;
-
-const compress = () =&amp;gt; {
-  const target = fs.readFileSync(TARGET);
-  const compressed = brotli.compress(target, {
-    quality: 11,
-  });
-  fs.writeFileSync(`${TARGET}.br`, compressed);
-};
-
-const decompress = () =&amp;gt; {
-  const target = fs.readFileSync(TARGET);
-  const decompressed = brotli.decompress(target);
-  fs.writeFileSync(`${TARGET.replace(&#39;.br&#39;, &#39;&#39;)}`, decompressed);
-};
-
-(async () =&amp;gt; {
-    if (MODE === &#39;decompress&#39;) {
-        decompress();
-    } else {
-        compress();
-    }
-})();
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ただ、これで大きなファイルを圧縮しようとすると以下のようなエラーが出て失敗する。
-設定を変えてコンパイルするのも面倒なので、圧縮はCLIでやることにした。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ TARGET=headless_shell node compress.js 
-Cannot enlarge memory arrays. Either (1) compile with  -s TOTAL_MEMORY=X  with X higher than the current value 318767104, (2) compile with  -s ALLOW_MEMORY_GROWTH=1  which adjusts the size at runtime but prevents some optimizations, (3) set Module.TOTAL_MEMORY to a higher value before the program runs, or if you want malloc to return NULL (0) instead of this abort, compile with  -s ABORTING_MALLOC=0 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;リポジトリをcloneしてきてmake installする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ git clone https://github.com/google/brotli.git
-$ cd brotli
-$ mkdir out &amp;amp;&amp;amp; cd out
-$ ../configure-cmake
-$ make
-$ make test
-$ make install
-$ brotli --version
-brotli 1.0.1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;デフォルトで最高レベル(11)で圧縮することもあり、かなり時間がかかる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ time brotli headless_shell
-$ time brotli headless_shell
-
-real	18m41.814s
-user	18m6.485s
-sys	0m7.906s
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;gzipだと最高レベルで圧縮しても43MBまでのところ、33MBまで圧縮できた。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;131M headless_shell
-33M  headless_shell.br
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;展開はすぐ。むしろgzipより速い。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ time TARGET=aaaa.br MODE=decompress node compress.js
-
-real	0m5.850s
-user	0m4.626s
-sys	0m1.030s
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ということで、brotli対応版を出そうとしたが、Lambdaでdecompressしたら&lt;code&gt;JavaScript heap out of memory&lt;/code&gt;になってしまった。&lt;/p&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.slideshare.net/7shi/deflate&#34;&gt;Deflate&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://qiita.com/jkr_2255/items/f3dfdf08267f2a8b590a&#34;&gt;Zopfliで高圧縮gzip・PNGほか - Qiita&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+	<atom:link href="https://www.sambaiz.net/tags/compress/index.xml" rel="self" type="application/rss+xml" />
     
-
+    
+    <item>
+      <title>圧縮アルゴリズムZopfliとBrotli</title>
+      <link>https://www.sambaiz.net/article/142/</link>
+      <pubDate>Fri, 03 Nov 2017 15:00:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/142/</guid>
+      <description>どちらもGoogleが開発した圧縮アルゴリズム。
+puppetter-lambda-starter-kit のissueに 現在使っているgzipと、Zopfli、Brotliを比較したデータが上がっていたので調べてみた。
+Zopfli 出力としてDeflateに対応している。
+Deflate LZ77(実際は改良版のLZSS)とハフマン記号による可逆圧縮アルゴリズム。 zip、zlib、gzip、pngなどで使われていて、これらはヘッダーやフッターが異なる。 LZSSはバイト列を見ていって同じ部分を発見したらそこを参照するように置き換えていく。
+a b c a b c a b c d d d =&amp;gt; a b c (距離3, 長さ6) d (距離１, 長さ2)  このLZSSにあたる部分をZopfliはがんばってやるので圧縮時間が結構かかるがサイズは小さくなるらしい。 展開は通常のDeflate通り。上げてくれたデータを見ても大体そんな感じだ。
+$ git clone https://github.com/google/zopfli $ cd zopfli $ make zopfli $ ./zopfli aaaa  Brotli LZ77、ハフマン記号に加えて2nd order context modelingというのを使って圧縮する Deflateではない可逆圧縮アルゴリズム。 Safari以外のモダンなブラウザで既に対応しているか対応しているところ。 対応している場合、Accept-EncodingやContent-Encodingヘッダに含まれるのはbr。 圧縮率も展開時間もかなり良さそう。
+Nodeにもblotliのライブラリがあって、 圧縮はEmscriptenで本家のC++コードから変換し、 展開は手で移植しているようだ。
+$ npm install blotli  const fs = require(&#39;fs&#39;); const brotli = require(&#39;brotli&#39;); const TARGET = process.</description>
+    </item>
+    
   </channel>
 </rss>

@@ -1,1201 +1,148 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz-net</title>
-    <link>https://www.sambaiz.net/tags/infra/index.xml</link>
-    <language>ja</language>
-    <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
-
+    <title>Infra on sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/infra/</link>
+    <description>Recent content in Infra on sambaiz-net</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <copyright>sambaiz-net</copyright>
+    <lastBuildDate>Sun, 18 Mar 2018 22:35:00 +0900</lastBuildDate>
     
-      
-        <item>
-          <title>Kubernetes,Helmで負荷試験ツールLocustを立てる</title>
-          <link>https://www.sambaiz.net/article/161/</link>
-          <pubDate>Sun, 18 Mar 2018 22:35:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/161/</guid>
-          <description>&lt;p&gt;OSSの負荷試験ツール&lt;a href=&#34;https://locust.io/&#34;&gt;Locust&lt;/a&gt;をK8sクラスタに立てる。
-K8sならworkerの増減も簡単だし、HelmのChartもあるので立てるのも楽。&lt;/p&gt;
-
-&lt;p&gt;LocustはPython製で、以下のような&lt;a href=&#34;https://docs.locust.io/en/latest/writing-a-locustfile.html&#34;&gt;コード&lt;/a&gt;で処理を書くことができる。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;@task(10)&lt;/code&gt;のように括弧の中に数字を書いて実行される割合を偏らせることもできる。
-ユーザー数はあとでWeb上から入力する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ mkdir tasks
-$ cat tasks/tasks.py
-from locust import HttpLocust, TaskSet, task
-
-class ElbTasks(TaskSet):
-  @task
-  def task1(self):
-    with client.get(&amp;quot;/&amp;quot;, catch_response=True) as response:
-    if response.content != &amp;quot;Success&amp;quot;:
-        response.failure(&amp;quot;Got wrong response&amp;quot;)
-
-class ElbWarmer(HttpLocust):
-  task_set = ElbTasks
-  min_wait = 1000
-  max_wait = 3000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;stableに&lt;a href=&#34;https://github.com/kubernetes/charts/tree/master/stable/locust&#34;&gt;Chart&lt;/a&gt;はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、&lt;code&gt;helm repo add&lt;/code&gt;するために&lt;code&gt;package&lt;/code&gt;して、これを参照する&lt;code&gt;index.yaml&lt;/code&gt;を生成した。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm package .
-$ helm repo index .
-$ ls locust-0.1.2.tgz index.yaml 
-index.yaml		locust-0.1.2.tgz
-$ cat index.yaml
-apiVersion: v1
-entries:
-  locust:
-    ...
-    urls:
-    - locust-0.1.2.tgz
-    version: 0.1.2
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm repo add my-locust &#39;https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust&#39;
-$ helm repo list
-NAME     	URL                                                                     
-stable   	https://kubernetes-charts.storage.googleapis.com
-local    	http://127.0.0.1:8879/charts    
-my-locust	https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;GKEのようなRBACが有効な環境でHelmを使う場合、TillerにServiceAccountを設定しておく。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/160/&#34;&gt;RBACが有効なGKEでHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;addしたrepoからinstallする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm install -n my-locust --set master.config.target-host=**** my-locust/locust 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;masterとworker(デフォルトで2つ)が立った。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl get pods
-NAME                                READY     STATUS    RESTARTS   AGE
-my-locust-master-7f7d57f5dc-k966s   1/1       Running   0          1m
-my-locust-worker-66cc964748-7ff5w   1/1       Running   0          1m
-my-locust-worker-66cc964748-wx5hf   1/1       Running   0          1m
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;port-forwardしてweb-uiにアクセスしてみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl port-forward $POD_NAME 8089
-$ open localhost:8089
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/161.png&#34; alt=&#34;User数と生成速度の設定&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;実行開始するとRPSなどがリアルタイムで表示される。
-1000Users、50spawned/sで始めてみたところ、200Userにも到達せずにリクエスト自体が止まってしまった。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/161-2.png&#34; alt=&#34;実行結果&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;少なく再設定してもUsersはそのままでよく分からない。
-一旦立ち上げ直して100,10で実行してみたら100Userまで行くことは確認できた。&lt;/p&gt;
-
-&lt;p&gt;再び止まるまで上げてみたところ、途中でOOMになっていることが分かった。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl describe pod my-locust-worker-****
-Containers:
-  locust:
-    ...
-    Last State:     Terminated
-      Reason:       OOMKilled
-      Exit Code:    137
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;CPU(割り当て100&lt;a href=&#34;https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu&#34;&gt;millicores&lt;/a&gt;)もメモリ(割り当て128mi)もそれなりに使われていて、単純にreplica数を増やす必要がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ watch kubectl top node
-NAME                                CPU(cores)   MEMORY(bytes)
-my-locust-master-7f7d57f5dc-h9mvt   1m           19Mi
-my-locust-worker-66cc964748-9dp8n   72m          112Mi
-my-locust-worker-66cc964748-h94v9   61m          114Mi
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ということでworkerを2から5に増やしてみたところUser数を増やしても止まらなくなった。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl scale deployment my-locust-worker --replicas=5
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+	<atom:link href="https://www.sambaiz.net/tags/infra/index.xml" rel="self" type="application/rss+xml" />
     
-      
-        <item>
-          <title>RBACが有効なGKEでHelmを使う</title>
-          <link>https://www.sambaiz.net/article/160/</link>
-          <pubDate>Sun, 18 Mar 2018 01:04:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/160/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/122/&#34;&gt;k8sのパッケージマネージャーHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm version
-Client: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
-Server: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;GKEで&lt;code&gt;helm init&lt;/code&gt;して&lt;code&gt;helm install&lt;/code&gt;したところ以下のエラーが返ってきた。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Error: release my-locust failed: namespaces &amp;quot;default&amp;quot; is forbidden: User &amp;quot;system:serviceaccount:kube-system:default&amp;quot; cannot get namespaces in the namespace &amp;quot;default&amp;quot;: Unknown user &amp;quot;system:serviceaccount:kube-system:default&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が&lt;a href=&#34;https://cloud.google.com/kubernetes-engine/docs/role-based-access-control&#34;&gt;有効になっている&lt;/a&gt;ため、&lt;a href=&#34;https://github.com/kubernetes/helm/blob/master/docs/rbac.md&#34;&gt;Tillerインスタンスに権限を与える&lt;/a&gt;必要がある。&lt;/p&gt;
-
-&lt;p&gt;ということでTiller用にnamespaceを切って、その中では好きにできる&lt;a href=&#34;https://kubernetes.io/docs/admin/authorization/rbac/#role-and-clusterrole&#34;&gt;Role&lt;/a&gt;と、Tillerが使う&lt;a href=&#34;https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/&#34;&gt;ServiceAccount&lt;/a&gt;を作成し、RoleBindingで紐づける。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;kind: Role
-apiVersion: rbac.authorization.k8s.io/v1beta1
-metadata:
-  name: tiller-manager
-  namespace: tiller-world
-rules:
-- apiGroups: [&amp;quot;&amp;quot;, &amp;quot;extensions&amp;quot;, &amp;quot;apps&amp;quot;]
-  resources: [&amp;quot;*&amp;quot;]
-  verbs: [&amp;quot;*&amp;quot;]
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: tiller
-  namespace: tiller-world
----
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
-metadata:
-  name: tiller-binding
-  namespace: tiller-world
-subjects:
-- kind: ServiceAccount
-  name: tiller
-  namespace: tiller-world
-roleRef:
-  kind: Role
-  name: tiller-manager
-  apiGroup: rbac.authorization.k8s.io
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Roleを追加するため、自分自身にsuper-user相当の&lt;code&gt;cluster-admin&lt;/code&gt;roleをbindする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=&amp;lt;email&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ kubectl create namespace tiller-world
-$ kubectl create -f tiller-rbac.yaml
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;helm init&lt;/code&gt;時に作ったServiceAccountを渡す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm init --tiller-namespace tiller-world --service-account tiller
-$ kubectl get deployment -n tiller-world
-NAME            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-tiller-deploy   1         1         1            1           1m
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Prometheusをinstallしてみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ helm install --name my-prometheus stable/prometheus --tiller-namespace tiller-world --namespace tiller-world
-$ kubectl get pods -n tiller-world
-NAME                                                           READY     STATUS    RESTARTS   AGE
-my-prometheus-prometheus-alertmanager-85f75879db-9r9z2         2/2       Running   0          1m
-my-prometheus-prometheus-kube-state-metrics-65dfc57897-95ts7   1/1       Running   0          1m
-my-prometheus-prometheus-server-7c98fb8ffb-s7jpq               2/2       Running   0          1m
-tiller-deploy-57dbcb6bbc-6srlt                                 1/1       Running   0          2m
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
     
+    <item>
+      <title>Kubernetes,Helmで負荷試験ツールLocustを立てる</title>
+      <link>https://www.sambaiz.net/article/161/</link>
+      <pubDate>Sun, 18 Mar 2018 22:35:00 +0900</pubDate>
       
-        <item>
-          <title>TerraformでVPCを管理するmoduleを作る</title>
-          <link>https://www.sambaiz.net/article/121/</link>
-          <pubDate>Sun, 23 Jul 2017 02:54:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/121/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://www.terraform.io/&#34;&gt;Terraform&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ brew install terraform
-$ terraform -v
-Terraform v0.9.11
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;terraformの設定要素&#34;&gt;Terraformの設定要素&lt;/h2&gt;
-
-&lt;h3 id=&#34;provider-https-www-terraform-io-docs-providers-index-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/index.html&#34;&gt;provider&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;IaaS(e.g. AWS)、PaaS(e.g. Heroku)、SaaS(e.g. CloudFlare)など。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/&#34;&gt;AWS Provider&lt;/a&gt;はこんな感じ。
-ここに直接access_keyやsecret_keyを書くこともできるけど、誤って公開されてしまわないように環境変数か
-variableで渡す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;provider &amp;quot;aws&amp;quot; {
-  # access_key = &amp;quot;${var.access_key}&amp;quot;
-  # secret_key = &amp;quot;${var.secret_key}&amp;quot;
-  region = &amp;quot;us-east-1&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ export AWS_ACCESS_KEY_ID=&amp;quot;anaccesskey&amp;quot;
-$ export AWS_SECRET_ACCESS_KEY=&amp;quot;asecretkey&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;varibale-https-www-terraform-io-docs-configuration-variables-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/configuration/variables.html&#34;&gt;varibale&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;CLIでオーバーライドできるパラメーター。typeにはstringのほかにmapやlistを渡すことができ、
-何も渡さないとdefault値のものが、それもなければstringになる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;variable &amp;quot;key&amp;quot; {
-  type    = &amp;quot;string&amp;quot;
-  default = &amp;quot;value&amp;quot;
-  description = &amp;quot;description&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;値を渡す方法はTF_VAR_をprefixとする環境変数、-var、-var-fileがある。
-また、moduleのinputとして渡されることもある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ export TF_VAR_somelist=&#39;[&amp;quot;ami-abc123&amp;quot;, &amp;quot;ami-bcd234&amp;quot;]&#39;
-$ terraform apply -var foo=bar -var foo=baz
-$ terraform apply -var-file=foo.tfvars -var-file=bar.tfvars
-$ cat foo.tfvars
-foo = &amp;quot;bar&amp;quot;
-xyz = &amp;quot;abc&amp;quot;
-
-somelist = [
-  &amp;quot;one&amp;quot;,
-  &amp;quot;two&amp;quot;,
-]
-
-somemap = {
-  foo = &amp;quot;bar&amp;quot;
-  bax = &amp;quot;qux&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h4 id=&#34;output-https-www-terraform-io-docs-configuration-outputs-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/configuration/outputs.html&#34;&gt;output&lt;/a&gt;&lt;/h4&gt;
-
-&lt;p&gt;variableがinputなのに対して、こちらはoutput。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;output &amp;quot;ip&amp;quot; {
-  value = &amp;quot;${aws_eip.ip.public_ip}&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;実行した後に取得できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ terraform apply
-...
-
-$ terraform output ip
-50.17.232.209
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;resource-https-www-terraform-io-docs-configuration-resources-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/configuration/resources.html&#34;&gt;resource&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;物理サーバーやVMのような低レベルのものからDNSレコードのような高レベルのものまで含むインフラのコンポーネント。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_instance&amp;quot; &amp;quot;web&amp;quot; {
-  ami           = &amp;quot;ami-408c7f28&amp;quot;
-  instance_type = &amp;quot;t1.micro&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h4 id=&#34;provisioner-https-www-terraform-io-docs-provisioners-index-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/provisioners/index.html&#34;&gt;provisioner&lt;/a&gt;&lt;/h4&gt;
-
-&lt;p&gt;デフォルトでは作成されたときに実行されるコマンド。&lt;code&gt;when = &amp;quot;destroy&amp;quot;&lt;/code&gt;で終了時に実行させることもできる。
-on_failureで失敗したときの挙動を設定することができ、デフォルトはコマンド自体が失敗する&amp;rdquo;fail&amp;rdquo;になっている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_instance&amp;quot; &amp;quot;web&amp;quot; {
-  # ...
-
-  provisioner &amp;quot;local-exec&amp;quot; {
-    command = &amp;quot;echo ${self.private_ip_address} &amp;gt; file.txt&amp;quot;
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;data-https-www-terraform-io-docs-configuration-data-sources-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/configuration/data-sources.html&#34;&gt;data&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;情報を取得する。Terraform以外で作られたリソースのものも取れる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;data &amp;quot;aws_ami&amp;quot; &amp;quot;web&amp;quot; {
-  filter {
-    name   = &amp;quot;state&amp;quot;
-    values = [&amp;quot;available&amp;quot;]
-  }
-
-  filter {
-    name   = &amp;quot;tag:Component&amp;quot;
-    values = [&amp;quot;web&amp;quot;]
-  }
-
-  most_recent = true
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;module-https-www-terraform-io-docs-modules-index-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/modules/index.html&#34;&gt;module&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;設定をまとめたもの。variableの値を渡すことができ、再利用することができる。
-GitHubのurlをsourceに指定することもできる。最初に&lt;code&gt;terraform get&lt;/code&gt;する必要がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;module &amp;quot;assets_bucket&amp;quot; {
-  source = &amp;quot;./publish_bucket&amp;quot;
-  name   = &amp;quot;assets&amp;quot;
-}
-
-module &amp;quot;media_bucket&amp;quot; {
-  source = &amp;quot;./publish_bucket&amp;quot;
-  name   = &amp;quot;media&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;# publish_bucket/bucket-and-cloudfront.tf
-variable &amp;quot;name&amp;quot; {} # this is the input parameter of the module
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;backend-https-www-terraform-io-docs-backends-index-html&#34;&gt;&lt;a href=&#34;https://www.terraform.io/docs/backends/index.html&#34;&gt;backend&lt;/a&gt;&lt;/h3&gt;
-
-&lt;p&gt;0.9.0から&lt;code&gt;terraform remote&lt;/code&gt;の代わりに使われるようになったもの。
-管理下のresourceと今の状態を表すtfstateファイルを各自のローカルではなくリモートで一元的に管理する。
-オプションではあるけど、applyしたあとにtfstateを上げるのを忘れたりするのを防ぐこともできるため
-相当変わった用途でもない限り使わない理由がないと思う。最初に&lt;code&gt;terraform init&lt;/code&gt;する必要がある。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.terraform.io/docs/backends/types/s3.html&#34;&gt;S3&lt;/a&gt;に置く場合はこんな感じ。
-DynamoDBでロックをかけられる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;terraform {
-  backend &amp;quot;s3&amp;quot; {
-    bucket = &amp;quot;mybucket&amp;quot;
-    key    = &amp;quot;path/to/my/key&amp;quot;
-    region = &amp;quot;us-east-1&amp;quot;
-    dynamodb_table = &amp;quot;tflocktable&amp;quot;
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;vpcのmoduleを作る&#34;&gt;VPCのmoduleを作る&lt;/h2&gt;
-
-&lt;p&gt;コードは&lt;a href=&#34;https://github.com/sambaiz/terraform-example-vpc&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;community-moduleにも&lt;a href=&#34;https://github.com/terraform-community-modules/tf_aws_vpc&#34;&gt;VPCのモジュール&lt;/a&gt;があるんだけど、今回は自分で作ってみる。&lt;/p&gt;
-
-&lt;p&gt;variableはこんな感じ。同じファイルに書くこともできるが別に分けた方が見やすい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;variable &amp;quot;vpc_name&amp;quot; {
-    description = &amp;quot;vpc&#39;s name, e.g. main-vpc&amp;quot;
-}
-
-variable &amp;quot;vpc_cidr_block&amp;quot; {
-    description = &amp;quot;vpc&#39;s cidr block, e.g. 10.0.0.0/16&amp;quot;
-}
-
-variable &amp;quot;public_subnet_cidr_blocks&amp;quot; {
-    type = &amp;quot;list&amp;quot;
-    description = &amp;quot;public subnets&#39; cidr blocks, e.g. [\&amp;quot;10.0.0.0/24\&amp;quot;, \&amp;quot;10.0.1.0/24\&amp;quot;]&amp;quot;
-}
-
-variable &amp;quot;public_subnet_availability_zones&amp;quot; {
-    type = &amp;quot;list&amp;quot;
-    description = &amp;quot;public subnets&#39; cidr blocks, e.g. [\&amp;quot;ap-northeast-1a\&amp;quot;,\&amp;quot;ap-northeast-1c\&amp;quot;]&amp;quot;
-}
-
-variable &amp;quot;private_subnet_cidr_blocks&amp;quot; {
-    type = &amp;quot;list&amp;quot;
-    description = &amp;quot;private subnets&#39; cidr blocks, e.g. [\&amp;quot;10.0.2.0/24\&amp;quot;, \&amp;quot;10.0.3.0/24\&amp;quot;]&amp;quot;
-}
-
-variable &amp;quot;private_subnet_availability_zones&amp;quot; {
-    type = &amp;quot;list&amp;quot;
-    description = &amp;quot;public subnets&#39; cidr blocks, e.g. [\&amp;quot;ap-northeast-1a\&amp;quot;,\&amp;quot;ap-northeast-1c\&amp;quot;]&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;まず&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/d/vpc.html&#34;&gt;VPC&lt;/a&gt;を作成する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_vpc&amp;quot; &amp;quot;vpc&amp;quot; {
-    cidr_block = &amp;quot;${var.vpc_cidr_block}&amp;quot;
-    enable_dns_hostnames = true
-    tags {
-        Name = &amp;quot;${var.vpc_name}&amp;quot;
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;次にVPCにpublicとprivate用の&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/d/subnet.html&#34;&gt;サブネット&lt;/a&gt;を、
-それぞれcidr_block分作成する。&lt;/p&gt;
-
-&lt;p&gt;vpc_idでvpcのresourceを参照している。したがって、これを実行するためには既にvpcが作られている必要がある。
-&lt;code&gt;depends_on&lt;/code&gt;で明示的に依存関係を示すこともできるのだけど、
-大抵はそうする必要がなくて&lt;a href=&#34;https://www.terraform.io/intro/getting-started/dependencies.html#implicit-and-explicit-dependencies&#34;&gt;暗黙的な依存関係&lt;/a&gt;をterraformが解決してくれる。
-これは&lt;a href=&#34;https://www.terraform.io/docs/commands/graph.html&#34;&gt;terraform graph&lt;/a&gt;で確認できる。&lt;/p&gt;
-
-&lt;p&gt;AZで使われている&lt;a href=&#34;https://www.terraform.io/docs/configuration/interpolation.html#element-list-index-&#34;&gt;element(list, index)&lt;/a&gt;
-は要素数以上のindexを渡してもmodの要領で選ぶので数を合わせなくてもよい。&lt;/p&gt;
-
-&lt;p&gt;複数作ったものは&lt;code&gt;aws_subnet.public-subnet.0&lt;/code&gt;のように0から始まるindexで&lt;a href=&#34;https://www.terraform.io/docs/configuration/interpolation.html#attributes-of-other-resources&#34;&gt;参照でき&lt;/a&gt;、
-&lt;code&gt;aws_subnet.public-subnet.*.id&lt;/code&gt;のようにすると要素のリストを得られる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_subnet&amp;quot; &amp;quot;public-subnet&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    count = &amp;quot;${length(var.public_subnet_cidr_blocks)}&amp;quot;
-    cidr_block = &amp;quot;${var.public_subnet_cidr_blocks[count.index]}&amp;quot;
-    availability_zone = &amp;quot;${element(var.public_subnet_availability_zones, count.index)}&amp;quot;
-    map_public_ip_on_launch = true
-    tags {
-        Name = &amp;quot;${var.vpc_name}-public-${element(var.public_subnet_availability_zones, count.index)}&amp;quot;
-    }
-}
-
-resource &amp;quot;aws_subnet&amp;quot; &amp;quot;private-subnet&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    count = &amp;quot;${length(var.private_subnet_cidr_blocks)}&amp;quot;
-    cidr_block = &amp;quot;${var.private_subnet_cidr_blocks[count.index]}&amp;quot;
-    availability_zone = &amp;quot;${element(var.private_subnet_availability_zones, count.index)}&amp;quot;
-    tags {
-        Name = &amp;quot;${var.vpc_name}-private-${element(var.private_subnet_availability_zones, count.index)}&amp;quot;
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;public用のサブネットが外と通信できるように&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/internet_gateway.html&#34;&gt;インターネットゲートウェイ&lt;/a&gt;をVPCにアタッチし、
-これを登録した&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/d/route_table.html&#34;&gt;カスタムルートテーブル&lt;/a&gt;
-をサブネットに&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/route_table_association.html&#34;&gt;関連付ける&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_internet_gateway&amp;quot; &amp;quot;igw&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    tags {
-        Name = &amp;quot;${var.vpc_name}-igw&amp;quot;
-    }
-}
-
-resource &amp;quot;aws_route_table&amp;quot; &amp;quot;public-route-table&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    route {
-        cidr_block = &amp;quot;0.0.0.0/0&amp;quot;
-        gateway_id = &amp;quot;${aws_internet_gateway.igw.id}&amp;quot;
-    }
-    tags {
-        Name = &amp;quot;${var.vpc_name}-public-route-table&amp;quot;
-    }
-}
-
-resource &amp;quot;aws_route_table_association&amp;quot; &amp;quot;route-table-association&amp;quot; {
-    count          = &amp;quot;${length(var.public_subnet_cidr_blocks)}&amp;quot;
-    subnet_id      = &amp;quot;${element(aws_subnet.public-subnet.*.id, count.index)}&amp;quot;
-    route_table_id = &amp;quot;${aws_route_table.public-route-table.id}&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;privateのサブネットからはNATして外に出られるようにする。
-publicなサブネットにNATする&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AmazonVPC/latest/UserGuide/vpc-nat-comparison.html&#34;&gt;インスタンス&lt;/a&gt;を立ててもいいけど、&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AmazonVPC/latest/UserGuide/vpc-nat-gateway.html&#34;&gt;NATゲートウェイ&lt;/a&gt;を使うと自分でメンテする必要がなくて楽。
-&lt;a href=&#34;https://aws.amazon.com/jp/vpc/pricing/&#34;&gt;料金&lt;/a&gt;は時間と通信量による。&lt;/p&gt;
-
-&lt;p&gt;ということで、&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/eip.html&#34;&gt;EIP&lt;/a&gt;を割り当て、
-適当なpublicのサブネットに&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/nat_gateway.html&#34;&gt;NATゲートウェイ&lt;/a&gt;を作成する。
-ドキュメントに書いてある通り、明示的にigwを依存に入れている。&lt;/p&gt;
-
-&lt;p&gt;NATゲートウェイを&lt;a href=&#34;https://www.terraform.io/docs/providers/aws/r/main_route_table_assoc.html&#34;&gt;メインルートテーブル&lt;/a&gt;に登録する。
-これは&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AmazonVPC/latest/UserGuide/vpc-nat-gateway.html#nat-gateway-basics&#34;&gt;AWSのドキュメント&lt;/a&gt;に書いてある通りの構成で、
-明示的にルートテーブルと関連付けていないサブネットは
-メインルートテーブルに
-&lt;a href=&#34;http://docs.aws.amazon.com/ja_jp/AmazonVPC/latest/UserGuide/VPC_Route_Tables.html#RouteTables&#34;&gt;関連付けられる&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;resource &amp;quot;aws_eip&amp;quot; &amp;quot;nat&amp;quot; {
-    vpc = true
-}
-
-resource &amp;quot;aws_nat_gateway&amp;quot; &amp;quot;ngw&amp;quot; {
-    allocation_id = &amp;quot;${aws_eip.nat.id}&amp;quot;
-    subnet_id     = &amp;quot;${aws_subnet.public-subnet.0.id}&amp;quot;
-    depends_on = [&amp;quot;aws_internet_gateway.igw&amp;quot;]
-}
-
-resource &amp;quot;aws_route_table&amp;quot; &amp;quot;main-route-table&amp;quot; {
-    vpc_id = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-    route {
-        cidr_block = &amp;quot;0.0.0.0/0&amp;quot;
-        nat_gateway_id = &amp;quot;${aws_nat_gateway.ngw.id}&amp;quot;
-    }
-    tags {
-        Name = &amp;quot;${var.vpc_name}-main-route-table&amp;quot;
-    }
-}
-
-resource &amp;quot;aws_main_route_table_association&amp;quot; &amp;quot;main-route-table-association&amp;quot; {
-  vpc_id         = &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-  route_table_id = &amp;quot;${aws_route_table.main-route-table.id}&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;実行&#34;&gt;実行&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;terraform {
-  backend &amp;quot;s3&amp;quot; {
-    bucket = &amp;quot;terraform&amp;quot;
-    key    = &amp;quot;terraform.tfstate&amp;quot;
-    region = &amp;quot;ap-northeast-1&amp;quot;
-  }
-}
-
-provider &amp;quot;aws&amp;quot; {
-  region = &amp;quot;ap-northeast-1&amp;quot;
-}
-
-module &amp;quot;test-vpc&amp;quot; {
-  source                            = &amp;quot;./vpc&amp;quot;
-  vpc_name                          = &amp;quot;test-vpc&amp;quot;
-  vpc_cidr_block                    = &amp;quot;10.0.0.0/16&amp;quot;
-  public_subnet_cidr_blocks         = [&amp;quot;10.0.0.0/24&amp;quot;, &amp;quot;10.0.1.0/24&amp;quot;]
-  public_subnet_availability_zones  = [&amp;quot;ap-northeast-1a&amp;quot;, &amp;quot;ap-northeast-1c&amp;quot;]
-  private_subnet_cidr_blocks        = [&amp;quot;10.0.2.0/24&amp;quot;, &amp;quot;10.0.3.0/24&amp;quot;]
-  private_subnet_availability_zones = [&amp;quot;ap-northeast-1a&amp;quot;, &amp;quot;ap-northeast-1c&amp;quot;]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;planして問題なければapplyする流れ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ terraform init
-$ terraform get
-$ terraform plan
-+ module.test-vpc.aws_eip.nat
-    allocation_id:     &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    association_id:    &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    domain:            &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    instance:          &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    network_interface: &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    private_ip:        &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    public_ip:         &amp;quot;&amp;lt;computed&amp;gt;&amp;quot;
-    vpc:               &amp;quot;true&amp;quot;
-
-+ module.test-vpc.aws_internet_gateway.igw
-    tags.%:    &amp;quot;1&amp;quot;
-    tags.Name: &amp;quot;test-vpc-igw&amp;quot;
-    vpc_id:    &amp;quot;${aws_vpc.vpc.id}&amp;quot;
-
-...
-Plan: 13 to add, 0 to change, 0 to destroy.
-
-$ terraform apply
-...
-Apply complete! Resources: 13 added, 0 changed, 0 destroyed.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;applyするとresourceが作成・更新され、tfstateファイルがbackendまたはローカルに出力される。
-次回以降はこのtfstateとの差分を取って変更されるので、このファイルがないとまた同じものが作成されてしまう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-    &amp;quot;version&amp;quot;: 3,
-    &amp;quot;terraform_version&amp;quot;: &amp;quot;0.9.11&amp;quot;,
-    &amp;quot;serial&amp;quot;: 1,
-    &amp;quot;lineage&amp;quot;: &amp;quot;f97ad997-5a19-4a3d-9921-b553c5f2532b&amp;quot;,
-    &amp;quot;modules&amp;quot;: [
-        {
-            &amp;quot;path&amp;quot;: [
-                &amp;quot;root&amp;quot;
-            ],
-            &amp;quot;outputs&amp;quot;: {},
-            &amp;quot;resources&amp;quot;: {},
-            &amp;quot;depends_on&amp;quot;: []
-        },
-        {
-            &amp;quot;path&amp;quot;: [
-                &amp;quot;root&amp;quot;,
-                &amp;quot;test-vpc&amp;quot;
-            ],
-            &amp;quot;outputs&amp;quot;: {},
-            &amp;quot;resources&amp;quot;: {
-                &amp;quot;aws_eip.nat&amp;quot;: {
-                    &amp;quot;type&amp;quot;: &amp;quot;aws_eip&amp;quot;,
-                    &amp;quot;depends_on&amp;quot;: [],
-                    &amp;quot;primary&amp;quot;: {
-                        &amp;quot;id&amp;quot;: &amp;quot;eipalloc-3046f054&amp;quot;,
-                        &amp;quot;attributes&amp;quot;: {
-                            &amp;quot;association_id&amp;quot;: &amp;quot;&amp;quot;,
-                            &amp;quot;domain&amp;quot;: &amp;quot;vpc&amp;quot;,
-                            &amp;quot;id&amp;quot;: &amp;quot;eipalloc-3046f054&amp;quot;,
-                            &amp;quot;instance&amp;quot;: &amp;quot;&amp;quot;,
-                            &amp;quot;network_interface&amp;quot;: &amp;quot;&amp;quot;,
-                            &amp;quot;private_ip&amp;quot;: &amp;quot;&amp;quot;,
-                            &amp;quot;public_ip&amp;quot;: &amp;quot;13.114.59.186&amp;quot;,
-                            &amp;quot;vpc&amp;quot;: &amp;quot;true&amp;quot;
-                        },
-                        &amp;quot;meta&amp;quot;: {},
-                        &amp;quot;tainted&amp;quot;: false
-                    },
-                    &amp;quot;deposed&amp;quot;: [],
-                    &amp;quot;provider&amp;quot;: &amp;quot;&amp;quot;
-                },
-                &amp;quot;aws_internet_gateway.igw&amp;quot;: {
-                    &amp;quot;type&amp;quot;: &amp;quot;aws_internet_gateway&amp;quot;,
-                    &amp;quot;depends_on&amp;quot;: [
-                        &amp;quot;aws_vpc.vpc&amp;quot;
-                    ],
-                    &amp;quot;primary&amp;quot;: {
-                        &amp;quot;id&amp;quot;: &amp;quot;igw-d2659bb6&amp;quot;,
-                        &amp;quot;attributes&amp;quot;: {
-                            &amp;quot;id&amp;quot;: &amp;quot;igw-d2659bb6&amp;quot;,
-                            &amp;quot;tags.%&amp;quot;: &amp;quot;1&amp;quot;,
-                            &amp;quot;tags.Name&amp;quot;: &amp;quot;test-vpc-igw&amp;quot;,
-                            &amp;quot;vpc_id&amp;quot;: &amp;quot;vpc-3cf6a358&amp;quot;
-                        },
-                        &amp;quot;meta&amp;quot;: {},
-                        &amp;quot;tainted&amp;quot;: false
-                    },
-                    &amp;quot;deposed&amp;quot;: [],
-                    &amp;quot;provider&amp;quot;: &amp;quot;&amp;quot;
-                },
-                ...
-            },
-            &amp;quot;depends_on&amp;quot;: []
-        }
-    ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;planすると変更なしになっている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ terraform plan
-...
-No changes. Infrastructure is up-to-date.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;terafform destroy&lt;/code&gt;で管理下のresourceを消すことができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ terraform plan -destroy
-...
-Plan: 0 to add, 0 to change, 13 to destroy.
-
-$ terraform destroy
-...
-Destroy complete! Resources: 13 destroyed.
-
-$ terraform plan
-...
-Plan: 13 to add, 0 to change, 0 to destroy.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://qiita.com/CkReal/items/1dbbc78888e157a80668&#34;&gt;お金をかけずに、TerraformでAWSのVPC環境を準備する - Qiita&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/161/</guid>
+      <description>OSSの負荷試験ツールLocustをK8sクラスタに立てる。 K8sならworkerの増減も簡単だし、HelmのChartもあるので立てるのも楽。
+LocustはPython製で、以下のようなコードで処理を書くことができる。
+@task(10)のように括弧の中に数字を書いて実行される割合を偏らせることもできる。 異なるTaskSetに対応するユーザーを複数作ることもできて、こちらもweightで重みを付けられる。 ユーザー数はあとでWeb上から入力する。
+$ mkdir tasks $ cat tasks/tasks.py from locust import HttpLocust, TaskSet, task class ElbTasks(TaskSet): @task def task1(self): with client.get(&amp;quot;/&amp;quot;, catch_response=True) as response: if response.content != &amp;quot;Success&amp;quot;: response.failure(&amp;quot;Got wrong response&amp;quot;) class ElbWarmer(HttpLocust): task_set = ElbTasks min_wait = 1000 max_wait = 3000  stableにChartはあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、helm repo addするためにpackageして、これを参照するindex.yamlを生成した。
+$ helm package . $ helm repo index . $ ls locust-0.1.2.tgz index.yaml index.yaml	locust-0.1.2.tgz $ cat index.yaml apiVersion: v1 entries: locust: .</description>
+    </item>
     
+    <item>
+      <title>RBACが有効なGKEでHelmを使う</title>
+      <link>https://www.sambaiz.net/article/160/</link>
+      <pubDate>Sun, 18 Mar 2018 01:04:00 +0900</pubDate>
       
-        <item>
-          <title>iftopでネットワークの帯域を見る</title>
-          <link>https://www.sambaiz.net/article/60/</link>
-          <pubDate>Tue, 07 Feb 2017 20:30:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/60/</guid>
-          <description>&lt;pre&gt;&lt;code&gt;$ yum install --enablerepo=epel iftop
-$ iftop -f &amp;quot;not dst net 10.0.0.0/8&amp;quot;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;-i eth0&lt;/code&gt;のようにしてインタフェースを指定し、&lt;code&gt;-f&lt;/code&gt;でフィルタをかけられる。フィルタの詳細は&lt;code&gt;man pcap-filter&lt;/code&gt;で。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;                          12.5Kb                     25.0Kb                     37.5Kb                     50.0Kb		62.5Kb
-└─────────────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────
-ip-172-31-9-9.ap-northeast-1.compute.internal         =&amp;gt; 61-121-217-66.dh-connect.net                          1.72Kb  6.57Kb  2.40Kb
-                                                      &amp;lt;=                                                        416b   2.13Kb   702b
-...
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-TX:             cum:   22.6KB   peak:   13.2Kb                                                        rates:   1.22Kb  1.27Kb  2.46Kb
-RX:                    6.63KB           5.03Kb                                                                  208b    330b    748b
-TOTAL:                 29.2KB           18.2Kb                                                                 1.42Kb  1.59Kb  3.19Kb
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;左から2, 10, 40秒間の平均kbps。TXが送信量、RXが受信量で、cumが総量、peakが最大。&lt;/p&gt;
-
-&lt;p&gt;実行中に&lt;code&gt;S&lt;/code&gt;でソースのポートを&lt;code&gt;D&lt;/code&gt;でディスティネーションのポートが表示される。&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/160/</guid>
+      <description>k8sのパッケージマネージャーHelmを使う - sambaiz-net
+$ helm version Client: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;} Server: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}  GKEでhelm initしてhelm installしたところ以下のエラーが返ってきた。
+Error: release my-locust failed: namespaces &amp;quot;default&amp;quot; is forbidden: User &amp;quot;system:serviceaccount:kube-system:default&amp;quot; cannot get namespaces in the namespace &amp;quot;default&amp;quot;: Unknown user &amp;quot;system:serviceaccount:kube-system:default&amp;quot;  GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が有効になっているため、Tillerインスタンスに権限を与える必要がある。
+ということでTiller用にnamespaceを切って、その中では好きにできるRoleと、Tillerが使うServiceAccountを作成し、RoleBindingで紐づける。
+kind: Role apiVersion: rbac.authorization.k8s.io/v1beta1 metadata: name: tiller-manager namespace: tiller-world rules: - apiGroups: [&amp;quot;&amp;quot;, &amp;quot;extensions&amp;quot;, &amp;quot;apps&amp;quot;] resources: [&amp;quot;*&amp;quot;] verbs: [&amp;quot;*&amp;quot;] --- apiVersion: v1 kind: ServiceAccount metadata: name: tiller namespace: tiller-world --- kind: RoleBinding apiVersion: rbac.</description>
+    </item>
     
+    <item>
+      <title>TerraformでVPCを管理するmoduleを作る</title>
+      <link>https://www.sambaiz.net/article/121/</link>
+      <pubDate>Sun, 23 Jul 2017 02:54:00 +0900</pubDate>
       
-        <item>
-          <title>vmstatのメモ</title>
-          <link>https://www.sambaiz.net/article/59/</link>
-          <pubDate>Mon, 06 Feb 2017 22:45:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/59/</guid>
-          <description>
-
-&lt;pre&gt;&lt;code&gt;$ vmstat 間隔(秒)
-procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
- r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
- 0  0      0 118588  80388 2516284    0    0     2    77  141   85  1  0 98  0  0
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;procs&#34;&gt;procs&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;r: 実行待ちプロセス数。CPUの処理が追いついていない。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;b: 割り込み不可能なスリープ中のプロセス数。I/O待ちらしい。&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;memory&#34;&gt;memory&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;swpd: バーチャルメモリの使用量。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;free: 空きメモリ量。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;buff: バッファに使われてるメモリ量。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;cache: キャッシュに使われているメモリ量。&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;swap&#34;&gt;swap&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;si: 秒あたりのスワップイン量。メモリが足りていない。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;so: 秒あたりのスワップアウト量。&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;io&#34;&gt;io&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;bi: 秒あたりのブロックデバイスから受け取ったブロック数。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;bo: 秒あたりのブロックデバイスに送ったブロック数。&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;system&#34;&gt;system&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;in: 秒あたりの割り込み回数。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;cs: 秒あたりの&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%82%B3%E3%83%B3%E3%83%86%E3%82%AD%E3%82%B9%E3%83%88%E3%82%B9%E3%82%A4%E3%83%83%E3%83%81&#34;&gt;コンテキストスイッチ&lt;/a&gt;の回数。&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;cpu&#34;&gt;cpu&lt;/h2&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;us: カーネル以外のコードでかかっている時間。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;sy: カーネルコードでかかっている時間。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;id: アイドルタイム。0だとCPUが全力で仕事中。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;wa: IO待ち時間。&lt;/p&gt;&lt;/li&gt;
-
-&lt;li&gt;&lt;p&gt;st: 要求したがCPUリソースを割り当ててもらえなかった時間。&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://orebibou.com/2015/07/vmstat%E3%82%B3%E3%83%9E%E3%83%B3%E3%83%89%E3%81%A7%E8%A6%9A%E3%81%88%E3%81%A6%E3%81%8A%E3%81%8D%E3%81%9F%E3%81%84%E4%BD%BF%E3%81%84%E6%96%B98%E5%80%8B/&#34;&gt;vmstatコマンドで覚えておきたい使い方8個(+1個) | 俺的備忘録 〜なんかいろいろ〜&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://blogs.oracle.com/yappri/entry/vmstat&#34;&gt;vmstat コマンドの読み方 (やっぱり Sun がスキ！)&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/121/</guid>
+      <description>Terraform
+$ brew install terraform $ terraform -v Terraform v0.9.11  Terraformの設定要素 provider IaaS(e.g. AWS)、PaaS(e.g. Heroku)、SaaS(e.g. CloudFlare)など。
+AWS Providerはこんな感じ。 ここに直接access_keyやsecret_keyを書くこともできるけど、誤って公開されてしまわないように環境変数か variableで渡す。
+provider &amp;quot;aws&amp;quot; { # access_key = &amp;quot;${var.access_key}&amp;quot; # secret_key = &amp;quot;${var.secret_key}&amp;quot; region = &amp;quot;us-east-1&amp;quot; }  $ export AWS_ACCESS_KEY_ID=&amp;quot;anaccesskey&amp;quot; $ export AWS_SECRET_ACCESS_KEY=&amp;quot;asecretkey&amp;quot;  varibale CLIでオーバーライドできるパラメーター。typeにはstringのほかにmapやlistを渡すことができ、 何も渡さないとdefault値のものが、それもなければstringになる。
+variable &amp;quot;key&amp;quot; { type = &amp;quot;string&amp;quot; default = &amp;quot;value&amp;quot; description = &amp;quot;description&amp;quot; }  値を渡す方法はTF_VAR_をprefixとする環境変数、-var、-var-fileがある。 また、moduleのinputとして渡されることもある。
+$ export TF_VAR_somelist=&#39;[&amp;quot;ami-abc123&amp;quot;, &amp;quot;ami-bcd234&amp;quot;]&#39; $ terraform apply -var foo=bar -var foo=baz $ terraform apply -var-file=foo.</description>
+    </item>
     
+    <item>
+      <title>iftopでネットワークの帯域を見る</title>
+      <link>https://www.sambaiz.net/article/60/</link>
+      <pubDate>Tue, 07 Feb 2017 20:30:00 +0900</pubDate>
       
-        <item>
-          <title>複数EC2インスタンスを立ち上げてvegetaで負荷試験する</title>
-          <link>https://www.sambaiz.net/article/43/</link>
-          <pubDate>Sun, 18 Dec 2016 20:52:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/43/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/tsenart/vegeta&#34;&gt;vegeta&lt;/a&gt;で負荷をかける。&lt;/p&gt;
-
-&lt;h2 id=&#34;インスタンスを立ち上げるスクリプト&#34;&gt;インスタンスを立ち上げるスクリプト&lt;/h2&gt;
-
-&lt;p&gt;コードはここ。 &lt;a href=&#34;https://github.com/sambaiz/loadtest&#34;&gt;sambaiz/loadtest&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;まずキーペアを作成し、EC2インスタンスを立ち上げて、全てのインスタンスが使えるようになるまで待つ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;aws ec2 create-key-pair --key-name LoadTestKeyPare --query &#39;KeyMaterial&#39; --output text &amp;gt; LoadTestKeyPare.pem
-chmod 400 LoadTestKeyPare.pem
-aws ec2 run-instances --image-id $AMI_ID --count $INSTANCE_NUM --instance-type t2.micro --key-name LoadTestKeyPare --security-group-ids $SECURITY_GROUP_IDS --subnet-id $SUBNET_ID
-...
-aws ec2 wait instance-status-ok --instance-ids $INSTANCE_IDS
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このAMIは事前にPackerでつくったもの。vegetaをインストールしてファイルディスクリプタの上限を増やしている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;variables&amp;quot;: {
-    &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot;
-  },
-  &amp;quot;builders&amp;quot;: [{
-    &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;,
-    &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;,
-    &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;,
-    &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
-    &amp;quot;source_ami&amp;quot;: &amp;quot;ami-0c11b26d&amp;quot;,
-    &amp;quot;instance_type&amp;quot;: &amp;quot;t2.micro&amp;quot;,
-    &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;,
-    &amp;quot;ami_name&amp;quot;: &amp;quot;loadtest {{timestamp}}&amp;quot;
-  }],
-  &amp;quot;provisioners&amp;quot;: [{
-    &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;,
-    &amp;quot;inline&amp;quot;: [
-      &amp;quot;wget https://github.com/tsenart/vegeta/releases/download/v6.1.1/vegeta-v6.1.1-linux-amd64.tar.gz&amp;quot;,
-      &amp;quot;sudo tar xzf vegeta-v6.1.1-linux-amd64.tar.gz -C /usr/local/bin/&amp;quot;,
-      &amp;quot;sudo sh -c \&amp;quot;echo &#39;* hard nofile 65536&#39; &amp;gt;&amp;gt; /etc/security/limits.conf\&amp;quot;&amp;quot;,
-      &amp;quot;sudo sh -c \&amp;quot;echo &#39;* soft nofile 65536&#39; &amp;gt;&amp;gt; /etc/security/limits.conf\&amp;quot;&amp;quot;
-    ]
-  }]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;立ち上がったインスタンスに対して&lt;a href=&#34;https://code.google.com/p/pdsh/&#34;&gt;pdsh&lt;/a&gt;で
-各マシンでvegetaを実行させ($VEGETA_CMD)、結果のファイルを集めてreportのinputsで指定すると
-まとめてレポートを出力してくれる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;pdsh -l ec2-user -w `echo &amp;quot;$PUBLIC_DNS_NAMES&amp;quot; |  paste -d, -s -` &amp;quot;$VEGETA_CMD &amp;gt; result.bin&amp;quot;
-
-for machine in $PUBLIC_DNS_NAMES; do
-  scp -i ./LoadTestKeyPare.pem -oStrictHostKeyChecking=no ec2-user@$machine:~/result.bin $machine
-done
-
-vegeta report -inputs=`echo $PUBLIC_DNS_NAMES |  paste -d, -s -`
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;終わったら後片付けをする。trapでCtrl+C等での終了時もインスタンスが残らないようにする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;cleanup() {
-  echo &amp;quot;---- Clean up ----&amp;quot;
-  aws ec2 terminate-instances --instance-ids $INSTANCE_IDS
-  aws ec2 delete-key-pair --key-name LoadTestKeyPare
-  rm -f LoadTestKeyPare.pem
-  rm $PUBLIC_DNS_NAMES
-}
-trap cleanup EXIT SIGHUP SIGINT SIGQUIT SIGTERM
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;実行する&#34;&gt;実行する&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;$ brew install awscli pdsh jq vegeta packer
-$ aws configure
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな感じのスクリプト(sample/sample.sh)から実行する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;#!/bin/bash
-
-export INSTANCE_NUM=3
-
-export AMI_ID=ami-*****
-export SECURITY_GROUP_IDS=sg-*****
-export SUBNET_ID=subnet-*****
-
-export RESOURCES_DIR=res
-
-# https://github.com/tsenart/vegeta#attack
-export VEGETA_CMD=&#39;vegeta attack -targets=res/targets.txt -rate=1000 -duration=10s&#39;
-
-sh run.sh
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;sample/res/targets.txt&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;GET http://example.com/
-
-POST http://example.com/
-@res/post.json
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;結果&#34;&gt;結果&lt;/h2&gt;
-
-&lt;p&gt;何も指定しないとこんな感じ(-reporter=text)。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Requests      [total, rate]            10000, 1000.10
-Duration      [total, attack, wait]    10.011642793s, 9.998999835s, 12.642958ms
-Latencies     [mean, 50, 95, 99, max]  14.781775ms, 4.262304ms, 68.475899ms, 97.492882ms, 1.096072997s
-Bytes In      [total, mean]            15285000, 1528.50
-Bytes Out     [total, mean]            110000, 11.00
-Success       [ratio]                  100.00%
-Status Codes  [code:count]             200:10000  
-Error Set:
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;他にもjsonだったり、plotを指定するとレイテンシのグラフのhtmlが出力される。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/43_plot.jpg&#34; alt=&#34;グラフ&#34; /&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/60/</guid>
+      <description>$ yum install --enablerepo=epel iftop $ iftop -f &amp;quot;not dst net 10.0.0.0/8&amp;quot;  -i eth0のようにしてインタフェースを指定し、-fでフィルタをかけられる。フィルタの詳細はman pcap-filterで。
+ 12.5Kb 25.0Kb 37.5Kb 50.0Kb	62.5Kb └─────────────────────────┴──────────────────────────┴──────────────────────────┴──────────────────────────┴────────────────────────── ip-172-31-9-9.ap-northeast-1.compute.internal =&amp;gt; 61-121-217-66.dh-connect.net 1.72Kb 6.57Kb 2.40Kb &amp;lt;= 416b 2.13Kb 702b ... ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── TX: cum: 22.6KB peak: 13.2Kb rates: 1.22Kb 1.27Kb 2.46Kb RX: 6.63KB 5.03Kb 208b 330b 748b TOTAL: 29.2KB 18.2Kb 1.42Kb 1.59Kb 3.19Kb  左から2, 10, 40秒間の平均kbps。TXが送信量、RXが受信量で、cumが総量、peakが最大。
+実行中にSでソースのポートをDでディスティネーションのポートが表示される。</description>
+    </item>
     
+    <item>
+      <title>vmstatのメモ</title>
+      <link>https://www.sambaiz.net/article/59/</link>
+      <pubDate>Mon, 06 Feb 2017 22:45:00 +0900</pubDate>
       
-        <item>
-          <title>SSHポートフォワーディングとnetstatのメモ</title>
-          <link>https://www.sambaiz.net/article/42/</link>
-          <pubDate>Sat, 17 Dec 2016 12:15:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/42/</guid>
-          <description>
-
-&lt;h2 id=&#34;sshポートフォワーディング&#34;&gt;SSHポートフォワーディング&lt;/h2&gt;
-
-&lt;p&gt;ローカルの8080ポートを、example.comを通したexample2.comの80ポートに向ける。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ssh hoge@example.com -Nf -L 8080:example2.com:80 
-$ curl localhost:8080 # =&amp;gt; example2.com:80
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;-N&lt;/code&gt;: リモートでコマンドを実行しない&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;-f&lt;/code&gt;: バックグラウンドで実行&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;h2 id=&#34;netstat&#34;&gt;netstat&lt;/h2&gt;
-
-&lt;p&gt;ネットワークの状態を確認する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ netstat -ant
-Proto Recv-Q Send-Q Local Address               Foreign Address             State      
-tcp        0      0 0.0.0.0:22                  0.0.0.0:*                   LISTEN 
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;-a&lt;/code&gt;: non-listening(TCPではESTABLISHED状態)しているソケットだけではなく、listeningしている情報も出す&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;-n&lt;/code&gt;: 数値のアドレスで表示する&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;-t&lt;/code&gt;: TCPで制限&lt;/li&gt;
-&lt;/ul&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/59/</guid>
+      <description>$ vmstat 間隔(秒) procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu----- r b swpd free buff cache si so bi bo in cs us sy id wa st 0 0 0 118588 80388 2516284 0 0 2 77 141 85 1 0 98 0 0  procs  r: 実行待ちプロセス数。CPUの処理が追いついていない。
+ b: 割り込み不可能なスリープ中のプロセス数。I/O待ちらしい。
+  memory  swpd: バーチャルメモリの使用量。
+ free: 空きメモリ量。
+ buff: バッファに使われてるメモリ量。
+ cache: キャッシュに使われているメモリ量。
+  swap  si: 秒あたりのスワップイン量。メモリが足りていない。</description>
+    </item>
     
+    <item>
+      <title>複数EC2インスタンスを立ち上げてvegetaで負荷試験する</title>
+      <link>https://www.sambaiz.net/article/43/</link>
+      <pubDate>Sun, 18 Dec 2016 20:52:00 +0900</pubDate>
       
-        <item>
-          <title>ファイルディスクリプタの上限を増やす</title>
-          <link>https://www.sambaiz.net/article/41/</link>
-          <pubDate>Thu, 08 Dec 2016 21:36:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/41/</guid>
-          <description>
-
-&lt;h2 id=&#34;ファイルディスクリプタとは&#34;&gt;ファイルディスクリプタとは&lt;/h2&gt;
-
-&lt;p&gt;プロセスの外部とやりとりするための識別子。POSIXではint型で、0がstdin、1がstdout、2がstderrといったもの。
-ファイルやデバイスに対するopen()や、
-ネットワーク(INETドメインソケット)やホスト内(UNIXドメインソケット)で
-通信するためのソケットを生成するsocket()などのシステムコールで生成される。&lt;/p&gt;
-
-&lt;h2 id=&#34;ファイルディスクリプタの上限&#34;&gt;ファイルディスクリプタの上限&lt;/h2&gt;
-
-&lt;p&gt;一つのプロセスがリソースを食いつぶさないように
-使えるファイルディスクリプタの上限が決まっていて、&lt;code&gt;ulimit -n&lt;/code&gt;で確認できる。デフォルトは大体1024。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ulimit -n
-1024
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;各プロセスの上限と使っているファイルディスクリプタはこれで確認できる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat /proc/&amp;lt;プロセスID&amp;gt;/limits
-...
-Max open files            1024                 4096                 files     
-...
-
-$ ls -l /proc/&amp;lt;プロセスID&amp;gt;/fd
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;webサーバーのように同時にたくさん通信したりすると上限に達してしまい、&lt;code&gt;Too many open files&lt;/code&gt;になってしまうので増やす必要がある。&lt;/p&gt;
-
-&lt;h3 id=&#34;etc-security-limits-conf-で変更する&#34;&gt;&lt;code&gt;/etc/security/limits.conf&lt;/code&gt;で変更する&lt;/h3&gt;
-
-&lt;p&gt;PAM認証時(ログインするときなど)に適用されるので、サーバーの起動時に立ち上がったデーモンには使えない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat /etc/pam.d/sshd
-...
-session    required     pam_limits.so
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;全てのユーザー(&lt;code&gt;*&lt;/code&gt;)のプロセスが使える
-ファイルディスクリプタ(nofile)のsoft(ユーザーが設定できる)とhard(rootが設定できる)上限を共に64000にする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ echo &amp;quot;* hard nofile 64000&amp;quot; &amp;gt;&amp;gt; /etc/security/limits.conf
-$ echo &amp;quot;* soft nofile 64000&amp;quot; &amp;gt;&amp;gt; /etc/security/limits.conf
-$ ulimit -n
-64000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;ulimit-n-で変更する&#34;&gt;&lt;code&gt;ulimit -n&lt;/code&gt;で変更する&lt;/h3&gt;
-
-&lt;p&gt;シェルと、起動したプロセスで有効。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ulimit -n 64000
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;dockerコンテナでは&#34;&gt;dockerコンテナでは&lt;/h3&gt;
-
-&lt;p&gt;run時に&lt;a href=&#34;https://docs.docker.com/engine/reference/commandline/run/#/set-ulimits-in-container---ulimit&#34;&gt;ulimitオプション&lt;/a&gt;で
-&lt;code&gt;--ulimit nofile=11111&lt;/code&gt;のように指定することもできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ docker run -itd --ulimit nofile=11111 ubuntu
-$ docker exec -it &amp;lt;id&amp;gt; /bin/bash -c &amp;quot;ulimit -n&amp;quot;
-11111
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://open-groove.net/linux/memo-etcsecuritylimits-conf/&#34;&gt;/etc/security/limits.confに関するメモ | OpenGroove&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://staffblog.yumemi.jp/%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%83%87%E3%82%A3%E3%82%B9%E3%82%AF%E3%83%AA%E3%83%97%E3%82%BF%E6%95%B0%E3%81%AE%E4%B8%8A%E9%99%90%E5%A4%89%E6%9B%B4%E3%81%A8limits-conf%E3%81%AE%E7%BD%A0-2/&#34;&gt;ファイルディスクリプタ数の上限変更とlimits.confの罠&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://www.koikikukan.com/archives/2013/03/14-005555.php&#34;&gt;Linuxのファイルディスクリプタ数を変更・確認する方法: 小粋空間&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://ja.wikipedia.org/wiki/ファイル記述子&#34;&gt;ファイル記述子 - Wikipedia&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://qiita.com/kuni-nakaji/items/d11219e4ad7c74ece748&#34;&gt;調べなきゃ寝れない！と調べたら余計に寝れなくなったソケットの話 - Qiita&lt;/a&gt;&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/43/</guid>
+      <description>vegetaで負荷をかける。
+インスタンスを立ち上げるスクリプト コードはここ。 sambaiz/loadtest
+まずキーペアを作成し、EC2インスタンスを立ち上げて、全てのインスタンスが使えるようになるまで待つ。
+aws ec2 create-key-pair --key-name LoadTestKeyPare --query &#39;KeyMaterial&#39; --output text &amp;gt; LoadTestKeyPare.pem chmod 400 LoadTestKeyPare.pem aws ec2 run-instances --image-id $AMI_ID --count $INSTANCE_NUM --instance-type t2.micro --key-name LoadTestKeyPare --security-group-ids $SECURITY_GROUP_IDS --subnet-id $SUBNET_ID ... aws ec2 wait instance-status-ok --instance-ids $INSTANCE_IDS  このAMIは事前にPackerでつくったもの。vegetaをインストールしてファイルディスクリプタの上限を増やしている。
+{ &amp;quot;variables&amp;quot;: { &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;, &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot; }, &amp;quot;builders&amp;quot;: [{ &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;, &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;, &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;, &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;, &amp;quot;source_ami&amp;quot;: &amp;quot;ami-0c11b26d&amp;quot;, &amp;quot;instance_type&amp;quot;: &amp;quot;t2.micro&amp;quot;, &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;, &amp;quot;ami_name&amp;quot;: &amp;quot;loadtest {{timestamp}}&amp;quot; }], &amp;quot;provisioners&amp;quot;: [{ &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;, &amp;quot;inline&amp;quot;: [ &amp;quot;wget https://github.</description>
+    </item>
     
+    <item>
+      <title>SSHポートフォワーディングとnetstatのメモ</title>
+      <link>https://www.sambaiz.net/article/42/</link>
+      <pubDate>Sat, 17 Dec 2016 12:15:00 +0900</pubDate>
       
-        <item>
-          <title>OpenVPNサーバーPritunlをDockerで動かす</title>
-          <link>https://www.sambaiz.net/article/39/</link>
-          <pubDate>Fri, 02 Dec 2016 21:05:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/39/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://pritunl.com/&#34;&gt;Pritunl&lt;/a&gt;でVPNサーバーを立てる。&lt;/p&gt;
-
-&lt;p&gt;Dockerfileはこんな感じ。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://hub.docker.com/r/sambaiz/pritunl/&#34;&gt;https://hub.docker.com/r/sambaiz/pritunl/&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;FROM mongo:3.4
-
-# https://docs.pritunl.com/docs/installation
-RUN echo &#39;deb http://repo.pritunl.com/stable/apt jessie main&#39; &amp;gt; /etc/apt/sources.list.d/pritunl.list &amp;amp;&amp;amp; \
-    apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 7568D9BB55FF9E5287D586017AE645C0CF8E292A &amp;amp;&amp;amp; \
-    apt-get --assume-yes update &amp;amp;&amp;amp; \
-    apt-get --assume-yes upgrade &amp;amp;&amp;amp; \
-    apt-get --assume-yes install pritunl iptables
-
-EXPOSE 80 443 12345/udp
-
-CMD mongod --fork --logpath /data/db/mongod.log &amp;amp;&amp;amp; echo &#39;Setup Key:&#39; `pritunl setup-key` &amp;amp;&amp;amp; pritunl start
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ docker run -itd -p 80:80 -p 443:443 -p 12345:12345/udp --privileged sambaiz/pritunl
-$ docker logs &amp;lt;id&amp;gt;
-...
-Setup Key: ***********
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;--privileged&lt;/code&gt;を付けているのはStart Server時にこれで失敗しないように。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;CalledProcessError: Command &#39;[&#39;sysctl&#39;, &#39;-w&#39;, &#39;net.ipv4.ip_forward=1&#39;]&#39; returned non-zero exit status 255
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;httpsでアクセスして、Setup Keyを入力すると初期設定が始まり、ログイン画面になる。
-初期パスワードは&lt;code&gt;pritunl/pritunl&lt;/code&gt;。&lt;/p&gt;
-
-&lt;p&gt;あとは、OrganizationとUser、Server(ポートはudpの12345にする)を登録し、ServerにOrganizationを紐付け、
-ServerにRouteを追加して、アクセスしたいCIDRを入力したらStart Serverする。
-ovpnファイルをダウンロードできる24時間有効のリンクを発行でき、これでクライアントに設定すると
-RouteにVPNを通してアクセスできるようになる。&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/42/</guid>
+      <description> SSHポートフォワーディング ローカルの8080ポートを、example.comを通したexample2.comの80ポートに向ける。
+$ ssh hoge@example.com -Nf -L 8080:example2.com:80 $ curl localhost:8080 # =&amp;gt; example2.com:80   -N: リモートでコマンドを実行しない -f: バックグラウンドで実行  netstat ネットワークの状態を確認する。
+$ netstat -ant Proto Recv-Q Send-Q Local Address Foreign Address State tcp 0 0 0.0.0.0:22 0.0.0.0:* LISTEN ...   -a: non-listening(TCPではESTABLISHED状態)しているソケットだけではなく、listeningしている情報も出す -n: 数値のアドレスで表示する -t: TCPで制限  </description>
+    </item>
     
+    <item>
+      <title>ファイルディスクリプタの上限を増やす</title>
+      <link>https://www.sambaiz.net/article/41/</link>
+      <pubDate>Thu, 08 Dec 2016 21:36:00 +0900</pubDate>
       
-        <item>
-          <title>PackerでAMIを作る</title>
-          <link>https://www.sambaiz.net/article/24/</link>
-          <pubDate>Tue, 18 Oct 2016 22:37:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/24/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://www.packer.io/&#34;&gt;https://www.packer.io/&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;いろんなプラットフォームのイメージを作ることができるツール。
-これでfluentdのログサーバーのAMIを作る。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ brew install packer # mac
-$ packer -v
-0.10.1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;設定ファイルはこんな感じ。&lt;code&gt;variables&lt;/code&gt;の値は&lt;code&gt;{{user ... }}&lt;/code&gt;のところで使われる。
-&lt;code&gt;builders&lt;/code&gt;に作るイメージの情報を書いて、&lt;code&gt;provisioners&lt;/code&gt;で環境を作る。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;provisioners&lt;/code&gt;にはchefやansibleなども指定できるが、
-継ぎ足し継ぎ足しで秘伝のタレ化したAMIも最初は、&lt;/p&gt;
-
-&lt;p&gt;「コマンドいくつか実行するだけなのでとりあえず手作業で作った、後でなんとかする」&lt;/p&gt;
-
-&lt;p&gt;なんてものもあったりして、
-そういうものは無理にchefなどで始めず、手軽にshellでpacker buildするといいと思う。
-手作業よりも楽だし、ソースが別にあるので使われていないAMIを消すのも簡単だ。&lt;/p&gt;
-
-&lt;p&gt;fileではpermissionがないところに置くことができないので、一旦置いてshellで移動する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;variables&amp;quot;: {
-    &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;,
-    &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot;
-  },
-  &amp;quot;builders&amp;quot;: [{
-    &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;,
-    &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;,
-    &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;,
-    &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
-    &amp;quot;source_ami&amp;quot;: &amp;quot;ami-1a15c77b&amp;quot;,
-    &amp;quot;instance_type&amp;quot;: &amp;quot;t2.small&amp;quot;,
-    &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;,
-    &amp;quot;ami_name&amp;quot;: &amp;quot;fluentd-logserver {{timestamp}}&amp;quot;
-  }],
-  &amp;quot;provisioners&amp;quot;: [{
-    &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;,
-    &amp;quot;source&amp;quot;: &amp;quot;td-agent.conf&amp;quot;,
-    &amp;quot;destination&amp;quot;: &amp;quot;/home/ec2-user/td-agent.conf&amp;quot;
-  },
-  {
-    &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;,
-    &amp;quot;inline&amp;quot;: [
-      &amp;quot;curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh&amp;quot;,
-      &amp;quot;sudo mv /home/ec2-user/td-agent.conf /etc/td-agent/td-agent.conf&amp;quot;,
-      &amp;quot;sudo /etc/init.d/td-agent restart&amp;quot;
-    ]
-  }]
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ packer validate fluentd-logserver.json
-Template validated successfully.
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;buildのとき&lt;code&gt;-var&lt;/code&gt;でvariablesを渡すことができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ packer build \
-    -var &#39;aws_access_key=YOUR ACCESS KEY&#39; \
-    -var &#39;aws_secret_key=YOUR SECRET KEY&#39; \
-    fluentd-logserver.json
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これを実行すると実際にインスタンスを立ち上げ、AMIを作成し始める。&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/41/</guid>
+      <description>ファイルディスクリプタとは プロセスの外部とやりとりするための識別子。POSIXではint型で、0がstdin、1がstdout、2がstderrといったもの。 ファイルやデバイスに対するopen()や、 ネットワーク(INETドメインソケット)やホスト内(UNIXドメインソケット)で 通信するためのソケットを生成するsocket()などのシステムコールで生成される。
+ファイルディスクリプタの上限 一つのプロセスがリソースを食いつぶさないように 使えるファイルディスクリプタの上限が決まっていて、ulimit -nで確認できる。デフォルトは大体1024。
+$ ulimit -n 1024  各プロセスの上限と使っているファイルディスクリプタはこれで確認できる。
+$ cat /proc/&amp;lt;プロセスID&amp;gt;/limits ... Max open files 1024 4096 files ... $ ls -l /proc/&amp;lt;プロセスID&amp;gt;/fd  webサーバーのように同時にたくさん通信したりすると上限に達してしまい、Too many open filesになってしまうので増やす必要がある。
+/etc/security/limits.confで変更する PAM認証時(ログインするときなど)に適用されるので、サーバーの起動時に立ち上がったデーモンには使えない。
+$ cat /etc/pam.d/sshd ... session required pam_limits.so ...  全てのユーザー(*)のプロセスが使える ファイルディスクリプタ(nofile)のsoft(ユーザーが設定できる)とhard(rootが設定できる)上限を共に64000にする。
+$ echo &amp;quot;* hard nofile 64000&amp;quot; &amp;gt;&amp;gt; /etc/security/limits.conf $ echo &amp;quot;* soft nofile 64000&amp;quot; &amp;gt;&amp;gt; /etc/security/limits.conf $ ulimit -n 64000  ulimit -nで変更する シェルと、起動したプロセスで有効。</description>
+    </item>
     
-
+    <item>
+      <title>OpenVPNサーバーPritunlをDockerで動かす</title>
+      <link>https://www.sambaiz.net/article/39/</link>
+      <pubDate>Fri, 02 Dec 2016 21:05:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/39/</guid>
+      <description>PritunlでVPNサーバーを立てる。
+Dockerfileはこんな感じ。
+https://hub.docker.com/r/sambaiz/pritunl/
+FROM mongo:3.4 # https://docs.pritunl.com/docs/installation RUN echo &#39;deb http://repo.pritunl.com/stable/apt jessie main&#39; &amp;gt; /etc/apt/sources.list.d/pritunl.list &amp;amp;&amp;amp; \ apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 7568D9BB55FF9E5287D586017AE645C0CF8E292A &amp;amp;&amp;amp; \ apt-get --assume-yes update &amp;amp;&amp;amp; \ apt-get --assume-yes upgrade &amp;amp;&amp;amp; \ apt-get --assume-yes install pritunl iptables EXPOSE 80 443 12345/udp CMD mongod --fork --logpath /data/db/mongod.log &amp;amp;&amp;amp; echo &#39;Setup Key:&#39; `pritunl setup-key` &amp;amp;&amp;amp; pritunl start  $ docker run -itd -p 80:80 -p 443:443 -p 12345:12345/udp --privileged sambaiz/pritunl $ docker logs &amp;lt;id&amp;gt; .</description>
+    </item>
+    
+    <item>
+      <title>PackerでAMIを作る</title>
+      <link>https://www.sambaiz.net/article/24/</link>
+      <pubDate>Tue, 18 Oct 2016 22:37:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/24/</guid>
+      <description>https://www.packer.io/
+いろんなプラットフォームのイメージを作ることができるツール。 これでfluentdのログサーバーのAMIを作る。
+$ brew install packer # mac $ packer -v 0.10.1  設定ファイルはこんな感じ。variablesの値は{{user ... }}のところで使われる。 buildersに作るイメージの情報を書いて、provisionersで環境を作る。
+provisionersにはchefやansibleなども指定できるが、 継ぎ足し継ぎ足しで秘伝のタレ化したAMIも最初は、
+「コマンドいくつか実行するだけなのでとりあえず手作業で作った、後でなんとかする」
+なんてものもあったりして、 そういうものは無理にchefなどで始めず、手軽にshellでpacker buildするといいと思う。 手作業よりも楽だし、ソースが別にあるので使われていないAMIを消すのも簡単だ。
+fileではpermissionがないところに置くことができないので、一旦置いてshellで移動する。
+{ &amp;quot;variables&amp;quot;: { &amp;quot;aws_access_key&amp;quot;: &amp;quot;&amp;quot;, &amp;quot;aws_secret_key&amp;quot;: &amp;quot;&amp;quot; }, &amp;quot;builders&amp;quot;: [{ &amp;quot;type&amp;quot;: &amp;quot;amazon-ebs&amp;quot;, &amp;quot;access_key&amp;quot;: &amp;quot;{{user `aws_access_key`}}&amp;quot;, &amp;quot;secret_key&amp;quot;: &amp;quot;{{user `aws_secret_key`}}&amp;quot;, &amp;quot;region&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;, &amp;quot;source_ami&amp;quot;: &amp;quot;ami-1a15c77b&amp;quot;, &amp;quot;instance_type&amp;quot;: &amp;quot;t2.small&amp;quot;, &amp;quot;ssh_username&amp;quot;: &amp;quot;ec2-user&amp;quot;, &amp;quot;ami_name&amp;quot;: &amp;quot;fluentd-logserver {{timestamp}}&amp;quot; }], &amp;quot;provisioners&amp;quot;: [{ &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;, &amp;quot;source&amp;quot;: &amp;quot;td-agent.conf&amp;quot;, &amp;quot;destination&amp;quot;: &amp;quot;/home/ec2-user/td-agent.conf&amp;quot; }, { &amp;quot;type&amp;quot;: &amp;quot;shell&amp;quot;, &amp;quot;inline&amp;quot;: [ &amp;quot;curl -L https://toolbelt.</description>
+    </item>
+    
   </channel>
 </rss>

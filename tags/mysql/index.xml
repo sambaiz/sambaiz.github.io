@@ -1,625 +1,85 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz-net</title>
-    <link>https://www.sambaiz.net/tags/mysql/index.xml</link>
-    <language>ja</language>
-    <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
-
+    <title>Mysql on sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/mysql/</link>
+    <description>Recent content in Mysql on sambaiz-net</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <copyright>sambaiz-net</copyright>
+    <lastBuildDate>Sat, 03 Mar 2018 19:44:00 +0900</lastBuildDate>
     
-      
-        <item>
-          <title>MySQL InnoDBのロックの挙動</title>
-          <link>https://www.sambaiz.net/article/158/</link>
-          <pubDate>Sat, 03 Mar 2018 19:44:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/158/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html&#34;&gt;https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;トランザクション分離レベルはデフォルトの&lt;code&gt;REPEATABLE-READ&lt;/code&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; SELECT @@GLOBAL.tx_isolation, @@tx_isolation;
-+-----------------------+-----------------+
-| @@GLOBAL.tx_isolation | @@tx_isolation  |
-+-----------------------+-----------------+
-| REPEATABLE-READ       | REPEATABLE-READ |
-+-----------------------+-----------------+
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
-
-&lt;p&gt;DBを立ち上げてテーブルとレコードを入れる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat schema_and_data.sql
-CREATE TABLE a (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(128) NOT NULL
-);
-
-CREATE TABLE b (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    a_id BIGINT UNSIGNED NOT NULL,
-    FOREIGN KEY (a_id) REFERENCES a (id)
-);
-
-INSERT INTO a (id, name) VALUES (1, &#39;1&#39;);
-INSERT INTO a (id, name) VALUES (2, &#39;2&#39;);
-INSERT INTO a (id, name) VALUES (3, &#39;3&#39;);
-INSERT INTO a (id, name) VALUES (8, &#39;8&#39;);
-INSERT INTO a (id, name) VALUES (9, &#39;9&#39;);
-INSERT INTO a (id, name) VALUES (10, &#39;10&#39;);
-
-$ cat start.sh
-docker rm -f try-mysql-lock
-docker run --name try-mysql-lock -p 4306:3306 -e &amp;quot;MYSQL_ALLOW_EMPTY_PASSWORD=yes&amp;quot; -e &amp;quot;MYSQL_DATABASE=try-mysql-lock&amp;quot; -e &amp;quot;TZ=Asia/Tokyo&amp;quot; --health-cmd=&#39;mysqladmin ping --silent&#39; -d mysql:5.6 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-while [[ $(docker inspect --format &amp;quot;{{.State.Health.Status}}&amp;quot; try-mysql-lock) != &amp;quot;healthy&amp;quot; ]]; do printf &amp;quot;.&amp;quot;; sleep 1; done
-mysql -u root -h 0.0.0.0 -P 4306 -D try-mysql-lock &amp;lt; schema_and_data.sql
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;共有-shared-ロック&#34;&gt;共有(Shared)ロック&lt;/h2&gt;
-
-&lt;p&gt;その行を他がSELECTしたり共有ロックを取ることは許す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx1
-&amp;gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx2
-&amp;gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE; -- 他も共有ロックは取れる
-&amp;gt; UPDATE a SET name=&#39;b&#39; WHERE id = 3; -- これは通る。ロックは行単位なのでid=2だけロックされている。
-&amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 2; -- これは止まる
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;たしかに1行ロックされている。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; SHOW ENGINE INNODB STATUS \G;
-...
----TRANSACTION 2345, ACTIVE 40 sec
-2 lock struct(s), heap size 360, 1 row lock(s)
-MySQL thread id 4, OS thread handle 0x7f5de21d8700, query id 147 172.17.0.1 root init
-SHOW ENGINE INNODB STATUS
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ただのSELECTは分離レベルが&lt;code&gt;SERIALIZABLE&lt;/code&gt;でない限りロックをとらない。
-ロックしないと、他のトランザクションのCOMMITで
-追加されたデータ(ファントム)を読んでしまったりするかというと、
-MySQLの&lt;code&gt;REPEATABLE-READ&lt;/code&gt;ではそうはならず、最初にSELECTしたときのスナップショットを返すようになっている。
-ただし、&lt;code&gt;LOCK IN SHARE MODE&lt;/code&gt;や&lt;code&gt;FOR UPDATE&lt;/code&gt;を付けると&lt;code&gt;READ-COMMITED&lt;/code&gt;のように最新の結果を返す。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://nippondanji.blogspot.jp/2013/12/innodbrepeatable-readlocking-read.html&#34;&gt;漢(オトコ)のコンピュータ道: InnoDBのREPEATABLE READにおけるLocking Readについての注意点&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;排他-exclusive-ロック&#34;&gt;排他(eXclusive)ロック&lt;/h2&gt;
-
-&lt;p&gt;その行に対して他がロックを取ることを許さない。SELECTできるかは分離レベルにより、&lt;code&gt;REPEATABLE READ&lt;/code&gt;では&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_exclusive_lock&#34;&gt;できる&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx1
-&amp;gt; SELECT * FROM a WHERE id = 2 FOR UPDATE;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx2
-&amp;gt; SELECT * FROM a WHERE id = 2 FOR UPDATE; -- 止まる。同じ行の排他ロックは取れない
-&amp;gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE; -- 止まる。共有ロックも取れない
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;逆に、共有ロックが取られている行に排他ロックも取れない。
-ロックを取る順番によってはDeadlockになる。&lt;/p&gt;
-
-&lt;h2 id=&#34;ギャップロック&#34;&gt;ギャップロック&lt;/h2&gt;
-
-&lt;p&gt;存在しない範囲のindexのレコードを一部でもロックすると、行ではなく範囲がロックされる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx1
-&amp;gt; SELECT * FROM a WHERE id &amp;gt; 5 FOR UPDATE;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx2
-&amp;gt; INSERT a (id, name) VALUE (6, &#39;a&#39;); -- 止まる。
-&amp;gt; INSERT a (id, name) VALUE (4, &#39;a&#39;); -- WHEREには含まれないがこれも止まる。
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ギャップロックの場合、同じ範囲を排他ロックできてしまう。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx1
-&amp;gt; SELECT * FROM a WHERE id = 5 FOR UPDATE;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx2
-&amp;gt; SELECT * FROM a WHERE id = 5 FOR UPDATE; -- 止まらない
-&amp;gt; INSERT a (id, name) VALUE (5, &#39;a&#39;); -- 止まる(Tx1でも同じことをやるとDeadlock)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;ネクストキーロック&#34;&gt;ネクストキーロック&lt;/h2&gt;
-
-&lt;p&gt;範囲でロックすると一つ先のキーまでロックされる。
-ギャップにファントムを発生させないためのもの。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx1
-&amp;gt; SELECT * FROM a WHERE id &amp;lt; 6 FOR UPDATE; -- ギャップロック(id=4~7)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx2
-&amp;gt; UPDATE a SET name = &#39;b&#39; WHERE id = 8; -- 止まる
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;更新系クエリでかかるロック-https-dev-mysql-com-doc-refman-5-6-ja-innodb-locks-set-html&#34;&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/innodb-locks-set.html&#34;&gt;更新系クエリでかかるロック&lt;/a&gt;&lt;/h2&gt;
-
-&lt;h3 id=&#34;insert&#34;&gt;INSERT&lt;/h3&gt;
-
-&lt;p&gt;排他ロックがかかる。重複キーエラーになった場合は共有ロックがかかる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx1
-&amp;gt; INSERT INTO a (id, name) VALUE (5, &#39;b&#39;); 
-&amp;gt; INSERT INTO a (id, name) VALUE (3, &#39;d&#39;); -- 重複キーエラー
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx2
-&amp;gt; INSERT INTO a (id, name) VALUE (5, &#39;c&#39;); -- 止まる
-&amp;gt; UPDATE a SET name = &#39;e&#39; WHERE id = 3; -- 止まる
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;code&gt;INSERT IGNORE&lt;/code&gt;しても同じ。そもそもこれは重複キー以外のエラーも無視した結果、変なデータが入ってしまうことがあるため、使わない方がよい。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; INSERT INTO a (name) VALUE (NULL);  -- Column &#39;name&#39; cannot be null
-&amp;gt; INSERT IGNORE INTO a (name) VALUE (NULL); -- Query OKで空文字が入ってしまう
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;update-delete&#34;&gt;UPDATE, DELETE&lt;/h3&gt;
-
-&lt;p&gt;排他ネクストキーロックがかかる。INSERTでの&lt;code&gt;ON DUPLICATE KEY UPDATE&lt;/code&gt;も同様。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx1
-&amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id BETWEEN 8 AND 9; 
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx2
-&amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 9; -- 止まる
-&amp;gt; UPDATE a SET name=&#39;a&#39; WHERE id = 10; -- これも止まる
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;外部キー制約&#34;&gt;外部キー制約&lt;/h3&gt;
-
-&lt;p&gt;さらに外部キー制約がかかるレコードを追加/更新/削除すると、参照するレコードも共有ロックされる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx1
-&amp;gt; INSERT INTO b (a_id) VALUES (1);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;-- Tx2
-&amp;gt; SELECT * FROM a WHERE id = 1 LOCK IN SHARE MODE; -- 通る
-&amp;gt; SELECT * FROM a WHERE id = 1 FOR UPDATE; -- 止まる
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+	<atom:link href="https://www.sambaiz.net/tags/mysql/index.xml" rel="self" type="application/rss+xml" />
     
-      
-        <item>
-          <title>xorm reverseでDBスキーマからGoのstructを生成する</title>
-          <link>https://www.sambaiz.net/article/153/</link>
-          <pubDate>Sat, 10 Feb 2018 15:55:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/153/</guid>
-          <description>&lt;p&gt;GoのORMの&lt;a href=&#34;https://github.com/go-xorm/xorm&#34;&gt;xorm&lt;/a&gt;にはxorm reverseというDBのスキーマから以下のようなテンプレートに沿ったGoのstructなどを生成する&lt;a href=&#34;https://github.com/go-xorm/cmd&#34;&gt;ツール&lt;/a&gt;がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;package {{.Model}}
-
-import (
-	{{range .Imports}}&amp;quot;{{.}}&amp;quot;{{end}}
-)
-
-{{range .Tables}}
-type {{Mapper .Name}} struct {
-{{$table := .}}
-{{range .Columns}}	{{Mapper .Name}}	{{Type .}}
-{{end}}
-}
-
-{{end}}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;リポジトリにある&lt;a href=&#34;https://github.com/go-xorm/cmd/tree/master/xorm/templates&#34;&gt;テンプレート&lt;/a&gt;にxorm用テンプレートとgo用のテンプレートが用意されているように、単体で使うこともできる。
-また、テンプレートを書く言語としてもGo以外にC++もサポートしている。&lt;/p&gt;
-
-&lt;p&gt;xormのcmdとドライバをインストール。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get github.com/go-xorm/cmd/xorm
-$ go get github.com/go-sql-driver/mysql
-$ xorm
-Version:
-
-    0.2.0524
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;様々な型のカラムを含むテーブルで試す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat schema.sql
-CREATE TABLE table1 (
-  n_tinyint TINYINT,
-  n_int INT,
-  n_int_unsigned INT UNSIGNED NOT NULL DEFAULT 1,
-  n_bigint BIGINT,
-  n_float FLOAT,
-  n_double DOUBLE,
-  d_date DATE,
-  d_datetime DATETIME,
-  s_char CHAR(64),
-  s_varchar VARCHAR(64),
-  s_text TEXT,
-  s_json JSON,
-  b_binary BLOB,
-  e_enum ENUM(&#39;aaa&#39;, &#39;bbb&#39;, &#39;ccc&#39;)
-)
-
-$ cat setup.sh
-docker run --name mysql-xorm -p 33306:3306 -e &amp;quot;MYSQL_ALLOW_EMPTY_PASSWORD=yes&amp;quot; -e &amp;quot;MYSQL_DATABASE=testdb&amp;quot; 
-while [ $(docker inspect --format &amp;quot;{{.State.Health.Status }}&amp;quot; mysql-xorm) != &amp;quot;healthy&amp;quot; ]; do printf &amp;quot;.&amp;quot;; sleep 1; done
-mysql -u root -h 0.0.0.0 -P 33306 -D testdb &amp;lt; schema.sql
-
-$ sh setup.sh
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Goのテンプレートをリポジトリから持ってきてxorm reverseを実行。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ls xorm-template
-config		struct.go.tpl
-
-$ xorm reverse mysql &amp;quot;root:@tcp(0.0.0.0:33306)/testdb&amp;quot; xorm-template
-$ cat model/table1.go 
-package model
-
-import (
-	&amp;quot;time&amp;quot;
-)
-
-type Table1 struct {
-	NTinyint     int
-	NInt         int
-	NIntUnsigned int
-	NBigint      int64
-	NFloat       float32
-	NDouble      float64
-	DDate        time.Time
-	DDatetime    time.Time
-	SChar        string
-	SVarchar     string
-	SText        string
-	SJson        string
-	BBinary      []byte
-	EEnum        string
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;概ねうまくいっているが、現状unsignedは無視されてしまう。
-これを修正するには依存しているcoreや&lt;a href=&#34;https://github.com/go-xorm/xorm/blob/430fbe866a716bac8e5307d0c5222346f37cf8cf/engine.go#L340&#34;&gt;xorm本体&lt;/a&gt;に手を入れる必要がありそうだ。&lt;/p&gt;
-</description>
-        </item>
-      
     
+    <item>
+      <title>MySQL InnoDBのロックの挙動</title>
+      <link>https://www.sambaiz.net/article/158/</link>
+      <pubDate>Sat, 03 Mar 2018 19:44:00 +0900</pubDate>
       
-        <item>
-          <title>Gooseリポジトリのmerge時にバージョンを上げmigrationボタンをSlackに出す</title>
-          <link>https://www.sambaiz.net/article/149/</link>
-          <pubDate>Fri, 19 Jan 2018 09:30:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/149/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/pressly/goose&#34;&gt;Goose&lt;/a&gt;はGo製のDB Migrationツール。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/149.gif&#34; alt=&#34;mergeされるとボタンが出る&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/mysql-migration-slack&#34;&gt;コード&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;こんなリポジトリを作成し、各自ブランチを切ってGoose形式のup/downのSQLを書き、終わったらPullRequestを出す。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;goose/
-  .keep
-.circleci/config.yml
-create_test_table.sql
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat create_test_table.sql
--- +goose Up
--- SQL in this section is executed when the migration is applied.
-CREATE TABLE testtable (
-  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
-  n INT NOT NULL,
-  c VARCHAR (20) NOT NULL UNIQUE
-);
-
--- +goose Down
--- SQL in this section is executed when the migration is rolled back.
-DROP TABLE testtable;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;無事Approveされ、mergeされるとCircleCIが走り、
-SQLをgooseディレクトリの中にバージョンを付けて移し、
-SlackにpostMessageするエンドポイントにリクエストを飛ばす。&lt;/p&gt;
-
-&lt;p&gt;ここでバージョンを作成することによって、並列で作業し、レビューなどの関係で適用順が前後しても修正する必要をなくしている。ただ、pushされる前に複数のブランチを連続でmergeする場合うまく動かないのでそれはなんとかする必要がある。&lt;/p&gt;
-
-&lt;p&gt;CircleCI 2.0ではApprovalボタンが出せるんだけど、
-アクセスしにいくのがちょっと面倒なのと、周知も兼ねてSlackに出したかったので使っていない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;version: 2
-jobs:
-  build:
-    docker:
-      - image: circleci/golang:1.8
-    branches:
-      only:
-        - master
-    steps:
-      - checkout
-      - run:
-          name: Create new version
-          command: |
-            if [ -e *.sql ]; then
-              VERSION=$(ls -U1 goose | wc -l | xargs expr 1 + | xargs printf %05d)
-              FILENAME=$(find . -maxdepth 1 -name &amp;quot;*.sql&amp;quot; | head | xargs basename)
-              mv ${FILENAME} goose/${VERSION}_${FILENAME}
-              git config --global user.email &amp;quot;circleci@example.com&amp;quot;
-              git config --global user.name &amp;quot;CircleCI&amp;quot;
-              git add .
-              git commit -m &amp;quot;version ${VERSION}&amp;quot;
-              git push origin master
-              COMMIT=$(git rev-parse HEAD)
-              curl -H &amp;quot;Authorization: Basic $(echo -n &#39;foobar:dolphins&#39; | base64)&amp;quot; &amp;quot;https://*****/auth/message?version=${VERSION}&amp;amp;filename=${FILENAME}&amp;amp;commit=${COMMIT}&amp;quot;
-            fi
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;goose/
-  .keep
-  00001_create_test_table.sql
-.circleci/config.yml
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Migrationボタンが押されると、まずボタンを消してRunning状態とし、
-処理が終わったら結果を上書きするようにしている。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/148/&#34;&gt;SlackのInteractive messagesでボタンの入力を受け付ける - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;slackMessages.action(&#39;migrate&#39;, (payload, respond) =&amp;gt; {
-  let replacement = payload.original_message; 
-  delete replacement.attachments[0].actions; 
-  replacement.attachments[0].text = `start migration by ${payload.user.name} at ${moment().format()}`;
-  replacement.attachments[0].fields = [
-    { 
-       &amp;quot;title&amp;quot;: &amp;quot;State&amp;quot;,
-       &amp;quot;value&amp;quot;: &amp;quot;Running&amp;quot;,
-       &amp;quot;short&amp;quot;: false
-    } 
-  ]; 
-
-  exec(
-    // Attention to command injection
-    `rm -rf ${repositoryName} &amp;amp;&amp;amp; git clone git@github.com:${repositoryPath}.git &amp;amp;&amp;amp; cd ${repositoryName}/goose &amp;amp;&amp;amp; goose mysql &amp;quot;${mySQLConf}&amp;quot; up`, 
-    (err, stdout, stderr) =&amp;gt; {
-      replacement.attachments[0].fields = [
-        { 
-          &amp;quot;title&amp;quot;: &amp;quot;Result&amp;quot;,
-          &amp;quot;value&amp;quot;: (err || stderr) ? `${stderr || err}` : &amp;quot;Success&amp;quot;,
-          &amp;quot;short&amp;quot;: false
-        }
-      ];
-      respond(replacement);
-    }
-  );
-  
-  return replacement;
-});
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/158/</guid>
+      <description>https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html
+トランザクション分離レベルはデフォルトのREPEATABLE-READ。
+&amp;gt; SELECT @@GLOBAL.tx_isolation, @@tx_isolation; +-----------------------+-----------------+ | @@GLOBAL.tx_isolation | @@tx_isolation | +-----------------------+-----------------+ | REPEATABLE-READ | REPEATABLE-READ | +-----------------------+-----------------+  準備 DBを立ち上げてテーブルとレコードを入れる。
+$ cat schema_and_data.sql CREATE TABLE a ( id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(128) NOT NULL ); CREATE TABLE b ( id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, a_id BIGINT UNSIGNED NOT NULL, FOREIGN KEY (a_id) REFERENCES a (id) ); INSERT INTO a (id, name) VALUES (1, &#39;1&#39;); INSERT INTO a (id, name) VALUES (2, &#39;2&#39;); INSERT INTO a (id, name) VALUES (3, &#39;3&#39;); INSERT INTO a (id, name) VALUES (8, &#39;8&#39;); INSERT INTO a (id, name) VALUES (9, &#39;9&#39;); INSERT INTO a (id, name) VALUES (10, &#39;10&#39;); $ cat start.</description>
+    </item>
     
+    <item>
+      <title>xorm reverseでDBスキーマからGoのstructを生成する</title>
+      <link>https://www.sambaiz.net/article/153/</link>
+      <pubDate>Sat, 10 Feb 2018 15:55:00 +0900</pubDate>
       
-        <item>
-          <title>MySQLのALTER TABLEのメモ</title>
-          <link>https://www.sambaiz.net/article/93/</link>
-          <pubDate>Sat, 15 Apr 2017 19:45:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/93/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/alter-table.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: 13.1.7 ALTER TABLE 構文&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;CREATE TABLE t0 (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    c1 VARCHAR(30),
-    c2 VARCHAR(30)
-);
-CREATE TABLE t2 (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY
-);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;ALTER TABLE t0 RENAME t1;
-ALTER TABLE t1
-  ADD COLUMN t2_id BIGINT UNSIGNED AFTER id,
-  ADD COLUMN c3 INTEGER NOT NULL AFTER t2_id,
-  MODIFY COLUMN c1 VARCHAR(30) NOT NULL,
-  DROP COLUMN c2,
-  ADD INDEX (c3),
-  ADD FOREIGN KEY (t2_id) REFERENCES t2(id) ON UPDATE CASCADE ON DELETE CASCADE
-;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SHOW CREATE TABLE t1 \G;
-*************************** 1. row ***************************
-       Table: t1
-Create Table: CREATE TABLE `t1` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  `t2_id` bigint(20) unsigned DEFAULT NULL,
-  `c3` int(11) NOT NULL,
-  `c1` varchar(30) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `c3` (`c3`),
-  KEY `t2_id` (`t2_id`),
-  CONSTRAINT `t1_ibfk_1` FOREIGN KEY (`t2_id`) REFERENCES `t2` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8
-1 row in set (0.00 sec)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;ALTER TABLE t1
-  DROP INDEX c3,
-  DROP FOREIGN KEY t1_ibfk_1,
-  DROP INDEX t2_id
-;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SHOW CREATE TABLE t1 \G
-*************************** 1. row ***************************
-       Table: t1
-Create Table: CREATE TABLE `t1` (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  `t2_id` bigint(20) unsigned DEFAULT NULL,
-  `c3` int(11) NOT NULL,
-  `c1` varchar(30) NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8
-1 row in set (0.00 sec)
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/153/</guid>
+      <description>GoのORMのxormにはxorm reverseというDBのスキーマから以下のようなテンプレートに沿ったGoのstructなどを生成するツールがある。
+package {{.Model}} import ( {{range .Imports}}&amp;quot;{{.}}&amp;quot;{{end}} ) {{range .Tables}} type {{Mapper .Name}} struct { {{$table := .}} {{range .Columns}}	{{Mapper .Name}}	{{Type .}} {{end}} } {{end}}  リポジトリにあるテンプレートにxorm用テンプレートとgo用のテンプレートが用意されているように、単体で使うこともできる。 また、テンプレートを書く言語としてもGo以外にC++もサポートしている。
+xormのcmdとドライバをインストール。
+$ go get github.com/go-xorm/cmd/xorm $ go get github.com/go-sql-driver/mysql $ xorm Version: 0.2.0524  様々な型のカラムを含むテーブルで試す。
+$ cat schema.sql CREATE TABLE table1 ( n_tinyint TINYINT, n_int INT, n_int_unsigned INT UNSIGNED NOT NULL DEFAULT 1, n_bigint BIGINT, n_float FLOAT, n_double DOUBLE, d_date DATE, d_datetime DATETIME, s_char CHAR(64), s_varchar VARCHAR(64), s_text TEXT, s_json JSON, b_binary BLOB, e_enum ENUM(&#39;aaa&#39;, &#39;bbb&#39;, &#39;ccc&#39;) ) $ cat setup.</description>
+    </item>
     
+    <item>
+      <title>Gooseリポジトリのmerge時にバージョンを上げmigrationボタンをSlackに出す</title>
+      <link>https://www.sambaiz.net/article/149/</link>
+      <pubDate>Fri, 19 Jan 2018 09:30:00 +0900</pubDate>
       
-        <item>
-          <title>MySQLで大文字小文字を区別しないのを直す</title>
-          <link>https://www.sambaiz.net/article/11/</link>
-          <pubDate>Sun, 24 Jul 2016 22:12:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/11/</guid>
-          <description>&lt;p&gt;Collationの話。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;MySQL 5.6
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;CREATE TABLE sample (
-  id SERIAL,
-  name VARCHAR(30)
-) ENGINE=InnoDB CHARACTER SET utf8mb4;
-
-INSERT INTO sample (name) VALUES (&#39;tom&#39;),(&#39;Tom&#39;),(&#39;TOM&#39;);
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;このテーブルを&amp;rdquo;tom&amp;rdquo;で絞り込むとこうなる。大文字小文字を区別していない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SELECT * FROM sample2 WHERE name = &#39;tom&#39;;
-+----+------+
-| id | name |
-+----+------+
-|  1 | tom  |
-|  2 | Tom  |
-|  3 | TOM  |
-+----+------+
-3 rows in set (0.01 sec)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/case-sensitivity.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: B.5.5.1 文字列検索での大文字/小文字の区別&lt;/a&gt;&lt;/p&gt;
-
-&lt;blockquote&gt;
-&lt;p&gt;単純な比較操作 (&amp;gt;=、&amp;gt;、=、&amp;lt;、&amp;lt;=、ソート、およびグループ化) は、各文字の「ソート値」に基づきます。
-同じソート値を持つ文字は同じ文字として扱われます。たとえば、「e」 と 「é」 が対象の照合順序で同じソート値を持つ場合は、等しいと判断されます。&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;&lt;a href=&#34;http://dev.mysql.com/doc/refman/5.6/ja/charset-mysql.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: 10.1.2 MySQL での文字セットと照合順序&lt;/a&gt;&lt;/p&gt;
-
-&lt;blockquote&gt;
-&lt;p&gt;照合順序名には、関連する文字セットの名前で始まる、通常は言語名を含む、
-_ci (大文字と小文字を区別しない)、_cs (大文字と小文字を区別する)、_bin (バイナリ)
-のいずれかで終わる、という規則が適用されます。&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;p&gt;ciはcase-insensitive、csというのはcase-sensitiveの略だ。
-照合順序(Collation)を&lt;code&gt;SHOW FULL COLUMNS FROM sample&lt;/code&gt;で確認したところ、確かに区別しない&lt;code&gt;utf8mb4_general_ci&lt;/code&gt;となっていた。
-これは、文字コード&lt;code&gt;utf8mb4&lt;/code&gt;のデフォルトの照合順序だ。(&lt;code&gt;SHOW CHARACTER SET&lt;/code&gt;で確認できる)&lt;/p&gt;
-
-&lt;p&gt;それなら&lt;code&gt;utf8mb4_general_cs&lt;/code&gt;というのがあるんだなと、&lt;code&gt;SHOW COLLATION LIKE &#39;utf8mb4%&#39;&lt;/code&gt;で確認してみたが、
-そんなものはなかった。どうやら区別させるためには&lt;code&gt;utf8mb4_bin&lt;/code&gt;を使うのが正解みたいで、これをCOLLATEで指定してやるか、
-カラム単位でBINARYとすると、照合順序が&lt;code&gt;utf8mb4_bin&lt;/code&gt;となり、期待通りの結果が得られる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;CREATE TABLE sample2 (
-  id SERIAL,
-  name VARCHAR(30)
-) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
-
-CREATE TABLE sample3 (
-  id SERIAL,
-  name VARCHAR(30) BINARY
-) ENGINE=InnoDB CHARACTER SET utf8mb4;
-
-ALTER TABLE sample MODIFY name VARCHAR(30) BINARY;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SELECT * FROM sample2 WHERE name = &#39;tom&#39;;
-+----+------+
-| id | name |
-+----+------+
-|  1 | tom  |
-+----+------+
-1 row in set (0.01 sec)
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/149/</guid>
+      <description>GooseはGo製のDB Migrationツール。
+コード
+こんなリポジトリを作成し、各自ブランチを切ってGoose形式のup/downのSQLを書き、終わったらPullRequestを出す。
+goose/ .keep .circleci/config.yml create_test_table.sql  $ cat create_test_table.sql -- +goose Up -- SQL in this section is executed when the migration is applied. CREATE TABLE testtable ( id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT, n INT NOT NULL, c VARCHAR (20) NOT NULL UNIQUE ); -- +goose Down -- SQL in this section is executed when the migration is rolled back. DROP TABLE testtable;  無事Approveされ、mergeされるとCircleCIが走り、 SQLをgooseディレクトリの中にバージョンを付けて移し、 SlackにpostMessageするエンドポイントにリクエストを飛ばす。</description>
+    </item>
     
+    <item>
+      <title>MySQLのALTER TABLEのメモ</title>
+      <link>https://www.sambaiz.net/article/93/</link>
+      <pubDate>Sat, 15 Apr 2017 19:45:00 +0900</pubDate>
       
-        <item>
-          <title>MySQLのUNIX_TIMESTAMPにある程度未来の日付を渡すと0になる</title>
-          <link>https://www.sambaiz.net/article/4/</link>
-          <pubDate>Mon, 04 Jul 2016 19:49:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/4/</guid>
-          <description>&lt;p&gt;以下、MySQL5.6で遭遇した。&lt;/p&gt;
-
-&lt;p&gt;MySQLの&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/date-and-time-functions.html#function_unix-timestamp&#34;&gt;UNIX_TIMESTAMP&lt;/a&gt;は
-DATETIME文字列などを引数にとり、UNIXタイムスタンプ(1970-01-01 00:00:00 UTCを起点とした経過秒数)を返す関数だ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;mysql&amp;gt; SET SESSION time_zone = &#39;UTC&#39;;
-mysql&amp;gt; select UNIX_TIMESTAMP(&#39;1970-01-01 00:00:00&#39;);
-+---------------------------------------+
-| UNIX_TIMESTAMP(&#39;1970-01-01 00:00:00&#39;) |
-+---------------------------------------+
-|                                     0 |
-+---------------------------------------+
-1 row in set (0.00 sec)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ただし、2038年1月19日3時14分7秒(UTC)以降を渡すと0になってしまう。
-これはドキュメントにも書いてある通り範囲外だから。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;mysql&amp;gt; select UNIX_TIMESTAMP(&#39;2038-01-19-03-14-07&#39;);
-+---------------------------------------+
-| UNIX_TIMESTAMP(&#39;2038-01-19-03-14-07&#39;) |
-+---------------------------------------+
-|                            2147483647 |
-+---------------------------------------+
-1 row in set (0.04 sec)
-
-mysql&amp;gt; select UNIX_TIMESTAMP(&#39;2038-01-19-03-14-08&#39;);
-+---------------------------------------+
-| UNIX_TIMESTAMP(&#39;2038-01-19-03-14-08&#39;) |
-+---------------------------------------+
-|                                     0 |
-+---------------------------------------+
-1 row in set (0.00 sec)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;では、この境目は何かというと、32ビットで表せる符号付数値の最大値だ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;&amp;gt; 2 ** 31
-=&amp;gt; 2147483648
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これはMySQLに限らず、&lt;a href=&#34;https://ja.wikipedia.org/wiki/2038%E5%B9%B4%E5%95%8F%E9%A1%8C&#34;&gt;2038年問題&lt;/a&gt;と呼ばれているもので、
-DATETIME型は&amp;rsquo;9999-12-31&amp;rsquo;までサポートしているのでこれ以降も表すことはできるが、&lt;code&gt;UNIX_TIMESTAMP&lt;/code&gt;しても正しい値は得られなくなる。&lt;/p&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/93/</guid>
+      <description>MySQL :: MySQL 5.6 リファレンスマニュアル :: 13.1.7 ALTER TABLE 構文
+CREATE TABLE t0 ( id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, c1 VARCHAR(30), c2 VARCHAR(30) ); CREATE TABLE t2 ( id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY );  ALTER TABLE t0 RENAME t1; ALTER TABLE t1 ADD COLUMN t2_id BIGINT UNSIGNED AFTER id, ADD COLUMN c3 INTEGER NOT NULL AFTER t2_id, MODIFY COLUMN c1 VARCHAR(30) NOT NULL, DROP COLUMN c2, ADD INDEX (c3), ADD FOREIGN KEY (t2_id) REFERENCES t2(id) ON UPDATE CASCADE ON DELETE CASCADE ;  mysql&amp;gt; SHOW CREATE TABLE t1 \G; *************************** 1.</description>
+    </item>
     
-
+    <item>
+      <title>MySQLで大文字小文字を区別しないのを直す</title>
+      <link>https://www.sambaiz.net/article/11/</link>
+      <pubDate>Sun, 24 Jul 2016 22:12:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/11/</guid>
+      <description>Collationの話。
+MySQL 5.6  CREATE TABLE sample ( id SERIAL, name VARCHAR(30) ) ENGINE=InnoDB CHARACTER SET utf8mb4; INSERT INTO sample (name) VALUES (&#39;tom&#39;),(&#39;Tom&#39;),(&#39;TOM&#39;);  このテーブルを&amp;rdquo;tom&amp;rdquo;で絞り込むとこうなる。大文字小文字を区別していない。
+mysql&amp;gt; SELECT * FROM sample2 WHERE name = &#39;tom&#39;; +----+------+ | id | name | +----+------+ | 1 | tom | | 2 | Tom | | 3 | TOM | +----+------+ 3 rows in set (0.01 sec)  MySQL :: MySQL 5.6 リファレンスマニュアル :: B.</description>
+    </item>
+    
+    <item>
+      <title>MySQLのUNIX_TIMESTAMPにある程度未来の日付を渡すと0になる</title>
+      <link>https://www.sambaiz.net/article/4/</link>
+      <pubDate>Mon, 04 Jul 2016 19:49:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/4/</guid>
+      <description>以下、MySQL5.6で遭遇した。
+MySQLのUNIX_TIMESTAMPは DATETIME文字列などを引数にとり、UNIXタイムスタンプ(1970-01-01 00:00:00 UTCを起点とした経過秒数)を返す関数だ。
+mysql&amp;gt; SET SESSION time_zone = &#39;UTC&#39;; mysql&amp;gt; select UNIX_TIMESTAMP(&#39;1970-01-01 00:00:00&#39;); +---------------------------------------+ | UNIX_TIMESTAMP(&#39;1970-01-01 00:00:00&#39;) | +---------------------------------------+ | 0 | +---------------------------------------+ 1 row in set (0.00 sec)  ただし、2038年1月19日3時14分7秒(UTC)以降を渡すと0になってしまう。 これはドキュメントにも書いてある通り範囲外だから。
+mysql&amp;gt; select UNIX_TIMESTAMP(&#39;2038-01-19-03-14-07&#39;); +---------------------------------------+ | UNIX_TIMESTAMP(&#39;2038-01-19-03-14-07&#39;) | +---------------------------------------+ | 2147483647 | +---------------------------------------+ 1 row in set (0.04 sec) mysql&amp;gt; select UNIX_TIMESTAMP(&#39;2038-01-19-03-14-08&#39;); +---------------------------------------+ | UNIX_TIMESTAMP(&#39;2038-01-19-03-14-08&#39;) | +---------------------------------------+ | 0 | +---------------------------------------+ 1 row in set (0.00 sec)  では、この境目は何かというと、32ビットで表せる符号付数値の最大値だ。</description>
+    </item>
+    
   </channel>
 </rss>

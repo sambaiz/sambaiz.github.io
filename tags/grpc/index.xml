@@ -1,157 +1,29 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz-net</title>
-    <link>https://www.sambaiz.net/tags/grpc/index.xml</link>
-    <language>ja</language>
-    <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
-
+    <title>Grpc on sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/grpc/</link>
+    <description>Recent content in Grpc on sambaiz-net</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <copyright>sambaiz-net</copyright>
+    <lastBuildDate>Fri, 29 Jul 2016 22:00:00 +0900</lastBuildDate>
     
-      
-        <item>
-          <title>Googleが作ったRPCフレームワークgRPCを使ってみた</title>
-          <link>https://www.sambaiz.net/article/12/</link>
-          <pubDate>Fri, 29 Jul 2016 22:00:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/12/</guid>
-          <description>
-
-&lt;blockquote&gt;
-&lt;p&gt;A high performance, open source, general RPC framework that puts mobile and HTTP/2 first.&lt;/p&gt;
-&lt;/blockquote&gt;
-
-&lt;h2 id=&#34;what-is-grpc-http-www-grpc-io-docs-what-is-grpc&#34;&gt;&lt;a href=&#34;http://www.grpc.io/docs/#what-is-grpc&#34;&gt;What is gRPC?&lt;/a&gt;&lt;/h2&gt;
-
-&lt;p&gt;gRPCを使うと、クライアントアプリケーションは直接、ローカルのオブジェクトのように、他のマシンのサーバーアプリケーションのメソッドを呼ぶことができ、
-分散したアプリケーションやサービスを簡単に作ることができる。
-多くのRPCシステムと同様に、gRPCはサービスを定義し、リモートから呼べるメソッドと、そのパラメーターおよび返り値の型を記述するようになっている。
-サーバーサイドではインタフェースを実装し、クライアントからの呼び出しをハンドリングするgRPCサーバーを実行する。
-クライアントサイドでは、サーバーと同じメソッドを提供するスタブを持っている。&lt;/p&gt;
-
-&lt;p&gt;gRPCクライアントとサーバーは様々な環境同士でやり取りすることができ、いくつもの言語でサポートされている。
-そのため、例えば、gRPCサーバーをJavaで、クライアントをGoやPython、Rubyで作るのも簡単だ。
-加えて、最新のGoodle APIにはgRPCのインタフェースが存在するので、これらをアプリケーションに組み込むのも容易にできる。&lt;/p&gt;
-
-&lt;h2 id=&#34;protobuf&#34;&gt;Protobuf&lt;/h2&gt;
-
-&lt;p&gt;デフォルトではgRPCはprotobuf(protocol buffers)を使う。
-&lt;a href=&#34;https://github.com/google/protobuf&#34;&gt;protobuf&lt;/a&gt;というのは、
-Googleによるオープンソースの、構造化されたデータをシリアライズするメカニズムだ。&lt;/p&gt;
-
-&lt;p&gt;今回作るのは、同じ文字列を返すだけのEchoサーバーで、コードは&lt;a href=&#34;https://github.com/sambaiz/try-gRPC&#34;&gt;ここ&lt;/a&gt;にある。
-以下のprotoファイルでは、&lt;code&gt;Echo&lt;/code&gt;というサービスは&lt;code&gt;RetEcho&lt;/code&gt;というメソッドを含み、
-これは文字列&lt;code&gt;say&lt;/code&gt;を含む&lt;code&gt;EchoRequest&lt;/code&gt;に対して、文字列&lt;code&gt;ret&lt;/code&gt;を含む&lt;code&gt;EchoReply&lt;/code&gt;を返すということを表している。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;syntax = &amp;quot;proto3&amp;quot;;
-
-option java_package = &amp;quot;net.sambaiz.trygrpc.protos&amp;quot;;
-
-package protos;
-
-service Echo {
-  rpc RetEcho (EchoRequest) returns (EchoReply) {}
-}
-
-message EchoRequest {
-  string say = 1;
-}
-
-message EchoReply {
-  string ret = 1;
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;これを&lt;code&gt;protoc&lt;/code&gt;でコンパイルすると&lt;code&gt;echo.pb.go&lt;/code&gt;のようなコードが生成される。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ brew install --devel protobuf # install Install Protocol Compiler v3.0.0-beta-2
-$ go get -u github.com/golang/protobuf/protoc-gen-go # Install Go Protobuf Runtime Installation
-$ protoc --go_out=plugins=grpc:protos/. protos/*.proto
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;サーバー&#34;&gt;サーバー&lt;/h2&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go get google.golang.org/grpc
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;protoファイルに書いた、RetEchoを実装し、サーバーを立ち上げる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;package main
-
-import (
-	&amp;quot;golang.org/x/net/context&amp;quot;
-	&amp;quot;google.golang.org/grpc&amp;quot;
-	&amp;quot;net&amp;quot;
-	&amp;quot;log&amp;quot;
-	pb &amp;quot;github.com/sambaiz/try-gRPC/protos&amp;quot;
-)
-
-const (
-	port = &amp;quot;:50051&amp;quot;
-)
-
-type server struct{}
-
-func (s *server) RetEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoReply, error) {
-	return &amp;amp;pb.EchoReply{Ret: in.Say}, nil
-}
-
-func main() {
-	lis, err := net.Listen(&amp;quot;tcp&amp;quot;, port)
-	if err != nil {
-		log.Fatalf(&amp;quot;failed to listen: %v&amp;quot;, err)
-	}
-	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &amp;amp;server{})
-	log.Printf(&amp;quot;server start localhost%s&amp;quot;, port)
-	s.Serve(lis)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;クライアント&#34;&gt;クライアント&lt;/h2&gt;
-
-&lt;p&gt;サーバーに接続すると、他のメソッドと同じようにサーバー側の&lt;code&gt;RetEcho&lt;/code&gt;メソッドを呼び出すことができるようになる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;package main
-
-import (
-	&amp;quot;log&amp;quot;
-	&amp;quot;google.golang.org/grpc&amp;quot;
-	&amp;quot;golang.org/x/net/context&amp;quot;
-	pb &amp;quot;github.com/sambaiz/try-gRPC/protos&amp;quot;
-
-)
-
-const (
-	address = &amp;quot;localhost:50051&amp;quot;
-)
-
-func main() {
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf(&amp;quot;did not connect: %v&amp;quot;, err)
-	}
-	defer conn.Close()
-	c := pb.NewEchoClient(conn)
-
-	r, err := c.RetEcho(context.Background(), &amp;amp;pb.EchoRequest{Say: &amp;quot;hello&amp;quot;})
-	if err != nil {
-		log.Fatalf(&amp;quot;Error: %v&amp;quot;, err)
-	}
-	log.Printf(&amp;quot;Return: %s&amp;quot;, r.Ret)
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;最新のprotoファイルを共有すれば、どんな言語で書いても自分で型を定義したり、呼び出すロジックを書く必要がないし、
-インタフェースが変わったときにコードレベルでエラーに気づけるのは通常のAPIリクエストと比較しても良い点だと思う。
-また、同じ理由でロジックが複数のサーバーに渡る場合の負担を最小限にできるため、サービスを小さく作る、
-マイクロサービスアーキテクチャで使われる。もちろん性能や管理のしやすさなどの面でもメリット/デメリットはあるだろうし、
-&lt;a href=&#34;https://www.oreilly.co.jp/books/9784873117607/&#34;&gt;オライリー本&lt;/a&gt;を読んで勉強しようと思う。(&lt;a href=&#34;https://www.sambaiz.net/article/14&#34;&gt;読んだ&lt;/a&gt;)&lt;/p&gt;
-</description>
-        </item>
-      
+	<atom:link href="https://www.sambaiz.net/tags/grpc/index.xml" rel="self" type="application/rss+xml" />
     
-
+    
+    <item>
+      <title>Googleが作ったRPCフレームワークgRPCを使ってみた</title>
+      <link>https://www.sambaiz.net/article/12/</link>
+      <pubDate>Fri, 29 Jul 2016 22:00:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/12/</guid>
+      <description>A high performance, open source, general RPC framework that puts mobile and HTTP/2 first.
+ What is gRPC? gRPCを使うと、クライアントアプリケーションは直接、ローカルのオブジェクトのように、他のマシンのサーバーアプリケーションのメソッドを呼ぶことができ、 分散したアプリケーションやサービスを簡単に作ることができる。 多くのRPCシステムと同様に、gRPCはサービスを定義し、リモートから呼べるメソッドと、そのパラメーターおよび返り値の型を記述するようになっている。 サーバーサイドではインタフェースを実装し、クライアントからの呼び出しをハンドリングするgRPCサーバーを実行する。 クライアントサイドでは、サーバーと同じメソッドを提供するスタブを持っている。
+gRPCクライアントとサーバーは様々な環境同士でやり取りすることができ、いくつもの言語でサポートされている。 そのため、例えば、gRPCサーバーをJavaで、クライアントをGoやPython、Rubyで作るのも簡単だ。 加えて、最新のGoodle APIにはgRPCのインタフェースが存在するので、これらをアプリケーションに組み込むのも容易にできる。
+Protobuf デフォルトではgRPCはprotobuf(protocol buffers)を使う。 protobufというのは、 Googleによるオープンソースの、構造化されたデータをシリアライズするメカニズムだ。
+今回作るのは、同じ文字列を返すだけのEchoサーバーで、コードはここにある。 以下のprotoファイルでは、EchoというサービスはRetEchoというメソッドを含み、 これは文字列sayを含むEchoRequestに対して、文字列retを含むEchoReplyを返すということを表している。
+syntax = &amp;quot;proto3&amp;quot;; option java_package = &amp;quot;net.sambaiz.trygrpc.protos&amp;quot;; package protos; service Echo { rpc RetEcho (EchoRequest) returns (EchoReply) {} } message EchoRequest { string say = 1; } message EchoReply { string ret = 1; }  これをprotocでコンパイルするとecho.</description>
+    </item>
+    
   </channel>
 </rss>

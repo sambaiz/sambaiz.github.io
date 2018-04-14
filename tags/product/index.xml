@@ -1,510 +1,73 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>sambaiz-net</title>
-    <link>https://www.sambaiz.net/tags/product/index.xml</link>
-    <language>ja</language>
-    <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>0001-01-01 00:00:00 &#43;0000 UTC</updated>
-
+    <title>Product on sambaiz-net</title>
+    <link>https://www.sambaiz.net/tags/product/</link>
+    <description>Recent content in Product on sambaiz-net</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <copyright>sambaiz-net</copyright>
+    <lastBuildDate>Sun, 24 Dec 2017 23:31:00 +0900</lastBuildDate>
     
-      
-        <item>
-          <title>Athenaのmigrationやpartitionするathena-adminを作った</title>
-          <link>https://www.sambaiz.net/article/145/</link>
-          <pubDate>Sun, 24 Dec 2017 23:31:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/145/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/athena-admin&#34;&gt;https://github.com/sambaiz/athena-admin&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;AthenaはS3をデータソースとするマネージドなデータ分析基盤。Prestoベースで標準SQLを実行できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/athena/pricing/&#34;&gt;料金&lt;/a&gt;はスキャンしたデータ量にかかり、$5/TB。1MB切り上げで、10MB以下のクエリは10MBになる。
-データ量に対してかなり安く使えるものの、フルスキャンしてしまうとBigQueryと同様にお金が溶けてしまうので、大抵はパーティションを切ることになるのだけど都度locationを指定して&lt;code&gt;ADD PARTITION&lt;/code&gt;を実行するのは大変。さらにスキーマを変更するのにも&lt;code&gt;ALTER TABLE ADD COLUMNS&lt;/code&gt;などはないのでテーブルを作り直すことになるが、当然パーティションも全部作り直すことになる。&lt;/p&gt;
-
-&lt;p&gt;ではどうしようもないかというと&lt;code&gt;MSCK REPAIR TABLE&lt;/code&gt;というのがあって、
-これはS3のObjectの&lt;code&gt;dt=YYYY-MM-DD&lt;/code&gt;のようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだけど、勝手に&lt;code&gt;YYYY/MM/DD/HH&lt;/code&gt;のprefixを付けてしまうFirehoseのようなのもある。&lt;/p&gt;
-
-&lt;p&gt;今回作った&lt;a href=&#34;https://github.com/sambaiz/athena-admin&#34;&gt;athena-admin&lt;/a&gt;は以下のような定義ファイルから、
-パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationする。
-このファイルを書き換えるだけで基本的にどうにかなるし、バージョン管理すればテーブル定義の変更を追うことができる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;{
-  &amp;quot;general&amp;quot;: {
-    &amp;quot;athenaRegion&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;,
-    &amp;quot;databaseName&amp;quot;: &amp;quot;aaaa&amp;quot;,
-    &amp;quot;saveDefinitionLocation&amp;quot;: &amp;quot;s3://saveDefinitionBucket/aaaa.json&amp;quot;
-  },
-  &amp;quot;tables&amp;quot;: {
-    &amp;quot;sample_data&amp;quot;: {
-      &amp;quot;columns&amp;quot;: {
-        &amp;quot;user_id&amp;quot;: &amp;quot;int&amp;quot;,
-        &amp;quot;value&amp;quot;: {
-          &amp;quot;score&amp;quot;: &amp;quot;int&amp;quot;,
-          &amp;quot;category&amp;quot;: &amp;quot;string&amp;quot;
-        } /* &amp;quot;struct&amp;lt;score:int,category:string&amp;gt;&amp;quot; のように書くこともできる */
-      },
-      &amp;quot;srcLocation&amp;quot;: &amp;quot;s3://src/location/&amp;quot;,
-      &amp;quot;partition&amp;quot;: {
-        &amp;quot;prePartitionLocation&amp;quot;: &amp;quot;s3://pre/partition/&amp;quot;, /* optional */
-        &amp;quot;regexp&amp;quot;: &amp;quot;(\\d{4})/(\\d{2})/(\\d{2})/&amp;quot;, /* optional */
-        &amp;quot;keys&amp;quot;: [
-          {
-            &amp;quot;name&amp;quot;: &amp;quot;dt&amp;quot;,
-            &amp;quot;type&amp;quot;: &amp;quot;string&amp;quot;,
-            &amp;quot;format&amp;quot;: &amp;quot;{1}-{2}-{3}&amp;quot;, /* optional */
-          }
-        ]
-      }
-    }
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;使い方はこんな感じ。使い方によっては&lt;code&gt;migrate()&lt;/code&gt;だけ呼ぶこともあると思う。
-&lt;code&gt;replaceObjects()&lt;/code&gt;にはmatchedHandlerというのを渡すこともできて、
-UTCからJSTに変換するといったこともできる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ npm install athena-admin
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;pre&gt;&lt;code&gt;const AthenaAdmin = require(&#39;athena-admin&#39;).AthenaAdmin;
-const dbDef = require(&#39;./sampledatabase.json&#39;);
-const admin = new AthenaAdmin(dbDef);
-await admin.replaceObjects();
-await admin.migrate();
-await admin.partition();
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+	<atom:link href="https://www.sambaiz.net/tags/product/index.xml" rel="self" type="application/rss+xml" />
     
-      
-        <item>
-          <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</title>
-          <link>https://www.sambaiz.net/article/132/</link>
-          <pubDate>Sun, 10 Sep 2017 23:45:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/132/</guid>
-          <description>
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer&#34;&gt;Puppeteer&lt;/a&gt;でHeadless Chromeを動かすコードを
-Lambda上で動かすStarter Kitを作った。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit&#34;&gt;puppeteer-lambda-starter-kit&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;chromeの準備&#34;&gt;Chromeの準備&lt;/h2&gt;
-
-&lt;p&gt;Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても
-Lambdaにないshared libraryに依存しているため失敗する。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Lambda上でHeadless Chromeを動かす例がないか調べたら&lt;a href=&#34;https://github.com/adieuadieu/serverless-chrome&#34;&gt;serverless-chrome&lt;/a&gt;というのがあって、
-Headless用の設定でChromeをビルドしていた。
-ほかには&lt;a href=&#34;https://github.com/graphcool/chromeless&#34;&gt;chromeless&lt;/a&gt;というのもあるけど
-これはserverless-chromeに
-&lt;a href=&#34;https://github.com/graphcool/chromeless/blob/master/serverless/serverless.yml#L46&#34;&gt;依存している&lt;/a&gt;。
-最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。&lt;/p&gt;
-
-&lt;p&gt;serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。
-基本的には&lt;a href=&#34;https://github.com/adieuadieu/serverless-chrome/tree/master/chrome&#34;&gt;書いてある&lt;/a&gt;
-通りやればうまくいく。他のプロセスとのshared memoryとして/dev/shmを使っているのを、/tmpに&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/master/chrome/buildChrome.sh#L20&#34;&gt;置き換える&lt;/a&gt;
-ようにしないと、実行時の&lt;code&gt;page.goto()&lt;/code&gt;で&lt;code&gt;Failed Provisional Load: ***, error_code: -12&lt;/code&gt;になる。&lt;/p&gt;
-
-&lt;p&gt;ビルドしたheadless_shellには問題になった依存は含まれていないようだ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ ldd headless_shell 
-	linux-vdso.so.1 =&amp;gt;  (0x00007ffcb6fed000)
-	libpthread.so.0 =&amp;gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000)
-	libdl.so.2 =&amp;gt; /lib64/libdl.so.2 (0x00007f5f17bba000)
-	librt.so.1 =&amp;gt; /lib64/librt.so.1 (0x00007f5f179b1000)
-	libnss3.so =&amp;gt; /usr/lib64/libnss3.so (0x00007f5f17692000)
-	libnssutil3.so =&amp;gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000)
-	libsmime3.so =&amp;gt; /usr/lib64/libsmime3.so (0x00007f5f1723e000)
-	libnspr4.so =&amp;gt; /lib64/libnspr4.so (0x00007f5f17001000)
-	libexpat.so.1 =&amp;gt; /lib64/libexpat.so.1 (0x00007f5f16dd8000)
-	libfontconfig.so.1 =&amp;gt; not found
-	libfreetype.so.6 =&amp;gt; /usr/lib64/libfreetype.so.6 (0x00007f5f16b3b000)
-	libm.so.6 =&amp;gt; /lib64/libm.so.6 (0x00007f5f16839000)
-	libstdc++.so.6 =&amp;gt; /usr/lib64/libstdc++.so.6 (0x00007f5f16533000)
-	libgcc_s.so.1 =&amp;gt; /lib64/libgcc_s.so.1 (0x00007f5f1631d000)
-	libc.so.6 =&amp;gt; /lib64/libc.so.6 (0x00007f5f15f5b000)
-	/lib64/ld-linux-x86-64.so.2 (0x000055ba0af5e000)
-	libplc4.so =&amp;gt; /lib64/libplc4.so (0x00007f5f15d55000)
-	libplds4.so =&amp;gt; /lib64/libplds4.so (0x00007f5f15b51000)
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;Puppetterで落としてくる普通のChromeは&lt;a href=&#34;http://docs.aws.amazon.com/lambda/latest/dg/limits.html&#34;&gt;Lambdaの制限&lt;/a&gt;の50MBを超えていたが、
-ビルドしたものはぎりぎり超えていないのでパッケージに含められるようになった。
-PuppeteerのChromeは環境変数&lt;code&gt;PUPPETEER_SKIP_CHROMIUM_DOWNLOAD&lt;/code&gt;を設定することで&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/blob/2817130fe099a7431e98c20ce1f44c6e547d4ca9/docs/api.md#puppeteer&#34;&gt;含めないようにできる&lt;/a&gt;。&lt;/p&gt;
-
-&lt;p&gt;他のパッケージのサイズによっては50MBを超えてしまうこともあるので、
-パッケージに含めず&lt;a href=&#34;https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/v0.9.0/src/util.js#L62&#34;&gt;S3からダウンロード&lt;/a&gt;できるようにもした。&lt;/p&gt;
-
-&lt;p&gt;いずれの場合も最終的な置き先はLambdaで唯一書き込める&lt;code&gt;/tmp&lt;/code&gt;になる。
-この領域は512MBまで使えるので展開してもまだ余裕がある。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;Error: EROFS: read-only file system, open &#39;node_modules/puppeteer/.local-chromium&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;chromeのlaunch時のoption&#34;&gt;ChromeのLaunch時のOption&lt;/h2&gt;
-
-&lt;p&gt;いろいろ試した結果、最低限必要だったのはこのあたり。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;exports.launchOptionForLambda = [
-    // error when launch(); No usable sandbox! Update your kernel
-    &#39;--no-sandbox&#39;,
-    // error when launch(); Failed to load libosmesa.so
-    &#39;--disable-gpu&#39;, 
-    // freeze when newPage()
-    &#39;--single-process&#39;
-];
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;エラーは分かりづらいものが多く、ときにはエラーすら出ずに止まってしまうこともある。
-デバッグの際はdumpioを有効にする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;const browser = await puppeteer.launch({
-    ...
-    dumpio: !!util.DEBUG,
-});  
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h2 id=&#34;babel&#34;&gt;Babel&lt;/h2&gt;
-
-&lt;p&gt;現在のLambdaのNodeのバージョンはv6.10.3。
-&lt;a href=&#34;http://node.green/&#34;&gt;node.green&lt;/a&gt;によるとES2015は99%対応していて、ES2016もべき乗演算子(2 ** 3 = 8)以外は対応しているが、ES2017のasync/awaitは7.6からなので、8系に対応するまではbabelにかける必要がある。
-ちなみにPuppeteerは6.4以降で&lt;a href=&#34;https://github.com/GoogleChrome/puppeteer/tree/master/utils/node6-transform&#34;&gt;動く&lt;/a&gt;。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ yarn add --dev babel-cli babel-preset-env
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/babel/babel-preset-env&#34;&gt;babel-preset-env&lt;/a&gt;
-.babelrcはこんな感じ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ cat .babelrc
-{
-  &amp;quot;presets&amp;quot;: [
-    [&amp;quot;env&amp;quot;, {
-      &amp;quot;targets&amp;quot;: {
-        &amp;quot;node&amp;quot;: &amp;quot;6.10&amp;quot;
-      }
-    }]
-  ]
-}
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
     
+    <item>
+      <title>Athenaのmigrationやpartitionするathena-adminを作った</title>
+      <link>https://www.sambaiz.net/article/145/</link>
+      <pubDate>Sun, 24 Dec 2017 23:31:00 +0900</pubDate>
       
-        <item>
-          <title>一定間隔でjsonデータを作って送り続けるCLIツールを作った</title>
-          <link>https://www.sambaiz.net/article/76/</link>
-          <pubDate>Sat, 04 Mar 2017 23:18:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/76/</guid>
-          <description>&lt;p&gt;Elasticsearchにリアルタイムなテストデータを投入するために、一定間隔でjsonを作って送り続けるCLIツールを作った。Go製。
-&lt;a href=&#34;https://github.com/urfave/cli&#34;&gt;urfave/cli&lt;/a&gt;を使った。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/sendjson&#34;&gt;sambaiz/sendjson&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;こんなindexにデータを入れてみる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl -XPUT &#39;http://localhost:9200/hoge&#39; -d&#39;
-{
-  &amp;quot;mappings&amp;quot;: {
-    &amp;quot;test_type&amp;quot;: { 
-      &amp;quot;_all&amp;quot;:       { &amp;quot;enabled&amp;quot;: false  }, 
-      &amp;quot;properties&amp;quot;: { 
-        &amp;quot;os_name&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;keyword&amp;quot; },
-        &amp;quot;score&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;byte&amp;quot; },
-        &amp;quot;@timestamp&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;date&amp;quot;, &amp;quot;format&amp;quot;: &amp;quot;epoch_second&amp;quot; }
-      }
-    }
-  }
-}
-&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;こんな感じでキーに対してtypeと入る値を定義するとそれっぽいデータができて送られていく。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ go install github.com/sambaiz/sendjson
-$ sendjson --interval 0.5s --duration 10s --url http://localhost:9200/hoge/test_type &#39;
-{
-    &amp;quot;os_name&amp;quot;: {&amp;quot;type&amp;quot;: &amp;quot;string&amp;quot;, &amp;quot;or&amp;quot;: [&amp;quot;windows&amp;quot;, &amp;quot;mac&amp;quot;, &amp;quot;linux&amp;quot;, &amp;quot;ios&amp;quot;, &amp;quot;android&amp;quot;]},
-    &amp;quot;score&amp;quot;:  {&amp;quot;type&amp;quot;: &amp;quot;integer&amp;quot;, &amp;quot;min&amp;quot;: 0, &amp;quot;max&amp;quot;: 100},
-    &amp;quot;@timestamp&amp;quot;: {&amp;quot;type&amp;quot;: &amp;quot;time&amp;quot;, &amp;quot;time_format&amp;quot;: &amp;quot;unix_epoch&amp;quot;}
-}&#39;
-
-{&amp;quot;@timestamp&amp;quot;:1488635130,&amp;quot;os_name&amp;quot;:&amp;quot;linux&amp;quot;,&amp;quot;score&amp;quot;:82}
-{&amp;quot;@timestamp&amp;quot;:1488635130,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:9}
-{&amp;quot;@timestamp&amp;quot;:1488635131,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:73}
-{&amp;quot;@timestamp&amp;quot;:1488635131,&amp;quot;os_name&amp;quot;:&amp;quot;ios&amp;quot;,&amp;quot;score&amp;quot;:50}
-{&amp;quot;@timestamp&amp;quot;:1488635132,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:69}
-...
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;ちゃんと入っていることを確認。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;$ curl http://localhost:9200/hoge/_search | jq
-{
-  &amp;quot;took&amp;quot;: 2,
-  &amp;quot;timed_out&amp;quot;: false,
-  &amp;quot;_shards&amp;quot;: {
-    &amp;quot;total&amp;quot;: 5,
-    &amp;quot;successful&amp;quot;: 5,
-    &amp;quot;failed&amp;quot;: 0
-  },
-  &amp;quot;hits&amp;quot;: {
-    &amp;quot;total&amp;quot;: 29,
-    &amp;quot;max_score&amp;quot;: 1,
-    &amp;quot;hits&amp;quot;: [
-      {
-        &amp;quot;_index&amp;quot;: &amp;quot;hoge&amp;quot;,
-        &amp;quot;_type&amp;quot;: &amp;quot;test_type&amp;quot;,
-        &amp;quot;_id&amp;quot;: &amp;quot;AVqZpCjjFTc9Q_rmmMn7&amp;quot;,
-        &amp;quot;_score&amp;quot;: 1,
-        &amp;quot;_source&amp;quot;: {
-          &amp;quot;@timestamp&amp;quot;: 1488636356,
-          &amp;quot;os_name&amp;quot;: &amp;quot;android&amp;quot;,
-          &amp;quot;score&amp;quot;: 38
-        }
-      },
-      {
-        &amp;quot;_index&amp;quot;: &amp;quot;hoge&amp;quot;,
-        &amp;quot;_type&amp;quot;: &amp;quot;test_type&amp;quot;,
-        &amp;quot;_id&amp;quot;: &amp;quot;AVqZpE-kFTc9Q_rmmMoN&amp;quot;,
-        &amp;quot;_score&amp;quot;: 1,
-        &amp;quot;_source&amp;quot;: {
-          &amp;quot;@timestamp&amp;quot;: 1488636366,
-          &amp;quot;os_name&amp;quot;: &amp;quot;android&amp;quot;,
-          &amp;quot;score&amp;quot;: 87
-        }
-      },
-      ...
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/145/</guid>
+      <description>https://github.com/sambaiz/athena-admin
+AthenaはS3をデータソースとするマネージドなデータ分析基盤。Prestoベースで標準SQLを実行できる。
+料金はスキャンしたデータ量にかかり、$5/TB。1MB切り上げで、10MB以下のクエリは10MBになる。 データ量に対してかなり安く使えるものの、フルスキャンしてしまうとBigQueryと同様にお金が溶けてしまうので、大抵はパーティションを切ることになるのだけど都度locationを指定してADD PARTITIONを実行するのは大変。さらにスキーマを変更するのにもALTER TABLE ADD COLUMNSなどはないのでテーブルを作り直すことになるが、当然パーティションも全部作り直すことになる。
+ではどうしようもないかというとMSCK REPAIR TABLEというのがあって、 これはS3のObjectのdt=YYYY-MM-DDのようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだけど、勝手にYYYY/MM/DD/HHのprefixを付けてしまうFirehoseのようなのもある。
+今回作ったathena-adminは以下のような定義ファイルから、 パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationする。 このファイルを書き換えるだけで基本的にどうにかなるし、バージョン管理すればテーブル定義の変更を追うことができる。
+{ &amp;quot;general&amp;quot;: { &amp;quot;athenaRegion&amp;quot;: &amp;quot;ap-northeast-1&amp;quot;, &amp;quot;databaseName&amp;quot;: &amp;quot;aaaa&amp;quot;, &amp;quot;saveDefinitionLocation&amp;quot;: &amp;quot;s3://saveDefinitionBucket/aaaa.json&amp;quot; }, &amp;quot;tables&amp;quot;: { &amp;quot;sample_data&amp;quot;: { &amp;quot;columns&amp;quot;: { &amp;quot;user_id&amp;quot;: &amp;quot;int&amp;quot;, &amp;quot;value&amp;quot;: { &amp;quot;score&amp;quot;: &amp;quot;int&amp;quot;, &amp;quot;category&amp;quot;: &amp;quot;string&amp;quot; } /* &amp;quot;struct&amp;lt;score:int,category:string&amp;gt;&amp;quot; のように書くこともできる */ }, &amp;quot;srcLocation&amp;quot;: &amp;quot;s3://src/location/&amp;quot;, &amp;quot;partition&amp;quot;: { &amp;quot;prePartitionLocation&amp;quot;: &amp;quot;s3://pre/partition/&amp;quot;, /* optional */ &amp;quot;regexp&amp;quot;: &amp;quot;(\\d{4})/(\\d{2})/(\\d{2})/&amp;quot;, /* optional */ &amp;quot;keys&amp;quot;: [ { &amp;quot;name&amp;quot;: &amp;quot;dt&amp;quot;, &amp;quot;type&amp;quot;: &amp;quot;string&amp;quot;, &amp;quot;format&amp;quot;: &amp;quot;{1}-{2}-{3}&amp;quot;, /* optional */ } ] } } } }  使い方はこんな感じ。使い方によってはmigrate()だけ呼ぶこともあると思う。 replaceObjects()にはmatchedHandlerというのを渡すこともできて、 UTCからJSTに変換するといったこともできる。</description>
+    </item>
     
+    <item>
+      <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</title>
+      <link>https://www.sambaiz.net/article/132/</link>
+      <pubDate>Sun, 10 Sep 2017 23:45:00 +0900</pubDate>
       
-        <item>
-          <title>剣を振るVRゲームを作った</title>
-          <link>https://www.sambaiz.net/article/29/</link>
-          <pubDate>Sun, 30 Oct 2016 19:05:00 &#43;0900</pubDate>
-          <author></author>
-          <guid>https://www.sambaiz.net/article/29/</guid>
-          <description>
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/29_game.png&#34; alt=&#34;ゲーム画像&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.youtube.com/watch?v=Tlonh7D5UzY&#34;&gt;プレイ動画&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://vr.google.com/intl/ja_jp/cardboard/&#34;&gt;Cardboard&lt;/a&gt;にAndroidを入れて、&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/29_card.jpg&#34; alt=&#34;Cardboard&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;iPhoneをくくりつけた傘を動かすと、画面の剣も動くのでこれで敵を倒すゲーム。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/29_sword.jpg&#34; alt=&#34;iPhoneをくくりつけた傘&#34; /&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;実装&#34;&gt;実装&lt;/h2&gt;
-
-&lt;h3 id=&#34;剣-ios&#34;&gt;剣(iOS)&lt;/h3&gt;
-
-&lt;p&gt;剣にくくりつけたiPhoneの傾きの値をUnity(Android)に送信している。
-iOSはClassic Bluetoothを自由に使えないので、Androidと通信する場合はBLEを使う。
-BLEは通常だと20byteしか一度に送れないので、これを超えないよう注意する必要がある。&lt;/p&gt;
-
-&lt;p&gt;BLEで通信するところは&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/26&#34;&gt;iOS端末をBLEのPeripheralにする&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;で作ったので、端末の傾きを取得して送るだけ。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;import UIKit
-import CoreMotion
-
-class Motion{
-
-    let peripheral: BLEPeripheral
-    let accelHandler:CMDeviceMotionHandler
-    let manager = CMMotionManager()
-
-    public init(peripheral :BLEPeripheral, label :UILabel){
-        self.peripheral = peripheral
-
-        accelHandler = {
-            (data: CMDeviceMotion?, error: Error?) -&amp;gt; Void in
-            let str = String(format: &amp;quot;%.1f %.1f %.1f&amp;quot;,
-                             arguments: [data!.attitude.pitch * 180 / M_PI,
-                                         data!.attitude.roll * 180 / M_PI,
-                                         data!.attitude.yaw * 180 / M_PI]
-                )
-            let res = peripheral.update(str.data(using: String.Encoding.utf8))
-            label.text = str + &amp;quot; &amp;quot; + String(res)
-        }
-    }
-
-    func start(){
-        if manager.isDeviceMotionAvailable {
-            manager.deviceMotionUpdateInterval = 1 / 12;
-            manager.startDeviceMotionUpdates(to: OperationQueue.current!, withHandler: accelHandler)
-        }
-    }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;h3 id=&#34;ゲーム-unity-android&#34;&gt;ゲーム(Unity &amp;amp; Android)&lt;/h3&gt;
-
-&lt;p&gt;オライリーから&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.oreilly.co.jp/books/9784873117577/&#34;&gt;UnityによるVRアプリケーション開発――作りながら学ぶバーチャルリアリティ入門&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;という本が出ていたので買った。Unityの初歩的なところやBlenderとかも説明があるのでおすすめ。
-とりあえず&lt;a href=&#34;https://developers.google.com/vr/unity/&#34;&gt;GoogleのSDK&lt;/a&gt;をimportして、
-Prefabの&lt;code&gt;GvrViewerMain&lt;/code&gt;を置くと二眼のそれっぽい感じになる。&lt;/p&gt;
-
-&lt;p&gt;スコアとかゲームオーバーの状態と処理。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;using UnityEngine;
-using UnityEngine.UI;
-using System.Collections;
-
-public class Game : MonoBehaviour {
-
-	public static int score = 0;
-	public static bool gameOver = false;
-	public static bool killed = false;
-
-	public Text gameOverText;
-	public Text scoreText;
-	public GameObject enemy;
-
-	void Start () {
-		gameOverText.enabled = false;
-	}
-
-	void Update () {
-		scoreText.text = &amp;quot;Score: &amp;quot; + score;
-		if (gameOver) gameOverText.enabled = true;
-		if (killed) {
-			nextLevel ();
-			killed = false;
-		}
-	}
-
-	public void nextLevel(){
-		var old = enemy;
-		var x = Random.Range (-10, 10);
-		enemy = (GameObject) Instantiate (
-			enemy, new Vector3(x, 0, Mathf.Sqrt(10 * 10 - x * x)), Quaternion.Euler(0, 0, 0));
-		Destroy (old);
-	}
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;敵の当たり判定。剣に当たったら爆発して次のが出てくる。
-体(見えないCapsule Colliderを設定している)に当たるとゲームオーバー。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;using UnityEngine;
-using UnityEngine.UI;
-using System.Collections;
-
-public class MonsterHit : MonoBehaviour {
-
-	public GameObject killEffect;
-
-	void OnCollisionEnter(Collision collision) {
-		switch (collision.gameObject.name) {
-		case &amp;quot;sword&amp;quot;:
-			if (!Game.gameOver) {
-				Game.score += 1;
-				Instantiate (killEffect, transform.position, transform.rotation);
-				Game.killed = true;
-			}
-			break;
-
-		case &amp;quot;Body&amp;quot;:
-			Game.gameOver = true;
-			break;
-		}
-	}
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;敵を動かす。スコアが上がるとスピードも上がる。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;using UnityEngine;
-using System.Collections;
-
-public class MonsterMove : MonoBehaviour {
-
-	private float moveRate;
-
-	void Start () {
-		moveRate = 0.0f;
-	}
-
-	void Update () {
-		transform.position = Vector3.Lerp (transform.position, new Vector3 (0, 0, -1.5f), moveRate);
-		moveRate += 0.0001f * (Game.score + 1);
-		transform.LookAt (new Vector3 (0, 0, -1.5f));
-  }
-}
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;センサーの値を受け取って、剣を動かす。ここで使っているネイティブライブラリは前作ったもの。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/27&#34;&gt;UnityでAndroidのBLEを使うネイティブプラグインを作る&lt;/a&gt;&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;using UnityEngine;
-using System.Collections;
-
-public class SwordMotion : MonoBehaviour {
-
-	private AndroidJavaObject ble;
-	private Quaternion q;
-
-	void Start () {
-		ble = new AndroidJavaObject (&amp;quot;net.sambaiz.unity_ble.BLE&amp;quot;, this.gameObject.name, &amp;quot;received&amp;quot;);
-		q = Quaternion.Euler (0, 0, 0);
-	}
-
-	void Update () {
-		transform.rotation = q;
-	}
-
-	void received(string message){
-		var motionData = message.Split (&#39; &#39;); // pitch roll yaw
-		q = Quaternion.Euler (
-				90 - float.Parse (motionData [0]),
-				float.Parse (motionData [1]),
-				0) ;
-	}
-
-	void OnApplicationPause (bool pauseStatus)
-	{
-		if (ble != null) {
-			if (pauseStatus) {
-				ble.Call (&amp;quot;onPause&amp;quot;);
-			} else {
-				ble.Call (&amp;quot;onActive&amp;quot;);
-			}
-		}
-	}
-}
-&lt;/code&gt;&lt;/pre&gt;
-</description>
-        </item>
-      
+      <guid>https://www.sambaiz.net/article/132/</guid>
+      <description>PuppeteerでHeadless Chromeを動かすコードを Lambda上で動かすStarter Kitを作った。
+puppeteer-lambda-starter-kit
+Chromeの準備 Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても Lambdaにないshared libraryに依存しているため失敗する。
+error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory  Lambda上でHeadless Chromeを動かす例がないか調べたらserverless-chromeというのがあって、 Headless用の設定でChromeをビルドしていた。 ほかにはchromelessというのもあるけど これはserverless-chromeに 依存している。 最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。
+serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。 基本的には書いてある 通りやればうまくいく。他のプロセスとのshared memoryとして/dev/shmを使っているのを、/tmpに置き換える ようにしないと、実行時のpage.goto()でFailed Provisional Load: ***, error_code: -12になる。
+ビルドしたheadless_shellには問題になった依存は含まれていないようだ。
+$ ldd headless_shell linux-vdso.so.1 =&amp;gt; (0x00007ffcb6fed000) libpthread.so.0 =&amp;gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000) libdl.so.2 =&amp;gt; /lib64/libdl.so.2 (0x00007f5f17bba000) librt.so.1 =&amp;gt; /lib64/librt.so.1 (0x00007f5f179b1000) libnss3.so =&amp;gt; /usr/lib64/libnss3.so (0x00007f5f17692000) libnssutil3.so =&amp;gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000) libsmime3.</description>
+    </item>
     
-
+    <item>
+      <title>一定間隔でjsonデータを作って送り続けるCLIツールを作った</title>
+      <link>https://www.sambaiz.net/article/76/</link>
+      <pubDate>Sat, 04 Mar 2017 23:18:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/76/</guid>
+      <description>Elasticsearchにリアルタイムなテストデータを投入するために、一定間隔でjsonを作って送り続けるCLIツールを作った。Go製。 urfave/cliを使った。
+sambaiz/sendjson
+こんなindexにデータを入れてみる。
+$ curl -XPUT &#39;http://localhost:9200/hoge&#39; -d&#39; { &amp;quot;mappings&amp;quot;: { &amp;quot;test_type&amp;quot;: { &amp;quot;_all&amp;quot;: { &amp;quot;enabled&amp;quot;: false }, &amp;quot;properties&amp;quot;: { &amp;quot;os_name&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;keyword&amp;quot; }, &amp;quot;score&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;byte&amp;quot; }, &amp;quot;@timestamp&amp;quot;: { &amp;quot;type&amp;quot;: &amp;quot;date&amp;quot;, &amp;quot;format&amp;quot;: &amp;quot;epoch_second&amp;quot; } } } } } &#39;  こんな感じでキーに対してtypeと入る値を定義するとそれっぽいデータができて送られていく。
+$ go install github.com/sambaiz/sendjson $ sendjson --interval 0.5s --duration 10s --url http://localhost:9200/hoge/test_type &#39; { &amp;quot;os_name&amp;quot;: {&amp;quot;type&amp;quot;: &amp;quot;string&amp;quot;, &amp;quot;or&amp;quot;: [&amp;quot;windows&amp;quot;, &amp;quot;mac&amp;quot;, &amp;quot;linux&amp;quot;, &amp;quot;ios&amp;quot;, &amp;quot;android&amp;quot;]}, &amp;quot;score&amp;quot;: {&amp;quot;type&amp;quot;: &amp;quot;integer&amp;quot;, &amp;quot;min&amp;quot;: 0, &amp;quot;max&amp;quot;: 100}, &amp;quot;@timestamp&amp;quot;: {&amp;quot;type&amp;quot;: &amp;quot;time&amp;quot;, &amp;quot;time_format&amp;quot;: &amp;quot;unix_epoch&amp;quot;} }&#39; {&amp;quot;@timestamp&amp;quot;:1488635130,&amp;quot;os_name&amp;quot;:&amp;quot;linux&amp;quot;,&amp;quot;score&amp;quot;:82} {&amp;quot;@timestamp&amp;quot;:1488635130,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:9} {&amp;quot;@timestamp&amp;quot;:1488635131,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:73} {&amp;quot;@timestamp&amp;quot;:1488635131,&amp;quot;os_name&amp;quot;:&amp;quot;ios&amp;quot;,&amp;quot;score&amp;quot;:50} {&amp;quot;@timestamp&amp;quot;:1488635132,&amp;quot;os_name&amp;quot;:&amp;quot;windows&amp;quot;,&amp;quot;score&amp;quot;:69} .</description>
+    </item>
+    
+    <item>
+      <title>剣を振るVRゲームを作った</title>
+      <link>https://www.sambaiz.net/article/29/</link>
+      <pubDate>Sun, 30 Oct 2016 19:05:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/29/</guid>
+      <description>プレイ動画
+CardboardにAndroidを入れて、
+iPhoneをくくりつけた傘を動かすと、画面の剣も動くのでこれで敵を倒すゲーム。
+実装 剣(iOS) 剣にくくりつけたiPhoneの傾きの値をUnity(Android)に送信している。 iOSはClassic Bluetoothを自由に使えないので、Androidと通信する場合はBLEを使う。 BLEは通常だと20byteしか一度に送れないので、これを超えないよう注意する必要がある。
+BLEで通信するところは
+iOS端末をBLEのPeripheralにする
+で作ったので、端末の傾きを取得して送るだけ。
+import UIKit import CoreMotion class Motion{ let peripheral: BLEPeripheral let accelHandler:CMDeviceMotionHandler let manager = CMMotionManager() public init(peripheral :BLEPeripheral, label :UILabel){ self.peripheral = peripheral accelHandler = { (data: CMDeviceMotion?, error: Error?) -&amp;gt; Void in let str = String(format: &amp;quot;%.1f %.1f %.1f&amp;quot;, arguments: [data!.attitude.pitch * 180 / M_PI, data!.attitude.roll * 180 / M_PI, data!.attitude.yaw * 180 / M_PI] ) let res = peripheral.</description>
+    </item>
+    
   </channel>
 </rss>
