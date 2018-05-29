@@ -6,8 +6,423 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-05-28 23:48:00 &#43;0900 JST</updated>
+    <updated>2018-05-29 22:33:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>IstioでSidecar Envoyを付けるまで</title>
+          <link>https://www.sambaiz.net/article/167/</link>
+          <pubDate>Tue, 29 May 2018 22:33:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/167/</guid>
+          <description>
+
+&lt;h2 id=&#34;istioとは-https-istio-io-docs-concepts-what-is-istio-overview-html&#34;&gt;&lt;a href=&#34;https://istio.io/docs/concepts/what-is-istio/overview.html&#34;&gt;Istioとは&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;サービスが増えるにしたがって複雑になるサービスメッシュ(マイクロサービス間のネットワーク)の、ロードバランシングや認証、モニタリングなどを一手に担うOSS。
+概念は抽象化されていて、Kubernetes以外のサポートも考えられている。&lt;/p&gt;
+
+&lt;h3 id=&#34;envoy-https-istio-io-docs-concepts-what-is-istio-overview-html-envoy&#34;&gt;&lt;a href=&#34;https://istio.io/docs/concepts/what-is-istio/overview.html#envoy&#34;&gt;Envoy&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;Sidecarとしてデプロイされる、サービスメッシュでの全ての通信を通すプロキシ。したがってコードに手を入れる必要がない。
+&lt;a href=&#34;https://www.cncf.io/&#34;&gt;CNCF&lt;/a&gt;のプロジェクトの一つで、
+Istio用に&lt;a href=&#34;https://www.envoyproxy.io/docs/envoy/latest/&#34;&gt;オリジナル&lt;/a&gt;から拡張されている。
+ロードバランシングやヘルスチェックなどを行い、メトリクスを取る。&lt;/p&gt;
+
+&lt;h3 id=&#34;mixer-https-istio-io-docs-concepts-what-is-istio-overview-html-mixer&#34;&gt;&lt;a href=&#34;https://istio.io/docs/concepts/what-is-istio/overview.html#mixer&#34;&gt;Mixer&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;AWSやGCPといったインフラの差異を吸収する。&lt;/p&gt;
+
+&lt;h3 id=&#34;pilot-https-istio-io-docs-concepts-what-is-istio-overview-html-pilot&#34;&gt;&lt;a href=&#34;https://istio.io/docs/concepts/what-is-istio/overview.html#pilot&#34;&gt;Pilot&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;サービスディスカバリしてEnvoyのトラフィックを制御する。A/Bテストやカナリアリリースをする場合や、障害に対応して適切にルーティングを行うことができる。&lt;/p&gt;
+
+&lt;h3 id=&#34;istio-auth-https-istio-io-docs-concepts-what-is-istio-overview-html-istio-auth&#34;&gt;&lt;a href=&#34;https://istio.io/docs/concepts/what-is-istio/overview.html#istio-auth&#34;&gt;Istio-Auth&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;サービスやエンドユーザーの認証を行い、ポリシーに従ってアクセス制御する。&lt;/p&gt;
+
+&lt;h2 id=&#34;istioのインストール-https-istio-io-docs-setup-kubernetes-quick-start-html&#34;&gt;[Istioのインストール]()&lt;a href=&#34;https://istio.io/docs/setup/kubernetes/quick-start.html&#34;&gt;https://istio.io/docs/setup/kubernetes/quick-start.html&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;ローカルのminikubeに環境を作る。
+&lt;code&gt;apiserver.Admission.PluginNames&lt;/code&gt;では立ち上がらなかったので&lt;a href=&#34;https://github.com/kubernetes/minikube/issues/2742&#34;&gt;代わりに&lt;/a&gt;
+&lt;code&gt;apiserver.admission-control&lt;/code&gt;を指定している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ minikube version
+minikube version: v0.27.0
+$ minikube start \
+--extra-config=apiserver.admission-control=&amp;quot;NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota&amp;quot; \
+--kubernetes-version=v1.9.0
+$ kubectl config current-context
+minikube
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最新のistioを持ってきてapplyする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -L https://git.io/getLatestIstio | sh -
+$ cd istio-0.7.1/
+$ kubectl apply -f install/kubernetes/istio-auth.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;作成されたserviceとpodはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get svc -o name -n istio-system
+NAME            TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                                                             AGE
+istio-ingress   LoadBalancer   10.96.175.13     &amp;lt;pending&amp;gt;     80:30562/TCP,443:32026/TCP                                          7m
+istio-mixer     ClusterIP      10.98.182.172    &amp;lt;none&amp;gt;        9091/TCP,15004/TCP,9093/TCP,9094/TCP,9102/TCP,9125/UDP,42422/TCP    7m
+istio-pilot     ClusterIP      10.102.123.144   &amp;lt;none&amp;gt;        15003/TCP,15005/TCP,15007/TCP,15010/TCP,8080/TCP,9093/TCP,443/TCP   7m
+
+$ kubectl get pod -o name -n istio-system
+pods/istio-ca-86f55cc46f-5d6vk
+pods/istio-ingress-868d5f978b-k4z5m
+pods/istio-mixer-65dc5549d6-lh22q
+pods/istio-pilot-657cb5ddf7-g8vc6
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;sidecarが自動で付くようする-https-istio-io-docs-setup-kubernetes-sidecar-injection-html-automatic-sidecar-injection&#34;&gt;&lt;a href=&#34;https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection&#34;&gt;Sidecarが自動で付くようする&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;istio-sidecar-injector&lt;/code&gt;を入れる。これが&lt;a href=&#34;https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#mutatingadmissionwebhook-beta-in-1-9&#34;&gt;MutatingAdmissionWebhook&lt;/a&gt;でsidecarを自動で付け足してくれるらしい。Webhookに証明書が必要。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ./install/kubernetes/webhook-create-signed-cert.sh \
+--service istio-sidecar-injector \
+--namespace istio-system \
+--secret sidecar-injector-certs
+$ kubectl apply -f install/kubernetes/istio-sidecar-injector-configmap-release.yaml
+$ cat install/kubernetes/istio-sidecar-injector.yaml | \
+./install/kubernetes/webhook-patch-ca-bundle.sh &amp;gt; \
+install/kubernetes/istio-sidecar-injector-with-ca-bundle.yaml
+$ kubectl apply -f install/kubernetes/istio-sidecar-injector-with-ca-bundle.yaml
+$ kubectl -n istio-system get deployment -listio=sidecar-injector
+NAME                     DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+istio-sidecar-injector   1         1         1            0           16s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;default namespaceでsidecarが付くようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl label namespace default istio-injection=enabled
+$ kubectl get namespace -L istio-injection
+NAME           STATUS    AGE       ISTIO-INJECTION
+default        Active    25m       enabled
+istio-system   Active    25m       
+kube-public    Active    25m       
+kube-system    Active    25m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;付いていることが確認できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl apply -f samples/sleep/sleep.yaml 
+$ kubectl get pod
+NAME                     READY     STATUS    RESTARTS   AGE
+sleep-776b7bcdcd-z567q   2/2       Running   0          26s
+
+$ kubectl describe pod sleep-776b7bcdcd-z567q
+Containers:
+  sleep:
+    ...
+  istio-proxy:
+    ...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>KaggleのTitanicのチュートリアルをランダムフォレストで解く</title>
+          <link>https://www.sambaiz.net/article/166/</link>
+          <pubDate>Tue, 29 May 2018 09:33:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/166/</guid>
+          <description>
+
+&lt;p&gt;ランダムフォレストはデータや特徴量をランダムにサンプリングして決定木を複数生成しアンサンブル学習する手法。
+決定木なので特徴量の影響が分かりやすく、単一の決定木と比べて過学習を防ぐことができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;train.csv&lt;/code&gt;と&lt;code&gt;test.csv&lt;/code&gt;をKaggleから&lt;a href=&#34;https://www.kaggle.com/c/titanic/data&#34;&gt;ダウンロード&lt;/a&gt;する。
+csvにはタイタニックの乗客者リストが含まれ、&lt;code&gt;test.csv&lt;/code&gt;には生還したかを表す&lt;code&gt;Survived&lt;/code&gt;が抜けている。
+これを予測するのがこのコンペティションの目的だ。&lt;/p&gt;
+
+&lt;p&gt;データのうちFareやAge、Embarkedは入っていないものがあって、これらの欠損値をどう扱うという問題がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;df = pd.read_csv(&#39;./train.csv&#39;)
+print(len(df))
+print(df.isnull().sum())
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;891
+PassengerId      0
+Survived         0
+Pclass           0
+Name             0
+Sex              0
+Age            177
+SibSp            0
+Parch            0
+Ticket           0
+Fare             0
+Cabin          687
+Embarked         2
+dtype: int64
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;連続値をとるFareとAgeは平均を取り、Embarkedは欠損値用の値にしてみた。数値化できないものについては除いている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def preprocess(df):
+    df[&#39;Fare&#39;] = df[&#39;Fare&#39;].fillna(df[&#39;Fare&#39;].mean())
+    df[&#39;Age&#39;] = df[&#39;Age&#39;].fillna(df[&#39;Age&#39;].mean())
+    df[&#39;Embarked&#39;] = df[&#39;Embarked&#39;].fillna(&#39;Unknown&#39;)
+    df[&#39;Sex&#39;] = df[&#39;Sex&#39;].apply(lambda x: 1 if x == &#39;male&#39; else 0)
+    df[&#39;Embarked&#39;] = df[&#39;Embarked&#39;].map( {&#39;S&#39;: 0, &#39;C&#39;: 1, &#39;Q&#39;: 2, &#39;Unknown&#39;: 3} ).astype(int)
+    df = df.drop([&#39;Cabin&#39;,&#39;Name&#39;,&#39;PassengerId&#39;,&#39;Ticket&#39;],axis=1)
+    return df
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;scikit-learnのの&lt;a href=&#34;http://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html&#34;&gt;RandomForestClassifier&lt;/a&gt;で学習させる。
+デフォルトの木の数は10で、特徴量の数はsqrt(n_features)となっている。
+&lt;code&gt;feature_importances_&lt;/code&gt;で各特徴量の重要度を出すことかできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.ensemble import RandomForestClassifier
+import numpy as np
+import csv
+
+def train(df):
+    train_x = df.drop(&#39;Survived&#39;, axis=1)
+    train_y = df.Survived
+    (train_x, test_x ,train_y, test_y) = train_test_split(train_x, train_y, test_size = 0.33, random_state = 42)
+
+    clf = RandomForestClassifier(random_state=0)
+    clf = clf.fit(train_x, train_y)
+    pred = clf.predict(test_x)
+    print(accuracy_score(pred, test_y))
+    
+    features = train_x.columns
+    importances = clf.feature_importances_
+    indices = np.argsort(importances)
+    for i in indices[::-1]:
+        print(&amp;quot;{:&amp;lt;15} {:f}&amp;quot;.format(features[i], importances[i]))
+    return clf
+
+import pandas as pd
+df = pd.read_csv(&#39;./train.csv&#39;)
+df = preprocess(df)
+clf = train(df)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;精度は8割ほどで、AgeとFareの影響が大きいようだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;0.803389830508
+Age             0.267060
+Fare            0.262733
+Sex             0.224451
+Pclass          0.097958
+SibSp           0.058860
+Parch           0.048173
+Embarked        0.040765
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このモデルで予測したSurvivedのcsvを出力してKaggleにアップロードするとスコアと順位が出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;df_test_origin = pd.read_csv(&#39;./test.csv&#39;)
+df_test = preprocess(df_test_origin)
+submit_data =  pd.Series(clf.predict(df_test), name=&#39;Survived&#39;, index=df_test_origin[&#39;PassengerId&#39;])
+submit_data.to_csv(&#39;submit.csv&#39;, header=True)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/166.png&#34; alt=&#34;スコアと順位&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://techblog.gmo-ap.jp/2017/10/02/%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92%E3%81%AE%E5%AE%9F%E8%B7%B5%E5%85%A5%E9%96%80%E3%83%BCrandom-forest%E3%81%AE%E8%A6%81%E7%B4%84/&#34;&gt;機械学習の実践入門ーRandom Forestの要約 | GMOアドパートナーズグループ TECH BLOG byGMO&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.randpy.tokyo/entry/python_random_forest&#34;&gt;【Pythonで決定木 &amp;amp; Random Forest】タイタニックの生存者データを分析してみた - これで無理なら諦めて！世界一やさしいデータ分析教室&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>TerraformでGKEクラスタとBigQueryを立てる</title>
+          <link>https://www.sambaiz.net/article/165/</link>
+          <pubDate>Tue, 29 May 2018 02:33:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/165/</guid>
+          <description>
+
+&lt;p&gt;GKEクラスタからBigQueryを読み書きすることを想定している。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/121/&#34;&gt;TerraformでVPCを管理するmoduleを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/159/&#34;&gt;Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;gke-https-github-com-hashicorp-terraform-guides-tree-master-infrastructure-as-code-k8s-cluster-gke&#34;&gt;&lt;a href=&#34;https://github.com/hashicorp/terraform-guides/tree/master/infrastructure-as-code/k8s-cluster-gke&#34;&gt;GKE&lt;/a&gt;&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/google/r/container_cluster.html&#34;&gt;google_container_cluster&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;oauth_scopeにbigqueryを付けている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;resource &amp;quot;google_container_cluster&amp;quot; &amp;quot;sample&amp;quot; {
+  name               = &amp;quot;${var.cluster_name}&amp;quot;
+  description        = &amp;quot;sample k8s cluster&amp;quot;
+  zone               = &amp;quot;${var.gcp_zone}&amp;quot;
+  initial_node_count = &amp;quot;${var.initial_node_count}&amp;quot;
+
+  master_auth {
+    username = &amp;quot;${var.master_username}&amp;quot;
+    password = &amp;quot;${var.master_password}&amp;quot;
+  }
+
+  node_config {
+    machine_type = &amp;quot;${var.node_machine_type}&amp;quot;
+    disk_size_gb = &amp;quot;${var.node_disk_size}&amp;quot;
+
+    oauth_scopes = [
+      &amp;quot;https://www.googleapis.com/auth/compute&amp;quot;,
+      &amp;quot;https://www.googleapis.com/auth/devstorage.read_only&amp;quot;,
+      &amp;quot;https://www.googleapis.com/auth/logging.write&amp;quot;,
+      &amp;quot;https://www.googleapis.com/auth/monitoring&amp;quot;,
+      &amp;quot;https://www.googleapis.com/auth/bigquery&amp;quot;,
+    ]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;variable &amp;quot;env&amp;quot; {
+  description = &amp;quot;system env&amp;quot;
+}
+variable &amp;quot;gcp_zone&amp;quot; {
+  description = &amp;quot;GCP zone, e.g. us-east1-b&amp;quot;
+  default = &amp;quot;us-east1-b&amp;quot;
+}
+
+variable &amp;quot;cluster_name&amp;quot; {
+  description = &amp;quot;Name of the K8s cluster&amp;quot;
+}
+
+variable &amp;quot;initial_node_count&amp;quot; {
+  description = &amp;quot;Number of worker VMs to initially create&amp;quot;
+  default = 1
+}
+
+variable &amp;quot;master_username&amp;quot; {
+  description = &amp;quot;Username for accessing the Kubernetes master endpoint&amp;quot;
+}
+
+variable &amp;quot;master_password&amp;quot; {
+  description = &amp;quot;Password for accessing the Kubernetes master endpoint&amp;quot;
+}
+
+variable &amp;quot;node_machine_type&amp;quot; {
+  description = &amp;quot;GCE machine type&amp;quot;
+  default = &amp;quot;n1-standard-1&amp;quot;
+}
+
+variable &amp;quot;node_disk_size&amp;quot; {
+  description = &amp;quot;Node disk size in GB&amp;quot;
+  default = &amp;quot;20&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;bigquery&#34;&gt;BigQuery&lt;/h2&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/google/r/bigquery_dataset.html&#34;&gt;google_bigquery_dataset&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/google/r/bigquery_table.html&#34;&gt;google_bigquery_table&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;resource &amp;quot;google_bigquery_dataset&amp;quot; &amp;quot;sample&amp;quot; {
+  dataset_id  = &amp;quot;${var.dataset_id}&amp;quot;
+  description = &amp;quot;sample dataset&amp;quot;
+  location    = &amp;quot;${var.dataset_location}&amp;quot;
+
+  labels {
+    env = &amp;quot;${var.env}&amp;quot;
+  }
+}
+
+resource &amp;quot;google_bigquery_table&amp;quot; &amp;quot;sample&amp;quot; {
+  dataset_id = &amp;quot;${google_bigquery_dataset.sample.dataset_id}&amp;quot;
+  table_id   = &amp;quot;sample&amp;quot;
+  schema     = &amp;quot;${file(&amp;quot;bigquery/sample/schema.json&amp;quot;)}&amp;quot;
+
+  time_partitioning {
+    type  = &amp;quot;DAY&amp;quot;
+  }
+
+  labels {
+    env = &amp;quot;${var.env}&amp;quot;
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;variable &amp;quot;env&amp;quot; {
+  description = &amp;quot;system env&amp;quot;
+}
+
+variable &amp;quot;dataset_id&amp;quot; {
+  description = &amp;quot;dataset ID&amp;quot;
+}
+
+variable &amp;quot;dataset_location&amp;quot; {
+  description = &amp;quot;dataset location one of [US EU]&amp;quot;
+  default     = &amp;quot;US&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;schema.json&lt;/code&gt;はこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;[
+    {
+        &amp;quot;name&amp;quot;: &amp;quot;foo&amp;quot;,
+        &amp;quot;type&amp;quot;: &amp;quot;FLOAT64&amp;quot;,
+        &amp;quot;mode&amp;quot;: &amp;quot;NULLABLE&amp;quot;,
+        &amp;quot;description&amp;quot;: &amp;quot;foo&amp;quot;
+    }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;呼び出し元&#34;&gt;呼び出し元&lt;/h2&gt;
+
+&lt;p&gt;IAMからサービスアカウントを作成し、credentialをダウンロードする。
+backendはgcs。&lt;code&gt;gcloud auth application-default login&lt;/code&gt;で認証しておく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;provider &amp;quot;google&amp;quot; {
+  credentials = &amp;quot;${file(&amp;quot;sample-credentials.json&amp;quot;)}&amp;quot;
+  project     = &amp;quot;sample&amp;quot;
+}
+
+terraform {
+  backend &amp;quot;gcs&amp;quot; {
+    bucket = &amp;quot;sample-tfstate&amp;quot;
+    prefix = &amp;quot;prd&amp;quot;
+  }
+}
+
+module &amp;quot;sample-cluster&amp;quot; {
+  source             = &amp;quot;./gke&amp;quot;
+  gcp_zone           = &amp;quot;us-west1-a&amp;quot;
+  env                = &amp;quot;prd&amp;quot;
+  cluster_name       = &amp;quot;sample&amp;quot;
+  initial_node_count = 1
+  master_username    = &amp;quot;master&amp;quot;
+  master_password    = &amp;quot;ae9fqAwfGefeweV&amp;quot;
+  node_machine_type  = &amp;quot;n1-standard-2&amp;quot;
+  node_disk_size     = &amp;quot;20&amp;quot;
+}
+
+module &amp;quot;sample-bigquery&amp;quot; {
+  source           = &amp;quot;./bigquery/sample&amp;quot;
+  env              = &amp;quot;prd&amp;quot;
+  dataset_id       = &amp;quot;sample&amp;quot;
+  dataset_location = &amp;quot;US&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -858,6 +1273,8 @@ spec:
 &lt;h2 id=&#34;動かす&#34;&gt;動かす&lt;/h2&gt;
 
 &lt;p&gt;BigQueryの権限が付いたGKEのクラスタにデプロイ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/165/&#34;&gt;TerraformでGKEクラスタとBigQueryを立てる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ gcloud container clusters get-credentials &amp;lt;cluster-name&amp;gt; --zone &amp;lt;zone&amp;gt; --project &amp;lt;project-name&amp;gt;
 $ kubectl config current-context
