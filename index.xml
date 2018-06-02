@@ -6,12 +6,85 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-05-29 22:33:00 &#43;0900 JST</updated>
+    <updated>2018-06-02 18:16:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>IstioでSidecar Envoyを付けるまで</title>
+          <title>KaggleのTitanicのチュートリアルをXGBoostで解く</title>
+          <link>https://www.sambaiz.net/article/168/</link>
+          <pubDate>Sat, 02 Jun 2018 18:16:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/168/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;http://xgboost.readthedocs.io/en/latest/&#34;&gt;XGBoost&lt;/a&gt;は高性能なGradient Boostingのライブラリ。
+Boostingというのはアンサンブル学習の種類の一つで、ランダムフォレストのように弱学習器をそれぞれ並列に学習するBaggingに対して、
+前回の結果を引き継ぎながら順番に学習するもの。XGBoostではランダムフォレストと同様に決定木を弱学習器とする。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/166/&#34;&gt;KaggleのTitanicのチュートリアルをランダムフォレストで解く&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pip install xgboost
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;データの前処理はランダムフォレストと同じようにした。
+&lt;a href=&#34;https://github.com/dmlc/xgboost/blob/master/doc/parameter.md#learning-task-parameters&#34;&gt;パラメータ&lt;/a&gt;の
+objective(目的関数)には二値分類なので&lt;code&gt;binary:logistic&lt;/code&gt;を指定し、確率が返るのでroundして結果を出している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import pandas as pd
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+def preprocess(df):
+    df[&#39;Fare&#39;] = df[&#39;Fare&#39;].fillna(df[&#39;Fare&#39;].mean())
+    df[&#39;Age&#39;] = df[&#39;Age&#39;].fillna(df[&#39;Age&#39;].mean())
+    df[&#39;Embarked&#39;] = df[&#39;Embarked&#39;].fillna(&#39;Unknown&#39;)
+    df[&#39;Sex&#39;] = df[&#39;Sex&#39;].apply(lambda x: 1 if x == &#39;male&#39; else 0)
+    df[&#39;Embarked&#39;] = df[&#39;Embarked&#39;].map( {&#39;S&#39;: 0, &#39;C&#39;: 1, &#39;Q&#39;: 2, &#39;Unknown&#39;: 3} ).astype(int)
+    df = df.drop([&#39;Cabin&#39;,&#39;Name&#39;,&#39;PassengerId&#39;,&#39;Ticket&#39;],axis=1)
+    return df
+
+def train(df):
+    train_x = df.drop(&#39;Survived&#39;, axis=1)
+    train_y = df.Survived
+    (train_x, test_x ,train_y, test_y) = train_test_split(train_x, train_y, test_size = 0.6, random_state = 42)
+    dtrain = xgb.DMatrix(train_x, label=train_y)
+    param = {&#39;max_depth&#39;:3, &#39;learning_rate&#39;: 0.6, &#39;objective&#39;:&#39;binary:logistic&#39; }
+    num_round = 2
+    bst = xgb.train(param, dtrain, num_round)
+    preds = bst.predict(xgb.DMatrix(test_x))
+    print(accuracy_score(preds.round(), test_y))
+
+    return bst
+
+def predict(bst, df):
+    return bst.predict(xgb.DMatrix(df))
+
+df = pd.read_csv(&#39;./train.csv&#39;)
+df_test_origin = pd.read_csv(&#39;./test.csv&#39;)
+df = preprocess(df)
+df_test = preprocess(df_test_origin)
+bst = train(df)
+answer = predict(bst, df_test).round().astype(int)
+submit_data =  pd.Series(answer, name=&#39;Survived&#39;, index=df_test_origin[&#39;PassengerId&#39;])
+submit_data.to_csv(&#39;submit2.csv&#39;, header=True)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;精度は&lt;code&gt;0.82&lt;/code&gt;ほど。ランダムフォレストよりちょっと良くなったが、パラメータをチューニングすれば埋まる差かもしれない。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/169.png&#34; alt=&#34;スコアと順位&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.slideshare.net/Retrieva_jp/ss-80724064&#34;&gt;ブースティング入門&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>IstioでEnvoy Proxyを付けるまで</title>
           <link>https://www.sambaiz.net/article/167/</link>
           <pubDate>Tue, 29 May 2018 22:33:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -82,9 +155,9 @@ pods/istio-mixer-65dc5549d6-lh22q
 pods/istio-pilot-657cb5ddf7-g8vc6
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h2 id=&#34;sidecarが自動で付くようする-https-istio-io-docs-setup-kubernetes-sidecar-injection-html-automatic-sidecar-injection&#34;&gt;&lt;a href=&#34;https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection&#34;&gt;Sidecarが自動で付くようする&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id=&#34;envoyが自動で付くようする-https-istio-io-docs-setup-kubernetes-sidecar-injection-html-automatic-sidecar-injection&#34;&gt;&lt;a href=&#34;https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection&#34;&gt;Envoyが自動で付くようする&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;&lt;code&gt;istio-sidecar-injector&lt;/code&gt;を入れる。これが&lt;a href=&#34;https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#mutatingadmissionwebhook-beta-in-1-9&#34;&gt;MutatingAdmissionWebhook&lt;/a&gt;でsidecarを自動で付け足してくれるらしい。Webhookに証明書が必要。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;istio-sidecar-injector&lt;/code&gt;を入れる。これが&lt;a href=&#34;https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#mutatingadmissionwebhook-beta-in-1-9&#34;&gt;MutatingAdmissionWebhook&lt;/a&gt;でEnvoyを自動で付け足してくれるらしい。Webhookに証明書が必要。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ ./install/kubernetes/webhook-create-signed-cert.sh \
 --service istio-sidecar-injector \
@@ -100,7 +173,7 @@ NAME                     DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
 istio-sidecar-injector   1         1         1            0           16s
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;default namespaceでsidecarが付くようにする。&lt;/p&gt;
+&lt;p&gt;default namespaceでEnvoyが付くようにする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl label namespace default istio-injection=enabled
 $ kubectl get namespace -L istio-injection
@@ -138,8 +211,10 @@ Containers:
           <guid>https://www.sambaiz.net/article/166/</guid>
           <description>
 
-&lt;p&gt;ランダムフォレストはデータや特徴量をランダムにサンプリングして決定木を複数生成しアンサンブル学習する手法。
+&lt;p&gt;ランダムフォレストはデータや特徴量をランダムにサンプリングして決定木を複数生成し並列に学習するアンサンブル学習のBaggingという種類の手法。
 決定木なので特徴量の影響が分かりやすく、単一の決定木と比べて過学習を防ぐことができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/168/&#34;&gt;KaggleのTitanicのチュートリアルをXGBoostで解く&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;&lt;code&gt;train.csv&lt;/code&gt;と&lt;code&gt;test.csv&lt;/code&gt;をKaggleから&lt;a href=&#34;https://www.kaggle.com/c/titanic/data&#34;&gt;ダウンロード&lt;/a&gt;する。
 csvにはタイタニックの乗客者リストが含まれ、&lt;code&gt;test.csv&lt;/code&gt;には生還したかを表す&lt;code&gt;Survived&lt;/code&gt;が抜けている。
