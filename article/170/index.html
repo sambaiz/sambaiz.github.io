@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む - sambaiz-net</title>
-    <meta name="twitter:title" content="Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む - sambaiz-net">
-    <meta property='og:title' content="Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む - sambaiz-net">
+    <title>Pandasの操作 - sambaiz-net</title>
+    <meta name="twitter:title" content="Pandasの操作 - sambaiz-net">
+    <meta property='og:title' content="Pandasの操作 - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="docker network">
-      <meta name="twitter:description" content="docker network">
+      <meta name="description" content="Pandas">
+      <meta name="twitter:description" content="Pandas">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/7/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/170/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む | sambaiz-net ",
-    "datePublished": "2016-07-15T00:38:00JST",
-    "dateModified": "2016-07-15T00:38:00JST",
+    "headline": "Pandasの操作 | sambaiz-net ",
+    "datePublished": "2018-06-13T23:47:00JST",
+    "dateModified": "2018-06-13T23:47:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "docker network"
+    "description": "Pandas"
   }
 </script>
 </head>
@@ -103,101 +103,133 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む</h1>
-          <p>(2016-07-15)</p>
-          <pre><code>Docker version 1.12.0-rc2
+          <h1>Pandasの操作</h1>
+          <p>(2018-06-13)</p>
+          
+
+<h2 id="seriesとdataframe">SeriesとDataframe</h2>
+
+<pre><code>import pandas as pd
+
+s = pd.Series([1,3])
+print(s[1]) # 3
+print(s.values) # [1 3] (ndarray)
+
+dates = pd.date_range('2014-11-01 10:00',periods=3, freq='2H')
+print(dates) 
+# DatetimeIndex(['2014-11-01 10:00:00', '2014-11-01 12:00:00', '2014-11-01 14:00:00'], dtype='datetime64[ns]', freq='2H')
+
+datestr = lambda d: pd.to_datetime(d).strftime('%Y-%m-%d %H:%M')
+
+df = pd.DataFrame({
+    'A' : 1.,
+    'B' : pd.Series(range(6),  index=pd.date_range('2014-11-01 10:00',periods=6, freq='H')),
+    'C' : [9, 1, 5],
+}, index=dates)
+
+df2 = pd.DataFrame({
+    'D' : range(3),
+}, index=dates)
+
+print(df)
 </code></pre>
 
-<p>公式ドキュメント<a href="http://docs.docker.jp/engine/userguide/networking/work-with-networks.html">network コマンドを使う</a>
-の内容をまとめてみた。</p>
+<p>|(index)            |A  |B|C|
+|&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-|&mdash;|-|-|
+|2014-11-01 10:00:00|1.0|0|9|
+|2014-11-01 12:00:00|1.0|2|1|
+|2014-11-01 14:00:00|1.0|4|5|</p>
 
-<p>dockerには3つのデフォルトネットワークが存在する。<code>docker run</code>時に<code>--net</code>オプションでネットワークを指定しない限り、
-docker0として表示されるbridgeネットワークにコンテナを接続する。</p>
+<p>indexを指定しないと0始まりの数値になる。</p>
 
-<pre><code>$ docker network ls
-NETWORK ID          NAME                DRIVER              SCOPE
-a3b712537566        bridge              bridge              local               
-f6d86cb54edd        host                host                local               
-33cb30b024d9        none                null                local            
+<h2 id="取得">取得</h2>
+
+<pre><code>print(df['B'].values) # [0 2 4] (列)
+print(df.loc[dates[0]].values) # [ 1.  0.  9.] (行)
+print(df['2014-11-01 11:00:00':'2014-11-01 13:00:00'].values) # [[ 1.  2.  1.]] (index指定で複数行)
+print(len(df[df.C &gt; 3])) # 2 (条件で複数行)
 </code></pre>
 
-<p>ただし、後方互換性を維持するため、デフォルトのbridgeネットワークでは自動的に名前解決が行われない。</p>
+<h2 id="ソート">ソート</h2>
 
-<p>これらのネットワークとは別にユーザー定義のネットワークを作成することもできる。
-単一ホストの<code>bridge</code>ネットワークと、複数ホストにまたがる<code>overlay</code>ネットワークから選択でき、
-何も指定しなかったら<code>bridge</code>になる。<code>subnet</code>を指定しなければ、
-dockerデーモンがネットワークに対してサブネットを自動的に割り当てるが、
-dockerが管理していないサブネットと重複するのを避けるために指定することが推奨されている。</p>
-
-<pre><code>$ docker network create -d bridge --subnet 172.25.0.0/16 isolated_nw
-$ docker network inspect isolated_nw
-$ docker network rm isolated_nw  # 削除
+<pre><code>print(df.sort_index(
+    axis=1, # 行
+    ascending=False # 降順
+).iloc[0].index.values) # ['C' 'B' 'A']
+print(list(map(datestr, df.sort_values(by='C').iloc[:2].index))) # ['2014-11-01 12:00', '2014-11-01 14:00']
 </code></pre>
 
-<p><code>docker network inspect</code>で以下のようなネットワークの情報が得られる。</p>
+<h2 id="結合">結合</h2>
 
-<pre><code>[
-    {
-        &quot;Name&quot;: &quot;isolated_nw&quot;,
-        &quot;Id&quot;: &quot;c81547cf7ed897054ea645192c6c47dcf7a248e77bc8067609becab5330e417d&quot;,
-        &quot;Scope&quot;: &quot;local&quot;,
-        &quot;Driver&quot;: &quot;bridge&quot;,
-        &quot;EnableIPv6&quot;: false,
-        &quot;IPAM&quot;: {
-            &quot;Driver&quot;: &quot;default&quot;,
-            &quot;Options&quot;: {},
-            &quot;Config&quot;: [
-                {
-                    &quot;Subnet&quot;: &quot;172.25.0.0/16&quot;
-                }
-            ]
-        },
-        &quot;Internal&quot;: false,
-        &quot;Containers&quot;: {},
-        &quot;Options&quot;: {},
-        &quot;Labels&quot;: {}
-    }
-]
+<p>indexでjoinする。</p>
+
+<pre><code>print(df.join(df2, how='outer'))
 </code></pre>
 
-<p>起動時に<code>--net</code>オプションでネットワークに接続したり、
-既に存在するコンテナを<code>docker network connect</code>で接続することができる。</p>
+<p>|(index)            |A  |B|C|D|
+|&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-|&mdash;|-|-|-|
+|2014-11-01 10:00:00|1.0|0|9|0|
+|2014-11-01 12:00:00|1.0|2|1|1|
+|2014-11-01 14:00:00|1.0|4|5|2|</p>
 
-<pre><code>$ docker run --net=isolated_nw -itd --name=container1 --link container2:c2 busybox
-$ docker network connect isolated_nw container1
-$ docker network disconnect isolated_nw container1 # 切断
+<p>値でjoinする。</p>
+
+<pre><code>print(pd.merge(df, df2, left_on='C', right_on='D', how='left'))
 </code></pre>
 
-<p>上の<code>run</code>によって同一ネットワークからこのコンテナへ、<code>ping container1</code>が届くようになり、
-このコンテナから同一ネットワークのconteiner2にc2というエイリアスが付くため、<code>ping c2</code>が届くようになる。</p>
+<p>|(index)            |A  |B|C|D  |
+|&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-|&mdash;|-|-|&mdash;|
+|2014-11-01 10:00:00|1.0|0|9|NaN|
+|2014-11-01 12:00:00|1.0|2|1|1.0|
+|2014-11-01 14:00:00|1.0|4|5|NaN|</p>
 
-<pre><code>$ docker attach container1
-# ping c2
-PING c2 (172.25.0.2): 56 data bytes
-64 bytes from 172.25.0.2: seq=0 ttl=64 time=0.094 ms
-...
-CTRL-p CTRL-q
+<h2 id="集計">集計</h2>
+
+<pre><code>print(df.mean().values) # [ 1.  2.  5.]
+print(df.apply(
+    lambda x: x.max(), 
+    axis=0 #  列
+).values) # [ 1.  4.  9.] (=df.max())
 </code></pre>
 
-<p>この設定時点でcontainer2が存在しなかったとしてもエラーにならない。
-また、この<code>--link</code>によるエイリアスは所属するネットワーク全体に適用される。</p>
+<h2 id="加工">加工</h2>
 
-<p>他にrunで指定している<a href="http://docs.docker.jp/engine/reference/commandline/run.html">オプション</a>は以下の通り。
-どれも良く使うもの。</p>
+<p><a href="https://www.sambaiz.net/article/166/">KaggleのTitanicのチュートリアルをランダムフォレストで解く - sambaiz-net</a></p>
 
-<pre><code>-i コンテナの STDIN にアタッチ
--t 疑似ターミナル (pseudo-TTY) を割り当てる
--d コンテナをバックグラウンドで実行し、コンテナIDを表示
+<pre><code>print(df.drop(
+    ['A', 'B'],
+    axis=1 # 行
+)) # 不要なカラムを削除
 </code></pre>
 
-<p><code>--link</code>は、コンテナ内におけるプライベートな名前解決のために、他のコンテナの<code>name</code>に対してエイリアスを付けるものだったが、
-これとは別に同一ネットワークの他のコンテナからの名前解決のために使われる、ネットワーク範囲のエイリアスを<code>--net-alias</code>で付けることができる。
-このエイリアスは同一ネットワークの複数のコンテナで同じものに設定でき、有効ないずれかのコンテナに名前解決される。
-つまり、コンテナが停止するかネットワークから切断されると、同じネットワーク範囲のエイリアスを持った別のコンテナに名前解決されることになる。</p>
+<p>|(index)            |C|
+|&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-|-|
+|2014-11-01 10:00:00|9|
+|2014-11-01 12:00:00|1|
+|2014-11-01 14:00:00|5|</p>
 
-<pre><code>$ docker run --net=isolated_nw -itd --name=container3 --net-alias app busybox
-$ docker run --net=isolated_nw -itd --name=container4 --net-alias app busybox
-$ docker network connect --alias app isolated_nw container5 # connectで指定するとき
+<pre><code>df['D'] = df['C'].shift(1) # Cを一列ずらしたDを追加
+df['D'] = df['D'].fillna(df['D'].mean()).astype(int) # NaNになる1行目はほかの平均で埋める
+print(df)
+</code></pre>
+
+<p>|(index)            |A  |B|C|D|
+|&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-|&mdash;|-|-|-|
+|2014-11-01 10:00:00|1.0|0|9|5|
+|2014-11-01 12:00:00|1.0|2|1|9|
+|2014-11-01 14:00:00|1.0|4|5|1|</p>
+
+<h2 id="ファイル入出力">ファイル入出力</h2>
+
+<pre><code>df.to_csv('df.csv', header=True, index_label='date')
+'''
+date,A,B,C
+2014-11-01 10:00:00,1.0,0,9
+2014-11-01 12:00:00,1.0,2,1
+2014-11-01 14:00:00,1.0,4,5
+'''
+df3 = pd.read_csv('df.csv', index_col=0)
+print(df3.index.values) # ['2014-11-01 10:00:00' '2014-11-01 12:00:00' '2014-11-01 14:00:00']
 </code></pre>
 
         </div>
