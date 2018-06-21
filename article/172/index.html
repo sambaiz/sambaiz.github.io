@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>Node.jsのコードをPrettierでフォーマットしてESLintにかける - sambaiz-net</title>
-    <meta name="twitter:title" content="Node.jsのコードをPrettierでフォーマットしてESLintにかける - sambaiz-net">
-    <meta property='og:title' content="Node.jsのコードをPrettierでフォーマットしてESLintにかける - sambaiz-net">
+    <title>TensorFlowのモデルをsave/loadする - sambaiz-net</title>
+    <meta name="twitter:title" content="TensorFlowのモデルをsave/loadする - sambaiz-net">
+    <meta property='og:title' content="TensorFlowのモデルをsave/loadする - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="コードフォーマッタ">
-      <meta name="twitter:description" content="コードフォーマッタ">
+      <meta name="description" content="SavedModel">
+      <meta name="twitter:description" content="SavedModel">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/139/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/172/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "Node.jsのコードをPrettierでフォーマットしてESLintにかける | sambaiz-net ",
-    "datePublished": "2017-10-19T00:35:00JST",
-    "dateModified": "2017-10-19T00:35:00JST",
+    "headline": "TensorFlowのモデルをsave/loadする | sambaiz-net ",
+    "datePublished": "2018-06-22T01:48:00JST",
+    "dateModified": "2018-06-22T01:48:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "コードフォーマッタ"
+    "description": "SavedModel"
   }
 </script>
 </head>
@@ -103,109 +103,83 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Node.jsのコードをPrettierでフォーマットしてESLintにかける</h1>
-          <p>(2017-10-19)</p>
-          <p><a href="https://github.com/prettier/prettier">Prettier</a>はJSやTSのコードフォーマッタで、
-ReactやBabel、Yarnなどの開発にも使われている。</p>
+          <h1>TensorFlowのモデルをsave/loadする</h1>
+          <p>(2018-06-22)</p>
+          <p><a href="https://www.tensorflow.org/api_docs/python/tf/saved_model/builder/SavedModelBuilder">SavedModelBuilder</a>で
+モデルを言語に依存しない<a href="https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/protobuf/saved_model.proto">SavedModel</a>のprotobufにして保存できる。</p>
 
-<p>今回はPrettierでフォーマットしたものを
-<code>eslint --fix</code>する<a href="https://github.com/prettier/prettier-eslint-cli">prettier-eslint-cli</a>を使う。役割が被っているけどPrettierは<code>eslint --fix</code>よりも強力にフォーマットしてくれるようだ。</p>
+<p><a href="https://www.tensorflow.org/api_docs/python/tf/train/Saver">Saver</a>のcheckpointがVariableの値のみを持つのに対して、
+こちらは単体で復元できる。</p>
 
-<pre><code>$ git init
-$ yarn add --dev eslint eslint-config-google prettier-eslint-cli husky lint-staged
-$ cat .eslintrc.js 
-module.exports = {
-    &quot;extends&quot;: &quot;google&quot;,
-    &quot;parserOptions&quot;: {
-    	&quot;ecmaVersion&quot;: 2017,
-    }
-};
+<p><a href="https://www.sambaiz.net/article/13/">Tensorflowの学習データを使ったAPIを作る - sambaiz-net</a></p>
+
+<pre><code>import tensorflow as tf
+
+def build_signature(signature_inputs, signature_outputs):
+    return tf.saved_model.signature_def_utils.build_signature_def(
+        signature_inputs, signature_outputs,
+        tf.saved_model.signature_constants.REGRESS_METHOD_NAME)
+
+def save(sess, export_dir, signature_def_map):
+    builder = tf.saved_model.builder.SavedModelBuilder(export_dir)
+    builder.add_meta_graph_and_variables(
+          sess, [tf.saved_model.tag_constants.SERVING],
+          signature_def_map=signature_def_map
+    )
+    builder.save()
+
+import shutil
+import os.path
+export_dir = &quot;./saved_model&quot;
+if os.path.exists(export_dir):
+    shutil.rmtree(export_dir)
+    
+with tf.Graph().as_default():
+    a = tf.placeholder(tf.float32, name=&quot;a&quot;)
+    b = tf.placeholder(tf.float32, name=&quot;b&quot;)
+    c = tf.add(a, b, name=&quot;c&quot;)
+
+    v = tf.placeholder(tf.float32, name=&quot;v&quot;)
+    w = tf.Variable(0.0, name=&quot;w&quot;)
+    x = w.assign(tf.add(v, w))
+    
+    sv = tf.train.Supervisor()
+    with sv.managed_session() as sess:
+        print(sess.run(c, feed_dict={a: 1, b: 2})) # 3.0
+        print(sess.run(x, feed_dict={v: 2})) # 2.0
+        print(sess.run(x, feed_dict={v: 3})) # 5.0
+        # https://github.com/tensorflow/tensorflow/issues/11549
+        sess.graph._unsafe_unfinalize()
+        save(sess, export_dir, {
+            &quot;add&quot;: build_signature({
+                &quot;a&quot;: tf.saved_model.utils.build_tensor_info(a),
+                &quot;b&quot;:tf.saved_model.utils.build_tensor_info(b)
+            }, {
+                &quot;c&quot;: tf.saved_model.utils.build_tensor_info(c)
+            }),
+             &quot;accumulate&quot;: build_signature({
+                &quot;v&quot;: tf.saved_model.utils.build_tensor_info(v),
+            }, {
+                &quot;x&quot;: tf.saved_model.utils.build_tensor_info(x)
+            })
+        })
 </code></pre>
 
-<p>対象のコードはこれ。</p>
-
-<pre><code>$ cat src/main.js
-/**
- * hoge function
- */
-function hoge() {
-
-  const f = (aaaaaaaaaaaaaaa, bbbbbbbbbb, ccccccccc, dddddddddddd, eeeeeeeeeeeeee) =&gt;
-    console.log('a');
-
-
-  f(1, 2, 3, 4, 5);
-}
-
-
-hoge();
+<pre><code>$ ls saved_model/
+saved_model.pb  variables
 </code></pre>
 
-<p>Prettierのドキュメントでも紹介されているように<a href="https://github.com/okonet/lint-staged">lint-staged</a>を使うとCommit時にフォーマットし、Lintをかけることができる。</p>
+<p>loadしてsess.runできる。variableの値も保存されている。</p>
 
-<pre><code>{
-  &quot;scripts&quot;: {
-    &quot;precommit&quot;: &quot;lint-staged&quot;,
-    &quot;lint&quot;: &quot;eslint src&quot;,
-    &quot;format&quot;: &quot;prettier-eslint --write \&quot;src/**/*.js\&quot;&quot;
-  },
-  &quot;lint-staged&quot;: {
-    &quot;*.js&quot;: [
-      &quot;prettier-eslint --write&quot;,
-      &quot;eslint&quot;,
-      &quot;git add&quot;
-    ]
-  },
-  &quot;devDependencies&quot;: {
-    &quot;eslint&quot;: &quot;^4.9.0&quot;,
-    &quot;eslint-config-google&quot;: &quot;^0.9.1&quot;,
-    &quot;husky&quot;: &quot;^0.14.3&quot;,
-    &quot;lint-staged&quot;: &quot;^4.2.3&quot;,
-    &quot;prettier-eslint-cli&quot;: &quot;^4.4.0&quot;
-  }
-}
-</code></pre>
-
-<pre><code>$ git commit -m &quot;test&quot;
-husky &gt; npm run -s precommit (node v8.2.1)
-
- ✔ Running tasks for *.js
-[master e325ea3] test
-
-$ cat src/main.js 
-/**
- * hoge function
- */
-function hoge() {
-  const f = (
-    aaaaaaaaaaaaaaa,
-    bbbbbbbbbb,
-    ccccccccc,
-    dddddddddddd,
-    eeeeeeeeeeeeee
-  ) =&gt; console.log('a');
-
-  f(1, 2, 3, 4, 5);
-}
-
-hoge();
-</code></pre>
-
-<p>Prettierは<code>eslint --fix</code>で修正されないmax-lenも良い感じにしてくれる。
-なのでESLintのフォーマットに関するところはほとんど修正いらないはず。</p>
-
-<pre><code>$ git commit -m &quot;test&quot;
-husky &gt; npm run -s precommit (node v8.2.1)
-
- ❯ Running tasks for *.js
-   ✖ eslint --fix
-     git add
-✖ eslint --fix found some errors. Please fix them and try committing again.
-
-***/src/main.js
-  5:1  error  Line 5 exceeds the maximum line length of 80  max-len
-
-✖ 1 problem (1 error, 0 warnings)
+<pre><code>with tf.Graph().as_default():
+    with tf.Session() as sess:
+        meta_graph_def = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], export_dir)
+        print(sess.run(
+            meta_graph_def.signature_def[&quot;accumulate&quot;].outputs[&quot;x&quot;].name, # Assign:0
+            feed_dict={
+                meta_graph_def.signature_def[&quot;accumulate&quot;].inputs[&quot;v&quot;].name: 3, # v:0
+            }
+        )) # 8.0
 </code></pre>
 
         </div>

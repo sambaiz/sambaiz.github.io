@@ -6,8 +6,95 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-06-20 01:00:00 &#43;0900 JST</updated>
+    <updated>2018-06-22 01:48:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>TensorFlowのモデルをsave/loadする</title>
+          <link>https://www.sambaiz.net/article/172/</link>
+          <pubDate>Fri, 22 Jun 2018 01:48:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/172/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/saved_model/builder/SavedModelBuilder&#34;&gt;SavedModelBuilder&lt;/a&gt;で
+モデルを言語に依存しない&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/protobuf/saved_model.proto&#34;&gt;SavedModel&lt;/a&gt;のprotobufにして保存できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/Saver&#34;&gt;Saver&lt;/a&gt;のcheckpointがVariableの値のみを持つのに対して、
+こちらは単体で復元できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/13/&#34;&gt;Tensorflowの学習データを使ったAPIを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import tensorflow as tf
+
+def build_signature(signature_inputs, signature_outputs):
+    return tf.saved_model.signature_def_utils.build_signature_def(
+        signature_inputs, signature_outputs,
+        tf.saved_model.signature_constants.REGRESS_METHOD_NAME)
+
+def save(sess, export_dir, signature_def_map):
+    builder = tf.saved_model.builder.SavedModelBuilder(export_dir)
+    builder.add_meta_graph_and_variables(
+          sess, [tf.saved_model.tag_constants.SERVING],
+          signature_def_map=signature_def_map
+    )
+    builder.save()
+
+import shutil
+import os.path
+export_dir = &amp;quot;./saved_model&amp;quot;
+if os.path.exists(export_dir):
+    shutil.rmtree(export_dir)
+    
+with tf.Graph().as_default():
+    a = tf.placeholder(tf.float32, name=&amp;quot;a&amp;quot;)
+    b = tf.placeholder(tf.float32, name=&amp;quot;b&amp;quot;)
+    c = tf.add(a, b, name=&amp;quot;c&amp;quot;)
+
+    v = tf.placeholder(tf.float32, name=&amp;quot;v&amp;quot;)
+    w = tf.Variable(0.0, name=&amp;quot;w&amp;quot;)
+    x = w.assign(tf.add(v, w))
+    
+    sv = tf.train.Supervisor()
+    with sv.managed_session() as sess:
+        print(sess.run(c, feed_dict={a: 1, b: 2})) # 3.0
+        print(sess.run(x, feed_dict={v: 2})) # 2.0
+        print(sess.run(x, feed_dict={v: 3})) # 5.0
+        # https://github.com/tensorflow/tensorflow/issues/11549
+        sess.graph._unsafe_unfinalize()
+        save(sess, export_dir, {
+            &amp;quot;add&amp;quot;: build_signature({
+                &amp;quot;a&amp;quot;: tf.saved_model.utils.build_tensor_info(a),
+                &amp;quot;b&amp;quot;:tf.saved_model.utils.build_tensor_info(b)
+            }, {
+                &amp;quot;c&amp;quot;: tf.saved_model.utils.build_tensor_info(c)
+            }),
+             &amp;quot;accumulate&amp;quot;: build_signature({
+                &amp;quot;v&amp;quot;: tf.saved_model.utils.build_tensor_info(v),
+            }, {
+                &amp;quot;x&amp;quot;: tf.saved_model.utils.build_tensor_info(x)
+            })
+        })
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls saved_model/
+saved_model.pb  variables
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;loadしてsess.runできる。variableの値も保存されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;with tf.Graph().as_default():
+    with tf.Session() as sess:
+        meta_graph_def = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], export_dir)
+        print(sess.run(
+            meta_graph_def.signature_def[&amp;quot;accumulate&amp;quot;].outputs[&amp;quot;x&amp;quot;].name, # Assign:0
+            feed_dict={
+                meta_graph_def.signature_def[&amp;quot;accumulate&amp;quot;].inputs[&amp;quot;v&amp;quot;].name: 3, # v:0
+            }
+        )) # 8.0
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -2869,6 +2956,8 @@ def make_batch(data, batch_size, num_steps, num_dimensions, name=None):
     ), 
     writeable=False
   )
+  
+  return data[:, :, :-1], data[:, :, 1:]
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h3 id=&#34;モデル&#34;&gt;モデル&lt;/h3&gt;
@@ -24404,6 +24493,14 @@ messageDaoMoc.EXPECT().FindById(message.ID).Return(&amp;amp;message, nil)
 &lt;code&gt;tf.train.Saver().save&lt;/code&gt;でnameで対応するVariableの値が保存できる。&lt;/p&gt;
 
 &lt;p&gt;今回は、学習側、アプリケーション側共にPythonを使うので、以下のようなクラスを作った。&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;追記(2018-06-22): SavedModelでモデルごと保存するとグラフのコードを共有する必要がないし言語にも依存しなくなる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/172/&#34;&gt;TensorFlowのモデルをsave/loadする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;hr /&gt;
 
 &lt;pre&gt;&lt;code&gt;import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
