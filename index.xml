@@ -6,8 +6,230 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-06-22 01:48:00 &#43;0900 JST</updated>
+    <updated>2018-06-23 15:02:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>GKEでのService(ClusterIP/NodePort/LoadBalancer)とIngress</title>
+          <link>https://www.sambaiz.net/article/173/</link>
+          <pubDate>Sat, 23 Jun 2018 15:02:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/173/</guid>
+          <description>
+
+&lt;h2 id=&#34;疎通確認用アプリケーション&#34;&gt;疎通確認用アプリケーション&lt;/h2&gt;
+
+&lt;p&gt;GETでは200を返し、POSTではURLにGETリクエストを送ってステータスコードを返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;encoding/json&amp;quot;
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;io/ioutil&amp;quot;
+	&amp;quot;net/http&amp;quot;
+)
+
+type PostBody struct {
+	URL string `json:&amp;quot;url&amp;quot;`
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		fmt.Fprintln(w, &amp;quot;ok&amp;quot;)
+	} else if r.Method == http.MethodPost {
+		data, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, err.Error())
+			return
+		}
+		p := PostBody{}
+		if err := json.Unmarshal(data, &amp;amp;p); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintln(w, err.Error())
+			return
+		}
+
+		resp, err := http.DefaultClient.Get(p.URL)
+		if err != nil {
+			fmt.Fprintln(w, err.Error())
+			return
+		}
+		defer resp.Body.Close()
+		fmt.Fprintln(w, resp.StatusCode)
+	} else {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func main() {
+	http.HandleFunc(&amp;quot;/&amp;quot;, handler)
+	fmt.Println(&amp;quot;Listen on :8080&amp;quot;)
+	http.ListenAndServe(&amp;quot;:8080&amp;quot;, nil)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM golang:1.10-alpine3.7 AS build-env
+WORKDIR /app
+ADD . /app
+RUN cd /app &amp;amp;&amp;amp; go build -o goapp
+
+FROM alpine:3.7
+RUN apk update &amp;amp;&amp;amp; \
+   apk add ca-certificates &amp;amp;&amp;amp; \
+   update-ca-certificates &amp;amp;&amp;amp; \
+   rm -rf /var/cache/apk/*
+WORKDIR /app
+COPY --from=build-env /app/goapp /app
+EXPOSE 8080
+ENTRYPOINT ./goapp
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t asia.gcr.io/*****/network-checker .
+$ gcloud docker -- push asia.gcr.io/*****/network-checker
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;deploymentとserviceを作成&#34;&gt;DeploymentとServiceを作成&lt;/h2&gt;
+
+&lt;p&gt;ksonnetでマニフェストを生成した。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/171/&#34;&gt;ksonnetでkubernetesのmanifestを環境ごとに生成/applyする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ks init try-service
+$ cd try-service
+$ ks generate deployed-service clusterip-app --image asia.gcr.io/****/network-checker --type ClusterIP
+$ ks generate deployed-service nodeport-app --image asia.gcr.io/l****/network-checker --type NodePort
+$ ks generate deployed-service loadbalancer-app --image asia.gcr.io/****/network-checker --type LoadBalancer
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;containerPortを8080に変更して、PodがPendingしないようにresourcesを絞る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;containers&amp;quot;: [
+  {
+     ...
+     &amp;quot;resources&amp;quot;: {
+        &amp;quot;limits&amp;quot;: {
+           &amp;quot;cpu&amp;quot;: params.cpu,
+           &amp;quot;memory&amp;quot;: params.memory
+        },
+        &amp;quot;requests&amp;quot;: {
+           &amp;quot;cpu&amp;quot;: params.cpu,
+           &amp;quot;memory&amp;quot;: params.memory
+        }
+     }
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ks apply default
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get service
+NAME               TYPE           CLUSTER-IP      EXTERNAL-IP       PORT(S)        AGE
+clusterip-app      ClusterIP      10.11.253.76    &amp;lt;none&amp;gt;            80/TCP         8m
+kubernetes         ClusterIP      10.11.240.1     &amp;lt;none&amp;gt;            443/TCP        3h
+loadbalancer-app   LoadBalancer   10.11.250.126   130.211.166.214   80:32627/TCP   8m
+nodeport-app       NodePort       10.11.253.190   &amp;lt;none&amp;gt;            80:31233/TCP   8m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;loadbalancer&#34;&gt;LoadBalancer&lt;/h3&gt;
+
+&lt;p&gt;L4のNetwork Load Balancerが立ち、ヘルスチェックが通っていればEXTERNAL-IPでそのままアクセスできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/173-l4lb.png&#34; alt=&#34;Network Load Balancer&#34; /&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://clusterip-app&amp;quot;}&#39; http://130.211.166.214/
+200
+
+$ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://nodeport-app&amp;quot;}&#39; http://130.211.166.214/
+200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;nodeport&#34;&gt;NodePort&lt;/h3&gt;
+
+&lt;p&gt;ファイアウォールでポートが開いていないのでそのままではアクセスできない。開けばNodeのIPとnodePortでアクセスできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/173-firewallrule.png&#34; alt=&#34;ファイアウォールのルール&#34; /&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get node -o wide
+NAME                                          STATUS    ROLES     AGE       VERSION         EXTERNAL-IP       OS-IMAGE                             KERNEL-VERSION   CONTAINER-RUNTIME
+gke-test-cluster-default-pool-6601d6a8-07gm   Ready     &amp;lt;none&amp;gt;    53m       v1.8.10-gke.0   130.211.190.139   Container-Optimized OS from Google   4.4.111+         docker://17.3.2
+gke-test-cluster-default-pool-6601d6a8-6881   Ready     &amp;lt;none&amp;gt;    4h        v1.8.10-gke.0   35.224.204.110    Container-Optimized OS from Google   4.4.111+         docker://17.3.2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://clusterip-app&amp;quot;}&#39; 35.224.204.110:31233
+200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ingressを作成&#34;&gt;Ingressを作成&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://kubernetes.io/docs/concepts/services-networking/ingress/&#34;&gt;Ingress&lt;/a&gt;はホストやパスで異なるServiceにルーティングしたり、
+SSLの終端にすることができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;local env = std.extVar(&amp;quot;__ksonnet/environments&amp;quot;);
+local params = std.extVar(&amp;quot;__ksonnet/params&amp;quot;).components[&amp;quot;ingress&amp;quot;];
+[
+  {
+    &amp;quot;apiVersion&amp;quot;: &amp;quot;extensions/v1beta1&amp;quot;,
+    &amp;quot;kind&amp;quot;: &amp;quot;Ingress&amp;quot;,
+    &amp;quot;metadata&amp;quot;: {         
+      &amp;quot;name&amp;quot;: params.name,
+      &amp;quot;annotations&amp;quot;: {
+        &amp;quot;ingress.kubernetes.io/rewrite-target&amp;quot;: &amp;quot;/&amp;quot;
+        // &amp;quot;kubernetes.io/ingress.allow-http&amp;quot;: &amp;quot;false&amp;quot;
+      }
+    },
+    &amp;quot;spec&amp;quot;: {
+      /*
+      &amp;quot;tls: {
+        &amp;quot;secretName&amp;quot;: &amp;quot;&amp;quot;
+      },
+      */
+      // default backend
+      &amp;quot;backend&amp;quot;: {
+        &amp;quot;serviceName&amp;quot;: &amp;quot;nodeport-app&amp;quot;,
+        &amp;quot;servicePort&amp;quot;: 81 // fail to reach app
+      },
+      &amp;quot;rules&amp;quot;: [
+        {
+          &amp;quot;http&amp;quot;: {
+            &amp;quot;paths&amp;quot;: [
+              {
+                &amp;quot;path&amp;quot;: &amp;quot;/aaa&amp;quot;,
+                &amp;quot;backend&amp;quot;: {
+                  &amp;quot;serviceName&amp;quot;: &amp;quot;nodeport-app&amp;quot;,
+                  &amp;quot;servicePort&amp;quot;: 80
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ks apply default -c ingress
+$ kubectl get ingress
+NAME      HOSTS     ADDRESS         PORTS     AGE
+ingress   *         35.241.38.159   80        22m
+
+$ curl 35.241.38.159
+default backend - 404
+
+$ curl 35.241.38.159/aaa
+ok
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;L7のHTTP Load Balancerが立っている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/173-l7lb.png&#34; alt=&#34;HTTP Load Balancer&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -24201,8 +24423,9 @@ test-node-1016577872-h7yiz   0/1       ContainerCreating   0          18s
 
 &lt;h2 id=&#34;serviceを作成してクラスタの外からアクセスできるようにする&#34;&gt;Serviceを作成してクラスタの外からアクセスできるようにする&lt;/h2&gt;
 
-&lt;p&gt;デフォルトではクラスタ内からしかアクセスできない。
-&lt;code&gt;--type=&amp;quot;LoadBalancer&amp;quot;&lt;/code&gt;のServiceを作成するとEXTERNAL_IPが割り当てられ、外からアクセスできるようになる。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;--type=&amp;quot;LoadBalancer&amp;quot;&lt;/code&gt;のServiceを作成すると外からアクセスできるようになる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/173/&#34;&gt;GKEでのService(ClusterIP/NodePort/LoadBalancer)とIngress - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl expose deployment test-node --type=&amp;quot;LoadBalancer&amp;quot;
 $ kubectl get services test-node
