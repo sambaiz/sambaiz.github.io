@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.38.2" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+    <link rel="stylesheet" href="/css/slidebars.min.css">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
+
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@sambaiz">
+    
+    <title>GoのgRPC ServerのInterceptor(recovery/auth/zap/prometheus) - sambaiz-net</title>
+    <meta name="twitter:title" content="GoのgRPC ServerのInterceptor(recovery/auth/zap/prometheus) - sambaiz-net">
+    <meta property='og:title' content="GoのgRPC ServerのInterceptor(recovery/auth/zap/prometheus) - sambaiz-net">
+    <meta property="og:type" content="article">
+    
+      <meta name="description" content="go-grpc-middleware">
+      <meta name="twitter:description" content="go-grpc-middleware">
+    
+    
+
+    <meta property="og:url" content="https://www.sambaiz.net/article/174/">
+    <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
+    <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
+    <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https://www.sambaiz.net/"
+    },
+    "headline": "GoのgRPC ServerのInterceptor(recovery/auth/zap/prometheus) | sambaiz-net ",
+    "datePublished": "2018-06-26T23:50:00JST",
+    "dateModified": "2018-06-26T23:50:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "go-grpc-middleware"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="https://www.sambaiz.net/tags/aws">aws</a></li><li><a href="https://www.sambaiz.net/tags/golang">golang</a></li><li><a href="https://www.sambaiz.net/tags/log">log</a></li><li><a href="https://www.sambaiz.net/tags/unity">unity</a></li><li><a href="https://www.sambaiz.net/tags/fluentd">fluentd</a></li><li><a href="https://www.sambaiz.net/tags/node.js">node.js</a></li><li><a href="https://www.sambaiz.net/tags/kubernetes">kubernetes</a></li><li><a href="https://www.sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="https://www.sambaiz.net/tags/gcp">gcp</a></li><li><a href="https://www.sambaiz.net/tags/infra">infra</a></li><li><a href="https://www.sambaiz.net/tags/machinelearning">machinelearning</a></li><li><a href="https://www.sambaiz.net/tags/web">web</a></li><li><a href="https://www.sambaiz.net/tags/docker">docker</a></li><li><a href="https://www.sambaiz.net/tags/python">python</a></li><li><a href="https://www.sambaiz.net/tags/elasticsearch">elasticsearch</a></li><li><a href="https://www.sambaiz.net/tags/hololens">hololens</a></li><li><a href="https://www.sambaiz.net/tags/lambda">lambda</a></li><li><a href="https://www.sambaiz.net/tags/linux">linux</a></li><li><a href="https://www.sambaiz.net/tags/mysql">mysql</a></li><li><a href="https://www.sambaiz.net/tags/javascript">javascript</a></li><li><a href="https://www.sambaiz.net/tags/ble">ble</a></li><li><a href="https://www.sambaiz.net/tags/product">product</a></li><li><a href="https://www.sambaiz.net/tags/android">android</a></li><li><a href="https://www.sambaiz.net/tags/angular">angular</a></li><li><a href="https://www.sambaiz.net/tags/auth">auth</a></li><li><a href="https://www.sambaiz.net/tags/cron">cron</a></li><li><a href="https://www.sambaiz.net/tags/react">react</a></li><li><a href="https://www.sambaiz.net/tags/terraform">terraform</a></li><li><a href="https://www.sambaiz.net/tags/uwp">uwp</a></li><li><a href="https://www.sambaiz.net/tags/.net">.net</a></li><li><a href="https://www.sambaiz.net/tags/css">css</a></li><li><a href="https://www.sambaiz.net/tags/event">event</a></li><li><a href="https://www.sambaiz.net/tags/firebase">firebase</a></li><li><a href="https://www.sambaiz.net/tags/grpc">grpc</a></li><li><a href="https://www.sambaiz.net/tags/hadoop">hadoop</a></li><li><a href="https://www.sambaiz.net/tags/norikra">norikra</a></li><li><a href="https://www.sambaiz.net/tags/rx">rx</a></li><li><a href="https://www.sambaiz.net/tags/vr">vr</a></li><li><a href="https://www.sambaiz.net/tags/api">api</a></li><li><a href="https://www.sambaiz.net/tags/cdn">cdn</a></li><li><a href="https://www.sambaiz.net/tags/circleci">circleci</a></li><li><a href="https://www.sambaiz.net/tags/compress">compress</a></li><li><a href="https://www.sambaiz.net/tags/crypto">crypto</a></li><li><a href="https://www.sambaiz.net/tags/csharp">csharp</a></li><li><a href="https://www.sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="https://www.sambaiz.net/tags/datadog">datadog</a></li><li><a href="https://www.sambaiz.net/tags/hugo">hugo</a></li><li><a href="https://www.sambaiz.net/tags/ios">ios</a></li><li><a href="https://www.sambaiz.net/tags/istio">istio</a></li><li><a href="https://www.sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="https://www.sambaiz.net/tags/jvm">jvm</a></li><li><a href="https://www.sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="https://www.sambaiz.net/tags/math">math</a></li><li><a href="https://www.sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="https://www.sambaiz.net/tags/scikit-learn">scikit-learn</a></li><li><a href="https://www.sambaiz.net/tags/serialize">serialize</a></li><li><a href="https://www.sambaiz.net/tags/server">server</a></li><li><a href="https://www.sambaiz.net/tags/sonnet">sonnet</a></li><li><a href="https://www.sambaiz.net/tags/spec">spec</a></li><li><a href="https://www.sambaiz.net/tags/statistics">statistics</a></li><li><a href="https://www.sambaiz.net/tags/typescript">typescript</a></li><li><a href="https://www.sambaiz.net/tags/video">video</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="https://www.sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="https://www.sambaiz.net/">sambaiz-net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+      </div>
+    </header>
+
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>GoのgRPC ServerのInterceptor(recovery/auth/zap/prometheus)</h1>
+          <p>(2018-06-26)</p>
+          
+
+<p><a href="https://github.com/grpc-ecosystem/go-grpc-middleware">go-grpc-middleware</a>の</p>
+
+<ul>
+<li><a href="https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/recovery">recovery</a></li>
+<li><a href="https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/auth">auth</a></li>
+<li><a href="https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/logging/zap">zap</a></li>
+<li><a href="https://github.com/grpc-ecosystem/go-grpc-prometheus">prometehus</a></li>
+</ul>
+
+<p>Interceptorの挙動を確認する。</p>
+
+<h2 id="proto">proto</h2>
+
+<p>UnaryとStreamでInterceptor(Middleware)のシグネチャが異なるため、
+UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。</p>
+
+<pre><code>$ cat protos/sample/service.proto
+syntax = &quot;proto3&quot;;
+
+package sample;
+
+message SampleRequest {
+  string sampleInput = 1;
+}
+
+message SampleResponse {
+  string sampleOutput = 1;
+}
+
+service SampleService {
+  rpc SampleUnary (SampleRequest) returns (SampleResponse) {}
+  rpc SampleStream (stream SampleRequest) returns (stream SampleResponse) {}
+}
+
+$ go get -u github.com/golang/protobuf/protoc-gen-go
+$ mkdir go
+$ protoc --go_out=plugins=grpc:./go --proto_path=./protos protos/*/*.proto
+$ ls go/sample
+service.pb.go
+</code></pre>
+
+<h2 id="service">Service</h2>
+
+<p>Unaryの方でcontextからユーザー名を取り出しているのと、
+Streamの方では&rdquo;panic&rdquo;という入力が来たときにpanicになるようにしている。</p>
+
+<pre><code>type sampleService struct{}
+
+type ctxKey string
+
+var ctxKeyUserName = &quot;userNames&quot;
+
+func (s *sampleService) SampleUnary(ctx context.Context, in *sample.SampleRequest) (*sample.SampleResponse, error) {
+	return &amp;sample.SampleResponse{SampleOutput: ctx.Value(ctxKeyUserName).(string)}, nil
+}
+
+func (s *sampleService) SampleStream(stream sample.SampleService_SampleStreamServer) error {
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if in.SampleInput == &quot;panic&quot; {
+			panic(&quot;received panic&quot;)
+		}
+		inputRunes := []rune(in.SampleInput)
+		for i := 0; i &lt; len(inputRunes); i++ {
+			if err := stream.Send(&amp;sample.SampleResponse{
+				SampleOutput: string(inputRunes[i]),
+			}); err != nil {
+				return err
+			}
+		}
+	}
+}
+</code></pre>
+
+<h2 id="server">Server</h2>
+
+<p>NewServerでUnary/StreamそれぞれのInterceptorを登録する。
+prometheusはさらに<a href="https://github.com/grpc-ecosystem/go-grpc-prometheus/blob/v1.2.0/server_metrics.go#L63">EnableHandlingTimeHistogram()</a>してRegisterしている。</p>
+
+<p>zapには<a href="https://github.com/uber-go/zap/blob/v1.8.0/logger.go#L93">NewProduction()</a>のloggerをそのまま渡しているのでログはstderrに<a href="https://github.com/uber-go/zap/blob/7307fae54f855761db01409a36e87fe18ebd8ef4/config.go#L124">出力される</a>。
+これを<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/91d9dda9fdb0440370fd55356f216a6293cbeb95/logging/zap/grpclogger.go#L15">ReplaceGrpcLogger()</a>でも渡しているのでgRPCライブラリ内部のエラーも出る。</p>
+
+<p><a href="https://www.sambaiz.net/article/104/">Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる - sambaiz-net</a></p>
+
+<pre><code>package main
+
+import (
+	&quot;context&quot;
+	&quot;fmt&quot;
+	&quot;io&quot;
+	&quot;math&quot;
+	&quot;net&quot;
+	&quot;net/http&quot;
+
+	&quot;github.com/grpc-ecosystem/go-grpc-middleware&quot;
+	&quot;github.com/grpc-ecosystem/go-grpc-middleware/auth&quot;
+	&quot;github.com/grpc-ecosystem/go-grpc-middleware/logging/zap&quot;
+	&quot;github.com/grpc-ecosystem/go-grpc-middleware/recovery&quot;
+	&quot;github.com/grpc-ecosystem/go-grpc-prometheus&quot;
+	&quot;github.com/sambaiz/grpc-interceptors/go/sample&quot;
+	&quot;github.com/prometheus/client_golang/prometheus/promhttp&quot;
+	&quot;go.uber.org/zap&quot;
+	&quot;google.golang.org/grpc&quot;
+	&quot;google.golang.org/grpc/codes&quot;
+)
+
+func main() {
+	zapLogger, err := zap.NewProduction()
+	if err != nil {
+		panic(err)
+	}
+	grpc_zap.ReplaceGrpcLogger(zapLogger)
+	grpcServer := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			grpc_recovery.StreamServerInterceptor(),
+			grpc_zap.StreamServerInterceptor(zapLogger),
+			grpc_auth.StreamServerInterceptor(auth),
+			grpc_prometheus.StreamServerInterceptor,
+		)),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			grpc_recovery.UnaryServerInterceptor(),
+			grpc_zap.UnaryServerInterceptor(zapLogger),
+			grpc_auth.UnaryServerInterceptor(auth),
+			grpc_prometheus.UnaryServerInterceptor,
+		)),
+		grpc.MaxRecvMsgSize(math.MaxInt32))
+
+	grpc_prometheus.EnableHandlingTimeHistogram()
+	grpc_prometheus.Register(grpcServer)
+	http.Handle(&quot;/metrics&quot;, promhttp.Handler())
+	go func() {
+		if err := http.ListenAndServe(&quot;:8081&quot;, nil); err != nil {
+			panic(err)
+		}
+	}()
+
+	sample.RegisterSampleServiceServer(grpcServer, &amp;sampleService{})
+
+	port := 8080
+	listener, err := net.Listen(&quot;tcp&quot;, fmt.Sprintf(&quot;:%d&quot;, port))
+	if err != nil {
+		return
+	}
+	fmt.Printf(&quot;GRPC server started on :%d\n&quot;, port)
+	grpcServer.Serve(listener)
+}
+</code></pre>
+
+<p>authに渡している関数では<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/v1.0.0/auth/metadata.go#L24">AuthFromMD()</a>でAuthorization headerのトークンを取得しユーザー名に変換してcontextに入れている。</p>
+
+<pre><code>func auth(ctx context.Context) (context.Context, error) {
+	token, err := grpc_auth.AuthFromMD(ctx, &quot;basic&quot;)
+	if err != nil {
+		return nil, err
+	}
+	users := map[string]string{
+		&quot;aaaaaa&quot;: &quot;sam&quot;,
+	}
+	userName, ok := users[token]
+	if !ok {
+		return nil, grpc.Errorf(codes.Unauthenticated, &quot;invalid auth token&quot;)
+	}
+	newCtx := context.WithValue(ctx, ctxKeyUserName, userName)
+	return newCtx, nil
+}
+</code></pre>
+
+<h2 id="client">Client</h2>
+
+<p>UnaryとStreamのRPCにそれぞれリクエストを送る。</p>
+
+<p><a href="https://github.com/grpc/grpc-go/blob/v1.13.0/clientconn.go#L325">WithPerRPCCredentials()</a>でAuthorization headerが渡るようにしている。</p>
+
+<p>prometheusのclientのInterceptorを付けているが、今回はメトリクスを出していないので意味はない。</p>
+
+<pre><code>package main
+
+import (
+	&quot;context&quot;
+	&quot;fmt&quot;
+
+	&quot;github.com/grpc-ecosystem/go-grpc-prometheus&quot;
+	&quot;github.com/sambaiz/grpc-interceptors/go/sample&quot;
+	&quot;google.golang.org/grpc&quot;
+)
+
+type cred struct{}
+
+func (c *cred) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{
+		&quot;authorization&quot;: &quot;basic aaaaaa&quot;,
+	}, nil
+}
+
+func (c *cred) RequireTransportSecurity() bool {
+	return false
+}
+
+func main() {
+	conn, err := grpc.Dial(
+		&quot;localhost:8080&quot;,
+		grpc.WithInsecure(),
+		grpc.WithPerRPCCredentials(&amp;cred{}),
+		grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor),
+		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
+	)
+	if err != nil {
+		panic(err)
+	}
+	client := sample.NewSampleServiceClient(conn)
+
+	fmt.Println(&quot;- Unary -&quot;)
+	unaryResult, err := client.SampleUnary(context.Background(), &amp;sample.SampleRequest{
+		SampleInput: &quot;hello&quot;,
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(unaryResult.SampleOutput)
+	streamClient, err := client.SampleStream(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	defer streamClient.CloseSend()
+
+	fmt.Println(&quot;- Stream -&quot;)
+	if err := streamClient.Send(&amp;sample.SampleRequest{
+		SampleInput: &quot;he&quot;,
+	}); err != nil {
+		panic(err)
+	}
+	if err := streamClient.Send(&amp;sample.SampleRequest{
+		SampleInput: &quot;llo&quot;,
+	}); err != nil {
+		panic(err)
+	}
+	if err := streamClient.Send(&amp;sample.SampleRequest{
+		SampleInput: &quot;panic&quot;,
+	}); err != nil {
+		panic(err)
+	}
+	for {
+		response, err := streamClient.Recv()
+		if err != nil {
+			fmt.Println(err)
+			break
+		} else {
+			fmt.Println(response.SampleOutput)
+		}
+	}
+}
+</code></pre>
+
+<h2 id="実行結果">実行結果</h2>
+
+<p>authによってユーザー名がcontextに入っている。
+recoveryがrecoverしているのでpanicしてもサーバーは落ちていない。</p>
+
+<pre><code>$ go run client.go
+- Unary -
+sam
+- Stream -
+h
+e
+l
+l
+o
+rpc error: code = Internal desc = received panic
+
+$ go run main.go
+- Unary -
+sam
+...
+</code></pre>
+
+<p>zapでログが出ている。</p>
+
+<pre><code>GRPC server started on :8080
+{&quot;level&quot;:&quot;info&quot;,&quot;ts&quot;:1530020624.963142,&quot;caller&quot;:&quot;zap/server_interceptors.go:40&quot;,&quot;msg&quot;:&quot;finished unary call with code OK&quot;,&quot;grpc.start_time&quot;:&quot;2018-06-26T22:43:44+09:00&quot;,&quot;system&quot;:&quot;grpc&quot;,&quot;span.kind&quot;:&quot;server&quot;,&quot;grpc.service&quot;:&quot;sample.SampleService&quot;,&quot;grpc.method&quot;:&quot;SampleUnary&quot;,&quot;grpc.code&quot;:&quot;OK&quot;,&quot;grpc.time_ms&quot;:0.27799999713897705}
+{&quot;level&quot;:&quot;info&quot;,&quot;ts&quot;:1530020624.9652505,&quot;caller&quot;:&quot;zap/grpclogger.go:41&quot;,&quot;msg&quot;:&quot;transport: loopyWriter.run returning. connection error: desc = \&quot;transport is closing\&quot;&quot;,&quot;system&quot;:&quot;grpc&quot;,&quot;grpc_log&quot;:true}
+</code></pre>
+
+<p>prometheusのInterceptorでCounterのメトリクスが追加されている。</p>
+
+<pre><code>grpc_server_handled_total{grpc_code=&quot;OK&quot;,grpc_method=&quot;SampleUnary&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;unary&quot;} 1
+grpc_server_msg_sent_total{grpc_method=&quot;SampleStream&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;bidi_stream&quot;} 5
+</code></pre>
+
+<p><code>EnableHandlingTimeHistogram()</code>でHistogramsのメトリクスも追加されている。</p>
+
+<pre><code>grpc_server_handling_seconds_bucket{grpc_method=&quot;SampleUnary&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;unary&quot;,le=&quot;0.005&quot;} 1
+grpc_server_handling_seconds_bucket{grpc_method=&quot;SampleUnary&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;unary&quot;,le=&quot;0.01&quot;} 1
+grpc_server_handling_seconds_bucket{grpc_method=&quot;SampleUnary&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;unary&quot;,le=&quot;0.025&quot;} 1
+grpc_server_handling_seconds_sum{grpc_method=&quot;SampleStream&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;bidi_stream&quot;} 271.267611998
+grpc_server_handling_seconds_count{grpc_method=&quot;SampleStream&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;bidi_stream&quot;} 1
+</code></pre>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

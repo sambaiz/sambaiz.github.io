@@ -6,10 +6,22 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sat, 23 Jun 2018 15:02:00 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 26 Jun 2018 23:50:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>GoのgRPC ServerのInterceptor(recovery/auth/zap/prometheus)</title>
+      <link>https://www.sambaiz.net/article/174/</link>
+      <pubDate>Tue, 26 Jun 2018 23:50:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/174/</guid>
+      <description>go-grpc-middlewareの
+ recovery auth zap prometehus  Interceptorの挙動を確認する。
+proto UnaryとStreamでInterceptor(Middleware)のシグネチャが異なるため、 UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。
+$ cat protos/sample/service.proto syntax = &amp;quot;proto3&amp;quot;; package sample; message SampleRequest { string sampleInput = 1; } message SampleResponse { string sampleOutput = 1; } service SampleService { rpc SampleUnary (SampleRequest) returns (SampleResponse) {} rpc SampleStream (stream SampleRequest) returns (stream SampleResponse) {} } $ go get -u github.com/golang/protobuf/protoc-gen-go $ mkdir go $ protoc --go_out=plugins=grpc:./go --proto_path=./protos protos/*/*.proto $ ls go/sample service.</description>
+    </item>
     
     <item>
       <title>GKEでのService(ClusterIP/NodePort/LoadBalancer)とIngress</title>
@@ -28,7 +40,7 @@ package main import ( &amp;quot;encoding/json&amp;quot; &amp;quot;fmt&amp;quot; 
       
       <guid>https://www.sambaiz.net/article/172/</guid>
       <description>SavedModelBuilderで モデルを言語に依存しないSavedModelのprotobufにして保存できる。
-SaverのcheckpointがVariableの値のみを持つのに対して、 こちらは単体で復元できる。
+SaverのcheckpointがVariableの値のみを持ち、モデルのコードに依存するのに対して SavedModelは単体で復元できる。
 Tensorflowの学習データを使ったAPIを作る - sambaiz-net
 import tensorflow as tf def build_signature(signature_inputs, signature_outputs): return tf.saved_model.signature_def_utils.build_signature_def( signature_inputs, signature_outputs, tf.saved_model.signature_constants.REGRESS_METHOD_NAME) def save(sess, export_dir, signature_def_map): builder = tf.saved_model.builder.SavedModelBuilder(export_dir) builder.add_meta_graph_and_variables( sess, [tf.saved_model.tag_constants.SERVING], signature_def_map=signature_def_map ) builder.save() import shutil import os.path export_dir = &amp;quot;./saved_model&amp;quot; if os.path.exists(export_dir): shutil.rmtree(export_dir) with tf.Graph().as_default(): a = tf.placeholder(tf.float32, name=&amp;quot;a&amp;quot;) b = tf.placeholder(tf.float32, name=&amp;quot;b&amp;quot;) c = tf.add(a, b, name=&amp;quot;c&amp;quot;) v = tf.placeholder(tf.float32, name=&amp;quot;v&amp;quot;) w = tf.Variable(0.0, name=&amp;quot;w&amp;quot;) x = w.assign(tf.add(v, w)) sv = tf.</description>
     </item>
@@ -2284,7 +2296,7 @@ $ go get -u github.com/labstack/echo  func main() { conn, err := dbr.Open(&amp;q
       <description>チュートリアルのMNISTの学習データを使って、手書き数字画像のデータを受け取り、数字を返すAPIを作る。 コードはここにある。
 学習して結果を保存する 前回の学習結果のチェックポイントファイルを出力する。 tf.train.Saver().saveでnameで対応するVariableの値が保存できる。
 今回は、学習側、アプリケーション側共にPythonを使うので、以下のようなクラスを作った。
-追記(2018-06-22): SavedModelでモデルごと保存するとグラフのコードを共有する必要がないし言語にも依存しなくなる。
+追記(2018-06-22): SavedModelで保存すると、アプリケーション側でモデルのコードを持つ必要がない。
 TensorFlowのモデルをsave/loadする - sambaiz-net
 import tensorflow as tf from tensorflow.examples.tutorials.mnist import input_data class Mnist: def __init__(self): g = tf.Graph() with g.as_default(): W_conv1 = self._weight_variable([5, 5, 1, 32], &amp;quot;W_conv1&amp;quot;) b_conv1 = self._bias_variable([32], &amp;quot;b_conv1&amp;quot;) self._x = tf.placeholder(tf.float32, [None, 784]) x_image = tf.reshape(self._x, [-1,28,28,1]) h_conv1 = tf.nn.relu(self._conv2d(x_image, W_conv1) + b_conv1) h_pool1 = self._max_pool_2x2(h_conv1) W_conv2 = self._weight_variable([5, 5, 32, 64], &amp;quot;W_conv2&amp;quot;) b_conv2 = self._bias_variable([64], &amp;quot;b_conv2&amp;quot;) h_conv2 = tf.</description>
     </item>
@@ -2296,9 +2308,9 @@ import tensorflow as tf from tensorflow.examples.tutorials.mnist import input_da
       
       <guid>https://www.sambaiz.net/article/12/</guid>
       <description>A high performance, open source, general RPC framework that puts mobile and HTTP/2 first.
- What is gRPC? gRPCを使うと、クライアントアプリケーションは直接、ローカルのオブジェクトのように、他のマシンのサーバーアプリケーションのメソッドを呼ぶことができ、 分散したアプリケーションやサービスを簡単に作ることができる。 多くのRPCシステムと同様に、gRPCはサービスを定義し、リモートから呼べるメソッドと、そのパラメーターおよび返り値の型を記述するようになっている。 サーバーサイドではインタフェースを実装し、クライアントからの呼び出しをハンドリングするgRPCサーバーを実行する。 クライアントサイドでは、サーバーと同じメソッドを提供するスタブを持っている。
-gRPCクライアントとサーバーは様々な環境同士でやり取りすることができ、いくつもの言語でサポートされている。 そのため、例えば、gRPCサーバーをJavaで、クライアントをGoやPython、Rubyで作るのも簡単だ。 加えて、最新のGoodle APIにはgRPCのインタフェースが存在するので、これらをアプリケーションに組み込むのも容易にできる。
-Protobuf デフォルトではgRPCはprotobuf(protocol buffers)を使う。 protobufというのは、 Googleによるオープンソースの、構造化されたデータをシリアライズするメカニズムだ。
+ What is gRPC? gRPCを使うと、クライアントアプリケーションは直接ローカルのオブジェクトのように、他のマシンのサーバーアプリケーションのメソッドを呼ぶことができ、 分散したアプリケーションやサービスを簡単に作ることができる。 多くのRPCシステムと同様にgRPCはサービスを定義し、リモートから呼べるメソッドとそのパラメーターおよび返り値の型を記述するようになっている。 サーバーサイドではインタフェースを実装し、クライアントからの呼び出しをハンドリングするgRPCサーバーを実行する。 クライアントサイドではサーバーと同じメソッドを提供するスタブを持っている。
+gRPCクライアントとサーバーは様々な環境同士でやり取りすることができ、いくつもの言語でサポートされている。 そのため例えば、gRPCサーバーをJavaでクライアントをGoやPython、Rubyで作るのも可能だ。 加えて、最新のGoodle APIにはgRPCのインタフェースが存在するので、これらをアプリケーションに組み込むのも容易にできる。
+Protobuf デフォルトではgRPCはprotobuf(protocol buffers)でやり取りする。 protobufというのは、 Googleによるオープンソースの、構造化されたデータをシリアライズフォーマット。
 今回作るのは、同じ文字列を返すだけのEchoサーバーで、コードはここにある。 以下のprotoファイルでは、EchoというサービスはRetEchoというメソッドを含み、 これは文字列sayを含むEchoRequestに対して、文字列retを含むEchoReplyを返すということを表している。
 syntax = &amp;quot;proto3&amp;quot;; option java_package = &amp;quot;net.sambaiz.trygrpc.protos&amp;quot;; package protos; service Echo { rpc RetEcho (EchoRequest) returns (EchoReply) {} } message EchoRequest { string say = 1; } message EchoReply { string ret = 1; }  これをprotocでコンパイルするとecho.</description>
     </item>
