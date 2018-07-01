@@ -6,8 +6,71 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-06-26 23:50:00 &#43;0900 JST</updated>
+    <updated>2018-07-01 23:50:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>TensorFlowのMonitoredSession</title>
+          <link>https://www.sambaiz.net/article/175/</link>
+          <pubDate>Sun, 01 Jul 2018 23:50:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/175/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/MonitoredSession&#34;&gt;MonitoredSession&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;deprecatedになった&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/Supervisor&#34;&gt;Supervisor&lt;/a&gt;の後継。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/MonitoredTrainingSession&#34;&gt;MonitoredTrainingSession&lt;/a&gt;で学習用のMonitoredSessionを生成する。
+このコンストラクタの引数でcheckpoint_dirを渡すと内部で&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/CheckpointSaverHook&#34;&gt;CheckpointSaverHook&lt;/a&gt;が
+&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/monitored_session.py#L396&#34;&gt;追加される&lt;/a&gt;ようになっていて、restoreしたり指定したタイミングでsaveしたりしてくれる。&lt;/p&gt;
+
+&lt;p&gt;なので今回明示的に渡すhookは
+指定したstepに到達したら&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L320&#34;&gt;止めてくれる&lt;/a&gt;、&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/StopAtStepHook&#34;&gt;StopAtStepHook&lt;/a&gt;のみ。&lt;/p&gt;
+
+&lt;p&gt;should_stop()がTrueな状態でsession.run()しようとすると&lt;code&gt;Run called even after should_stop requested.&lt;/code&gt;のエラーが出るため、学習後Accuracyを返すには新しいsessionにする必要がある。&lt;/p&gt;
+
+&lt;p&gt;全体のコードは&lt;a href=&#34;https://gist.github.com/sambaiz/72888520379cff778d6261cd417a3773&#34;&gt;ここ&lt;/a&gt;。
+MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかおかしいかも。
+ハイパーパラメータは軽くベイズ最適化で決めている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/169/&#34;&gt;ベイズ最適化でランダムフォレストとXGBoostの良いハイパーパラメータを探す - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def train(self, learning_rate, variable_default_stddev, bias_default, last_step=800):
+  test_images = self.images[:500]
+  test_labels = self.labels[:500]
+  train_batch = Batch(self.images[500:], self.labels[500:])
+
+  with tf.Graph().as_default():
+    global_step=tf.train.get_or_create_global_step()
+    g = MNIST_CNN(learning_rate,  variable_default_stddev, bias_default).graph()
+    saver = tf.train.Saver()
+    savedir = &#39;./ckpt-{}-{}-{}&#39;.format(learning_rate, variable_default_stddev, bias_default)
+    hooks = [
+      tf.train.StopAtStepHook(last_step=last_step)
+    ]
+    with tf.train.MonitoredTrainingSession(
+      hooks=hooks,
+      checkpoint_dir=savedir,
+      save_checkpoint_secs = 300,
+    ) as sess:
+      sess.run(global_step)
+      while not sess.should_stop():
+        # step = sess.run(global_step)
+        images, labels = train_batch.get_next(500)
+        sess.run(g[&amp;quot;op&amp;quot;][&amp;quot;train_step&amp;quot;], feed_dict={
+          g[&amp;quot;placeholder&amp;quot;][&amp;quot;x&amp;quot;]: list(images), 
+          g[&amp;quot;placeholder&amp;quot;][&amp;quot;y&amp;quot;]: list(labels),
+        })
+    with tf.Session() as sess:
+      self._restore(sess, saver, savedir)
+      return sess.run(g[&amp;quot;op&amp;quot;][&amp;quot;accuracy&amp;quot;], feed_dict={
+        g[&amp;quot;placeholder&amp;quot;][&amp;quot;x&amp;quot;]: list(test_images), 
+        g[&amp;quot;placeholder&amp;quot;][&amp;quot;y&amp;quot;]: list(test_labels)
+      }), savedir
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -967,6 +1030,7 @@ spec:
 &lt;h2 id=&#34;seriesとdataframe&#34;&gt;SeriesとDataframe&lt;/h2&gt;
 
 &lt;pre&gt;&lt;code&gt;import pandas as pd
+import numpy as np
 
 s = pd.Series([1,3])
 print(s[1]) # 3
@@ -1015,6 +1079,11 @@ print(len(df[df.C &amp;gt; 3])) # 2 (条件で複数行)
     ascending=False # 降順
 ).iloc[0].index.values) # [&#39;C&#39; &#39;B&#39; &#39;A&#39;]
 print(list(map(datestr, df.sort_values(by=&#39;C&#39;).iloc[:2].index))) # [&#39;2014-11-01 12:00&#39;, &#39;2014-11-01 14:00&#39;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;takeでランダムに取ってreset_indexで振り直せばシャッフルできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;print(df.take(np.random.permutation(df.index)).reset_index(drop=True))
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;結合&#34;&gt;結合&lt;/h2&gt;
@@ -1457,7 +1526,8 @@ $ kubectl config current-context
 minikube
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;最新のistioを持ってきてapplyする。&lt;/p&gt;
+&lt;p&gt;istioを持ってきてapplyする。
+Helmも用意されていて将来的にそっちで入れるのが推奨になりそうだ。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ curl -L https://git.io/getLatestIstio | sh -
 $ cd istio-0.7.1/
@@ -1480,6 +1550,10 @@ pods/istio-pilot-657cb5ddf7-g8vc6
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;envoyが自動で付くようする-https-istio-io-docs-setup-kubernetes-sidecar-injection-html-automatic-sidecar-injection&#34;&gt;&lt;a href=&#34;https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection&#34;&gt;Envoyが自動で付くようする&lt;/a&gt;&lt;/h2&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;追記(2018-06-30): 0.8.0になってsidecar-injectorはデフォルトで入るようになった&lt;/p&gt;
+&lt;/blockquote&gt;
 
 &lt;p&gt;&lt;code&gt;istio-sidecar-injector&lt;/code&gt;を入れる。これが&lt;a href=&#34;https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#mutatingadmissionwebhook-beta-in-1-9&#34;&gt;MutatingAdmissionWebhook&lt;/a&gt;でEnvoyを自動で付け足してくれるらしい。Webhookに証明書が必要。&lt;/p&gt;
 
@@ -4136,7 +4210,8 @@ sv = tf.train.Supervisor(logdir=FLAGS.save_path)
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/147-tensorboard.png&#34; alt=&#34;summaryの推移&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;グラフのつながりや、各Operationの入出力やそのshapeを確認できる。&lt;/p&gt;
+&lt;p&gt;グラフのつながりや、各Operationの入出力やそのshapeを確認できる。
+name_scopeで分けておくと見やすい。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/147-tensorboard3.png&#34; alt=&#34;グラフ全体&#34; /&gt;&lt;/p&gt;
 
@@ -4531,6 +4606,12 @@ for step in range(model.input.epoch_size):
 
 &lt;p&gt;のラッパー。&lt;/p&gt;
 
+&lt;blockquote&gt;
+&lt;p&gt;追記(2018-07-01): Supervisorはdeprecatedになったので代わりにMonitoredSessionを使うべき。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/175/&#34;&gt;TensorFlowのMonitoredSession - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
 &lt;pre&gt;&lt;code&gt;with tf.Graph().as_default():
   tf.train.import_meta_graph(metagraph)
   for model in models.values():
@@ -4785,7 +4866,7 @@ $ apex logs hello
     
       
         <item>
-          <title>JavaScriptのrequire/import</title>
+          <title>JavaScriptのrequire/importの歴史</title>
           <link>https://www.sambaiz.net/article/143/</link>
           <pubDate>Sat, 11 Nov 2017 20:20:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -14783,13 +14864,14 @@ if(child != null){
     
       
         <item>
-          <title>Node.jsでDateを任意のフォーマットの文字列にする</title>
+          <title>Moment.jsでNode.jsのDateを任意のフォーマットの文字列にする</title>
           <link>https://www.sambaiz.net/article/79/</link>
           <pubDate>Mon, 06 Mar 2017 20:18:00 &#43;0900</pubDate>
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/79/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;http://momentjs.com/&#34;&gt;Moment.js&lt;/a&gt;を使う。
-相対時間(&lt;code&gt;5 years ago&lt;/code&gt;)を出したり、日付の計算(&lt;code&gt;add(3, &#39;days&#39;)&lt;/code&gt;)もできる便利なライブラリ。
+          <description>&lt;p&gt;&lt;a href=&#34;http://momentjs.com/&#34;&gt;Moment.js&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;相対時間(&lt;code&gt;5 years ago&lt;/code&gt;)を出したり、日付の計算(&lt;code&gt;add(3, &#39;days&#39;)&lt;/code&gt;)もできる便利なライブラリ。
 ブラウザでも使える。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm install moment
@@ -14799,6 +14881,20 @@ if(child != null){
 const jst = +9
 let now = moment().utcOffset(jst).format(&amp;quot;YYYY-MM-DD HH:mm:ss.SSSZ&amp;quot;);
 console.log(now);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ TZ=Africa/Ouagadougou node main.js
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;mutableなのでadd()などの操作で元の値が変わってしまうのに注意。
+変わると困る場合clone()する必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;let now2 = moment();
+let now3 = now2.clone();
+console.log(now2);
+console.log(now2.add(1, &#39;days&#39;));
+console.log(now2);
+console.log(now3);
 &lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>
@@ -26035,19 +26131,18 @@ sess = tf.InteractiveSession()
 
 &lt;h3 id=&#34;build-a-multilayer-convolutional-network&#34;&gt;Build a Multilayer Convolutional Network&lt;/h3&gt;
 
-&lt;p&gt;前回のシンプルなモデルでは、あまり良い結果が出なかった。
+&lt;p&gt;前回のシンプルなモデルではあまり良い結果が出なかった。
 そこで、今回はもう少し洗練されたモデル、小さな畳み込みニューラルネットワークを作成する。&lt;/p&gt;
 
 &lt;h3 id=&#34;weight-initialization&#34;&gt;Weight Initialization&lt;/h3&gt;
 
-&lt;p&gt;このモデルを作成するためには、たくさんの重みとバイアスを作成する必要がある。&lt;/p&gt;
-
-&lt;p&gt;重みは、対称性を破り、勾配0を避けるために、少しのノイズで初期化すべきだ。&lt;/p&gt;
-
-&lt;p&gt;また、&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E6%B4%BB%E6%80%A7%E5%8C%96%E9%96%A2%E6%95%B0#ReLU.EF.BC.88.E3.83.A9.E3.83.B3.E3.83.97.E9.96.A2.E6.95.B0.EF.BC.89&#34;&gt;ReLU(Rectified Linear Unit, 正規化線形関数)&lt;/a&gt;ニューロンを使うので、&amp;rdquo;死んだニューロン&amp;rdquo;を避けるためにわずかな正の値のバイアスで初期化すると良い。&lt;/p&gt;
-
-&lt;p&gt;&lt;code&gt;tf.truncated_normal&lt;/code&gt;は&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/api_docs/python/constant_op.html#truncated_normal&#34;&gt;正規分布で、μ±2σ範囲内のランダムな値を返す。&lt;/a&gt;
+&lt;p&gt;勾配が0になるのを避けるために重みの初期化時にノイズを付ける。
+&lt;code&gt;tf.truncated_normal&lt;/code&gt;は&lt;a href=&#34;https://www.tensorflow.org/versions/r0.9/api_docs/python/constant_op.html#truncated_normal&#34;&gt;正規分布で、μ±2σ範囲内のランダムな値を返す&lt;/a&gt;。
 以下の例だと、&lt;code&gt;mean&lt;/code&gt;のデフォルトが0.0なので、正規分布 &lt;code&gt;N(0, 0.01)&lt;/code&gt;の、&lt;code&gt;-0.2&amp;lt;=x&amp;lt;=0.2&lt;/code&gt;な値がランダムに返ることになる。&lt;/p&gt;
+
+&lt;p&gt;また、&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E6%B4%BB%E6%80%A7%E5%8C%96%E9%96%A2%E6%95%B0#ReLU.EF.BC.88.E3.83.A9.E3.83.B3.E3.83.97.E9.96.A2.E6.95.B0.EF.BC.89&#34;&gt;ReLU(Rectified Linear Unit, 正規化線形関数)&lt;/a&gt;ニューロンを使うので、&amp;rdquo;死んだニューロン&amp;rdquo;を避けるために、バイアスは小さな正の値で初期化する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/133/&#34;&gt;ニューラルネットワークと活性化関数 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;def weight_variable(shape):
   initial = tf.truncated_normal(shape, stddev=0.1)
@@ -26060,9 +26155,9 @@ def bias_variable(shape):
 
 &lt;h3 id=&#34;convolution-and-pooling&#34;&gt;Convolution and Pooling&lt;/h3&gt;
 
-&lt;p&gt;TensorFlowは柔軟な畳み込みとプーリングの手続きを提供している。&lt;/p&gt;
+&lt;p&gt;TensorFlowに畳み込みとプーリングの関数が用意されている。&lt;/p&gt;
 
-&lt;p&gt;畳み込みというのは、画像に対してフィルターを少しずつ動かしながら掛けていく処理のことだ。&lt;a href=&#34;http://www.clg.niigata-u.ac.jp/~medimg/practice_medical_imaging/imgproc_scion/4filter/index.htm&#34;&gt;このページ&lt;/a&gt;が分かりやすい。
+&lt;p&gt;畳み込みというのは、画像に対してフィルターを少しずつ動かしながら掛けていく処理のこと。&lt;a href=&#34;http://www.clg.niigata-u.ac.jp/~medimg/practice_medical_imaging/imgproc_scion/4filter/index.htm&#34;&gt;このページ&lt;/a&gt;が分かりやすい。
 例えば、&lt;a href=&#34;https://en.wikipedia.org/wiki/Sobel_operator&#34;&gt;ソーベルフィルタ&lt;/a&gt;で輪郭になっているところを抽出するように、
 フィルターの値によって、その区域における、ある特徴を際立たせたりすることができる。
 今回はこのフィルターが重みとなり、際立たせたいのはその数字を識別するための特徴ということになる。
@@ -26111,7 +26206,7 @@ b_conv1 = bias_variable([32])
 x_image = tf.reshape(x, [-1,28,28,1])
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;これで畳み込めるようになったので、画像と重みを畳み込み、バイアスを足したものにReLUを適用した後、最大プーリングする。&lt;/p&gt;
+&lt;p&gt;これで畳み込めるようになったので画像と重みを畳み込み、バイアスを足したものにReLUを適用した後、最大プーリングする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
 h_pool1 = max_pool_2x2(h_conv1)
@@ -26120,7 +26215,7 @@ h_pool1 = max_pool_2x2(h_conv1)
 &lt;h3 id=&#34;second-convolutional-layer&#34;&gt;Second Convolutional Layer&lt;/h3&gt;
 
 &lt;p&gt;deepネットワークにするために最初のレイヤーのようなものをいくつか重ねる。
-2番目のレイヤーでは64チャンネル出力のフィルターで畳み込みを行い、プーリングする。&lt;/p&gt;
+2番目のレイヤーでは64チャンネル出力のフィルターで畳み込みを行いプーリングする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;W_conv2 = weight_variable([5, 5, 32, 64])
 b_conv2 = bias_variable([64])
@@ -26165,7 +26260,7 @@ y_conv=tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
 &lt;h3 id=&#34;train-and-evaluate-the-model&#34;&gt;Train and Evaluate the Model&lt;/h3&gt;
 
-&lt;p&gt;今回は前回使った&lt;code&gt;GradientDescentOptimizer&lt;/code&gt;よりも洗練されている&lt;code&gt;AdamOptimizer&lt;/code&gt;というのが使われている。&lt;/p&gt;
+&lt;p&gt;今回は前回使った&lt;code&gt;GradientDescentOptimizer&lt;/code&gt;よりも性能が高い&lt;code&gt;AdamOptimizer&lt;/code&gt;というのが使われている。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;y_ = tf.placeholder(tf.float32, [None, 10])
 cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv), reduction_indices=[1]))
