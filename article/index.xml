@@ -12,7 +12,7 @@
     
     
     <item>
-      <title>TensorFlowのMonitoredSession</title>
+      <title>TensorFlowのMonitoredSessionとSessionRunHook</title>
       <link>https://www.sambaiz.net/article/175/</link>
       <pubDate>Sun, 01 Jul 2018 23:50:00 +0900</pubDate>
       
@@ -20,9 +20,9 @@
       <description>MonitoredSession
 deprecatedになったSupervisorの後継。
 MonitoredTrainingSessionで学習用のMonitoredSessionを生成する。 このコンストラクタの引数でcheckpoint_dirを渡すと内部でCheckpointSaverHookが 追加されるようになっていて、restoreしたり指定したタイミングでsaveしたりしてくれる。
-なので今回明示的に渡すhookは 指定したstepに到達したら止めてくれる、StopAtStepHookのみ。
+なので今回明示的に渡すhooksは 指定したstepに到達したら止めてくれる、StopAtStepHookのみ。
 should_stop()がTrueな状態でsession.run()しようとするとRun called even after should_stop requested.のエラーが出るため、学習後Accuracyを返すには新しいsessionにする必要がある。
-全体のコードはここ。 MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかおかしいかも。 ハイパーパラメータは軽くベイズ最適化で決めている。
+全体のコードはここ。 MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかおかしいかも。 ハイパーパラメータは軽くベイズ最適化で決めた。
 ベイズ最適化でランダムフォレストとXGBoostの良いハイパーパラメータを探す - sambaiz-net
 def train(self, learning_rate, variable_default_stddev, bias_default, last_step=800): test_images = self.images[:500] test_labels = self.labels[:500] train_batch = Batch(self.images[500:], self.labels[500:]) with tf.Graph().as_default(): global_step=tf.train.get_or_create_global_step() g = MNIST_CNN(learning_rate, variable_default_stddev, bias_default).graph() saver = tf.train.Saver() savedir = &#39;./ckpt-{}-{}-{}&#39;.format(learning_rate, variable_default_stddev, bias_default) hooks = [ tf.train.StopAtStepHook(last_step=last_step) ] with tf.train.MonitoredTrainingSession( hooks=hooks, checkpoint_dir=savedir, save_checkpoint_secs = 300, ) as sess: sess.run(global_step) while not sess.should_stop(): # step = sess.</description>
     </item>
@@ -33,10 +33,10 @@ def train(self, learning_rate, variable_default_stddev, bias_default, last_step=
       <pubDate>Tue, 26 Jun 2018 23:50:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/174/</guid>
-      <description>go-grpc-middlewareの
+      <description>grpc-goはInterceptor(Middleware)でhandlerの前後で処理を行うことができる。 UnaryとStreamでシグネチャが異なる。
+type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error) type StreamServerInterceptor func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error  func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor { return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) { resp, err := handler(newCtx, req) fmt.Println(resp) return resp, err } }  今回は良く使うgo-grpc-middlewareの
  recovery auth zap prometehus  Interceptorの挙動を確認する。
-proto UnaryとStreamでInterceptor(Middleware)のシグネチャが異なるため、 UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。
-$ cat protos/sample/service.proto syntax = &amp;quot;proto3&amp;quot;; package sample; message SampleRequest { string sampleInput = 1; } message SampleResponse { string sampleOutput = 1; } service SampleService { rpc SampleUnary (SampleRequest) returns (SampleResponse) {} rpc SampleStream (stream SampleRequest) returns (stream SampleResponse) {} } $ go get -u github.com/golang/protobuf/protoc-gen-go $ mkdir go $ protoc --go_out=plugins=grpc:./go --proto_path=./protos protos/*/*.proto $ ls go/sample service.</description>
+proto UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。</description>
     </item>
     
     <item>

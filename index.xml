@@ -11,7 +11,7 @@
     
       
         <item>
-          <title>TensorFlowのMonitoredSession</title>
+          <title>TensorFlowのMonitoredSessionとSessionRunHook</title>
           <link>https://www.sambaiz.net/article/175/</link>
           <pubDate>Sun, 01 Jul 2018 23:50:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -24,14 +24,14 @@
 このコンストラクタの引数でcheckpoint_dirを渡すと内部で&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/CheckpointSaverHook&#34;&gt;CheckpointSaverHook&lt;/a&gt;が
 &lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/monitored_session.py#L396&#34;&gt;追加される&lt;/a&gt;ようになっていて、restoreしたり指定したタイミングでsaveしたりしてくれる。&lt;/p&gt;
 
-&lt;p&gt;なので今回明示的に渡すhookは
+&lt;p&gt;なので今回明示的に渡すhooksは
 指定したstepに到達したら&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L320&#34;&gt;止めてくれる&lt;/a&gt;、&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/StopAtStepHook&#34;&gt;StopAtStepHook&lt;/a&gt;のみ。&lt;/p&gt;
 
 &lt;p&gt;should_stop()がTrueな状態でsession.run()しようとすると&lt;code&gt;Run called even after should_stop requested.&lt;/code&gt;のエラーが出るため、学習後Accuracyを返すには新しいsessionにする必要がある。&lt;/p&gt;
 
 &lt;p&gt;全体のコードは&lt;a href=&#34;https://gist.github.com/sambaiz/72888520379cff778d6261cd417a3773&#34;&gt;ここ&lt;/a&gt;。
 MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかおかしいかも。
-ハイパーパラメータは軽くベイズ最適化で決めている。&lt;/p&gt;
+ハイパーパラメータは軽くベイズ最適化で決めた。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/169/&#34;&gt;ベイズ最適化でランダムフォレストとXGBoostの良いハイパーパラメータを探す - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
@@ -68,6 +68,74 @@ MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかお
         g[&amp;quot;placeholder&amp;quot;][&amp;quot;y&amp;quot;]: list(test_labels)
       }), savedir
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;hooksに渡す&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/session_run_hook.py#L103&#34;&gt;SessionRunHook&lt;/a&gt;は以下のメソッドからなる。
+&lt;code&gt;before_run()&lt;/code&gt;で返すSessionRunArgsのfeed_dictは&lt;code&gt;sess.run()&lt;/code&gt;で渡すfeed_dictとmergeされ、
+fetchesは&lt;code&gt;sess.run()&lt;/code&gt;するたびに毎回評価される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class MySessionRunHook:
+  def __init__(self, feed_dict):
+    self.feed_dict = feed_dict
+    self.a = tf.placeholder(tf.float32, name=&amp;quot;a&amp;quot;)
+      
+  def begin(self):
+    &amp;quot;&amp;quot;&amp;quot;Called once before using the session.&amp;quot;&amp;quot;&amp;quot;
+    print(&amp;quot;begin&amp;quot;)
+
+  def after_create_session(self, session, coord):
+    &amp;quot;&amp;quot;&amp;quot;Called when new TensorFlow session is created.&amp;quot;&amp;quot;&amp;quot;
+    print(&amp;quot;after_create_session&amp;quot;)
+      
+  def before_run(self, run_context):
+    &amp;quot;&amp;quot;&amp;quot;Called before each call to run().&amp;quot;&amp;quot;&amp;quot;
+    return SessionRunArgs(fetches={&amp;quot;a&amp;quot;: self.a}, feed_dict=self.feed_dict)
+  
+  def after_run(self, run_context, run_values):
+    &amp;quot;&amp;quot;&amp;quot;Called after each call to run().&amp;quot;&amp;quot;&amp;quot;
+    print(&amp;quot;after_run {} {}&amp;quot;.format(run_values.results[&amp;quot;a&amp;quot;], run_context.session.run(self.a, feed_dict={self.a: 10})))
+
+  def end(self, session):
+    &amp;quot;&amp;quot;&amp;quot;Called at the end of session.&amp;quot;&amp;quot;&amp;quot;
+    print(&amp;quot;end&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;したがって、hooks内のfetchesにfeedする必要があるものが含まれる場合、
+&lt;code&gt;sess.run()&lt;/code&gt;する対象がfeedする必要がない場合でも&lt;code&gt;You must feed a value for placeholder tensor&lt;/code&gt;のエラーが出ることになる。
+また、hooks内とrunの引数のfeed_dictが衝突した場合もエラーになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;with tf.Graph().as_default():
+  global_step = tf.train.get_or_create_global_step()
+  x = tf.placeholder(tf.float32, name=&amp;quot;x&amp;quot;)
+  y = tf.placeholder(tf.float32, name=&amp;quot;y&amp;quot;)
+  z = x + y
+  hook1 = MySessionRunHook({x: 2})
+  hook2 = MySessionRunHook({y: 3})
+  hooks=[hook1, hook2]
+  with tf.train.MonitoredTrainingSession(hooks=hooks) as sess:
+    try:
+      print(sess.run(global_step))
+    except tf.errors.InvalidArgumentError as err:
+      print(err) # You must feed a value for placeholder tensor &#39;a_1&#39; with dtype float ...
+    print(sess.run([global_step, z], feed_dict={hook1.a: 2, hook2.a: 3})) # [0, 5.0]
+    try:
+      print(sess.run(y, feed_dict={x: 10}))
+    except RuntimeError as err:
+      print(err) # Same tensor is fed by a SessionRunHook and user. Conflict(s): [&amp;lt;tf.Tensor &#39;x:0&#39; shape=&amp;lt;unknown&amp;gt; dtype=float32&amp;gt;]     
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上で書いたようにMonitoredTrainingSessionは内部でCheckpointSaverHookを持っていて、
+これがfetchesでsummaryを&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L689&#34;&gt;返している&lt;/a&gt;ので、一つでもsummaryを入れると&lt;code&gt;sess.run()&lt;/code&gt;するときにそれに必要なfeed_dictを渡さないとエラーになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;with tf.Graph().as_default():
+  global_step = tf.train.get_or_create_global_step()
+  x = tf.placeholder(tf.float32, name=&amp;quot;x&amp;quot;)
+  y = tf.placeholder(tf.float32, name=&amp;quot;y&amp;quot;)
+  z = x + y
+  tf.summary.scalar(&amp;quot;z&amp;quot;, z)
+  with tf.train.MonitoredTrainingSession(checkpoint_dir=&amp;quot;./aaa&amp;quot;, save_summaries_steps=1) as sess:
+    # sess.run(global_step) =&amp;gt; You must feed a value for placeholder tensor &#39;y&#39; with dtype float
+    step, zz = print(sess.run([global_step, z], feed_dict={x: 10, y:20})) # ok
+&lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>
       
@@ -81,7 +149,23 @@ MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかお
           <guid>https://www.sambaiz.net/article/174/</guid>
           <description>
 
-&lt;p&gt;&lt;a href=&#34;https://github.com/grpc-ecosystem/go-grpc-middleware&#34;&gt;go-grpc-middleware&lt;/a&gt;の&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/grpc/grpc-go&#34;&gt;grpc-go&lt;/a&gt;はInterceptor(Middleware)でhandlerの前後で処理を行うことができる。
+UnaryとStreamで&lt;a href=&#34;https://github.com/grpc/grpc-go/blob/master/interceptor.go#L60&#34;&gt;シグネチャ&lt;/a&gt;が異なる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
+type StreamServerInterceptor func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
+    return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+        resp, err := handler(newCtx, req)
+        fmt.Println(resp)
+        return resp, err
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回は良く使う&lt;a href=&#34;https://github.com/grpc-ecosystem/go-grpc-middleware&#34;&gt;go-grpc-middleware&lt;/a&gt;の&lt;/p&gt;
 
 &lt;ul&gt;
 &lt;li&gt;&lt;a href=&#34;https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/recovery&#34;&gt;recovery&lt;/a&gt;&lt;/li&gt;
@@ -94,8 +178,7 @@ MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかお
 
 &lt;h2 id=&#34;proto&#34;&gt;proto&lt;/h2&gt;
 
-&lt;p&gt;UnaryとStreamでInterceptor(Middleware)のシグネチャが異なるため、
-UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。&lt;/p&gt;
+&lt;p&gt;UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat protos/sample/service.proto
 syntax = &amp;quot;proto3&amp;quot;;
@@ -235,7 +318,7 @@ func main() {
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;authに渡している関数では&lt;a href=&#34;https://github.com/grpc-ecosystem/go-grpc-middleware/blob/v1.0.0/auth/metadata.go#L24&#34;&gt;AuthFromMD()&lt;/a&gt;でAuthorization headerのトークンを取得しユーザー名に変換してcontextに入れている。&lt;/p&gt;
+&lt;p&gt;authに渡している関数では&lt;a href=&#34;https://github.com/grpc-ecosystem/go-grpc-middleware/blob/v1.0.0/auth/metadata.go#L24&#34;&gt;AuthFromMD()&lt;/a&gt;でmetadataのAuthorization headerのトークンを取得しユーザー名に変換してcontextに入れている。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;func auth(ctx context.Context) (context.Context, error) {
 	token, err := grpc_auth.AuthFromMD(ctx, &amp;quot;basic&amp;quot;)
@@ -258,7 +341,7 @@ func main() {
 
 &lt;p&gt;UnaryとStreamのRPCにそれぞれリクエストを送る。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://github.com/grpc/grpc-go/blob/v1.13.0/clientconn.go#L325&#34;&gt;WithPerRPCCredentials()&lt;/a&gt;でAuthorization headerが渡るようにしている。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://github.com/grpc/grpc-go/blob/v1.13.0/clientconn.go#L325&#34;&gt;WithPerRPCCredentials()&lt;/a&gt;でAuthorization headerがmetadataとして渡るようにしている。&lt;/p&gt;
 
 &lt;p&gt;prometheusのclientのInterceptorを付けているが、今回はメトリクスを出していないので意味はない。&lt;/p&gt;
 

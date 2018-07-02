@@ -15,9 +15,9 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>TensorFlowのMonitoredSession - sambaiz-net</title>
-    <meta name="twitter:title" content="TensorFlowのMonitoredSession - sambaiz-net">
-    <meta property='og:title' content="TensorFlowのMonitoredSession - sambaiz-net">
+    <title>TensorFlowのMonitoredSessionとSessionRunHook - sambaiz-net</title>
+    <meta name="twitter:title" content="TensorFlowのMonitoredSessionとSessionRunHook - sambaiz-net">
+    <meta property='og:title' content="TensorFlowのMonitoredSessionとSessionRunHook - sambaiz-net">
     <meta property="og:type" content="article">
     
       <meta name="description" content="MonitoredSession">
@@ -38,7 +38,7 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "TensorFlowのMonitoredSession | sambaiz-net ",
+    "headline": "TensorFlowのMonitoredSessionとSessionRunHook | sambaiz-net ",
     "datePublished": "2018-07-01T23:50:00JST",
     "dateModified": "2018-07-01T23:50:00JST",
     "author": {
@@ -103,7 +103,7 @@
 
       <article class="single">
         <div class="single body">
-          <h1>TensorFlowのMonitoredSession</h1>
+          <h1>TensorFlowのMonitoredSessionとSessionRunHook</h1>
           <p>(2018-07-01)</p>
           <p><a href="https://www.tensorflow.org/api_docs/python/tf/train/MonitoredSession">MonitoredSession</a></p>
 
@@ -113,14 +113,14 @@
 このコンストラクタの引数でcheckpoint_dirを渡すと内部で<a href="https://www.tensorflow.org/api_docs/python/tf/train/CheckpointSaverHook">CheckpointSaverHook</a>が
 <a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/monitored_session.py#L396">追加される</a>ようになっていて、restoreしたり指定したタイミングでsaveしたりしてくれる。</p>
 
-<p>なので今回明示的に渡すhookは
+<p>なので今回明示的に渡すhooksは
 指定したstepに到達したら<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L320">止めてくれる</a>、<a href="https://www.tensorflow.org/api_docs/python/tf/train/StopAtStepHook">StopAtStepHook</a>のみ。</p>
 
 <p>should_stop()がTrueな状態でsession.run()しようとすると<code>Run called even after should_stop requested.</code>のエラーが出るため、学習後Accuracyを返すには新しいsessionにする必要がある。</p>
 
 <p>全体のコードは<a href="https://gist.github.com/sambaiz/72888520379cff778d6261cd417a3773">ここ</a>。
 MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかおかしいかも。
-ハイパーパラメータは軽くベイズ最適化で決めている。</p>
+ハイパーパラメータは軽くベイズ最適化で決めた。</p>
 
 <p><a href="https://www.sambaiz.net/article/169/">ベイズ最適化でランダムフォレストとXGBoostの良いハイパーパラメータを探す - sambaiz-net</a></p>
 
@@ -156,6 +156,74 @@ MNISTのシンプルなCNNなんだけど、精度が出ないのでどこかお
         g[&quot;placeholder&quot;][&quot;x&quot;]: list(test_images), 
         g[&quot;placeholder&quot;][&quot;y&quot;]: list(test_labels)
       }), savedir
+</code></pre>
+
+<p>hooksに渡す<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/session_run_hook.py#L103">SessionRunHook</a>は以下のメソッドからなる。
+<code>before_run()</code>で返すSessionRunArgsのfeed_dictは<code>sess.run()</code>で渡すfeed_dictとmergeされ、
+fetchesは<code>sess.run()</code>するたびに毎回評価される。</p>
+
+<pre><code>class MySessionRunHook:
+  def __init__(self, feed_dict):
+    self.feed_dict = feed_dict
+    self.a = tf.placeholder(tf.float32, name=&quot;a&quot;)
+      
+  def begin(self):
+    &quot;&quot;&quot;Called once before using the session.&quot;&quot;&quot;
+    print(&quot;begin&quot;)
+
+  def after_create_session(self, session, coord):
+    &quot;&quot;&quot;Called when new TensorFlow session is created.&quot;&quot;&quot;
+    print(&quot;after_create_session&quot;)
+      
+  def before_run(self, run_context):
+    &quot;&quot;&quot;Called before each call to run().&quot;&quot;&quot;
+    return SessionRunArgs(fetches={&quot;a&quot;: self.a}, feed_dict=self.feed_dict)
+  
+  def after_run(self, run_context, run_values):
+    &quot;&quot;&quot;Called after each call to run().&quot;&quot;&quot;
+    print(&quot;after_run {} {}&quot;.format(run_values.results[&quot;a&quot;], run_context.session.run(self.a, feed_dict={self.a: 10})))
+
+  def end(self, session):
+    &quot;&quot;&quot;Called at the end of session.&quot;&quot;&quot;
+    print(&quot;end&quot;)
+</code></pre>
+
+<p>したがって、hooks内のfetchesにfeedする必要があるものが含まれる場合、
+<code>sess.run()</code>する対象がfeedする必要がない場合でも<code>You must feed a value for placeholder tensor</code>のエラーが出ることになる。
+また、hooks内とrunの引数のfeed_dictが衝突した場合もエラーになる。</p>
+
+<pre><code>with tf.Graph().as_default():
+  global_step = tf.train.get_or_create_global_step()
+  x = tf.placeholder(tf.float32, name=&quot;x&quot;)
+  y = tf.placeholder(tf.float32, name=&quot;y&quot;)
+  z = x + y
+  hook1 = MySessionRunHook({x: 2})
+  hook2 = MySessionRunHook({y: 3})
+  hooks=[hook1, hook2]
+  with tf.train.MonitoredTrainingSession(hooks=hooks) as sess:
+    try:
+      print(sess.run(global_step))
+    except tf.errors.InvalidArgumentError as err:
+      print(err) # You must feed a value for placeholder tensor 'a_1' with dtype float ...
+    print(sess.run([global_step, z], feed_dict={hook1.a: 2, hook2.a: 3})) # [0, 5.0]
+    try:
+      print(sess.run(y, feed_dict={x: 10}))
+    except RuntimeError as err:
+      print(err) # Same tensor is fed by a SessionRunHook and user. Conflict(s): [&lt;tf.Tensor 'x:0' shape=&lt;unknown&gt; dtype=float32&gt;]     
+</code></pre>
+
+<p>上で書いたようにMonitoredTrainingSessionは内部でCheckpointSaverHookを持っていて、
+これがfetchesでsummaryを<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L689">返している</a>ので、一つでもsummaryを入れると<code>sess.run()</code>するときにそれに必要なfeed_dictを渡さないとエラーになる。</p>
+
+<pre><code>with tf.Graph().as_default():
+  global_step = tf.train.get_or_create_global_step()
+  x = tf.placeholder(tf.float32, name=&quot;x&quot;)
+  y = tf.placeholder(tf.float32, name=&quot;y&quot;)
+  z = x + y
+  tf.summary.scalar(&quot;z&quot;, z)
+  with tf.train.MonitoredTrainingSession(checkpoint_dir=&quot;./aaa&quot;, save_summaries_steps=1) as sess:
+    # sess.run(global_step) =&gt; You must feed a value for placeholder tensor 'y' with dtype float
+    step, zz = print(sess.run([global_step, z], feed_dict={x: 10, y:20})) # ok
 </code></pre>
 
         </div>

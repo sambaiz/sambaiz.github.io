@@ -107,7 +107,23 @@
           <p>(2018-06-26)</p>
           
 
-<p><a href="https://github.com/grpc-ecosystem/go-grpc-middleware">go-grpc-middleware</a>の</p>
+<p><a href="https://github.com/grpc/grpc-go">grpc-go</a>はInterceptor(Middleware)でhandlerの前後で処理を行うことができる。
+UnaryとStreamで<a href="https://github.com/grpc/grpc-go/blob/master/interceptor.go#L60">シグネチャ</a>が異なる。</p>
+
+<pre><code>type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
+type StreamServerInterceptor func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error
+</code></pre>
+
+<pre><code>func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
+    return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+        resp, err := handler(newCtx, req)
+        fmt.Println(resp)
+        return resp, err
+	}
+}
+</code></pre>
+
+<p>今回は良く使う<a href="https://github.com/grpc-ecosystem/go-grpc-middleware">go-grpc-middleware</a>の</p>
 
 <ul>
 <li><a href="https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/recovery">recovery</a></li>
@@ -120,8 +136,7 @@
 
 <h2 id="proto">proto</h2>
 
-<p>UnaryとStreamでInterceptor(Middleware)のシグネチャが異なるため、
-UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。</p>
+<p>UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。</p>
 
 <pre><code>$ cat protos/sample/service.proto
 syntax = &quot;proto3&quot;;
@@ -261,7 +276,7 @@ func main() {
 }
 </code></pre>
 
-<p>authに渡している関数では<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/v1.0.0/auth/metadata.go#L24">AuthFromMD()</a>でAuthorization headerのトークンを取得しユーザー名に変換してcontextに入れている。</p>
+<p>authに渡している関数では<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/v1.0.0/auth/metadata.go#L24">AuthFromMD()</a>でmetadataのAuthorization headerのトークンを取得しユーザー名に変換してcontextに入れている。</p>
 
 <pre><code>func auth(ctx context.Context) (context.Context, error) {
 	token, err := grpc_auth.AuthFromMD(ctx, &quot;basic&quot;)
@@ -284,7 +299,7 @@ func main() {
 
 <p>UnaryとStreamのRPCにそれぞれリクエストを送る。</p>
 
-<p><a href="https://github.com/grpc/grpc-go/blob/v1.13.0/clientconn.go#L325">WithPerRPCCredentials()</a>でAuthorization headerが渡るようにしている。</p>
+<p><a href="https://github.com/grpc/grpc-go/blob/v1.13.0/clientconn.go#L325">WithPerRPCCredentials()</a>でAuthorization headerがmetadataとして渡るようにしている。</p>
 
 <p>prometheusのclientのInterceptorを付けているが、今回はメトリクスを出していないので意味はない。</p>
 
