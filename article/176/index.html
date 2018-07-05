@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>JenkinsのMultiple SCMs PluginからPipeline Pluginへの移行 - sambaiz-net</title>
-    <meta name="twitter:title" content="JenkinsのMultiple SCMs PluginからPipeline Pluginへの移行 - sambaiz-net">
-    <meta property='og:title' content="JenkinsのMultiple SCMs PluginからPipeline Pluginへの移行 - sambaiz-net">
+    <title>DOMの(next/previous)SiblingとElementSiblingの値 - sambaiz-net</title>
+    <meta name="twitter:title" content="DOMの(next/previous)SiblingとElementSiblingの値 - sambaiz-net">
+    <meta property='og:title' content="DOMの(next/previous)SiblingとElementSiblingの値 - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="Jenkins">
-      <meta name="twitter:description" content="Jenkins">
+      <meta name="description" content="Elementを忘れると意図しないtext nodeが取れる">
+      <meta name="twitter:description" content="Elementを忘れると意図しないtext nodeが取れる">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/16/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/176/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "JenkinsのMultiple SCMs PluginからPipeline Pluginへの移行 | sambaiz-net ",
-    "datePublished": "2016-08-20T16:18:00JST",
-    "dateModified": "2016-08-20T16:18:00JST",
+    "headline": "DOMの(next/previous)SiblingとElementSiblingの値 | sambaiz-net ",
+    "datePublished": "2018-07-04T23:40:00JST",
+    "dateModified": "2018-07-04T23:40:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Jenkins"
+    "description": "Elementを忘れると意図しないtext nodeが取れる"
   }
 </script>
 </head>
@@ -103,36 +103,58 @@
 
       <article class="single">
         <div class="single body">
-          <h1>JenkinsのMultiple SCMs PluginからPipeline Pluginへの移行</h1>
-          <p>(2016-08-20)</p>
-          <p>Jenkins環境を作り直すことになり、
-長らく使ってきた<a href="https://wiki.jenkins-ci.org/display/JENKINS/Multiple+SCMs+Plugin">Multiple SCMs Plugin</a>がDeprecatedなので、
-<a href="https://wiki.jenkins-ci.org/display/JENKINS/Pipeline+Plugin">Pipeline Plugin</a>に移行することにした。</p>
+          <h1>DOMの(next/previous)SiblingとElementSiblingの値</h1>
+          <p>(2018-07-04)</p>
+          
 
-<p>プラグインをインストールすると、ジョブ作成時にPipelineを選択できるようになる。
-Pipeline scriptの複数リポジトリを指定するところはこんな感じ。</p>
+<p>Siblingは兄弟姉妹という意味</p>
 
-<pre><code>node {
-   stage 'Checkout rep1'
-   git([url: 'git@rep1.git', branch: REP1_BRANCH])
+<pre><code>&lt;ul&gt;
+&lt;li&gt;1&lt;/li&gt;
+&lt;li id=&quot;li2&quot;&gt;2&lt;/li&gt;&lt;li&gt;3&lt;/li&gt;
+&lt;/ul&gt;
 
-   stage 'Checkout rep2'
-   dir('rep2') {
-      git([url: 'git@rep2.git', branch: REP2_BRANCH])
-   }
-
-   stage 'Checkout rep3'
-   dir('subdir3/rep3') {
-      git([url: 'git@rep3.git', branch: REP3_BRANCH])
-   }
-
-   stage 'Build'
-   ...
-}
+&lt;script&gt;
+const el = document.querySelector(&quot;li#li2&quot;);
+&lt;/script&gt;
 </code></pre>
 
-<p>まとめて入った<a href="https://wiki.jenkins-ci.org/display/JENKINS/Pipeline+Stage+View+Plugin">Pipeline Stage View Plugin</a>によって、
-経過や変更などいろいろ見やすくなった。</p>
+<h2 id="sibling">Sibling</h2>
+
+<p>elのpreviousSiblingを取ると<code>&lt;li&gt;1&lt;/li&gt;</code>になると思いきや、その直前の空白や改行を含むtext nodeが返る。
+それらが全くない場合隣のElementが返ることになる。</p>
+
+<pre><code>const el2 = el.previousSibling;
+console.log(`previousSibling: ${el2.nodeName} &quot;${el2.textContent}&quot;`);
+/*
+#text &quot;
+&quot;
+*/
+
+const el4 = el.nextSibling;
+console.log(`nextSibling: ${el4.nodeName} &quot;${el4.textContent}&quot;`); // LI &quot;3&quot;
+</code></pre>
+
+<h2 id="elementsibling">ElementSibling</h2>
+
+<p>多くの場合で意図した結果が返るのはこっち。</p>
+
+<pre><code>const el3 = el.previousElementSibling;
+console.log(`previousElementSibling: ${el3.nodeName} &quot;${el3.textContent}&quot;`); // LI &quot;1&quot;
+
+const el5 = el.nextElementSibling;
+console.log(`nextElementSibling: ${el5.nodeName} &quot;${el5.textContent}&quot;`); // LI &quot;3&quot;
+</code></pre>
+
+<p>firstChildとfirstElementChildなどの関係も同じ。存在を忘れていてひっかかった。</p>
+
+<pre><code>const el6 = document.querySelector(&quot;ul&quot;).firstChild;
+console.log(`firstChild: ${el6.nodeName} &quot;${el6.textContent}&quot;`);
+/*
+fistChild: #text &quot;
+&quot;
+*/
+</code></pre>
 
         </div>
       </article>
