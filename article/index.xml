@@ -6,10 +6,33 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Wed, 04 Jul 2018 23:40:00 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 15 Jul 2018 16:03:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>GAEのTaskQueue</title>
+      <link>https://www.sambaiz.net/article/178/</link>
+      <pubDate>Sun, 15 Jul 2018 16:03:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/178/</guid>
+      <description>GCPのマネージドなQueueサービスとしてGAEのTaskQueueがあることを教えてもらったので動かしてみる。 PushQueueとPullQueueがあって、それぞれおおよそAWSのSNSとSQSに相当する。PushQueueの場合はHTTPのリクエストとしてGAEのサービスに投げられる。PullQueueはCloud Tasks APIを使えばGAE外からも使えるらしいがまだalpha。
+設定ファイルqueue.yamlはこんな感じ。bucket_sizeは最大同時実行数で空いていたらrateで埋められていく。
+queue: - name: default rate: 10/m bucket_size: 5 retry_parameters: min_backoff_seconds: 10 max_backoff_seconds: 300  bucket_sizeの最大は500なのでこれ以上の性能が必要な場合は複数のQueueに分けるか Cloud Pub/Subを使うことになる。ただし、At-Least-Onceなのでレコードが重複しても問題ないように作る必要がある。SQSも同じ。
+アプリケーション /にアクセスすると2つのTaskをdefaultのTaskQueueにDelay25秒でPOSTする。 Taskによるリクエストは/workerで受け、30%の確率で500エラーを返すようにしている。
+package main import ( &amp;quot;fmt&amp;quot; &amp;quot;io/ioutil&amp;quot; &amp;quot;math/rand&amp;quot; &amp;quot;net/http&amp;quot; &amp;quot;net/url&amp;quot; &amp;quot;strconv&amp;quot; &amp;quot;time&amp;quot; &amp;quot;google.golang.org/appengine&amp;quot; &amp;quot;google.golang.org/appengine/log&amp;quot; &amp;quot;google.golang.org/appengine/taskqueue&amp;quot; ) func main() { http.HandleFunc(&amp;quot;/&amp;quot;, handler) http.HandleFunc(&amp;quot;/worker&amp;quot;, handlerQueue) appengine.Main() } func handler(w http.ResponseWriter, r *http.Request) { ctx := appengine.NewContext(r) // POST body: name=a%26&amp;amp;value=20 t := taskqueue.NewPOSTTask(&amp;quot;/worker&amp;quot;, map[string][]string{&amp;quot;name&amp;quot;: {&amp;quot;a&amp;amp;&amp;quot;}, &amp;quot;time&amp;quot;: {strconv.FormatInt(time.Now().UnixNano(), 10)}}) t.</description>
+    </item>
+    
+    <item>
+      <title>WebSocketでの通信内容をWiresharkで見る</title>
+      <link>https://www.sambaiz.net/article/177/</link>
+      <pubDate>Tue, 10 Jul 2018 23:40:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/177/</guid>
+      <description>Webで双方向通信するためのプロトコル、WebSocketでの通信内容をWireSharkで見る。
+アプリケーション サーバー package main import ( &amp;quot;context&amp;quot; &amp;quot;fmt&amp;quot; &amp;quot;io&amp;quot; &amp;quot;net/http&amp;quot; &amp;quot;golang.org/x/net/websocket&amp;quot; ) type Payload struct { A string } func Handler(ws *websocket.Conn) { ctx, cancel := context.WithCancel(context.Background()) go func() { var payload Payload for { err := websocket.JSON.Receive(ws, &amp;amp;payload) if err != nil { if err == io.EOF { fmt.Println(&amp;quot;connection closed&amp;quot;) } else { fmt.Println(err) } cancel() break } fmt.Println(payload.A) } }() websocket.JSON.Send(ws, Payload{A: &amp;quot;a&amp;quot;}) select { case &amp;lt;-ctx.</description>
+    </item>
     
     <item>
       <title>DOMの(next/previous)SiblingとElementSiblingの値</title>
@@ -2126,7 +2149,8 @@ import UIKit import CoreMotion class Motion{ let peripheral: BLEPeripheral let a
       
       <guid>https://www.sambaiz.net/article/28/</guid>
       <description> いつも迷うのでまとめた。
-gcloudのアカウント一覧と切り替え $ gcloud auth list $ gcloud config set account `ACCOUNT`  kubectlのcontext変更 $ kubectl config current-context $ kubectl config view # contexts $ kubectl config use-context minikube  </description>
+gcloudのアカウント一覧と切り替え $ gcloud auth list $ gcloud config set account `ACCOUNT`  configにprojectなども設定している場合はconfig自体を作成して切り替えた方が楽。
+$ gcloud config configurations create &amp;lt;name&amp;gt; $ gcloud config configurations activate &amp;lt;name&amp;gt; $ gcloud config list ... Your active configuration is: [&amp;lt;name&amp;gt;] $ gcloud config set account &amp;lt;accout&amp;gt; $ gcloud config set project &amp;lt;project&amp;gt;  kubectlのcontext変更 $ kubectl config current-context $ kubectl config view # contexts $ kubectl config use-context minikube  </description>
     </item>
     
     <item>

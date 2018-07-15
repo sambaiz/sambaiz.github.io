@@ -6,8 +6,274 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-07-04 23:40:00 &#43;0900 JST</updated>
+    <updated>2018-07-15 16:03:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>GAEのTaskQueue</title>
+          <link>https://www.sambaiz.net/article/178/</link>
+          <pubDate>Sun, 15 Jul 2018 16:03:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/178/</guid>
+          <description>
+
+&lt;p&gt;GCPのマネージドなQueueサービスとしてGAEのTaskQueueがあることを教えてもらったので動かしてみる。
+PushQueueとPullQueueがあって、それぞれおおよそAWSのSNSとSQSに相当する。PushQueueの場合はHTTPのリクエストとしてGAEのサービスに投げられる。PullQueueは&lt;a href=&#34;https://cloud.google.com/appengine/docs/standard/python/taskqueue/rest/&#34;&gt;Cloud Tasks API&lt;/a&gt;を使えばGAE外からも使えるらしいがまだalpha。&lt;/p&gt;
+
+&lt;p&gt;設定ファイル&lt;a href=&#34;https://cloud.google.com/appengine/docs/standard/go/config/queueref&#34;&gt;queue.yaml&lt;/a&gt;はこんな感じ。bucket_sizeは最大同時実行数で空いていたらrateで埋められていく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;queue:
+- name: default
+  rate: 10/m
+  bucket_size: 5
+  retry_parameters:
+    min_backoff_seconds: 10
+    max_backoff_seconds: 300
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;bucket_sizeの最大は500なのでこれ以上の性能が必要な場合は複数のQueueに分けるか
+&lt;a href=&#34;https://cloud.google.com/pubsub/&#34;&gt;Cloud Pub/Sub&lt;/a&gt;を使うことになる。ただし、&lt;a href=&#34;https://cloud.google.com/pubsub/faq?hl=ja#duplicates&#34;&gt;At-Least-Once&lt;/a&gt;なのでレコードが重複しても問題ないように作る必要がある。SQSも&lt;a href=&#34;https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues.html#standard-queues-at-least-once-delivery&#34;&gt;同じ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;アプリケーション&#34;&gt;アプリケーション&lt;/h2&gt;
+
+&lt;p&gt;/にアクセスすると2つのTaskをdefaultのTaskQueueにDelay25秒でPOSTする。
+Taskによるリクエストは/workerで受け、30%の確率で500エラーを返すようにしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;io/ioutil&amp;quot;
+	&amp;quot;math/rand&amp;quot;
+	&amp;quot;net/http&amp;quot;
+	&amp;quot;net/url&amp;quot;
+	&amp;quot;strconv&amp;quot;
+	&amp;quot;time&amp;quot;
+
+	&amp;quot;google.golang.org/appengine&amp;quot;
+	&amp;quot;google.golang.org/appengine/log&amp;quot;
+	&amp;quot;google.golang.org/appengine/taskqueue&amp;quot;
+)
+
+func main() {
+	http.HandleFunc(&amp;quot;/&amp;quot;, handler)
+	http.HandleFunc(&amp;quot;/worker&amp;quot;, handlerQueue)
+	appengine.Main()
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
+	// POST body: name=a%26&amp;amp;value=20
+	t := taskqueue.NewPOSTTask(&amp;quot;/worker&amp;quot;, map[string][]string{&amp;quot;name&amp;quot;: {&amp;quot;a&amp;amp;&amp;quot;}, &amp;quot;time&amp;quot;: {strconv.FormatInt(time.Now().UnixNano(), 10)}})
+	t.Delay = time.Second * 25
+	// POST body: name=a&amp;amp;name=b
+	t2 := taskqueue.NewPOSTTask(&amp;quot;/worker&amp;quot;, map[string][]string{&amp;quot;name&amp;quot;: {&amp;quot;a&amp;quot;, &amp;quot;b&amp;quot;}})
+	if _, err := taskqueue.AddMulti(ctx, []*taskqueue.Task{t, t2}, &amp;quot;&amp;quot;); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintln(w, &amp;quot;ok&amp;quot;)
+}
+
+func handlerQueue(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
+
+	bodyb, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	body := string(bodyb)
+	log.Infof(ctx, &amp;quot;%s\n&amp;quot;, body)
+
+	values, err := url.ParseQuery(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	log.Infof(ctx, &amp;quot;%#+v\n&amp;quot;, values)
+	if rand.Float64() &amp;lt; 0.3 {
+		http.Error(w, &amp;quot;random fail&amp;quot;, http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintln(w, &amp;quot;ok&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デプロイして何度かアクセスする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud app deploy queue.yaml
+$ gcloud app deploy
+$ gcloud app browse
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;TaskがQueueに入り、エラーの場合はリトライしていることが確認できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/178.png&#34; alt=&#34;PushQueue&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通常Delay経ってETA(Estimate Time of Arrival?)を迎えたものから処理されていくが、bucketやrateが小さい場合リトライが重なって渋滞すると過ぎても処理されず溜まってしまうことがある。リトライ時のDelayはmax_backoff_secondsまでの範囲内でExponential Backoffし、task_retry_limitを指定しないと永遠にリトライし続ける。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.slideshare.net/furuyamayuuki/gcp-72165187&#34;&gt;スケーラブル GCP アーキテクチャ&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>WebSocketでの通信内容をWiresharkで見る</title>
+          <link>https://www.sambaiz.net/article/177/</link>
+          <pubDate>Tue, 10 Jul 2018 23:40:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/177/</guid>
+          <description>
+
+&lt;p&gt;Webで双方向通信するためのプロトコル、WebSocketでの通信内容をWireSharkで見る。&lt;/p&gt;
+
+&lt;h2 id=&#34;アプリケーション&#34;&gt;アプリケーション&lt;/h2&gt;
+
+&lt;h3 id=&#34;サーバー&#34;&gt;サーバー&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;context&amp;quot;
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;io&amp;quot;
+	&amp;quot;net/http&amp;quot;
+
+	&amp;quot;golang.org/x/net/websocket&amp;quot;
+)
+
+type Payload struct {
+	A string
+}
+
+func Handler(ws *websocket.Conn) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		var payload Payload
+		for {
+			err := websocket.JSON.Receive(ws, &amp;amp;payload)
+			if err != nil {
+				if err == io.EOF {
+					fmt.Println(&amp;quot;connection closed&amp;quot;)
+				} else {
+					fmt.Println(err)
+				}
+				cancel()
+				break
+			}
+			fmt.Println(payload.A)
+		}
+	}()
+	websocket.JSON.Send(ws, Payload{A: &amp;quot;a&amp;quot;})
+	select {
+	case &amp;lt;-ctx.Done():
+	}
+}
+
+func main() {
+	http.Handle(&amp;quot;/&amp;quot;, websocket.Handler(Handler))
+	http.ListenAndServe(&amp;quot;:12345&amp;quot;, nil)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;クライアント&#34;&gt;クライアント&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;script&amp;gt;
+const websocket = new WebSocket(&amp;quot;ws://localhost:12345&amp;quot;);
+console.log(websocket)
+websocket.onopen = (e) =&amp;gt; { 
+    setInterval(() =&amp;gt; {
+        console.log(&amp;quot;send&amp;quot;)
+        websocket.send(JSON.stringify({A: &amp;quot;あ&amp;quot;.repeat(50)}));
+    }, 10000)
+};
+websocket.onmessage = (e) =&amp;gt; { 
+    console.log(`received ${e.data}`);
+};
+&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;wireshark-https-www-wireshark-org-のインストール&#34;&gt;&lt;a href=&#34;https://www.wireshark.org/&#34;&gt;Wireshark&lt;/a&gt;のインストール&lt;/h2&gt;
+
+&lt;p&gt;GUIが立ち上がるので&lt;code&gt;tcp.port == 12345&lt;/code&gt;のフィルタで待ち構える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install wireshark --with-qt
+$ sudo wireshark
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;通信内容&#34;&gt;通信内容&lt;/h2&gt;
+
+&lt;h3 id=&#34;websocketで通信するまで&#34;&gt;WebSocketで通信するまで&lt;/h3&gt;
+
+&lt;p&gt;まず通常のHTTP通信と同様に3-way handshakeでTCPのコネクションを張った後、
+&lt;code&gt;Upgrade: WebSocket&lt;/code&gt;と&lt;code&gt;Connection: Upgrade&lt;/code&gt;を付けたリクエストをサーバーに送ってWebSocketでの通信を要求する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Hypertext Transfer Protocol
+    GET / HTTP/1.1\r\n
+    Host: localhost:12345\r\n
+    Connection: Upgrade\r\n
+    Pragma: no-cache\r\n
+    Cache-Control: no-cache\r\n
+    Upgrade: websocket\r\n
+    Sec-WebSocket-Version: 13\r\n
+    Sec-WebSocket-Key: vuQHXJAxDEdD9pQ3d7RtOw==\r\n
+    Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r\n    
+    ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;それに対してサーバーはステータスコード101でレスポンスを返す。
+送られてきたランダムな&lt;code&gt;Sec-WebSocket-Key&lt;/code&gt;をもとに生成した&lt;code&gt;Sec-WebSocket-Accept&lt;/code&gt;
+をヘッダーに付けて、クライアントはこれを見て正しいWebSocketサーバーであることを確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Hypertext Transfer Protocol
+    HTTP/1.1 101 Switching Protocols\r\n
+    Upgrade: websocket\r\n
+    Connection: Upgrade\r\n
+    Sec-WebSocket-Accept: oImbSbalm6WMVbXV5oqmRlHHhWg=\r\n
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;websocketでの通信&#34;&gt;WebSocketでの通信&lt;/h3&gt;
+
+&lt;p&gt;サーバーからクライアントへのデータ。
+HTTP/1.1のヘッダーはテキストで記述も多いためデータ量が大きく、毎回それらを送る必要があり効率的ではなかったが、WebSocketではこの場合Payloadを除いた部分が2bytesしかない。&lt;/p&gt;
+
+&lt;p&gt;ちなみにHTTP/2では差分を送るHPACKというフォーマットで圧縮した、バイナリのHEADERSフレームにすることで、この問題を改善している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;WebSocket
+    1... .... = Fin: True
+    .000 .... = Reserved: 0x0
+    .... 0001 = Opcode: Text (1)
+    0... .... = Mask: False
+    .000 1001 = Payload length: 9
+    Payload
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;クライアントからサーバーへのデータ。Payload lengthが125を超えたため拡張されている。
+それ以外にMasked payloadが含まれるのでデータ量が少し大きくなっている。これは不正なスクリプトがHTTPリクエストに偽装したデータを送ることでプロキシのキャッシュが汚染されるのを防ぐため。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;WebSocket
+    1... .... = Fin: True
+    .000 .... = Reserved: 0x0
+    .... 0001 = Opcode: Text (1)
+    1... .... = Mask: True
+    .111 1110 = Payload length: 126 Extended Payload Length (16 bits)
+    Extended Payload length (16 bits): 158
+    Masking-Key: ef17e997
+    Masked payload
+    Payload
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://plus.google.com/u/0/+TakeshiYoshino/posts/af6Fg972tGQ&#34;&gt;The WebSocket Protocol (RFC 6455) の歴史&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -22016,6 +22282,18 @@ public class SwordMotion : MonoBehaviour {
 
 &lt;pre&gt;&lt;code&gt;$ gcloud auth list
 $ gcloud config set account `ACCOUNT`
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;configにprojectなども設定している場合はconfig自体を作成して切り替えた方が楽。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gcloud config configurations create &amp;lt;name&amp;gt;
+$ gcloud config configurations activate &amp;lt;name&amp;gt;
+$ gcloud config list
+...
+Your active configuration is: [&amp;lt;name&amp;gt;]
+
+$ gcloud config set account &amp;lt;accout&amp;gt;
+$ gcloud config set project &amp;lt;project&amp;gt;
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;kubectlのcontext変更&#34;&gt;kubectlのcontext変更&lt;/h2&gt;
