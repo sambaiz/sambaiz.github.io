@@ -6,10 +6,25 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sun, 15 Jul 2018 16:03:00 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 25 Jul 2018 23:55:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Destributed TensorFlowの流れとSavedModelの出力</title>
+      <link>https://www.sambaiz.net/article/179/</link>
+      <pubDate>Wed, 25 Jul 2018 23:55:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/179/</guid>
+      <description>Distributed TensorFlow クラスタを組んでGraphを分散実行する。
+クラスタは
+ master: sessionを作成し、workerを制御する worker: 計算を行う ps(parameter server): 変数の値を持ち、更新する  のjobからなり、gRPCの
+ Master Service Worker Service  でやり取りする。
+TensorFlow serverを立てる 各jobとURLのmapをClusterSpecにして jobとindexと併せてServerDefを作って Serverを立てる。
+{ &amp;quot;master&amp;quot;: [ &amp;quot;check-tf-config-master-34z8-0:2222&amp;quot; ], &amp;quot;ps&amp;quot;: [ &amp;quot;check-tf-config-ps-34z8-0:2222&amp;quot;, &amp;quot;check-tf-config-ps-34z8-1:2222&amp;quot; ], &amp;quot;worker&amp;quot;: [ &amp;quot;check-tf-config-worker-34z8-0:2222&amp;quot;, &amp;quot;check-tf-config-worker-34z8-1:2222&amp;quot; ] }  cluster_spec_object = tf.train.ClusterSpec(cluster_spec) server_def = tf.train.ServerDef( cluster=cluster_spec_object.as_cluster_def(), protocol=&amp;quot;grpc&amp;quot;, job_name=job_name, # worker, master, ps task_index=0) server = tf.train.Server(server_def)  psのjobではserver.join()して待ち構える。
+if job_name == &amp;quot;ps&amp;quot;: server.join() else: # build model  WorkerにGraphを割り当てる workerのdeviceにGraphを割り当てる。 deviceは/job:worker/replica:0/task:0/device:GPU:0 のようなフォーマットで表される。</description>
+    </item>
     
     <item>
       <title>GAEのTaskQueue</title>
@@ -30,7 +45,7 @@ package main import ( &amp;quot;fmt&amp;quot; &amp;quot;io/ioutil&amp;quot; &amp
       <pubDate>Tue, 10 Jul 2018 23:40:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/177/</guid>
-      <description>Webで双方向通信するためのプロトコル、WebSocketでの通信内容をWireSharkで見る。
+      <description>Webで双方向通信するためのプロトコル、WebSocketでの通信内容をWiresharkで見る。
 アプリケーション サーバー package main import ( &amp;quot;context&amp;quot; &amp;quot;fmt&amp;quot; &amp;quot;io&amp;quot; &amp;quot;net/http&amp;quot; &amp;quot;golang.org/x/net/websocket&amp;quot; ) type Payload struct { A string } func Handler(ws *websocket.Conn) { ctx, cancel := context.WithCancel(context.Background()) go func() { var payload Payload for { err := websocket.JSON.Receive(ws, &amp;amp;payload) if err != nil { if err == io.EOF { fmt.Println(&amp;quot;connection closed&amp;quot;) } else { fmt.Println(err) } cancel() break } fmt.Println(payload.A) } }() websocket.JSON.Send(ws, Payload{A: &amp;quot;a&amp;quot;}) select { case &amp;lt;-ctx.</description>
     </item>
     
@@ -57,9 +72,10 @@ const el6 = document.querySelector(&amp;quot;ul&amp;quot;).firstChild; console.l
 deprecatedになったSupervisorの後継。
 MonitoredTrainingSessionで学習用のMonitoredSessionを生成する。 このコンストラクタの引数でcheckpoint_dirを渡すと内部でCheckpointSaverHookが 追加されるようになっていて、restoreしたり指定したタイミングでsaveしたりしてくれる。
 なので今回明示的に渡すhooksは 指定したstepに到達したら止めてくれる、StopAtStepHookのみ。
-should_stop()がTrueな状態でsession.run()しようとするとRun called even after should_stop requested.のエラーが出るため、学習後Accuracyを返すには新しいsessionにする必要がある。
+should_stop()がTrueな状態でsession.run()しようとするとRun called even after should_stop requested.のエラーが出るため、 今回は新しいsessionを作ってAccuracyを返しているが、hookでやった方がrestoreする必要がないので良さそうだ。
+Destributed TensorFlowの流れとSavedModelの出力 - sambaiz-net
 全体のコードはここ。
-def train(self, learning_rate, variable_default_stddev, bias_default, last_step=800): test_images = self.images[:500] test_labels = self.labels[:500] train_batch = Batch(self.images[500:], self.labels[500:]) with tf.Graph().as_default(): global_step=tf.train.get_or_create_global_step() g = MNIST_CNN(learning_rate, variable_default_stddev, bias_default).graph() saver = tf.train.Saver() savedir = &#39;./ckpt-{}-{}-{}&#39;.format(learning_rate, variable_default_stddev, bias_default) hooks = [ tf.train.StopAtStepHook(last_step=last_step) ] with tf.train.MonitoredTrainingSession( hooks=hooks, checkpoint_dir=savedir, save_checkpoint_secs = 300, ) as sess: sess.run(global_step) while not sess.should_stop(): # step = sess.run(global_step) images, labels = train_batch.</description>
+def train(self, learning_rate, variable_default_stddev, bias_default, last_step=800): test_images = self.images[:500] test_labels = self.labels[:500] train_batch = Batch(self.images[500:], self.labels[500:]) with tf.Graph().as_default(): global_step=tf.train.get_or_create_global_step() g = MNIST_CNN(learning_rate, variable_default_stddev, bias_default).graph() saver = tf.train.Saver() savedir = &#39;./ckpt-{}-{}-{}&#39;.format(learning_rate, variable_default_stddev, bias_default) hooks = [ tf.train.StopAtStepHook(last_step=last_step) ] with tf.train.MonitoredTrainingSession( hooks=hooks, checkpoint_dir=savedir, save_checkpoint_secs = 300, ) as sess: sess.run(global_step) while not sess.should_stop(): # step = sess.</description>
     </item>
     
     <item>
@@ -90,10 +106,8 @@ package main import ( &amp;quot;encoding/json&amp;quot; &amp;quot;fmt&amp;quot; 
       <pubDate>Fri, 22 Jun 2018 01:48:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/172/</guid>
-      <description>SavedModelBuilderで モデルを言語に依存しないSavedModelのprotobufにして保存できる。
-SaverのcheckpointがVariableの値のみを持ち、モデルのコードに依存するのに対して SavedModelは単体で復元できる。
-Tensorflowの学習データを使ったAPIを作る - sambaiz-net
-import tensorflow as tf def build_signature(signature_inputs, signature_outputs): return tf.saved_model.signature_def_utils.build_signature_def( signature_inputs, signature_outputs, tf.saved_model.signature_constants.REGRESS_METHOD_NAME) def save(sess, export_dir, signature_def_map): builder = tf.saved_model.builder.SavedModelBuilder(export_dir) builder.add_meta_graph_and_variables( sess, [tf.saved_model.tag_constants.SERVING], signature_def_map=signature_def_map ) builder.save() import shutil import os.path export_dir = &amp;quot;./saved_model&amp;quot; if os.path.exists(export_dir): shutil.rmtree(export_dir) with tf.Graph().as_default(): a = tf.placeholder(tf.float32, name=&amp;quot;a&amp;quot;) b = tf.placeholder(tf.float32, name=&amp;quot;b&amp;quot;) c = tf.add(a, b, name=&amp;quot;c&amp;quot;) v = tf.placeholder(tf.float32, name=&amp;quot;v&amp;quot;) w = tf.Variable(0.0, name=&amp;quot;w&amp;quot;) x = w.assign(tf.add(v, w)) sv = tf.</description>
+      <description>SavedModelBuilderで モデルを言語に依存しないSavedModelのprotobufにして保存できる。 SavedModelにはSaverによって出力されるCheckpointを共有する一つ以上のMetaGraphDefを含む。
+import tensorflow as tf def build_signature(signature_inputs, signature_outputs): return tf.saved_model.signature_def_utils.build_signature_def( signature_inputs, signature_outputs, tf.saved_model.signature_constants.REGRESS_METHOD_NAME) def save(sess, export_dir, signature_def_map): builder = tf.saved_model.builder.SavedModelBuilder(export_dir) builder.add_meta_graph_and_variables( sess, [tf.saved_model.tag_constants.SERVING], signature_def_map=signature_def_map ) builder.save() import shutil import os.path export_dir = &amp;quot;./saved_model&amp;quot; if os.path.exists(export_dir): shutil.rmtree(export_dir) with tf.Graph().as_default(): a = tf.placeholder(tf.float32, name=&amp;quot;a&amp;quot;) b = tf.placeholder(tf.float32, name=&amp;quot;b&amp;quot;) c = tf.add(a, b, name=&amp;quot;c&amp;quot;) v = tf.placeholder(tf.float32, name=&amp;quot;v&amp;quot;) w = tf.Variable(0.0, name=&amp;quot;w&amp;quot;) x = w.assign(tf.add(v, w)) sv = tf.train.Supervisor() with sv.managed_session() as sess: print(sess.</description>
     </item>
     
     <item>
@@ -146,7 +160,7 @@ import pandas as pd import xgboost as xgb from sklearn.model_selection import tr
     </item>
     
     <item>
-      <title>IstioでEnvoy Proxyを付けるまで</title>
+      <title>Istio v0.7でEnvoy Proxyを付けるまで</title>
       <link>https://www.sambaiz.net/article/167/</link>
       <pubDate>Tue, 29 May 2018 22:33:00 +0900</pubDate>
       
@@ -2348,11 +2362,8 @@ $ go get -u github.com/labstack/echo  func main() { conn, err := dbr.Open(&amp;q
       
       <guid>https://www.sambaiz.net/article/13/</guid>
       <description>チュートリアルのMNISTの学習データを使って、手書き数字画像のデータを受け取り、数字を返すAPIを作る。 コードはここにある。
-学習して結果を保存する 前回の学習結果のチェックポイントファイルを出力する。 tf.train.Saver().saveでnameで対応するVariableの値が保存できる。
-今回は、学習側、アプリケーション側共にPythonを使うので、以下のようなクラスを作った。
-追記(2018-06-22): SavedModelで保存すると、アプリケーション側でモデルのコードを持つ必要がない。
-TensorFlowのモデルをsave/loadする - sambaiz-net
-import tensorflow as tf from tensorflow.examples.tutorials.mnist import input_data class Mnist: def __init__(self): g = tf.Graph() with g.as_default(): W_conv1 = self._weight_variable([5, 5, 1, 32], &amp;quot;W_conv1&amp;quot;) b_conv1 = self._bias_variable([32], &amp;quot;b_conv1&amp;quot;) self._x = tf.placeholder(tf.float32, [None, 784]) x_image = tf.reshape(self._x, [-1,28,28,1]) h_conv1 = tf.nn.relu(self._conv2d(x_image, W_conv1) + b_conv1) h_pool1 = self._max_pool_2x2(h_conv1) W_conv2 = self._weight_variable([5, 5, 32, 64], &amp;quot;W_conv2&amp;quot;) b_conv2 = self._bias_variable([64], &amp;quot;b_conv2&amp;quot;) h_conv2 = tf.</description>
+学習して結果を保存する 前回の学習結果のcheckpointファイルを出力する。 tf.train.Saver().saveでnameで対応するVariableの値が保存できる。 また、その際デフォルトでMetaGraphもexportされ、これをimportすればGraphも復元することができる。
+import tensorflow as tf from tensorflow.examples.tutorials.mnist import input_data class Mnist: def __init__(self): g = tf.Graph() with g.as_default(): W_conv1 = self._weight_variable([5, 5, 1, 32], &amp;quot;W_conv1&amp;quot;) b_conv1 = self._bias_variable([32], &amp;quot;b_conv1&amp;quot;) self._x = tf.placeholder(tf.float32, [None, 784]) x_image = tf.reshape(self._x, [-1,28,28,1]) h_conv1 = tf.nn.relu(self._conv2d(x_image, W_conv1) + b_conv1) h_pool1 = self._max_pool_2x2(h_conv1) W_conv2 = self._weight_variable([5, 5, 32, 64], &amp;quot;W_conv2&amp;quot;) b_conv2 = self._bias_variable([64], &amp;quot;b_conv2&amp;quot;) h_conv2 = tf.nn.relu(self._conv2d(h_pool1, W_conv2) + b_conv2) h_pool2 = self.</description>
     </item>
     
     <item>
@@ -2364,7 +2375,7 @@ import tensorflow as tf from tensorflow.examples.tutorials.mnist import input_da
       <description>A high performance, open source, general RPC framework that puts mobile and HTTP/2 first.
  What is gRPC? gRPCを使うと、クライアントアプリケーションは直接ローカルのオブジェクトのように、他のマシンのサーバーアプリケーションのメソッドを呼ぶことができ、 分散したアプリケーションやサービスを簡単に作ることができる。 多くのRPCシステムと同様にgRPCはサービスを定義し、リモートから呼べるメソッドとそのパラメーターおよび返り値の型を記述するようになっている。 サーバーサイドではインタフェースを実装し、クライアントからの呼び出しをハンドリングするgRPCサーバーを実行する。 クライアントサイドではサーバーと同じメソッドを提供するスタブを持っている。
 gRPCクライアントとサーバーは様々な環境同士でやり取りすることができ、いくつもの言語でサポートされている。 そのため例えば、gRPCサーバーをJavaでクライアントをGoやPython、Rubyで作るのも可能だ。 加えて、最新のGoodle APIにはgRPCのインタフェースが存在するので、これらをアプリケーションに組み込むのも容易にできる。
-Protobuf デフォルトではgRPCはprotobuf(protocol buffers)でやり取りする。 protobufというのは、 Googleによるオープンソースの、構造化されたデータをシリアライズフォーマット。
+Protobuf デフォルトではgRPCはprotobuf(protocol buffers)でやり取りする。 protobufというのは、 Googleによるオープンソースのシリアライズフォーマット。
 今回作るのは、同じ文字列を返すだけのEchoサーバーで、コードはここにある。 以下のprotoファイルでは、EchoというサービスはRetEchoというメソッドを含み、 これは文字列sayを含むEchoRequestに対して、文字列retを含むEchoReplyを返すということを表している。
 syntax = &amp;quot;proto3&amp;quot;; option java_package = &amp;quot;net.sambaiz.trygrpc.protos&amp;quot;; package protos; service Echo { rpc RetEcho (EchoRequest) returns (EchoReply) {} } message EchoRequest { string say = 1; } message EchoReply { string ret = 1; }  これをprotocでコンパイルするとecho.</description>
     </item>
@@ -2402,8 +2413,8 @@ MATCH (ee:Person) WHERE ee.name = &amp;quot;Emil&amp;quot; RETURN ee; CREATE (js
       <pubDate>Mon, 18 Jul 2016 22:22:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/9/</guid>
-      <description>Kubernetesとは Kubernetes(発音はkoo-ber-nay&amp;rsquo;-tace。 ギリシャ語で操舵手。)はアプリケーションコンテナにおける、自動デプロイ、スケーリング、操作を 自動化するオープンソースプラットフォームだ。K8sと略される。Googleによって開発が始められた。
-Minikube K8sをローカルで試すためのに、MinikubeというVMの中で単一ノードのK8sクラスターを動かすツールを入れる。
+      <description>Kubernetesとは Kubernetes(発音はkoo-ber-nay&amp;rsquo;-tace。 ギリシャ語で操舵手。)はGoogleによって開発が始められた、アプリケーションコンテナにおける自動デプロイ、スケーリング、操作を 自動化するOSS。K8sと略される。
+Minikube K8sをローカルで試すために、MinikubeというVMの中で単一ノードのK8sクラスターを動かすツールを入れる。
 v0.6.0
 curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.6.0/minikube-darwin-amd64 &amp;amp;&amp;amp; chmod +x minikube &amp;amp;&amp;amp; sudo mv minikube /usr/local/bin/  $ minikube start Starting local Kubernetes cluster... ... $ kubectl version Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;2&amp;quot;, GitVersion:&amp;quot;v1.2.4&amp;quot;, GitCommit:&amp;quot;3eed1e3be6848b877ff80a93da3785d9034d0a4f&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;} Server Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;3&amp;quot;, GitVersion:&amp;quot;v1.3.0&amp;quot;, GitCommit:&amp;quot;283137936a498aed572ee22af6774b6fb6e9fd94&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;}  Pods K8sではコンテナのグループをpodと呼ぶ。pod中のコンテナは共にデプロイされ、起動し、停止する。 また、グループとして複製される。
 Podの定義は以下のようにyamlで書かれる。

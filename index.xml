@@ -6,8 +6,164 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-07-15 16:03:00 &#43;0900 JST</updated>
+    <updated>2018-07-25 23:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Destributed TensorFlowの流れとSavedModelの出力</title>
+          <link>https://www.sambaiz.net/article/179/</link>
+          <pubDate>Wed, 25 Jul 2018 23:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/179/</guid>
+          <description>
+
+&lt;h2 id=&#34;distributed-tensorflow-https-www-tensorflow-org-deploy-distributed&#34;&gt;&lt;a href=&#34;https://www.tensorflow.org/deploy/distributed&#34;&gt;Distributed TensorFlow&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;クラスタを組んでGraphを分散実行する。&lt;/p&gt;
+
+&lt;p&gt;クラスタは&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;master: sessionを作成し、workerを制御する&lt;/li&gt;
+&lt;li&gt;worker: 計算を行う&lt;/li&gt;
+&lt;li&gt;ps(parameter server): 変数の値を持ち、更新する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;のjobからなり、gRPCの&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.9/tensorflow/core/protobuf/master_service.proto&#34;&gt;Master Service&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.9/tensorflow/core/protobuf/worker_service.proto&#34;&gt;Worker Service&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;でやり取りする。&lt;/p&gt;
+
+&lt;h2 id=&#34;tensorflow-serverを立てる&#34;&gt;TensorFlow serverを立てる&lt;/h2&gt;
+
+&lt;p&gt;各jobとURLのmapを&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/ClusterSpec&#34;&gt;ClusterSpec&lt;/a&gt;にして
+jobとindexと併せて&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/ServerDef&#34;&gt;ServerDef&lt;/a&gt;を作って
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/Server&#34;&gt;Server&lt;/a&gt;を立てる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;master&amp;quot;: [
+        &amp;quot;check-tf-config-master-34z8-0:2222&amp;quot;
+    ],
+    &amp;quot;ps&amp;quot;: [
+        &amp;quot;check-tf-config-ps-34z8-0:2222&amp;quot;,
+        &amp;quot;check-tf-config-ps-34z8-1:2222&amp;quot;
+    ],
+    &amp;quot;worker&amp;quot;: [
+        &amp;quot;check-tf-config-worker-34z8-0:2222&amp;quot;,
+        &amp;quot;check-tf-config-worker-34z8-1:2222&amp;quot;
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;cluster_spec_object = tf.train.ClusterSpec(cluster_spec)
+server_def = tf.train.ServerDef(
+    cluster=cluster_spec_object.as_cluster_def(),
+    protocol=&amp;quot;grpc&amp;quot;,
+    job_name=job_name, # worker, master, ps 
+    task_index=0)
+server = tf.train.Server(server_def)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;psのjobでは&lt;code&gt;server.join()&lt;/code&gt;して待ち構える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;if job_name == &amp;quot;ps&amp;quot;:
+    server.join()
+else:
+    # build model
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;workerにgraphを割り当てる&#34;&gt;WorkerにGraphを割り当てる&lt;/h2&gt;
+
+&lt;p&gt;workerの&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/device&#34;&gt;device&lt;/a&gt;にGraphを割り当てる。
+deviceは&lt;code&gt;/job:worker/replica:0/task:0/device:GPU:0&lt;/code&gt;
+のような&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/framework/device.py#L130&#34;&gt;フォーマット&lt;/a&gt;で表される。&lt;/p&gt;
+
+&lt;p&gt;Graphの持ち方には一つのGraphの異なる計算箇所をそれぞれのworkerが持つIn-graph replicationと、
+それぞれGraphを持つBetween-graph replicationがある。これは後者の例で、&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/replica_device_setter&#34;&gt;replica_device_setter&lt;/a&gt;によってラウンドロビンで各psに変数を配置する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;with tf.device(tf.train.replica_device_setter(
+    cluster=cluster_spec,
+    worker_device=device
+)):
+    # graph
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;syncreplicasoptimizerのhookを追加&#34;&gt;SyncReplicasOptimizerのhookを追加&lt;/h2&gt;
+
+&lt;p&gt;同期して変数を更新する場合、&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/SyncReplicasOptimizer&#34;&gt;SyncReplicasOptimizer&lt;/a&gt;を使い、make_session_run_hookで作られるhookをMonitoredTrainingSessionに渡す。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/175/&#34;&gt;TensorFlowのMonitoredSessionとSessionRunHookとsummaryのエラー - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;train_op = tf.train.SyncReplicasOptimizer(
+    tf.train.AdamOptimizer(self.learning_rate),
+    replicas_to_aggregate=self.worker_num,
+    total_num_replicas=self.worker_num)
+
+hooks = [
+    tf.train.StopAtStepHook(last_step=args.last_step),
+    tf.train.CheckpointSaverHook(
+        &#39;./ckpt&#39;,
+        save_steps=args.save_steps,
+        saver=saver),
+    train_op.make_session_run_hook(self.is_chief)
+]
+with tf.train.MonitoredTrainingSession(
+    is_chief=is_chief,
+    master=master,
+    hooks=hooks
+) as sess:
+    while not sess.should_stop():
+    # sess.run()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;savedmodelの出力&#34;&gt;SavedModelの出力&lt;/h2&gt;
+
+&lt;p&gt;実行後、SavedModelを出力する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/172/&#34;&gt;TensorFlowのモデルをsave/loadする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;MonitoredTrainingSessionのsessは&lt;code&gt;should_stop()&lt;/code&gt;がtrueになったあとは使えなくなるため、
+新しいsessionを作るかhookのendでする必要がある。&lt;/p&gt;
+
+&lt;p&gt;新しいsessionでする例。そのままrestoreするとすでにworkerが終了している場合に、そのdeviceの変数もrestoreしようとして失敗するので
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/import_meta_graph&#34;&gt;import_meta_graph&lt;/a&gt;のclear_devicesをTrueにしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;with tf.Graph().as_default():
+    with tf.Session() as sess:
+        ckpt = tf.train.get_checkpoint_state(&amp;quot;ckpt&amp;quot;)
+        saver = tf.train.import_meta_graph(
+            &#39;{}.meta&#39;.format(ckpt.model_checkpoint_path),
+            clear_devices=True)
+        saver.restore(sess, ckpt.model_checkpoint_path)
+        save.save(sess, &amp;quot;saved&amp;quot;, signature_def_map)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;hookでする例。restoreする必要がなくて良い。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class SavedModelBuilderHook(session_run_hook.SessionRunHook):
+    def __init__(self, export_dir, signature_def_map, tags):
+        self.export_dir = export_dir
+        self.signature_def_map = signature_def_map
+        self.tags = tags
+
+    def end(self, session):
+        session.graph._unsafe_unfinalize()
+        builder = tf.saved_model.builder.SavedModelBuilder(self.export_dir)
+        builder.add_meta_graph_and_variables(
+            session,
+            self.tags,
+            signature_def_map=self.signature_def_map
+        )
+        builder.save()
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -130,7 +286,7 @@ $ gcloud app browse
           <guid>https://www.sambaiz.net/article/177/</guid>
           <description>
 
-&lt;p&gt;Webで双方向通信するためのプロトコル、WebSocketでの通信内容をWireSharkで見る。&lt;/p&gt;
+&lt;p&gt;Webで双方向通信するためのプロトコル、WebSocketでの通信内容をWiresharkで見る。&lt;/p&gt;
 
 &lt;h2 id=&#34;アプリケーション&#34;&gt;アプリケーション&lt;/h2&gt;
 
@@ -354,7 +510,10 @@ fistChild: #text &amp;quot;
 &lt;p&gt;なので今回明示的に渡すhooksは
 指定したstepに到達したら&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L320&#34;&gt;止めてくれる&lt;/a&gt;、&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/StopAtStepHook&#34;&gt;StopAtStepHook&lt;/a&gt;のみ。&lt;/p&gt;
 
-&lt;p&gt;should_stop()がTrueな状態で&lt;code&gt;session.run()&lt;/code&gt;しようとすると&lt;code&gt;Run called even after should_stop requested.&lt;/code&gt;のエラーが出るため、学習後Accuracyを返すには新しいsessionにする必要がある。&lt;/p&gt;
+&lt;p&gt;should_stop()がTrueな状態で&lt;code&gt;session.run()&lt;/code&gt;しようとすると&lt;code&gt;Run called even after should_stop requested.&lt;/code&gt;のエラーが出るため、
+今回は新しいsessionを作ってAccuracyを返しているが、hookでやった方がrestoreする必要がないので良さそうだ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/179/&#34;&gt;Destributed TensorFlowの流れとSavedModelの出力 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;全体のコードは&lt;a href=&#34;https://gist.github.com/sambaiz/72888520379cff778d6261cd417a3773&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
 
@@ -1030,12 +1189,8 @@ ok
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/172/</guid>
           <description>&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/saved_model/builder/SavedModelBuilder&#34;&gt;SavedModelBuilder&lt;/a&gt;で
-モデルを言語に依存しない&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/protobuf/saved_model.proto&#34;&gt;SavedModel&lt;/a&gt;のprotobufにして保存できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/Saver&#34;&gt;Saver&lt;/a&gt;の&lt;a href=&#34;https://www.tensorflow.org/get_started/checkpoints&#34;&gt;checkpoint&lt;/a&gt;がVariableの値のみを持ち、モデルのコードに依存するのに対して
-SavedModelは単体で復元できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/13/&#34;&gt;Tensorflowの学習データを使ったAPIを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+モデルを言語に依存しない&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/protobuf/saved_model.proto&#34;&gt;SavedModel&lt;/a&gt;のprotobufにして保存できる。
+SavedModelには&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/Saver&#34;&gt;Saver&lt;/a&gt;によって&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.9/tensorflow/python/saved_model/builder_impl.py#L418&#34;&gt;出力&lt;/a&gt;される&lt;a href=&#34;https://www.tensorflow.org/get_started/checkpoints&#34;&gt;Checkpoint&lt;/a&gt;を共有する一つ以上の&lt;a href=&#34;https://www.tensohttps://www.tensorflow.org/guide/saved_model#structure_of_a_savedmodel_directoryrflow.org/api_docs/python/tf/MetaGraphDef&#34;&gt;MetaGraphDef&lt;/a&gt;を&lt;a href=&#34;https://www.tensorflow.org/guide/saved_model#structure_of_a_savedmodel_directory&#34;&gt;含む&lt;/a&gt;。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;import tensorflow as tf
 
@@ -1303,6 +1458,8 @@ NAME    OVERRIDE KUBERNETES-VERSION NAMESPACE SERVER
 default          v1.10.0            default   https://192.168.99.100:8443
 prd              v1.10.0            prd       https://192.168.99.100:8443
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;--server&lt;/code&gt;フラグでSERVERを指定できる。対象クラスタのIPは&lt;code&gt;kubectl config view&lt;/code&gt;で分かる。&lt;/p&gt;
 
 &lt;p&gt;&lt;code&gt;ks param set&lt;/code&gt;でパラメータを設定できる。これがcomponentsの&lt;code&gt;params.libsonnet&lt;/code&gt;のものより優先される。&lt;/p&gt;
 
@@ -1890,7 +2047,7 @@ submit_data.to_csv(&#39;submit2.csv&#39;, header=True)
     
       
         <item>
-          <title>IstioでEnvoy Proxyを付けるまで</title>
+          <title>Istio v0.7でEnvoy Proxyを付けるまで</title>
           <link>https://www.sambaiz.net/article/167/</link>
           <pubDate>Tue, 29 May 2018 22:33:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -25548,18 +25705,9 @@ messageDaoMoc.EXPECT().FindById(message.ID).Return(&amp;amp;message, nil)
 
 &lt;h2 id=&#34;学習して結果を保存する&#34;&gt;学習して結果を保存する&lt;/h2&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/6&#34;&gt;前回&lt;/a&gt;の学習結果のチェックポイントファイルを出力する。
-&lt;code&gt;tf.train.Saver().save&lt;/code&gt;でnameで対応するVariableの値が保存できる。&lt;/p&gt;
-
-&lt;p&gt;今回は、学習側、アプリケーション側共にPythonを使うので、以下のようなクラスを作った。&lt;/p&gt;
-
-&lt;hr /&gt;
-
-&lt;p&gt;追記(2018-06-22): SavedModelで保存すると、アプリケーション側でモデルのコードを持つ必要がない。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/172/&#34;&gt;TensorFlowのモデルをsave/loadする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;hr /&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/6&#34;&gt;前回&lt;/a&gt;の学習結果のcheckpointファイルを出力する。
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/train/Saver#save&#34;&gt;tf.train.Saver().save&lt;/a&gt;でnameで対応するVariableの値が保存できる。
+また、その際&lt;a href=&#34;https://github.com/tensorflow/tensorflow/blob/r1.9/tensorflow/python/training/saver.py#L1560&#34;&gt;デフォルト&lt;/a&gt;で&lt;a href=&#34;https://www.tensorflow.org/api_guides/python/meta_graph&#34;&gt;MetaGraph&lt;/a&gt;もexportされ、これをimportすればGraphも復元することができる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
@@ -25748,6 +25896,14 @@ $ docker logs -f &amp;lt;CONTAINER_ID&amp;gt;
   &amp;quot;result&amp;quot;: 7
 }
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;(追記 2018-07-25)&lt;/p&gt;
+
+&lt;p&gt;この記事ではcheckpointをそのまま使っているが、モデルを公開する際はSaverをwrapしたSavedModelにするのが&lt;a href=&#34;https://github.com/tensorflow/tensorflow/tree/r1.9/tensorflow/python/saved_model#background&#34;&gt;標準的&lt;/a&gt;だ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/172/&#34;&gt;TensorFlowのモデルをsave/loadする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
@@ -25781,7 +25937,7 @@ $ docker logs -f &amp;lt;CONTAINER_ID&amp;gt;
 
 &lt;p&gt;デフォルトではgRPCはprotobuf(protocol buffers)でやり取りする。
 &lt;a href=&#34;https://github.com/google/protobuf&#34;&gt;protobuf&lt;/a&gt;というのは、
-Googleによるオープンソースの、構造化されたデータをシリアライズフォーマット。&lt;/p&gt;
+Googleによるオープンソースのシリアライズフォーマット。&lt;/p&gt;
 
 &lt;p&gt;今回作るのは、同じ文字列を返すだけのEchoサーバーで、コードは&lt;a href=&#34;https://github.com/sambaiz/try-gRPC&#34;&gt;ここ&lt;/a&gt;にある。
 以下のprotoファイルでは、&lt;code&gt;Echo&lt;/code&gt;というサービスは&lt;code&gt;RetEcho&lt;/code&gt;というメソッドを含み、
@@ -26090,12 +26246,12 @@ RETURN p
 &lt;h2 id=&#34;kubernetesとは-http-kubernetes-io-docs-whatisk8s&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/whatisk8s/&#34;&gt;Kubernetesとは&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;Kubernetes(発音は&lt;a href=&#34;https://cloudplatform.googleblog.com/2014/06/an-update-on-container-support-on-google-cloud-platform.html&#34;&gt;koo-ber-nay&amp;rsquo;-tace&lt;/a&gt;。
-ギリシャ語で操舵手。)はアプリケーションコンテナにおける、自動デプロイ、スケーリング、操作を
-自動化するオープンソースプラットフォームだ。K8sと略される。Googleによって開発が始められた。&lt;/p&gt;
+ギリシャ語で操舵手。)はGoogleによって開発が始められた、アプリケーションコンテナにおける自動デプロイ、スケーリング、操作を
+自動化するOSS。K8sと略される。&lt;/p&gt;
 
 &lt;h2 id=&#34;minikube-https-github-com-kubernetes-minikube&#34;&gt;&lt;a href=&#34;https://github.com/kubernetes/minikube&#34;&gt;Minikube&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;K8sをローカルで試すためのに、MinikubeというVMの中で単一ノードのK8sクラスターを動かすツールを入れる。&lt;/p&gt;
+&lt;p&gt;K8sをローカルで試すために、MinikubeというVMの中で単一ノードのK8sクラスターを動かすツールを入れる。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://github.com/kubernetes/minikube/releases/tag/v0.6.0&#34;&gt;v0.6.0&lt;/a&gt;&lt;/p&gt;
 
@@ -26143,14 +26299,14 @@ NAME      READY     STATUS    RESTARTS   AGE
 nginx     1/1       Running   0          4s
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;code&gt;kubectl exec&lt;/code&gt;で&lt;a href=&#34;http://kubernetes.io/docs/user-guide/getting-into-containers/&#34;&gt;コマンドを実行&lt;/a&gt;し、
-podが動いていることを確認しようとしたが、使えそうなコマンドが見つからなかった。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;kubectl exec&lt;/code&gt;でps&lt;a href=&#34;http://kubernetes.io/docs/user-guide/getting-into-containers/&#34;&gt;コマンドを実行&lt;/a&gt;し、
+podが動いていることを確認しようとしたがコマンドがなかった。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl exec -it nginx ps
 rpc error: code = 2 desc = &amp;quot;oci runtime error: exec failed: exec: \&amp;quot;ps\&amp;quot;: executable file not found in $PATH&amp;quot;error: error executing remote command: error executing command in container: Error executing in Docker Container: 126
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;そこで、リクエストを投げるために&lt;code&gt;kubectl run&lt;/code&gt;で&lt;a href=&#34;http://kubernetes.io/docs/user-guide/kubectl/kubectl_run/&#34;&gt;イメージを動かす単一コンテナのpodを管理するためのDeploymentを作成する。&lt;/a&gt;
+&lt;p&gt;そこでリクエストを投げるために&lt;code&gt;kubectl run&lt;/code&gt;で単一コンテナのDeploymentを&lt;a href=&#34;http://kubernetes.io/docs/user-guide/kubectl/kubectl_run/&#34;&gt;作成する&lt;/a&gt;。
 Deploymentについては後で説明がある。
 &lt;code&gt;--restart=Never&lt;/code&gt;でpodが存在しなくなったときに再起動しないようにし、&lt;code&gt;--env&lt;/code&gt;で環境変数としてnginxのpodのIPを渡している。&lt;/p&gt;
 
@@ -26223,7 +26379,7 @@ spec:
 
 &lt;h2 id=&#34;labels-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-labels&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#labels&#34;&gt;Labels&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;metadataとしてkey-valueのラベルを付けることができる。たくさんのPodをまとめたりするのに便利だ。&lt;/p&gt;
+&lt;p&gt;metadataとしてkey-valueのラベルを付けることができる。たくさんのPodをまとめたりするのに便利。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;metadata:
   name: nginx
@@ -26238,9 +26394,9 @@ nginx     1/1       Running   0          2m
 
 &lt;h2 id=&#34;deployments-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-deployments&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#deployments&#34;&gt;Deployments&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;実行しているPodの維持と更新を管理するのが、上でも出てきたDeploymentだ。
-Deploymentの定義には、Podを作るためのテンプレートと、維持するPod数を記述する。
-pod名はDeployment名から生成されるので、templateには含めない。&lt;/p&gt;
+&lt;p&gt;実行しているPodの維持と更新を管理するのが上でも出てきたDeploymentだ。
+Deploymentの定義にはPodを作るためのテンプレートと維持するPod数を記述する。
+pod名はDeployment名から生成されるのでtemplateには含めない。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
 kind: Deployment
@@ -26271,7 +26427,7 @@ nginx-deployment-1159050644-ar3i7   1/1       Running   0          3m
 nginx-deployment-1159050644-kdjly   1/1       Running   0          3m
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;code&gt;kubectl apply&lt;/code&gt;でDeploymentは変更を実行中のPodに安全にロールアウトする。
+&lt;p&gt;&lt;code&gt;kubectl apply&lt;/code&gt;でDeploymentの変更を実行中のPodに適用する。
 以下の例ではnginxのバージョンを上げている。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
@@ -26312,7 +26468,7 @@ nginx-deployment-1771418926-ygoxl   1/1       Running   0          15s
 
 &lt;h2 id=&#34;services-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-services&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#services&#34;&gt;Services&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;アプリケーションのレイヤー間(例えばフロントエンドとバックエンド)の接続で使われるのがServiceだ。
+&lt;p&gt;アプリケーションのレイヤー間(例えばフロントエンドとバックエンド)の接続で使われるのがService。
 以下のServiceは、8080番ポートで待ち、&lt;code&gt;app: nginx&lt;/code&gt;のラベルが付いているPodの80番ポートに向けるロードバランサーとして働く。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;apiVersion: v1
@@ -26344,7 +26500,7 @@ $ kubectl run busybox --image=busybox --restart=Never --tty -i --env &amp;quot;S
 
 &lt;h2 id=&#34;health-checking-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-health-checking&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#health-checking&#34;&gt;Health Checking&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;&lt;code&gt;livenessProbe&lt;/code&gt;でヘルスチェックの設定を含めることができる。
+&lt;p&gt;&lt;code&gt;livenessProbe&lt;/code&gt;にヘルスチェックの設定を含めることができる。
 以下の例では、初期化のために30秒待った後、&lt;code&gt;/_status/healthz&lt;/code&gt;へのHTTP GETリクエストに対して
 200~399以外のステータスコードが返るか、1秒以上かかった場合、コンテナを再起動する。&lt;/p&gt;
 
