@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>GAEのTaskQueue - sambaiz-net</title>
-    <meta name="twitter:title" content="GAEのTaskQueue - sambaiz-net">
-    <meta property='og:title' content="GAEのTaskQueue - sambaiz-net">
+    <title>GCPのCloud Pub/Sub - sambaiz-net</title>
+    <meta name="twitter:title" content="GCPのCloud Pub/Sub - sambaiz-net">
+    <meta property='og:title' content="GCPのCloud Pub/Sub - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="GCPのマネージドなQueue">
-      <meta name="twitter:description" content="GCPのマネージドなQueue">
+      <meta name="description" content="メッセージングミドルウェア">
+      <meta name="twitter:description" content="メッセージングミドルウェア">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/178/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/180/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "GAEのTaskQueue | sambaiz-net ",
-    "datePublished": "2018-07-15T16:03:00JST",
-    "dateModified": "2018-07-15T16:03:00JST",
+    "headline": "GCPのCloud Pub/Sub | sambaiz-net ",
+    "datePublished": "2018-07-26T23:55:00JST",
+    "dateModified": "2018-07-26T23:55:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "GCPのマネージドなQueue"
+    "description": "メッセージングミドルウェア"
   }
 </script>
 </head>
@@ -103,111 +103,136 @@
 
       <article class="single">
         <div class="single body">
-          <h1>GAEのTaskQueue</h1>
-          <p>(2018-07-15)</p>
-          
+          <h1>GCPのCloud Pub/Sub</h1>
+          <p>(2018-07-26)</p>
+          <p>スケーラビリティに優れるメッセージングミドルウェア。
+データはPullするだけではなくhttpsのエンドポイントにPushすることもでき、Cloud Dataflowを通してBigQueryやCloud MLに繋げることもできる。GAEのTaskQueueのように遅延させる機能は今のところない。</p>
 
-<p>GCPのマネージドなQueueサービスとしてGAEのTaskQueueがあることを教えてもらったので動かしてみる。
-PushQueueとPullQueueがあって、それぞれおおよそAWSのSNSとSQSに相当する。PushQueueの場合はHTTPのリクエストとしてGAEのサービスに投げられる。PullQueueは<a href="https://cloud.google.com/appengine/docs/standard/python/taskqueue/rest/">Cloud Tasks API</a>を使えばGAE外からも使えるらしいがまだalpha。</p>
+<p><a href="https://www.sambaiz.net/article/178/">GAEのTaskQueue - sambaiz-net</a></p>
 
-<p>設定ファイル<a href="https://cloud.google.com/appengine/docs/standard/go/config/queueref">queue.yaml</a>はこんな感じ。bucket_sizeは最大同時実行数で空いていたらrateで埋められていく。</p>
+<p><a href="https://cloud.google.com/pubsub/pricing">料金</a>はPublish/Pull/Pushしたデータ容量による。1TB送ると$60くらい。</p>
 
-<pre><code>queue:
-- name: default
-  rate: 10/m
-  bucket_size: 5
-  retry_parameters:
-    min_backoff_seconds: 10
-    max_backoff_seconds: 300
-</code></pre>
+<p>まずTopicを作成して50件Publishした後、Subsriptionを作成して、再び50件Publishしてみる。
+Publishできるデータは<a href="https://cloud.google.com/pubsub/docs/publisher#header_1">10MB未満</a>。</p>
 
-<p>bucket_sizeの最大は500なのでこれ以上の性能が必要な場合は複数のQueueに分けるか
-<a href="https://cloud.google.com/pubsub/">Cloud Pub/Sub</a>を使うことになる。ただし、<a href="https://cloud.google.com/pubsub/faq?hl=ja#duplicates">At-Least-Once</a>なのでレコードが重複しても問題ないように作る必要がある。SQSも<a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues.html#standard-queues-at-least-once-delivery">同じ</a>。</p>
-
-<p><a href="https://www.sambaiz.net/article/180/">GCPのCloud Pub/Sub - sambaiz-net</a></p>
-
-<h2 id="アプリケーション">アプリケーション</h2>
-
-<p>/にアクセスすると2つのTaskをdefaultのTaskQueueにDelay25秒でPOSTする。
-Taskによるリクエストは/workerで受け、30%の確率で500エラーを返すようにしている。</p>
-
-<pre><code>package main
-
-import (
-	&quot;fmt&quot;
-	&quot;io/ioutil&quot;
-	&quot;math/rand&quot;
-	&quot;net/http&quot;
-	&quot;net/url&quot;
-	&quot;strconv&quot;
-	&quot;time&quot;
-
-	&quot;google.golang.org/appengine&quot;
-	&quot;google.golang.org/appengine/log&quot;
-	&quot;google.golang.org/appengine/taskqueue&quot;
-)
-
-func main() {
-	http.HandleFunc(&quot;/&quot;, handler)
-	http.HandleFunc(&quot;/worker&quot;, handlerQueue)
-	appengine.Main()
+<pre><code>topic, err := client.CreateTopic(ctx, topicName)
+if err != nil {
+  panic(err)
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	ctx := appengine.NewContext(r)
-	// POST body: name=a%26&amp;value=20
-	t := taskqueue.NewPOSTTask(&quot;/worker&quot;, map[string][]string{&quot;name&quot;: {&quot;a&amp;&quot;}, &quot;time&quot;: {strconv.FormatInt(time.Now().UnixNano(), 10)}})
-	t.Delay = time.Second * 25
-	// POST body: name=a&amp;name=b
-	t2 := taskqueue.NewPOSTTask(&quot;/worker&quot;, map[string][]string{&quot;name&quot;: {&quot;a&quot;, &quot;b&quot;}})
-	if _, err := taskqueue.AddMulti(ctx, []*taskqueue.Task{t, t2}, &quot;&quot;); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fmt.Fprintln(w, &quot;ok&quot;)
+var wg sync.WaitGroup
+for i := 0; i &lt; 50; i++ {
+  wg.Add(1)
+  go func() {
+    if _, err := topic.Publish(ctx, &amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != nil {
+      log.Fatalf(&quot;Publish error: %s&quot;, err.Error())
+    } else {
+      log.Printf(&quot;Publish successful: %d&quot;, i)
+    }
+    wg.Done()
+  }()
+  wg.Wait()
 }
 
-func handlerQueue(w http.ResponseWriter, r *http.Request) {
-	ctx := appengine.NewContext(r)
+log.Printf(&quot;Create Subscription&quot;)
+sub := createSubscription(ctx, client, topic, subscriptionName)
 
-	bodyb, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	body := string(bodyb)
-	log.Infof(ctx, &quot;%s\n&quot;, body)
-
-	values, err := url.ParseQuery(body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	log.Infof(ctx, &quot;%#+v\n&quot;, values)
-	if rand.Float64() &lt; 0.3 {
-		http.Error(w, &quot;random fail&quot;, http.StatusInternalServerError)
-		return
-	}
-	fmt.Fprintln(w, &quot;ok&quot;)
+for i := 50; i &lt; 100; i++ {
+  wg.Add(1)
+  go func() {
+    if _, err := topic.Publish(ctx, &amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != nil {
+      log.Fatalf(&quot;Publish error: %s&quot;, err.Error())
+    } else {
+      log.Printf(&quot;Publish successful: %d&quot;, i)
+    }
+    wg.Done()
+  }()
+  wg.Wait()
 }
 </code></pre>
 
-<p>デプロイして何度かアクセスする。</p>
-
-<pre><code>$ gcloud app deploy queue.yaml
-$ gcloud app deploy
-$ gcloud app browse
+<pre><code>2018/07/26 21:42:51 Publish successful: 47
+2018/07/26 21:42:51 Publish successful: 48
+2018/07/26 21:42:51 Publish successful: 49
+2018/07/26 21:42:51 Create Subscription
+2018/07/26 21:42:58 Publish successful: 50
+2018/07/26 21:42:58 Publish successful: 51
+2018/07/26 21:42:58 Publish successful: 52
 </code></pre>
 
-<p>TaskがQueueに入り、エラーの場合はリトライしていることが確認できる。</p>
+<p>Pull時のHandlerとしてAckを呼ぶackHandlerと、Nackを呼ぶnackHandler、何もしないnothingHandlerを用意した。
+AckするとPub/Subからメッセージが消え、Nackまたはタイムアウトするとリトライされる。</p>
 
-<p><img src="https://www.sambaiz.net/images/178.png" alt="PushQueue" /></p>
+<pre><code>type GotData struct {
+	sync.Mutex
+	gotData []string
+}
 
-<p>通常Delay経ってETA(Estimate Time of Arrival?)を迎えたものから処理されていくが、bucketやrateが小さい場合リトライが重なって渋滞すると過ぎても処理されず溜まってしまうことがある。リトライ時のDelayはmax_backoff_secondsまでの範囲内でExponential Backoffし、task_retry_limitを指定しないと永遠にリトライし続ける。</p>
+var g = GotData{}
 
-<h2 id="参考">参考</h2>
+func ackHandler(done func()) func(ctx context.Context, m *pubsub.Message) {
+	return func(ctx context.Context, m *pubsub.Message) {
+		g.Lock()
+		g.gotData = append(g.gotData, string(m.Data))
+		sort.Slice(g.gotData, func(i, j int) bool {
+			return g.gotData[i] &lt; g.gotData[j]
+		})
+		log.Printf(&quot;ackHandler got message: %s %#v&quot;, m.Data, g.gotData)
+		if len(g.gotData) == 50 {
+			done()
+		}
+		g.Unlock()
+		m.Ack()
+	}
+}
 
-<p><a href="https://www.slideshare.net/furuyamayuuki/gcp-72165187">スケーラブル GCP アーキテクチャ</a></p>
+func nackHandler(ctx context.Context, m *pubsub.Message) {
+	log.Printf(&quot;nackHandler got message: %s&quot;, m.Data)
+	m.Nack()
+}
+
+func nothingHandler(ctx context.Context, m *pubsub.Message) {
+	log.Printf(&quot;nothingHandler got message: %s&quot;, m.Data)
+}
+</code></pre>
+
+<p>一つのSubscriptionを複数のSubscriberで使うことでメッセージを分散処理することができる。
+ただし同じstructを使うとエラーになるのでそれぞれ生成している。</p>
+
+<p>nothingHandlerではSubscriptionの<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L210">MaxExtension</a>を<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L240">デフォルト</a>の10分から10秒にすることでリトライを早めている。<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L136">AckDeadline</a>というのもあるがPullの場合、結局MaxExtensionまで延長してしまうので意味がないようだ。</p>
+
+<p>ReceiveSettingsにはほかに<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L217">MaxOutstandingMessages</a>というのもあり、一度に処理されるメッセージの量を制限することができる。</p>
+
+<pre><code>go func() {
+  sub := client.Subscription(subscriptionName)
+  if err := sub.Receive(ctx, ackHandler(cancel)); err != nil {
+    panic(err)
+  }
+}()
+go func() {
+  sub := client.Subscription(subscriptionName)
+  if err := sub.Receive(ctx, nackHandler); err != nil {
+    panic(err)
+  }
+}()
+go func() {
+  sub := client.Subscription(subscriptionName)
+  sub.ReceiveSettings.MaxExtension = time.Second * 10
+  if err := sub.Receive(ctx, nothingHandler); err != nil {
+		panic(err)
+  }
+}()
+</code></pre>
+
+<p>nack/nothingHandlerによっていくつかリトライされた後、ackHandlerにSubscription作成後のメッセージが全て届いた。
+データは<a href="https://cloud.google.com/pubsub/faq#persistent">7日間</a>保持される。
+メッセージの順序は<a href="https://cloud.google.com/pubsub/docs/ordering">保証されず</a>、今回は1件ずつになっているが重複することがある。</p>
+
+<pre><code>2018/07/26 21:43:49 nothingHandler got message: 91
+2018/07/26 21:44:28 nackHandler got message: 91
+2018/07/26 21:44:30 ackHandler got message: 91 []string{&quot;50&quot;, &quot;51&quot;, &quot;52&quot;, &quot;53&quot;, &quot;54&quot;, &quot;55&quot;, &quot;56&quot;, &quot;57&quot;, &quot;58&quot;, &quot;59&quot;, &quot;60&quot;, &quot;61&quot;, &quot;62&quot;, &quot;63&quot;, &quot;64&quot;, &quot;65&quot;, &quot;66&quot;, &quot;67&quot;, &quot;68&quot;, &quot;69&quot;, &quot;70&quot;, &quot;71&quot;, &quot;72&quot;, &quot;73&quot;, &quot;74&quot;, &quot;75&quot;, &quot;76&quot;, &quot;77&quot;, &quot;78&quot;, &quot;79&quot;, &quot;80&quot;, &quot;81&quot;, &quot;82&quot;, &quot;83&quot;, &quot;84&quot;, &quot;85&quot;, &quot;86&quot;, &quot;87&quot;, &quot;88&quot;, &quot;89&quot;, &quot;90&quot;, &quot;91&quot;, &quot;92&quot;, &quot;93&quot;, &quot;94&quot;, &quot;95&quot;, &quot;96&quot;, &quot;97&quot;, &quot;98&quot;, &quot;99&quot;}
+2018/07/26 21:44:30 Finished!
+</code></pre>
 
         </div>
       </article>

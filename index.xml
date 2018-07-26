@@ -6,8 +6,147 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-07-25 23:55:00 &#43;0900 JST</updated>
+    <updated>2018-07-26 23:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>GCPのCloud Pub/Sub</title>
+          <link>https://www.sambaiz.net/article/180/</link>
+          <pubDate>Thu, 26 Jul 2018 23:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/180/</guid>
+          <description>&lt;p&gt;スケーラビリティに優れるメッセージングミドルウェア。
+データはPullするだけではなくhttpsのエンドポイントにPushすることもでき、Cloud Dataflowを通してBigQueryやCloud MLに繋げることもできる。GAEのTaskQueueのように遅延させる機能は今のところない。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/178/&#34;&gt;GAEのTaskQueue - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://cloud.google.com/pubsub/pricing&#34;&gt;料金&lt;/a&gt;はPublish/Pull/Pushしたデータ容量による。1TB送ると$60くらい。&lt;/p&gt;
+
+&lt;p&gt;まずTopicを作成して50件Publishした後、Subsriptionを作成して、再び50件Publishしてみる。
+Publishできるデータは&lt;a href=&#34;https://cloud.google.com/pubsub/docs/publisher#header_1&#34;&gt;10MB未満&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;topic, err := client.CreateTopic(ctx, topicName)
+if err != nil {
+  panic(err)
+}
+
+var wg sync.WaitGroup
+for i := 0; i &amp;lt; 50; i++ {
+  wg.Add(1)
+  go func() {
+    if _, err := topic.Publish(ctx, &amp;amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != nil {
+      log.Fatalf(&amp;quot;Publish error: %s&amp;quot;, err.Error())
+    } else {
+      log.Printf(&amp;quot;Publish successful: %d&amp;quot;, i)
+    }
+    wg.Done()
+  }()
+  wg.Wait()
+}
+
+log.Printf(&amp;quot;Create Subscription&amp;quot;)
+sub := createSubscription(ctx, client, topic, subscriptionName)
+
+for i := 50; i &amp;lt; 100; i++ {
+  wg.Add(1)
+  go func() {
+    if _, err := topic.Publish(ctx, &amp;amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != nil {
+      log.Fatalf(&amp;quot;Publish error: %s&amp;quot;, err.Error())
+    } else {
+      log.Printf(&amp;quot;Publish successful: %d&amp;quot;, i)
+    }
+    wg.Done()
+  }()
+  wg.Wait()
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;2018/07/26 21:42:51 Publish successful: 47
+2018/07/26 21:42:51 Publish successful: 48
+2018/07/26 21:42:51 Publish successful: 49
+2018/07/26 21:42:51 Create Subscription
+2018/07/26 21:42:58 Publish successful: 50
+2018/07/26 21:42:58 Publish successful: 51
+2018/07/26 21:42:58 Publish successful: 52
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Pull時のHandlerとしてAckを呼ぶackHandlerと、Nackを呼ぶnackHandler、何もしないnothingHandlerを用意した。
+AckするとPub/Subからメッセージが消え、Nackまたはタイムアウトするとリトライされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type GotData struct {
+	sync.Mutex
+	gotData []string
+}
+
+var g = GotData{}
+
+func ackHandler(done func()) func(ctx context.Context, m *pubsub.Message) {
+	return func(ctx context.Context, m *pubsub.Message) {
+		g.Lock()
+		g.gotData = append(g.gotData, string(m.Data))
+		sort.Slice(g.gotData, func(i, j int) bool {
+			return g.gotData[i] &amp;lt; g.gotData[j]
+		})
+		log.Printf(&amp;quot;ackHandler got message: %s %#v&amp;quot;, m.Data, g.gotData)
+		if len(g.gotData) == 50 {
+			done()
+		}
+		g.Unlock()
+		m.Ack()
+	}
+}
+
+func nackHandler(ctx context.Context, m *pubsub.Message) {
+	log.Printf(&amp;quot;nackHandler got message: %s&amp;quot;, m.Data)
+	m.Nack()
+}
+
+func nothingHandler(ctx context.Context, m *pubsub.Message) {
+	log.Printf(&amp;quot;nothingHandler got message: %s&amp;quot;, m.Data)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一つのSubscriptionを複数のSubscriberで使うことでメッセージを分散処理することができる。
+ただし同じstructを使うとエラーになるのでそれぞれ生成している。&lt;/p&gt;
+
+&lt;p&gt;nothingHandlerではSubscriptionの&lt;a href=&#34;https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L210&#34;&gt;MaxExtension&lt;/a&gt;を&lt;a href=&#34;https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L240&#34;&gt;デフォルト&lt;/a&gt;の10分から10秒にすることでリトライを早めている。&lt;a href=&#34;https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L136&#34;&gt;AckDeadline&lt;/a&gt;というのもあるがPullの場合、結局MaxExtensionまで延長してしまうので意味がないようだ。&lt;/p&gt;
+
+&lt;p&gt;ReceiveSettingsにはほかに&lt;a href=&#34;https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L217&#34;&gt;MaxOutstandingMessages&lt;/a&gt;というのもあり、一度に処理されるメッセージの量を制限することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;go func() {
+  sub := client.Subscription(subscriptionName)
+  if err := sub.Receive(ctx, ackHandler(cancel)); err != nil {
+    panic(err)
+  }
+}()
+go func() {
+  sub := client.Subscription(subscriptionName)
+  if err := sub.Receive(ctx, nackHandler); err != nil {
+    panic(err)
+  }
+}()
+go func() {
+  sub := client.Subscription(subscriptionName)
+  sub.ReceiveSettings.MaxExtension = time.Second * 10
+  if err := sub.Receive(ctx, nothingHandler); err != nil {
+		panic(err)
+  }
+}()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;nack/nothingHandlerによっていくつかリトライされた後、ackHandlerにSubscription作成後のメッセージが全て届いた。
+データは&lt;a href=&#34;https://cloud.google.com/pubsub/faq#persistent&#34;&gt;7日間&lt;/a&gt;保持される。
+メッセージの順序は&lt;a href=&#34;https://cloud.google.com/pubsub/docs/ordering&#34;&gt;保証されず&lt;/a&gt;、今回は1件ずつになっているが重複することがある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;2018/07/26 21:43:49 nothingHandler got message: 91
+2018/07/26 21:44:28 nackHandler got message: 91
+2018/07/26 21:44:30 ackHandler got message: 91 []string{&amp;quot;50&amp;quot;, &amp;quot;51&amp;quot;, &amp;quot;52&amp;quot;, &amp;quot;53&amp;quot;, &amp;quot;54&amp;quot;, &amp;quot;55&amp;quot;, &amp;quot;56&amp;quot;, &amp;quot;57&amp;quot;, &amp;quot;58&amp;quot;, &amp;quot;59&amp;quot;, &amp;quot;60&amp;quot;, &amp;quot;61&amp;quot;, &amp;quot;62&amp;quot;, &amp;quot;63&amp;quot;, &amp;quot;64&amp;quot;, &amp;quot;65&amp;quot;, &amp;quot;66&amp;quot;, &amp;quot;67&amp;quot;, &amp;quot;68&amp;quot;, &amp;quot;69&amp;quot;, &amp;quot;70&amp;quot;, &amp;quot;71&amp;quot;, &amp;quot;72&amp;quot;, &amp;quot;73&amp;quot;, &amp;quot;74&amp;quot;, &amp;quot;75&amp;quot;, &amp;quot;76&amp;quot;, &amp;quot;77&amp;quot;, &amp;quot;78&amp;quot;, &amp;quot;79&amp;quot;, &amp;quot;80&amp;quot;, &amp;quot;81&amp;quot;, &amp;quot;82&amp;quot;, &amp;quot;83&amp;quot;, &amp;quot;84&amp;quot;, &amp;quot;85&amp;quot;, &amp;quot;86&amp;quot;, &amp;quot;87&amp;quot;, &amp;quot;88&amp;quot;, &amp;quot;89&amp;quot;, &amp;quot;90&amp;quot;, &amp;quot;91&amp;quot;, &amp;quot;92&amp;quot;, &amp;quot;93&amp;quot;, &amp;quot;94&amp;quot;, &amp;quot;95&amp;quot;, &amp;quot;96&amp;quot;, &amp;quot;97&amp;quot;, &amp;quot;98&amp;quot;, &amp;quot;99&amp;quot;}
+2018/07/26 21:44:30 Finished!
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -190,6 +329,8 @@ PushQueueとPullQueueがあって、それぞれおおよそAWSのSNSとSQSに�
 
 &lt;p&gt;bucket_sizeの最大は500なのでこれ以上の性能が必要な場合は複数のQueueに分けるか
 &lt;a href=&#34;https://cloud.google.com/pubsub/&#34;&gt;Cloud Pub/Sub&lt;/a&gt;を使うことになる。ただし、&lt;a href=&#34;https://cloud.google.com/pubsub/faq?hl=ja#duplicates&#34;&gt;At-Least-Once&lt;/a&gt;なのでレコードが重複しても問題ないように作る必要がある。SQSも&lt;a href=&#34;https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues.html#standard-queues-at-least-once-delivery&#34;&gt;同じ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/180/&#34;&gt;GCPのCloud Pub/Sub - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;h2 id=&#34;アプリケーション&#34;&gt;アプリケーション&lt;/h2&gt;
 
