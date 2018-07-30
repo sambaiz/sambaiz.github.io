@@ -6,8 +6,111 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-07-26 23:55:00 &#43;0900 JST</updated>
+    <updated>2018-07-30 23:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>KubernetesのNetworkPolicy Resource</title>
+          <link>https://www.sambaiz.net/article/181/</link>
+          <pubDate>Mon, 30 Jul 2018 23:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/181/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://kubernetes.io/docs/concepts/services-networking/network-policies/&#34;&gt;Network Policies - Kubernetes&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Podのトラフィックを制御するためのResource。AWSのセキュリティグループやGCPのファイアウォールルールのようなもの。
+GKEでは今のところデフォルトでオフになっているので&lt;code&gt;--enable-network-policy&lt;/code&gt;を付けてクラスタを作成する必要がある。&lt;/p&gt;
+
+&lt;p&gt;以前作成したmulti podのアプリケーションで挙動を確認する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/173/&#34;&gt;GKEでのService(ClusterIP/NodePort/LoadBalancer)とIngress - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get service
+NAME               TYPE           CLUSTER-IP      EXTERNAL-IP      PORT(S)        AGE
+clusterip-app      ClusterIP      10.23.247.54    &amp;lt;none&amp;gt;           80/TCP         48m
+loadbalancer-app   LoadBalancer   10.23.244.137   35.224.130.196   80:31508/TCP   48m
+nodeport-app       NodePort       10.23.246.215   &amp;lt;none&amp;gt;           80:32181/TCP   48m
+...
+
+$ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://nodeport-app&amp;quot;}&#39; http://35.224.130.196/
+200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;作成するNetworkPolicyは以下の二つで、いずれも対象は&lt;code&gt;app: nodeport-app&lt;/code&gt;のラベルが付いたPod。
+一つ目は対象Podへのリクエストを一旦全て拒否する。
+二つ目は&lt;code&gt;nodeport-access: &amp;quot;true&amp;quot;&lt;/code&gt;のラベルが付いたPodから対象Podへの8080ポートのリクエストを許可するもの。
+今回は設定しないがegressも設定できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat networkPolicies.yaml 
+---
+# Default deny all ingress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector:
+    matchLabels:
+      app: nodeport-app
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: nodeport-app
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          nodeport-access: &amp;quot;true&amp;quot;
+    ports:
+    - port: 8080
+
+$ kubectl apply -f networkPolicies.yaml 
+$ kubectl get networkpolicy
+NAME                  POD-SELECTOR       AGE
+default-deny          app=nodeport-app   5s
+test-network-policy   app=nodeport-app   5s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;作成後、ラベルが付いていないPodからアクセスできなくなり、ラベルを付けるとアクセスできるようになった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://nodeport-app&amp;quot;}&#39; http://35.224.130.196/
+Get http://nodeport-app: dial tcp 10.23.246.215:80: i/o timeout
+
+$ kubectl label pods loadbalancer-app-6bd554874-**** nodeport-access=true
+$ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://nodeport-app&amp;quot;}&#39; http://35.224.130.196/
+200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fromにはipBlockやnamespaceSelectorも設定することもでき、複数指定した場合はいずれかの条件を満たすと通る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl delete pod loadbalancer-app-***
+$  curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://nodeport-app&amp;quot;}&#39; http://35.224.130.196/
+Get http://nodeport-app: dial tcp 10.23.246.215:80: i/o timeout
+
+$ kubectl label namespaces default aaa=bbb
+$ cat networkPolicies.yaml 
+...
+- from:
+    - podSelector:
+        matchLabels:
+          nodeport-access: &amp;quot;true&amp;quot;
+    - namespaceSelector:
+        matchLabels:
+          aaa: bbb
+...
+
+$ kubectl apply -f networkPolicies.yaml 
+$ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://nodeport-app&amp;quot;}&#39; http://35.224.130.196/
+200
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -23,7 +126,8 @@
 
 &lt;p&gt;&lt;a href=&#34;https://cloud.google.com/pubsub/pricing&#34;&gt;料金&lt;/a&gt;はPublish/Pull/Pushしたデータ容量による。1TB送ると$60くらい。&lt;/p&gt;
 
-&lt;p&gt;まずTopicを作成して50件Publishした後、Subsriptionを作成して、再び50件Publishしてみる。
+&lt;p&gt;Goの&lt;a href=&#34;https://github.com/GoogleCloudPlatform/google-cloud-go&#34;&gt;クライアントライブラリ&lt;/a&gt;で動かしてみる。
+まずTopicを作成して50件Publishした後、Subsriptionを作成して、再び50件Publishする。
 Publishできるデータは&lt;a href=&#34;https://cloud.google.com/pubsub/docs/publisher#header_1&#34;&gt;10MB未満&lt;/a&gt;。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;topic, err := client.CreateTopic(ctx, topicName)
@@ -144,6 +248,10 @@ go func() {
 2018/07/26 21:44:30 ackHandler got message: 91 []string{&amp;quot;50&amp;quot;, &amp;quot;51&amp;quot;, &amp;quot;52&amp;quot;, &amp;quot;53&amp;quot;, &amp;quot;54&amp;quot;, &amp;quot;55&amp;quot;, &amp;quot;56&amp;quot;, &amp;quot;57&amp;quot;, &amp;quot;58&amp;quot;, &amp;quot;59&amp;quot;, &amp;quot;60&amp;quot;, &amp;quot;61&amp;quot;, &amp;quot;62&amp;quot;, &amp;quot;63&amp;quot;, &amp;quot;64&amp;quot;, &amp;quot;65&amp;quot;, &amp;quot;66&amp;quot;, &amp;quot;67&amp;quot;, &amp;quot;68&amp;quot;, &amp;quot;69&amp;quot;, &amp;quot;70&amp;quot;, &amp;quot;71&amp;quot;, &amp;quot;72&amp;quot;, &amp;quot;73&amp;quot;, &amp;quot;74&amp;quot;, &amp;quot;75&amp;quot;, &amp;quot;76&amp;quot;, &amp;quot;77&amp;quot;, &amp;quot;78&amp;quot;, &amp;quot;79&amp;quot;, &amp;quot;80&amp;quot;, &amp;quot;81&amp;quot;, &amp;quot;82&amp;quot;, &amp;quot;83&amp;quot;, &amp;quot;84&amp;quot;, &amp;quot;85&amp;quot;, &amp;quot;86&amp;quot;, &amp;quot;87&amp;quot;, &amp;quot;88&amp;quot;, &amp;quot;89&amp;quot;, &amp;quot;90&amp;quot;, &amp;quot;91&amp;quot;, &amp;quot;92&amp;quot;, &amp;quot;93&amp;quot;, &amp;quot;94&amp;quot;, &amp;quot;95&amp;quot;, &amp;quot;96&amp;quot;, &amp;quot;97&amp;quot;, &amp;quot;98&amp;quot;, &amp;quot;99&amp;quot;}
 2018/07/26 21:44:30 Finished!
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;スケールし、複数コンシューマーがそれぞれのタイミングでPullできるログの一時的な貯め先などとしてAWSのKinesis Data Streamsと同じようなユースケースで使われるが、Kinesisでは順序が保証されていたり、シャードの指定やデータの取り出し方といった扱いなど異なる点もある。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/67/&#34;&gt;Kinesis Streams/Firehose/Analyticsを試す - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
@@ -1240,9 +1348,9 @@ $ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://nodeport-app&amp;quot;
 
 &lt;h3 id=&#34;nodeport&#34;&gt;NodePort&lt;/h3&gt;
 
-&lt;p&gt;ファイアウォールでポートが開いていないのでそのままではアクセスできない。開けばNodeのIPとnodePortでアクセスできる。&lt;/p&gt;
+&lt;p&gt;ファイアウォールルールでGCEのポートが開いていないのでそのままではアクセスできない。開けばNodeのIPとnodePortでアクセスできる。&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/173-firewallrule.png&#34; alt=&#34;ファイアウォールのルール&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/173-firewallrule.png&#34; alt=&#34;ファイアウォールルール&#34; /&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl get node -o wide
 NAME                                          STATUS    ROLES     AGE       VERSION         EXTERNAL-IP       OS-IMAGE                             KERNEL-VERSION   CONTAINER-RUNTIME
@@ -1253,6 +1361,10 @@ gke-test-cluster-default-pool-6601d6a8-6881   Ready     &amp;lt;none&amp;gt;    
 &lt;pre&gt;&lt;code&gt;$ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://clusterip-app&amp;quot;}&#39; 35.224.204.110:31233
 200
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ちなみにNetworkPolicyを使うとPodのトラフィックを制御できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/181/&#34;&gt;KubernetesのNetworkPolicy Resource - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;h2 id=&#34;ingressを作成&#34;&gt;Ingressを作成&lt;/h2&gt;
 
@@ -8683,7 +8795,7 @@ Ran all test suites.
     
       
         <item>
-          <title>k8sのパッケージマネージャーHelmを使う</title>
+          <title>KubernetesのパッケージマネージャーHelmを使う</title>
           <link>https://www.sambaiz.net/article/122/</link>
           <pubDate>Wed, 26 Jul 2017 01:33:00 &#43;0900</pubDate>
           <author>sambaiz</author>

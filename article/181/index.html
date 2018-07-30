@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>HoloLensでのUnityアプリケーションのフレームレート - sambaiz-net</title>
-    <meta name="twitter:title" content="HoloLensでのUnityアプリケーションのフレームレート - sambaiz-net">
-    <meta property='og:title' content="HoloLensでのUnityアプリケーションのフレームレート - sambaiz-net">
+    <title>KubernetesのNetworkPolicy Resource - sambaiz-net</title>
+    <meta name="twitter:title" content="KubernetesのNetworkPolicy Resource - sambaiz-net">
+    <meta property='og:title' content="KubernetesのNetworkPolicy Resource - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="フレームレート">
-      <meta name="twitter:description" content="フレームレート">
+      <meta name="description" content="AWSのセキュリティグループやGCPのファイアウォールルールのようなPodの設定">
+      <meta name="twitter:description" content="AWSのセキュリティグループやGCPのファイアウォールルールのようなPodの設定">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/120/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/181/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "HoloLensでのUnityアプリケーションのフレームレート | sambaiz-net ",
-    "datePublished": "2017-07-16T23:32:00JST",
-    "dateModified": "2017-07-16T23:32:00JST",
+    "headline": "KubernetesのNetworkPolicy Resource | sambaiz-net ",
+    "datePublished": "2018-07-30T23:55:00JST",
+    "dateModified": "2018-07-30T23:55:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "フレームレート"
+    "description": "AWSのセキュリティグループやGCPのファイアウォールルールのようなPodの設定"
   }
 </script>
 </head>
@@ -103,38 +103,100 @@
 
       <article class="single">
         <div class="single body">
-          <h1>HoloLensでのUnityアプリケーションのフレームレート</h1>
-          <p>(2017-07-16)</p>
-          
+          <h1>KubernetesのNetworkPolicy Resource</h1>
+          <p>(2018-07-30)</p>
+          <p><a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/">Network Policies - Kubernetes</a></p>
 
-<h2 id="hololensディスプレイのフレームレート-https-developer-microsoft-com-en-us-windows-mixed-reality-hologram-stability-frame-rate"><a href="https://developer.microsoft.com/en-us/windows/mixed-reality/hologram_stability#frame_rate">HoloLensディスプレイのフレームレート</a></h2>
+<p>Podのトラフィックを制御するためのResource。AWSのセキュリティグループやGCPのファイアウォールルールのようなもの。
+GKEでは今のところデフォルトでオフになっているので<code>--enable-network-policy</code>を付けてクラスタを作成する必要がある。</p>
 
-<p>HoloLensのディスプレイは60fpsでリフレッシュされるので、アプリケーションもこれに合わせて60fps、
-つまり16msごとにOSにイメージを渡せるのがベスト。
-ただし、安定して60fpsが実現できないような重いアプリケーションの場合、
-変動してしまうよりは下げて安定させる方が良い。</p>
+<p>以前作成したmulti podのアプリケーションで挙動を確認する。</p>
 
-<p>フレームレートはDevice Portalから確認することができ、キャプチャする際は30fpsに制限される。</p>
+<p><a href="https://www.sambaiz.net/article/173/">GKEでのService(ClusterIP/NodePort/LoadBalancer)とIngress - sambaiz-net</a></p>
 
-<h2 id="unityアプリケーションのフレームレート">Unityアプリケーションのフレームレート</h2>
+<pre><code>$ kubectl get service
+NAME               TYPE           CLUSTER-IP      EXTERNAL-IP      PORT(S)        AGE
+clusterip-app      ClusterIP      10.23.247.54    &lt;none&gt;           80/TCP         48m
+loadbalancer-app   LoadBalancer   10.23.244.137   35.224.130.196   80:31508/TCP   48m
+nodeport-app       NodePort       10.23.246.215   &lt;none&gt;           80:32181/TCP   48m
+...
 
-<p>Unityでのフレームレートは
-<a href="https://docs.unity3d.com/ja/current/ScriptReference/Application-targetFrameRate.html">Application.targetFrameRate</a>
-で設定できる。デフォルト値は-1で、その場合プラットフォームごとのデフォルト設定が使われる。
-何も設定しない状態でHoloLensで動かしたところ60fpsになった。</p>
+$ curl -d '{&quot;url&quot;: &quot;http://nodeport-app&quot;}' http://35.224.130.196/
+200
+</code></pre>
 
-<h2 id="debugビルドでのフレームレートの低下">Debugビルドでのフレームレートの低下</h2>
+<p>作成するNetworkPolicyは以下の二つで、いずれも対象は<code>app: nodeport-app</code>のラベルが付いたPod。
+一つ目は対象Podへのリクエストを一旦全て拒否する。
+二つ目は<code>nodeport-access: &quot;true&quot;</code>のラベルが付いたPodから対象Podへの8080ポートのリクエストを許可するもの。
+今回は設定しないがegressも設定できる。</p>
 
-<p>Debugビルドだと<a href="https://www.assetstore.unity3d.com/jp/#!/content/4696">Space Robot Kyle</a>
-だけ描画するだけでもフレームレートが20まで下がってしまった。</p>
+<pre><code>$ cat networkPolicies.yaml 
+---
+# Default deny all ingress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector:
+    matchLabels:
+      app: nodeport-app
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: nodeport-app
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          nodeport-access: &quot;true&quot;
+    ports:
+    - port: 8080
 
-<p><a href="https://www.sambaiz.net/article/119/">HoloLensで剣振ってみた - sambaiz-net</a></p>
+$ kubectl apply -f networkPolicies.yaml 
+$ kubectl get networkpolicy
+NAME                  POD-SELECTOR       AGE
+default-deny          app=nodeport-app   5s
+test-network-policy   app=nodeport-app   5s
+</code></pre>
 
-<p><img src="https://www.sambaiz.net/images/120-frame.png" alt="フレームレートの低下" /></p>
+<p>作成後、ラベルが付いていないPodからアクセスできなくなり、ラベルを付けるとアクセスできるようになった。</p>
 
-<p>DebugビルドだったのをRelasseビルドに変えたら60fpsになった。
-Relaseビルドではコードの最適化にチェックが入っていたりするんだけど、
-その辺りを外してみても特に変わらなかったのでそれではないらしい。</p>
+<pre><code>$ curl -d '{&quot;url&quot;: &quot;http://nodeport-app&quot;}' http://35.224.130.196/
+Get http://nodeport-app: dial tcp 10.23.246.215:80: i/o timeout
+
+$ kubectl label pods loadbalancer-app-6bd554874-**** nodeport-access=true
+$ curl -d '{&quot;url&quot;: &quot;http://nodeport-app&quot;}' http://35.224.130.196/
+200
+</code></pre>
+
+<p>fromにはipBlockやnamespaceSelectorも設定することもでき、複数指定した場合はいずれかの条件を満たすと通る。</p>
+
+<pre><code>$ kubectl delete pod loadbalancer-app-***
+$  curl -d '{&quot;url&quot;: &quot;http://nodeport-app&quot;}' http://35.224.130.196/
+Get http://nodeport-app: dial tcp 10.23.246.215:80: i/o timeout
+
+$ kubectl label namespaces default aaa=bbb
+$ cat networkPolicies.yaml 
+...
+- from:
+    - podSelector:
+        matchLabels:
+          nodeport-access: &quot;true&quot;
+    - namespaceSelector:
+        matchLabels:
+          aaa: bbb
+...
+
+$ kubectl apply -f networkPolicies.yaml 
+$ curl -d '{&quot;url&quot;: &quot;http://nodeport-app&quot;}' http://35.224.130.196/
+200
+</code></pre>
 
         </div>
       </article>
