@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>ElasticsearchのCircuit Breaker - sambaiz-net</title>
-    <meta name="twitter:title" content="ElasticsearchのCircuit Breaker - sambaiz-net">
-    <meta property='og:title' content="ElasticsearchのCircuit Breaker - sambaiz-net">
+    <title>nohupし忘れた時間のかかる処理をdisownしてexit後も実行させ続ける - sambaiz-net</title>
+    <meta name="twitter:title" content="nohupし忘れた時間のかかる処理をdisownしてexit後も実行させ続ける - sambaiz-net">
+    <meta property='og:title' content="nohupし忘れた時間のかかる処理をdisownしてexit後も実行させ続ける - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="Circuit Breaker">
-      <meta name="twitter:description" content="Circuit Breaker">
+      <meta name="description" content="SIGHUP">
+      <meta name="twitter:description" content="SIGHUP">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/71/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/184/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "ElasticsearchのCircuit Breaker | sambaiz-net ",
-    "datePublished": "2017-02-24T21:45:00JST",
-    "dateModified": "2017-02-24T21:45:00JST",
+    "headline": "nohupし忘れた時間のかかる処理をdisownしてexit後も実行させ続ける | sambaiz-net ",
+    "datePublished": "2018-08-23T00:52:00JST",
+    "dateModified": "2018-08-23T00:52:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Circuit Breaker"
+    "description": "SIGHUP"
   }
 </script>
 </head>
@@ -103,71 +103,28 @@
 
       <article class="single">
         <div class="single body">
-          <h1>ElasticsearchのCircuit Breaker</h1>
-          <p>(2017-02-24)</p>
-          <p><a href="https://www.sambaiz.net/article/52/">ElasticsearchをDockerで動かしてGrafanaで可視化する - sambaiz.net</a></p>
+          <h1>nohupし忘れた時間のかかる処理をdisownしてexit後も実行させ続ける</h1>
+          <p>(2018-08-23)</p>
+          <p>時間がかかるコマンドを実行する場合、通常は<code>nohup</code>で実行し
+ターミナル終了時に飛ぶ<a href="https://en.wikipedia.org/wiki/SIGHUP">SIGHUP(SIGnal Hang UP)</a>を無視させることで
+exitしても実行させ続けることができる。</p>
 
-<p>ESに送られるデータの量が増えてくるとGrafanaのDashboardにグラフが表示されなくなってしまった。
-表示されたエラーはこういうの。</p>
-
-<pre><code>&quot;root_cause&quot;: [
-    {
-        &quot;type&quot;: &quot;circuit_breaking_exception&quot;,
-        &quot;reason&quot;: &quot;[request] Data too large, data for [] would be larger than limit of [8998512230/8.3gb]&quot;,
-        &quot;bytes_wanted&quot;: 10464007168,
-        &quot;bytes_limit&quot;: 8998512230
-    }
-],
+<pre><code>$ nohup ./foo &amp;
 </code></pre>
 
-<p>これは1リクエストの集計などで使うメモリ量がしきい値をこえて
-<a href="https://www.elastic.co/guide/en/elasticsearch/reference/5.2/circuit-breaker.html">Circuit Breaker</a>が発動したということ。
-メモリを食いつぶしてOutOfMemoryになる前に焼き切れるようになっている。</p>
+<p>ただnohupを付けずに実行し始めてから思ったより時間がかかるということもある。
+その場合は、<code>Ctrl+Z</code>で一旦停止してから<code>bg</code>でバックラウンドで実行するようにして<code>disown -h</code>でSIGHUPが送られないようにできる。
+<code>disown</code>はシェルのジョブテーブルから削除するコマンドで、そのままでもSIGHUPが送られないようにできるが、
+-hを付けるとジョブテーブルから削除せずに済む。</p>
 
-<p>情報は<a href="https://www.elastic.co/guide/en/elasticsearch/reference/5.2/cluster-nodes-stats.html">stats</a>のapiでも取得できる。</p>
+<pre><code>$ jobs
+[1]+  停止                  ./foo
 
-<pre><code>$ curl localhost:9200/_nodes/stats | jq .nodes[].breakers.request
-{
-  &quot;limit_size_in_bytes&quot;: 8998512230,
-  &quot;limit_size&quot;: &quot;8.3gb&quot;,
-  &quot;estimated_size_in_bytes&quot;: 10348347504,
-  &quot;estimated_size&quot;: &quot;9.6gb&quot;,
-  &quot;overhead&quot;: 1,
-  &quot;tripped&quot;: 470
-}
-</code></pre>
+$ bg1
+$ jobs
+[1]+  実行中                ./foo
 
-<p>今回ひっかかったのは<code>indices.breaker.request.limit</code>。デフォルトではJVMのヒープメモリの60%になっているが、
-これを80%にまで緩和する。併せてparent-levelのbreakerも上げる。</p>
-
-<pre><code>$ curl -XPUT localhost:9200/_cluster/settings -d '{
-    &quot;persistent&quot; : {
-        &quot;indices.breaker.request.limit&quot;: &quot;80%&quot;,
-        &quot;indices.breaker.total.limit&quot;: &quot;80%&quot;
-    }
-}'
-</code></pre>
-
-<pre><code>$ curl -XPUT localhost:9200/_cluster/settings -d '{
-    &quot;persistent&quot; : {
-        &quot;indices.breaker.request.limit&quot;: &quot;80%&quot;,
-        &quot;indices.breaker.total.limit&quot;: &quot;80%&quot;
-    }
-}'
-</code></pre>
-
-<p>必要なメモリ量を上回ったのでひとまずは返せるようになった。
-これは一時しのぎで、定常的に大量にメモリが必要なリクエストを処理する必要があるなら、そもそもメモリが足りないので増やさなければならない。</p>
-
-<pre><code>$ curl localhost:9200/_nodes/stats | jq .nodes[].breakers.request
-{
-  &quot;limit_size_in_bytes&quot;: 11998016307,
-  &quot;limit_size&quot;: &quot;11.1gb&quot;,
-  &quot;estimated_size_in_bytes&quot;: 10473078896,
-  &quot;estimated_size&quot;: &quot;9.7gb&quot;,
-  &quot;overhead&quot;: 1,
-  &quot;tripped&quot;: 470
-}
+$ disown -h %1
 </code></pre>
 
         </div>
