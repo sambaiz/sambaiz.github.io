@@ -6,8 +6,700 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-08-23 00:52:00 &#43;0900 JST</updated>
+    <updated>2018-09-02 23:50:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する</title>
+          <link>https://www.sambaiz.net/article/185/</link>
+          <pubDate>Sun, 02 Sep 2018 23:50:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/185/</guid>
+          <description>
+
+&lt;p&gt;Istioは&lt;a href=&#34;https://www.envoyproxy.io/&#34;&gt;Envoy&lt;/a&gt;というProxyをSidecarとしてPodに入れてトラフィックを通すことでマイクロサービスの複雑なRoutingやTelemetryをサービスのコードに手を入れずに行うことができるサービスメッシュ。
+もともとEnvoy自体は単体で、コネクションを張りっぱなしのgRPC(HTTP/2)をK8sのServiceのL4ロードバランサーでは分散できない問題の解決方法の一つとして
+各PodのIPの一覧を返す&lt;a href=&#34;https://kubernetes.io/docs/concepts/services-networking/service/#headless-services&#34;&gt;Headless Service&lt;/a&gt;と使われていたが、各Manifestに入れたりConfigMapを編集したりする必要があり少し面倒だった。
+Istioにするとそれらが省けて、さらに賢いRoutingなどの機能やモニタリングツールまで付いてくるのでとても便利だ。&lt;/p&gt;
+
+&lt;h2 id=&#34;インストール-https-istio-io-docs-setup-kubernetes-helm-install&#34;&gt;&lt;a href=&#34;https://istio.io/docs/setup/kubernetes/helm-install/&#34;&gt;インストール&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;IstioをダウンロードしてきてHelmでインストールする。Istioには様々なコンポーネントが含まれているが、&lt;a href=&#34;https://github.com/istio/istio/blob/b17b4989699a6d9dc98245c511dc7d544d88e945/install/kubernetes/helm/istio/README.md#configuration&#34;&gt;パラメータ&lt;/a&gt;でインストールするものを選択することができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/122/&#34;&gt;KubernetesのパッケージマネージャーHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;今回はデフォルトではfalseになっているGrafana/Jaeger/Kialiをtrueにしてほぼ全て入るようにしている。&lt;/p&gt;
+
+&lt;p&gt;RBACが有効な場合はServiceAccountを作ってcluster-adminあるいは必要なRoleをBindしておく。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/160/&#34;&gt;RBACが有効なGKEでHelmを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -L https://git.io/getLatestIstio | sh -
+$ cd istio-1.0.1/
+# helm init --service-account tiller
+$ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set grafana.persist=true --set grafana.storageClassName=standard --set tracing.enabled=true --set kiali.enabled=true
+$ kubectl get pod -n istio-system
+NAME                                        READY     STATUS    RESTARTS   AGE
+grafana-598678cbb-bglbq                     1/1       Running   0          3m
+istio-citadel-6f9887d776-tvdg8              1/1       Running   0          3m
+istio-egressgateway-84d78d84bf-zpxrq        1/1       Running   0          3m
+istio-galley-556f5558f5-hk2r8               1/1       Running   0          3m
+istio-ingressgateway-78cccbddbb-gh2xl       1/1       Running   0          3m
+istio-pilot-799845f56d-l777d                2/2       Running   0          3m
+istio-policy-7666fcd574-nbx8s               2/2       Running   0          3m
+istio-sidecar-injector-7b6589c9-m7x77       1/1       Running   0          3m
+istio-statsd-prom-bridge-55965ff9c8-s6dmj   1/1       Running   0          3m
+istio-telemetry-844c8d6bff-9trcf            2/2       Running   0          3m
+istio-tracing-77f9f94b98-g7v6f              1/1       Running   0          3m
+kiali-bdf7fdc78-9lpd4                       1/1       Running   0          3m
+prometheus-7456f56c96-drhlq                 1/1       Running   0          3m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;default namespaceにラベルを貼って自動でEnvoyがSidecarとして各Podに付くようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get namespace -L istio-injection
+NAME           STATUS    AGE       ISTIO-INJECTION
+default        Active    27m       
+istio-system   Active    16m       
+kube-public    Active    27m       
+kube-system    Active    27m 
+
+$ kubectl label namespace default istio-injection=enabled
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;routing&#34;&gt;Routing&lt;/h2&gt;
+
+&lt;h3 id=&#34;pilot-https-istio-io-docs-concepts-traffic-management-pilot-and-envoy&#34;&gt;&lt;a href=&#34;https://istio.io/docs/concepts/traffic-management/#pilot-and-envoy&#34;&gt;Pilot&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;全Envoyを管理するPilotにEnvoy間のトラフィックのルーティングや、リトライやサーキットブレーカーのルールを設定できる。
+EnvoyはPilotからサービスディスカバリして他Envoyについて知り、定期的にロードバランシングプールに含まれるインスタンスのヘルスチェックをして失敗数がしきい値を超えたら成功数がしきい値を超えるまでプールから追い出し、ルールに従いトラフィックを制御する。&lt;/p&gt;
+
+&lt;h3 id=&#34;リソース&#34;&gt;リソース&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://istio.io/docs/reference/config/istio.networking.v1alpha3/#Gateway&#34;&gt;Gateway&lt;/a&gt;: HTTP/TCPロードバランサー。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Ingressとは異なりL4-L6のポートやTLSの設定は持つがL7の設定は持たず、VirtualServiceに持つ。
+インフラ管理者とサービス開発者が触るであろうリソースが分離されている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/173/&#34;&gt;GKEでのService(ClusterIP/NodePort/LoadBalancer)とIngress - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: my-gateway
+spec:
+  selector:
+    app: my-gatweway-controller
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - uk.bookinfo.com
+    - eu.bookinfo.com
+    tls:
+      httpsRedirect: true # sends 301 redirect for http requests
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - uk.bookinfo.com
+    - eu.bookinfo.com
+    tls:
+      mode: SIMPLE #enables HTTPS on this port
+      serverCertificate: /etc/certs/servercert.pem
+      privateKey: /etc/certs/privatekey.pem
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://istio.io/docs/reference/config/istio.networking.v1alpha3/#VirtualService&#34;&gt;VirtualService&lt;/a&gt;: ルーティングのルール。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews-route
+spec:
+  hosts:
+  - reviews.prod.svc.cluster.local
+  http:
+  - match:
+    - uri:
+        prefix: &amp;quot;/wpcatalog&amp;quot;
+    - uri:
+        prefix: &amp;quot;/consumercatalog&amp;quot;
+    rewrite:
+      uri: &amp;quot;/newcatalog&amp;quot;
+    route:
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 50
+    - destination:
+        host: reviews
+        subset: v3
+      weight: 50
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://istio.io/docs/reference/config/istio.networking.v1alpha3/#DestinationRule&#34;&gt;DestinationRule&lt;/a&gt;: ロードバランシングのルール。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: reviews
+spec:
+  host: reviews
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_CONN
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+  - name: v3
+    labels:
+      version: v3
+      trafficPolicy:
+        loadBalancer:
+          simple: ROUND_ROBIN
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;例-https-istio-io-docs-examples-bookinfo&#34;&gt;&lt;a href=&#34;https://istio.io/docs/examples/bookinfo/&#34;&gt;例&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;サンプルアプリケーションBookInfoを動かす。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+$ kubectl get pod
+NAME                              READY     STATUS    RESTARTS   AGE
+details-v1-7bcdcc4fd6-x92f5       2/2       Running   0          1m
+productpage-v1-8584c875d8-jxl68   2/2       Running   0          1m
+ratings-v1-54cf9dc8f8-wv9xz       2/2       Running   0          1m
+reviews-v1-59cbdd7959-vxf2f       2/2       Running   0          1m
+reviews-v2-dccb4cfc9-mc22f        2/2       Running   0          1m
+reviews-v3-5465dc97bc-pgvbl       2/2       Running   0          1m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;GatewayとVirtualServiceを作成して外に開く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat samples/bookinfo/networking/bookinfo-gateway.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: bookinfo-gateway
+spec:
+  selector:
+    istio: ingressgateway # use istio default controller
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - &amp;quot;*&amp;quot;
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: bookinfo
+spec:
+  hosts:
+  - &amp;quot;*&amp;quot;
+  gateways:
+  - bookinfo-gateway
+  http:
+  - match:
+    - uri:
+        exact: /productpage
+    - uri:
+        exact: /login
+    - uri:
+        exact: /logout
+    - uri:
+        prefix: /api/v1/products
+    route:
+    - destination:
+        host: productpage
+        port:
+          number: 9080
+
+$ kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+$ export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath=&#39;{.status.loadBalancer.ingress[0].ip}&#39;)
+$ export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath=&#39;{.spec.ports[?(@.name==&amp;quot;http2&amp;quot;)].port}&#39;)
+$ export GATEWAY_URL=http://$INGRESS_HOST:$INGRESS_PORT
+$ open $GATEWAY_URL/productpage
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/185-bookinfo.png&#34; alt=&#34;BookInfo&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;DestinationRuleを作成する。この時点では各バージョンがラウンドロビンする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat samples/bookinfo/networking/destination-rule-all.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: productpage
+spec:
+  host: productpage
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: reviews
+spec:
+  host: reviews
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+  - name: v3
+    labels:
+      version: v3
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: ratings
+spec:
+  host: ratings
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+  - name: v2-mysql
+    labels:
+      version: v2-mysql
+  - name: v2-mysql-vm
+    labels:
+      version: v2-mysql-vm
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: details
+spec:
+  host: details
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+---
+
+$ kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://istio.io/docs/tasks/traffic-management/request-routing/&#34;&gt;Request Routing&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;VirtualServiceのdestinationでsubsetを指定することでそのバージョンのみに飛ぶようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat samples/bookinfo/networking/virtual-service-all-v1.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: productpage
+spec:
+  hosts:
+  - productpage
+  http:
+  - route:
+    - destination:
+        host: productpage
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: details
+spec:
+  hosts:
+  - details
+  http:
+  - route:
+    - destination:
+        host: details
+        subset: v1
+---
+
+$ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;VirtualServiceはheaderの中身をみてルーティングさせることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+
+$ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://istio.io/docs/tasks/traffic-management/fault-injection/&#34;&gt;Fault Injection&lt;/a&gt;して特定条件や割合で意図的に遅延を生じさせたり、エラーコードを返らせたりできる。バグの発見や調査、Chaos Engineeringもできそうだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat samples/bookinfo/networking/virtual-service-ratings-test-delay.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ratings
+spec:
+  hosts:
+  - ratings
+  http:
+  - match:
+    - headers:
+        end-user:
+          exact: jason
+    fault:
+      delay:
+        percent: 100
+        fixedDelay: 7s
+    route:
+    - destination:
+        host: ratings
+        subset: v1
+  - route:
+    - destination:
+        host: ratings
+        subset: v1
+
+$ kubectl apply -f samples/bookinfo/networking/virtual-service-ratings-test-delay.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;routeには複数のdestinationを指定できてweightによって飛ばす割合を&lt;a href=&#34;https://istio.io/docs/tasks/traffic-management/traffic-shifting/&#34;&gt;変えられる&lt;/a&gt;。
+カナリアリリースやA/Bテストが簡単にできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+  - route:
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 50
+    - destination:
+        host: reviews
+        subset: v3
+      weight: 50
+
+$ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;telemetry&#34;&gt;Telemetry&lt;/h2&gt;
+
+&lt;h3 id=&#34;mixer-https-istio-io-docs-concepts-policies-and-telemetry&#34;&gt;&lt;a href=&#34;https://istio.io/docs/concepts/policies-and-telemetry/&#34;&gt;Mixer&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;MixerはポリシーコントロールとTelemetryを行うコンポーネント。
+&lt;a href=&#34;https://istio.io/docs/reference/config/policy-and-telemetry/adapters/&#34;&gt;Adapter&lt;/a&gt;によってStackdriverやCloudWatchなど様々なバックエンドに対応している。&lt;/p&gt;
+
+&lt;p&gt;Envoyは前提条件を確認するためリクエストの前と、Telemetryするためリクエストの後にMixerを呼び出す。ただしキャッシュとバッファを持っていて毎回呼び出しはしない。また、Mixerもキャッシュやバッファを持ちバックエンドの呼び出し回数を減らしている。
+MixerがSPOFとなり可用性が下がるのではと思われるが、バックエンドの障害をある程度許容できるのに加えて Mixer自身はステートレスで他のバックエンドよりも可用性が高く設計されているためむしろ&lt;a href=&#34;https://istio.io/blog/2017/mixer-spof-myth/&#34;&gt;SLOが向上する&lt;/a&gt;そうだ。&lt;/p&gt;
+
+&lt;h3 id=&#34;リソース-1&#34;&gt;リソース&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://istio.io/docs/concepts/policies-and-telemetry/#handlers&#34;&gt;Handler(Adapter)&lt;/a&gt;: Mixerからバックエンドへ送る。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: config.istio.io/v1alpha2
+kind: prometheus
+metadata:
+  name: handler
+  namespace: istio-system
+spec:
+  metrics:
+  - name: request_count
+    instance_name: requestcount.metric.istio-system
+    kind: COUNTER
+    label_names:
+    - destination_service
+    - destination_version
+    - response_code
+  - name: request_duration
+    instance_name: requestduration.metric.istio-system
+    kind: DISTRIBUTION
+    label_names:
+    - destination_service
+    - destination_version
+    - response_code
+    buckets:
+      explicit_buckets:
+        bounds: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://istio.io/docs/concepts/policies-and-telemetry/#instances&#34;&gt;Instance&lt;/a&gt;: EnvoyからMixerに送られてきたAttributeをAdapterの入力へマッピングする。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: config.istio.io/v1alpha2
+kind: metric
+metadata:
+  name: requestduration
+  namespace: istio-system
+spec:
+  value: response.duration | &amp;quot;0ms&amp;quot;
+  dimensions:
+    destination_service: destination.service | &amp;quot;unknown&amp;quot;
+    destination_version: destination.labels[&amp;quot;version&amp;quot;] | &amp;quot;unknown&amp;quot;
+    response_code: response.code | 200
+  monitored_resource_type: &#39;&amp;quot;UNSPECIFIED&amp;quot;&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://istio.io/docs/concepts/policies-and-telemetry/#rules&#34;&gt;Rule&lt;/a&gt;: Handlerが特定のInstancesで呼び出されるルール。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: config.istio.io/v1alpha2
+kind: rule
+metadata:
+  name: promhttp
+  namespace: istio-system
+spec:
+  match: destination.service == &amp;quot;service1.ns.svc.cluster.local&amp;quot; &amp;amp;&amp;amp; request.headers[&amp;quot;x-user&amp;quot;] == &amp;quot;user1&amp;quot;
+  actions:
+  - handler: handler.prometheus
+    instances:
+    - requestduration.metric.istio-system
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;例-https-istio-io-docs-tasks-telemetry-metrics-logs&#34;&gt;&lt;a href=&#34;https://istio.io/docs/tasks/telemetry/metrics-logs/&#34;&gt;例&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;リクエストの2倍の数を値とするmetric instance。&lt;a href=&#34;https://istio.io/docs/reference/config/policy-and-telemetry/expression-language/&#34;&gt;configuration expression language(CEXL)&lt;/a&gt;が使われている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat new_telemetry.yaml 
+# Configuration for metric instances
+apiVersion: &amp;quot;config.istio.io/v1alpha2&amp;quot;
+kind: metric
+metadata:
+  name: doublerequestcount
+  namespace: istio-system
+spec:
+  value: &amp;quot;2&amp;quot; # count each request twice
+  dimensions:
+    reporter: conditional((context.reporter.kind | &amp;quot;inbound&amp;quot;) == &amp;quot;outbound&amp;quot;, &amp;quot;client&amp;quot;, &amp;quot;server&amp;quot;)
+    source: source.workload.name | &amp;quot;unknown&amp;quot;
+    destination: destination.workload.name | &amp;quot;unknown&amp;quot;
+    message: &#39;&amp;quot;twice the fun!&amp;quot;&#39;
+  monitored_resource_type: &#39;&amp;quot;UNSPECIFIED&amp;quot;&#39;
+---
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;このmetricを受け取るprometheus handler。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# Configuration for a Prometheus handler
+apiVersion: &amp;quot;config.istio.io/v1alpha2&amp;quot;
+kind: prometheus
+metadata:
+  name: doublehandler
+  namespace: istio-system
+spec:
+  metrics:
+  - name: double_request_count # Prometheus metric name
+    instance_name: doublerequestcount.metric.istio-system # Mixer instance name (fully-qualified)
+    kind: COUNTER
+    label_names:
+    - reporter
+    - source
+    - destination
+    - message
+---
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そしてこれらを紐づけるrule。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# Rule to send metric instances to a Prometheus handler
+apiVersion: &amp;quot;config.istio.io/v1alpha2&amp;quot;
+kind: rule
+metadata:
+  name: doubleprom
+  namespace: istio-system
+spec:
+  actions:
+  - handler: doublehandler.prometheus
+    instances:
+    - doublerequestcount.metric
+---
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://istio.io/docs/reference/config/policy-and-telemetry/templates/logentry/&#34;&gt;logentry&lt;/a&gt;はログを表すinstance。
+あとはそれを標準出力するhandlerとrule。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# Configuration for logentry instances
+apiVersion: &amp;quot;config.istio.io/v1alpha2&amp;quot;
+kind: logentry
+metadata:
+  name: newlog
+  namespace: istio-system
+spec:
+  severity: &#39;&amp;quot;warning&amp;quot;&#39;
+  timestamp: request.time
+  variables:
+    source: source.labels[&amp;quot;app&amp;quot;] | source.workload.name | &amp;quot;unknown&amp;quot;
+    user: source.user | &amp;quot;unknown&amp;quot;
+    destination: destination.labels[&amp;quot;app&amp;quot;] | destination.workload.name | &amp;quot;unknown&amp;quot;
+    responseCode: response.code | 0
+    responseSize: response.size | 0
+    latency: response.duration | &amp;quot;0ms&amp;quot;
+  monitored_resource_type: &#39;&amp;quot;UNSPECIFIED&amp;quot;&#39;
+---
+# Configuration for a stdio handler
+apiVersion: &amp;quot;config.istio.io/v1alpha2&amp;quot;
+kind: stdio
+metadata:
+  name: newhandler
+  namespace: istio-system
+spec:
+ severity_levels:
+   warning: 1 # Params.Level.WARNING
+ outputAsJson: true
+---
+# Rule to send logentry instances to a stdio handler
+apiVersion: &amp;quot;config.istio.io/v1alpha2&amp;quot;
+kind: rule
+metadata:
+  name: newlogstdio
+  namespace: istio-system
+spec:
+  match: &amp;quot;true&amp;quot; # match for all requests
+  actions:
+   - handler: newhandler.stdio
+     instances:
+     - newlog.logentry
+---
+
+$ kubectl apply -f new_telemetry.yaml 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Prometheus handlerによってdoublerequestcount metricが届いている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=prometheus -o jsonpath=&#39;{.items[0].metadata.name}&#39;) 9090:9090
+$ open http://localhost:9090/graph
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/185-prometheus.png&#34; alt=&#34;Prometheus&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;stdio handlerによってnewlog logentryが出力されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl -n istio-system logs -f $(kubectl -n istio-system get pods -l istio-mixer-type=telemetry -o jsonpath=&#39;{.items[0].metadata.name}&#39;) -c mixer | grep \&amp;quot;instance\&amp;quot;:\&amp;quot;newlog.logentry.istio-system\&amp;quot; 
+{&amp;quot;level&amp;quot;:&amp;quot;warn&amp;quot;,&amp;quot;time&amp;quot;:&amp;quot;2018-09-01T13:53:45.897141Z&amp;quot;,&amp;quot;instance&amp;quot;:&amp;quot;l&amp;quot;,&amp;quot;destination&amp;quot;:&amp;quot;telemetry&amp;quot;,&amp;quot;latency&amp;quot;:&amp;quot;3.817501ms&amp;quot;,&amp;quot;responseCode&amp;quot;:200,&amp;quot;responseSize&amp;quot;:5,&amp;quot;source&amp;quot;:&amp;quot;details&amp;quot;,&amp;quot;user&amp;quot;:&amp;quot;unknown&amp;quot;}
+{&amp;quot;level&amp;quot;:&amp;quot;warn&amp;quot;,&amp;quot;time&amp;quot;:&amp;quot;2018-09-01T13:53:45.899237Z&amp;quot;,&amp;quot;instance&amp;quot;:&amp;quot;newlog.logentry.istio-system&amp;quot;,&amp;quot;destination&amp;quot;:&amp;quot;telemetry&amp;quot;,&amp;quot;latency&amp;quot;:&amp;quot;4.423947ms&amp;quot;,&amp;quot;responseCode&amp;quot;:200,&amp;quot;responseSize&amp;quot;:5,&amp;quot;source&amp;quot;:&amp;quot;productpage&amp;quot;,&amp;quot;user&amp;quot;:&amp;quot;unknown&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;grafana&#34;&gt;Grafana&lt;/h2&gt;
+
+&lt;p&gt;Grafanaを開くと最初からIstioのダッシュボードがいくつか作られている。
+Prometheusに送ったmetricをGrafanaで可視化できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=grafana -o jsonpath=&#39;{.items[0].metadata.name}&#39;) 3000:3000
+$ open http://localhost:3000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/185-grafana.png&#34; alt=&#34;Grafana&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;jaeger&#34;&gt;Jaeger&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.jaegertracing.io/&#34;&gt;Jaeger&lt;/a&gt;は分散トレーシングツール。
+パフォーマンスが問題になったときにどこのサービスがボトルネックになっているかが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl port-forward -n istio-system $(kubectl get pod -n istio-system -l app=jaeger -o jsonpath=&#39;{.items[0].metadata.name}&#39;) 16686:16686
+$ open http://localhost:16686
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/185-jaeger.png&#34; alt=&#34;Jaeger&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;kiali&#34;&gt;Kiali&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.kiali.io/&#34;&gt;Kiali&lt;/a&gt;はサービスメッシュを可視化するツール。v1とv3にリクエストが飛んでいてv2には飛んでいないことが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=kiali -o jsonpath=&#39;{.items[0].metadata.name}&#39;) 20001:20001
+$ open http://localhost:20001
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/185-kiali.png&#34; alt=&#34;Kiali&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://qiita.com/wataru420/items/a63a8b205308a93e253c&#34;&gt;kubernetesでgRPCするときにenvoy挟んでみたよ&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://thenewstack.io/why-you-should-care-about-istio-gateways/&#34;&gt;Why You Should Care About Istio Gateways - The New Stack&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -31,7 +723,7 @@ exitしても実行させ続けることができる。&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;$ jobs
 [1]+  停止                  ./foo
 
-$ bg1
+$ bg 1
 $ jobs
 [1]+  実行中                ./foo
 
@@ -2877,6 +3569,12 @@ submit_data.to_csv(&#39;submit2.csv&#39;, header=True)
           <guid>https://www.sambaiz.net/article/167/</guid>
           <description>
 
+&lt;blockquote&gt;
+&lt;p&gt;追記(2018-09-01) ついにv1.0となりHelmでのインストールが問題なくできるようになった。Istio-AuthがCitadelという&lt;a href=&#34;https://istio.io/about/notes/0.8/&#34;&gt;名前になったり&lt;/a&gt;DeprecatedになってるAPIがある&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/185/&#34;&gt;IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
 &lt;h2 id=&#34;istioとは-https-istio-io-docs-concepts-what-is-istio-overview-html&#34;&gt;&lt;a href=&#34;https://istio.io/docs/concepts/what-is-istio/overview.html&#34;&gt;Istioとは&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;マイクロサービス間のネットワークの、ロードバランシングや認証、モニタリングなどを担うサービスメッシュのOSS。
@@ -4001,6 +4699,30 @@ my-prometheus-prometheus-alertmanager-85f75879db-9r9z2         2/2       Running
 my-prometheus-prometheus-kube-state-metrics-65dfc57897-95ts7   1/1       Running   0          1m
 my-prometheus-prometheus-server-7c98fb8ffb-s7jpq               2/2       Running   0          1m
 tiller-deploy-57dbcb6bbc-6srlt                                 1/1       Running   0          2m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;ただ、実際のところHelmが特定のnamespaceしか触れないのは不便だし、roleをあとから増やすのも面倒なので最初からcluster-adminのRoleを付けておいてもよいかもしれない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: tiller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: tiller
+    namespace: kube-system
 &lt;/code&gt;&lt;/pre&gt;
 </description>
         </item>
@@ -9373,7 +10095,10 @@ Ran all test suites.
           <description>&lt;p&gt;Kubernatesが操舵手なのに対して、Helmは舵。
 パッケージは&lt;a href=&#34;https://github.com/kubernetes/charts&#34;&gt;Chart&lt;/a&gt;(海図)と呼ばれている。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://github.com/kubernetes/helm&#34;&gt;Helm&lt;/a&gt;をインストールし、&lt;a href=&#34;https://github.com/kubernetes/minikube&#34;&gt;minikube&lt;/a&gt;を立ち上げる。&lt;/p&gt;
+&lt;p&gt;ChartにはデフォルトでGoのtemplateで書かれた&lt;a href=&#34;https://github.com/kubernetes/charts/blob/master/stable/mysql/templates/deployment.yaml&#34;&gt;Manifest&lt;/a&gt;が含まれ、&lt;a href=&#34;https://github.com/helm/charts/blob/master/stable/mysql/values.yaml&#34;&gt;values.yaml&lt;/a&gt;の値を&lt;code&gt;-f values.yaml&lt;/code&gt;や&lt;code&gt;--set key=value&lt;/code&gt;フラグで上書きして適用しインストールすることができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/kubernetes/helm&#34;&gt;Helm&lt;/a&gt;コマンドをインストールする。
+今回は&lt;a href=&#34;https://github.com/kubernetes/minikube&#34;&gt;minikube&lt;/a&gt;に入れるので立ち上げる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ brew install kubernetes-helm
 $ helm version
@@ -9394,10 +10119,13 @@ $ kubectl config current-context
 minikube
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;k8sクラスタ上にHelmの管理サーバーTillerをインストールする必要がある。
-ついでにリポジトリもupdateする。&lt;/p&gt;
+&lt;p&gt;まずk8sクラスタ上にHelmの管理サーバーTillerをインストールする必要がある。
+ついでにリポジトリをupdateする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ helm init
+$ ls ~/.helm/
+cache		plugins		repository	starters
+
 $ helm repo update
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -9411,10 +10139,8 @@ stable/gcloud-sqlproxy	0.1.0  	Google Cloud SQL Proxy
 stable/mariadb        	0.6.3  	Fast, reliable, scalable, and easy to use open-...
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://docs.helm.sh/helm/#helm-inspect&#34;&gt;inspect&lt;/a&gt;でChartの内容を確認することができる。
-&lt;code&gt;---&lt;/code&gt;より上がChartの情報のChart.yamlで、下がデフォルト値のvalues.yaml。
-この値は&lt;a href=&#34;https://github.com/kubernetes/charts/blob/master/stable/mysql/templates/deployment.yaml#L54&#34;&gt;template&lt;/a&gt;で
-参照される。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://docs.helm.sh/helm/#helm-inspect&#34;&gt;inspect&lt;/a&gt;でChartの情報を見ることができる。
+&lt;code&gt;---&lt;/code&gt;の上がChartの情報のChart.yamlで、下がvalues.yaml。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ helm inspect stable/mysql
 description: Fast, reliable, scalable, and easy to use open-source relational database
@@ -9521,7 +10247,7 @@ pioneering-hydra-mysql-3456603420-0pldk   1/1       Running   0          4m
 
 &lt;p&gt;&lt;a href=&#34;https://github.com/kubernetes/charts/blob/master/stable/mysql/templates/secrets.yaml#L15&#34;&gt;生成された&lt;/a&gt;Secretの値は&lt;a href=&#34;https://github.com/kubernetes/charts/blob/master/stable/mysql/templates/deployment.yaml#L44&#34;&gt;secretKeyRef&lt;/a&gt;で参照できる。&lt;/p&gt;
 
-&lt;p&gt;PVというのは管理者によってクラスタにプロビジョニングされた、あるいは動的にされる、Podとは独立したライフサイクルを持つVolume。PVCは&lt;a href=&#34;https://kubernetes.io/docs/concepts/storage/persistent-volumes/#storageclasses&#34;&gt;StorageClass&lt;/a&gt;、ReadWriteOnceのようなアクセスモード、容量でリクエストする。&lt;/p&gt;
+&lt;p&gt;PVというのはクラスタにプロビジョニングされる、Podとは独立したライフサイクルを持つVolume。&lt;a href=&#34;https://kubernetes.io/docs/concepts/storage/persistent-volumes/#storageclasses&#34;&gt;StorageClass&lt;/a&gt;、ReadWriteOnceのようなアクセスモード、容量を含むPVCでリクエストする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl get storageclasses
 NAME                 TYPE

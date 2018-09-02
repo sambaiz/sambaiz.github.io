@@ -6,10 +6,25 @@
     <description>Recent content in Kubernetes on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Wed, 22 Aug 2018 23:22:00 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 02 Sep 2018 23:50:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/tags/kubernetes/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する</title>
+      <link>https://www.sambaiz.net/article/185/</link>
+      <pubDate>Sun, 02 Sep 2018 23:50:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/185/</guid>
+      <description>IstioはEnvoyというProxyをSidecarとしてPodに入れてトラフィックを通すことでマイクロサービスの複雑なRoutingやTelemetryをサービスのコードに手を入れずに行うことができるサービスメッシュ。 もともとEnvoy自体は単体で、コネクションを張りっぱなしのgRPC(HTTP/2)をK8sのServiceのL4ロードバランサーでは分散できない問題の解決方法の一つとして 各PodのIPの一覧を返すHeadless Serviceと使われていたが、各Manifestに入れたりConfigMapを編集したりする必要があり少し面倒だった。 Istioにするとそれらが省けて、さらに賢いRoutingなどの機能やモニタリングツールまで付いてくるのでとても便利だ。
+インストール IstioをダウンロードしてきてHelmでインストールする。Istioには様々なコンポーネントが含まれているが、パラメータでインストールするものを選択することができる。
+KubernetesのパッケージマネージャーHelmを使う - sambaiz-net
+今回はデフォルトではfalseになっているGrafana/Jaeger/Kialiをtrueにしてほぼ全て入るようにしている。
+RBACが有効な場合はServiceAccountを作ってcluster-adminあるいは必要なRoleをBindしておく。
+RBACが有効なGKEでHelmを使う - sambaiz-net
+$ curl -L https://git.io/getLatestIstio | sh - $ cd istio-1.0.1/ # helm init --service-account tiller $ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set grafana.persist=true --set grafana.storageClassName=standard --set tracing.enabled=true --set kiali.enabled=true $ kubectl get pod -n istio-system NAME READY STATUS RESTARTS AGE grafana-598678cbb-bglbq 1/1 Running 0 3m istio-citadel-6f9887d776-tvdg8 1/1 Running 0 3m istio-egressgateway-84d78d84bf-zpxrq 1/1 Running 0 3m istio-galley-556f5558f5-hk2r8 1/1 Running 0 3m istio-ingressgateway-78cccbddbb-gh2xl 1/1 Running 0 3m istio-pilot-799845f56d-l777d 2/2 Running 0 3m istio-policy-7666fcd574-nbx8s 2/2 Running 0 3m istio-sidecar-injector-7b6589c9-m7x77 1/1 Running 0 3m istio-statsd-prom-bridge-55965ff9c8-s6dmj 1/1 Running 0 3m istio-telemetry-844c8d6bff-9trcf 2/2 Running 0 3m istio-tracing-77f9f94b98-g7v6f 1/1 Running 0 3m kiali-bdf7fdc78-9lpd4 1/1 Running 0 3m prometheus-7456f56c96-drhlq 1/1 Running 0 3m  default namespaceにラベルを貼って自動でEnvoyがSidecarとして各Podに付くようにする。</description>
+    </item>
     
     <item>
       <title>CircleCI 2.0でDocker imageをbuildしてタグを付けてContainer Registryに上げる</title>
@@ -76,7 +91,9 @@ $ kubectl config current-context minikube $ ks init kstest $ cd kstest $ ls app.
       <pubDate>Tue, 29 May 2018 22:33:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/167/</guid>
-      <description>Istioとは マイクロサービス間のネットワークの、ロードバランシングや認証、モニタリングなどを担うサービスメッシュのOSS。 概念は抽象化されていて、Kubernetes以外でもサポートされている。 通信をコントロールするdata-planeのEnvoyと、Envoyを管理するcontrol-planeのPilot, Mixer, Istio-Authからなる。
+      <description>追記(2018-09-01) ついにv1.0となりHelmでのインストールが問題なくできるようになった。Istio-AuthがCitadelという名前になったりDeprecatedになってるAPIがある
+IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net
+ Istioとは マイクロサービス間のネットワークの、ロードバランシングや認証、モニタリングなどを担うサービスメッシュのOSS。 概念は抽象化されていて、Kubernetes以外でもサポートされている。 通信をコントロールするdata-planeのEnvoyと、Envoyを管理するcontrol-planeのPilot, Mixer, Istio-Authからなる。
 Envoy Sidecarとしてデプロイされる、サービスメッシュでの全ての通信を通すプロキシ。 アプリケーションのコードに手を入れる必要がないので言語に縛られない。 CNCFのプロジェクトの一つで、 Istio用にオリジナルから拡張されている。 ロードバランシングやヘルスチェックなどを行い、メトリクスを取る。
 Mixer サービスメッシュ全体のアクセスコントロールや、Envoyからデータを集めてログに出したりモニタリングしたりする。 プラグインよってAWSやGCPといったインフラバックエンドの差異が吸収される。
 Pilot サービスディスカバリしてEnvoyのトラフィックを制御する。A/Bテストやカナリアリリースをする場合や、障害に対応して適切にルーティングを行うことができる。
@@ -161,8 +178,9 @@ FROM nginx  何もタグを付けない(:latest)とcreate時にDockerレジス�
       
       <guid>https://www.sambaiz.net/article/122/</guid>
       <description>Kubernatesが操舵手なのに対して、Helmは舵。 パッケージはChart(海図)と呼ばれている。
-Helmをインストールし、minikubeを立ち上げる。
-$ brew install kubernetes-helm $ helm version Client: &amp;amp;version.Version{SemVer:&amp;quot;v2.5.0&amp;quot;, GitCommit:&amp;quot;012cb0ac1a1b2f888144ef5a67b8dab6c2d45be6&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;} # brew cask install virtualbox minikube $ minikube version minikube version: v0.20.0 $ minikube start Kubectl is now configured to use the cluster. $ kubectl version Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;7&amp;quot;, GitVersion:&amp;quot;v1.7.2&amp;quot;, GitCommit:&amp;quot;922a86cfcd65915a9b2f69f3f193b8907d741d9c&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;, BuildDate:&amp;quot;2017-07-21T19:06:19Z&amp;quot;, GoVersion:&amp;quot;go1.8.3&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;darwin/amd64&amp;quot;} Server Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;6&amp;quot;, GitVersion:&amp;quot;v1.6.4&amp;quot;, GitCommit:&amp;quot;d6f433224538d4f9ca2f7ae19b252e6fcb66a3ae&amp;quot;, GitTreeState:&amp;quot;dirty&amp;quot;, BuildDate:&amp;quot;2017-06-22T04:31:09Z&amp;quot;, GoVersion:&amp;quot;go1.7.5&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;linux/amd64&amp;quot;} $ kubectl config current-context minikube  k8sクラスタ上にHelmの管理サーバーTillerをインストールする必要がある。 ついでにリポジトリもupdateする。</description>
+ChartにはデフォルトでGoのtemplateで書かれたManifestが含まれ、values.yamlの値を-f values.yamlや--set key=valueフラグで上書きして適用しインストールすることができる。
+Helmコマンドをインストールする。 今回はminikubeに入れるので立ち上げる。
+$ brew install kubernetes-helm $ helm version Client: &amp;amp;version.Version{SemVer:&amp;quot;v2.5.0&amp;quot;, GitCommit:&amp;quot;012cb0ac1a1b2f888144ef5a67b8dab6c2d45be6&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;} # brew cask install virtualbox minikube $ minikube version minikube version: v0.20.0 $ minikube start Kubectl is now configured to use the cluster. $ kubectl version Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;7&amp;quot;, GitVersion:&amp;quot;v1.7.2&amp;quot;, GitCommit:&amp;quot;922a86cfcd65915a9b2f69f3f193b8907d741d9c&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;, BuildDate:&amp;quot;2017-07-21T19:06:19Z&amp;quot;, GoVersion:&amp;quot;go1.8.3&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;darwin/amd64&amp;quot;} Server Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;6&amp;quot;, GitVersion:&amp;quot;v1.6.4&amp;quot;, GitCommit:&amp;quot;d6f433224538d4f9ca2f7ae19b252e6fcb66a3ae&amp;quot;, GitTreeState:&amp;quot;dirty&amp;quot;, BuildDate:&amp;quot;2017-06-22T04:31:09Z&amp;quot;, GoVersion:&amp;quot;go1.7.5&amp;quot;, Compiler:&amp;quot;gc&amp;quot;, Platform:&amp;quot;linux/amd64&amp;quot;} $ kubectl config current-context minikube  まずk8sクラスタ上にHelmの管理サーバーTillerをインストールする必要がある。 ついでにリポジトリをupdateする。</description>
     </item>
     
     <item>
