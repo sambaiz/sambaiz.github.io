@@ -110,7 +110,7 @@
 <p>Istioは<a href="https://www.envoyproxy.io/">Envoy</a>というProxyをSidecarとしてPodに入れてトラフィックを通すことでマイクロサービスの複雑なRoutingやTelemetryをサービスのコードに手を入れずに行うことができるサービスメッシュ。
 もともとEnvoy自体は単体で、コネクションを張りっぱなしのgRPC(HTTP/2)をK8sのServiceのL4ロードバランサーでは分散できない問題の解決方法の一つとして
 各PodのIPの一覧を返す<a href="https://kubernetes.io/docs/concepts/services-networking/service/#headless-services">Headless Service</a>と使われていたが、各Manifestに入れたりConfigMapを編集したりする必要があり少し面倒だった。
-Istioにするとそれらが省けて、さらに賢いRoutingなどの機能やモニタリングツールまで付いてくるのでとても便利だ。</p>
+Istioにするとそれらが省けて、さらに賢いRoutingやモニタリングの仕組みまで付いてくるのでとても便利だ。</p>
 
 <h2 id="インストール-https-istio-io-docs-setup-kubernetes-helm-install"><a href="https://istio.io/docs/setup/kubernetes/helm-install/">インストール</a></h2>
 
@@ -145,7 +145,7 @@ kiali-bdf7fdc78-9lpd4                       1/1       Running   0          3m
 prometheus-7456f56c96-drhlq                 1/1       Running   0          3m
 </code></pre>
 
-<p>default namespaceにラベルを貼って自動でEnvoyがSidecarとして各Podに付くようにする。</p>
+<p>default namespaceにラベルを貼って自動でEnvoyが各Podに<a href="https://github.com/istio/istio/blob/1.0.1/install/kubernetes/helm/istio/templates/sidecar-injector-configmap.yaml#L77">Injectionされる</a>ようにする。</p>
 
 <pre><code>$ kubectl get namespace -L istio-injection
 NAME           STATUS    AGE       ISTIO-INJECTION
@@ -156,6 +156,8 @@ kube-system    Active    27m
 
 $ kubectl label namespace default istio-injection=enabled
 </code></pre>
+
+<p>併せて<a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">Init Containers</a>としてInjectionされるistio-initのiptablesで<a href="https://github.com/istio/istio/blob/1.0.1/tools/deb/istio-iptables.sh#L292">Envoy以外</a>のトラフィックが<a href="https://github.com/istio/istio/blob/1.0.1/tools/deb/istio-iptables.sh#L202">Envoyのポートに向く</a>のでサービスのコードでは向き先を変える必要がない。</p>
 
 <h2 id="routing">Routing</h2>
 
@@ -403,11 +405,7 @@ spec:
 $ kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
 </code></pre>
 
-<ul>
-<li><a href="https://istio.io/docs/tasks/traffic-management/request-routing/">Request Routing</a></li>
-</ul>
-
-<p>VirtualServiceのdestinationでsubsetを指定することでそのバージョンのみに飛ぶようになる。</p>
+<p>VirtualServiceのdestinationでsubsetを指定するとそのバージョンのみに<a href="https://istio.io/docs/tasks/traffic-management/request-routing/">飛ぶ</a>ようになる。</p>
 
 <pre><code>$ cat samples/bookinfo/networking/virtual-service-all-v1.yaml
 apiVersion: networking.istio.io/v1alpha3

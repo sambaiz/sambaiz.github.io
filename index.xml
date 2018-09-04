@@ -21,7 +21,7 @@
 &lt;p&gt;Istioは&lt;a href=&#34;https://www.envoyproxy.io/&#34;&gt;Envoy&lt;/a&gt;というProxyをSidecarとしてPodに入れてトラフィックを通すことでマイクロサービスの複雑なRoutingやTelemetryをサービスのコードに手を入れずに行うことができるサービスメッシュ。
 もともとEnvoy自体は単体で、コネクションを張りっぱなしのgRPC(HTTP/2)をK8sのServiceのL4ロードバランサーでは分散できない問題の解決方法の一つとして
 各PodのIPの一覧を返す&lt;a href=&#34;https://kubernetes.io/docs/concepts/services-networking/service/#headless-services&#34;&gt;Headless Service&lt;/a&gt;と使われていたが、各Manifestに入れたりConfigMapを編集したりする必要があり少し面倒だった。
-Istioにするとそれらが省けて、さらに賢いRoutingなどの機能やモニタリングツールまで付いてくるのでとても便利だ。&lt;/p&gt;
+Istioにするとそれらが省けて、さらに賢いRoutingやモニタリングの仕組みまで付いてくるのでとても便利だ。&lt;/p&gt;
 
 &lt;h2 id=&#34;インストール-https-istio-io-docs-setup-kubernetes-helm-install&#34;&gt;&lt;a href=&#34;https://istio.io/docs/setup/kubernetes/helm-install/&#34;&gt;インストール&lt;/a&gt;&lt;/h2&gt;
 
@@ -56,7 +56,7 @@ kiali-bdf7fdc78-9lpd4                       1/1       Running   0          3m
 prometheus-7456f56c96-drhlq                 1/1       Running   0          3m
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;default namespaceにラベルを貼って自動でEnvoyがSidecarとして各Podに付くようにする。&lt;/p&gt;
+&lt;p&gt;default namespaceにラベルを貼って自動でEnvoyが各Podに&lt;a href=&#34;https://github.com/istio/istio/blob/1.0.1/install/kubernetes/helm/istio/templates/sidecar-injector-configmap.yaml#L77&#34;&gt;Injectionされる&lt;/a&gt;ようにする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl get namespace -L istio-injection
 NAME           STATUS    AGE       ISTIO-INJECTION
@@ -67,6 +67,8 @@ kube-system    Active    27m
 
 $ kubectl label namespace default istio-injection=enabled
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;併せて&lt;a href=&#34;https://kubernetes.io/docs/concepts/workloads/pods/init-containers/&#34;&gt;Init Containers&lt;/a&gt;としてInjectionされるistio-initのiptablesで&lt;a href=&#34;https://github.com/istio/istio/blob/1.0.1/tools/deb/istio-iptables.sh#L292&#34;&gt;Envoy以外&lt;/a&gt;のトラフィックが&lt;a href=&#34;https://github.com/istio/istio/blob/1.0.1/tools/deb/istio-iptables.sh#L202&#34;&gt;Envoyのポートに向く&lt;/a&gt;のでサービスのコードでは向き先を変える必要がない。&lt;/p&gt;
 
 &lt;h2 id=&#34;routing&#34;&gt;Routing&lt;/h2&gt;
 
@@ -314,11 +316,7 @@ spec:
 $ kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;ul&gt;
-&lt;li&gt;&lt;a href=&#34;https://istio.io/docs/tasks/traffic-management/request-routing/&#34;&gt;Request Routing&lt;/a&gt;&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;p&gt;VirtualServiceのdestinationでsubsetを指定することでそのバージョンのみに飛ぶようになる。&lt;/p&gt;
+&lt;p&gt;VirtualServiceのdestinationでsubsetを指定するとそのバージョンのみに&lt;a href=&#34;https://istio.io/docs/tasks/traffic-management/request-routing/&#34;&gt;飛ぶ&lt;/a&gt;ようになる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat samples/bookinfo/networking/virtual-service-all-v1.yaml
 apiVersion: networking.istio.io/v1alpha3
@@ -3570,7 +3568,7 @@ submit_data.to_csv(&#39;submit2.csv&#39;, header=True)
           <description>
 
 &lt;blockquote&gt;
-&lt;p&gt;追記(2018-09-01) ついにv1.0となりHelmでのインストールが問題なくできるようになった。Istio-AuthがCitadelという&lt;a href=&#34;https://istio.io/about/notes/0.8/&#34;&gt;名前になったり&lt;/a&gt;DeprecatedになってるAPIがある&lt;/p&gt;
+&lt;p&gt;追記(2018-09-01) v1.0となりHelmでのインストールも問題なくできるようになった。Istio-AuthがCitadelという&lt;a href=&#34;https://istio.io/about/notes/0.8/&#34;&gt;名前になっていたり&lt;/a&gt;DeprecatedになってるAPIもある&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/185/&#34;&gt;IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 &lt;/blockquote&gt;
