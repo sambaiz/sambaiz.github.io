@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>Unityで動的にNavMeshを生成する - sambaiz-net</title>
-    <meta name="twitter:title" content="Unityで動的にNavMeshを生成する - sambaiz-net">
-    <meta property='og:title' content="Unityで動的にNavMeshを生成する - sambaiz-net">
+    <title>cert-managerで生成した証明書をIstioのGatewayに設定してHTTPS対応する - sambaiz-net</title>
+    <meta name="twitter:title" content="cert-managerで生成した証明書をIstioのGatewayに設定してHTTPS対応する - sambaiz-net">
+    <meta property='og:title' content="cert-managerで生成した証明書をIstioのGatewayに設定してHTTPS対応する - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="Unity5.6から動的にNavMeshを生成できるようになった">
-      <meta name="twitter:description" content="Unity5.6から動的にNavMeshを生成できるようになった">
+      <meta name="description" content="IstioのHTTPS対応">
+      <meta name="twitter:description" content="IstioのHTTPS対応">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/117/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/186/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "Unityで動的にNavMeshを生成する | sambaiz-net ",
-    "datePublished": "2017-07-01T23:50:00JST",
-    "dateModified": "2017-07-01T23:50:00JST",
+    "headline": "cert-managerで生成した証明書をIstioのGatewayに設定してHTTPS対応する | sambaiz-net ",
+    "datePublished": "2018-09-13T21:55:00JST",
+    "dateModified": "2018-09-13T21:55:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Unity5.6から動的にNavMeshを生成できるようになった"
+    "description": "IstioのHTTPS対応"
   }
 </script>
 </head>
@@ -103,117 +103,149 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Unityで動的にNavMeshを生成する</h1>
-          <p>(2017-07-01)</p>
-          <p>Unity5.6から動的にNavMeshを生成できるようになった。</p>
+          <h1>cert-managerで生成した証明書をIstioのGatewayに設定してHTTPS対応する</h1>
+          <p>(2018-09-13)</p>
+          <p><a href="https://github.com/jetstack/cert-manager">cert-manager</a>はTLSの証明書を自動で生成し管理するK8sのアドオン。
+Istioにも含まれていて、これを使って<a href="https://letsencrypt.org/">Let&rsquo;s Encrypt</a>で証明書を生成しGatewayに設定することでHTTPS対応することができる。</p>
 
-<p><a href="https://github.com/Unity-Technologies/NavMeshComponents">Unity-Technologies/NavMeshComponents</a>の
-Exampleの2_drop_blankのsceneを開く。</p>
+<p>デフォルトではcert-managerは入らないのでenabled=trueにしてインストールする。
+最初に入るLet&rsquo;s EncryptのClusterIssuerはエラーになったので消す。</p>
 
-<p><img src="https://www.sambaiz.net/images/117-sample.png" alt="Exampleの2_drop_blank" /></p>
+<p><a href="https://www.sambaiz.net/article/185/">IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net</a></p>
 
-<p>分断されたCubeの床と、その上に黄色いCylindarと赤いCubeがあって、
-クリックしたところに黄色いCylindarが動くんだけど、床がつながっていないのでそのままでは赤いCubeまではたどり着けない。
-スペースを押すと目の前に板が出てくるのでこの上を渡って移動することができる。</p>
-
-<p><img src="https://www.sambaiz.net/images/117-sample2.png" alt="スペースを押すと板が出てくる" /></p>
-
-<p>板の上がNavMeshとして認識されている。</p>
-
-<p><img src="https://www.sambaiz.net/images/117-sample3.png" alt="スペースを押すと板が出てくる" /></p>
-
-<p>床のCubeと追加される板には<a href="https://github.com/Unity-Technologies/NavMeshComponents/blob/5.6.0b4/Assets/Examples/Scripts/NavMeshSourceTag.cs">NavMeshSourceTag.cs</a>が付いていて、staticな<code>m_Meshes</code>と<code>m_Terrains</code>にそれぞれ追加している。</p>
-
-<pre><code>public static List&lt;MeshFilter&gt; m_Meshes = new List&lt;MeshFilter&gt;();
-public static List&lt;Terrain&gt; m_Terrains = new List&lt;Terrain&gt;();
-
-void OnEnable()
-{
-    var m = GetComponent&lt;MeshFilter&gt;();
-    if (m != null)
-    {
-        m_Meshes.Add(m);
-    }
-
-    var t = GetComponent&lt;Terrain&gt;();
-    if (t != null)
-    {
-        m_Terrains.Add(t);
-    }
-}
-
-void OnDisable()
-{
-    var m = GetComponent&lt;MeshFilter&gt;();
-    if (m != null)
-    {
-        m_Meshes.Remove(m);
-    }
-
-    var t = GetComponent&lt;Terrain&gt;();
-    if (t != null)
-    {
-        m_Terrains.Remove(t);
-    }
-}
+<pre><code>$ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set certmanager.enabled=true
+$ kubectl delete ClusterIssuer --all
 </code></pre>
 
-<p>これらはCollectメソッドでNavMeshBuildSourceのリストを生成するのに使われる。</p>
+<p>確認用にBookInfoを動かす。</p>
 
-<pre><code>public static void Collect(ref List&lt;NavMeshBuildSource&gt; sources)
-{
-    sources.Clear();
-
-    for (var i = 0; i &lt; m_Meshes.Count; ++i)
-    {
-        var mf = m_Meshes[i];
-        if (mf == null) continue;
-
-        var m = mf.sharedMesh;
-        if (m == null) continue;
-
-        var s = new NavMeshBuildSource();
-        s.shape = NavMeshBuildSourceShape.Mesh;
-        s.sourceObject = m;
-        s.transform = mf.transform.localToWorldMatrix;
-        s.area = 0;
-        sources.Add(s);
-    }
-
-    for (var i = 0; i &lt; m_Terrains.Count; ++i)
-    {
-       ...
-    }
-}
+<pre><code>$ kubectl label namespace default istio-injection=enabled
+$ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+$ kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
 </code></pre>
 
-<p>これを<a href="https://github.com/Unity-Technologies/NavMeshComponents/blob/5.6.0b4/Assets/Examples/Scripts/LocalNavMeshBuilder.cs">LocalNavMeshBuilder.cs</a>から呼び、<a href="https://docs.unity3d.com/ScriptReference/AI.NavMeshBuilder.UpdateNavMeshData.html">NavMeshBuilder.UpdateNavMeshData</a>に渡してNavMeshDataを更新している。</p>
+<p>Let&rsquo;s Encryptで使われている<a href="https://github.com/ietf-wg-acme/acme">ACME</a>プロトコルのドメイン認証(Challenge)には
+<code>/.well-known/acme-challenge/{token}</code>でHTTPレスポンスを返す<a href="https://github.com/ietf-wg-acme/acme/blob/master/draft-ietf-acme-acme.md#http-challenge">HTTP Challenge</a>(http-01)と
+DNSのTXTレコードに書き込む<a href="https://github.com/ietf-wg-acme/acme/blob/master/draft-ietf-acme-acme.md#dns-challenge">DNS Challenge</a>(dns-01)がある。
+HTTP Challengeは手軽に達成できる一方、CAからアクセスできるようにする必要がある。今回はDNS Challengeでやる。
+cert-managerはCloud DNSやRoute53などに<a href="http://docs.cert-manager.io/en/latest/reference/issuers/acme/dns01.html">対応</a>していて、今回はCloudflareを使う。</p>
 
-<pre><code>NavMeshData m_NavMesh;
-AsyncOperation m_Operation;
-NavMeshDataInstance m_Instance;
-List&lt;NavMeshBuildSource&gt; m_Sources = new List&lt;NavMeshBuildSource&gt;();
+<p>DNSに書き込めるようにするためCloudflareのMy ProfileからGlobal API Keyを持ってきてBase64デコードしSecretに入れる。
+改行コードが含まれないように<code>-n</code>を付ける。</p>
 
-IEnumerator Start()
-{
-    while (true)
-    {
-        UpdateNavMesh(true);
-        yield return m_Operation;
-    }
-}
+<pre><code>$ echo -n ***** | base64
+</code></pre>
 
-void UpdateNavMesh(bool asyncUpdate = false)
-{
-    NavMeshSourceTag.Collect(ref m_Sources);
-    var defaultBuildSettings = NavMesh.GetSettingsByID(0);
-    var bounds = QuantizedBounds();
+<pre><code>apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare-api-key
+  namespace: istio-system
+type: Opaque
+data:
+  api-key: *****
+</code></pre>
 
-    if (asyncUpdate)
-        m_Operation = NavMeshBuilder.UpdateNavMeshDataAsync(m_NavMesh, defaultBuildSettings, m_Sources, bounds);
-    else
-        NavMeshBuilder.UpdateNavMeshData(m_NavMesh, defaultBuildSettings, m_Sources, bounds);
-}
+<p>Let&rsquo;s EncryptのClusterIssuerと証明書を生成するドメインのCertificateを作成する。
+serverのURLは<a href="https://letsencrypt.status.io/">Status</a>のページから確認できる。
+本番のURLは<a href="https://letsencrypt.org/docs/rate-limits/">レート制限</a>があるので、まずはFakeの証明書が生成されるstgで試すとよい。</p>
+
+<p>証明書を書くsecretNameは<code>istio-system</code>ネームスペースの<code>istio-ingressgateway-certs</code>にする<a href="https://istio.io/docs/tasks/traffic-management/secure-ingress/#configure-a-tls-ingress-gateway">必要がある</a>。</p>
+
+<pre><code>apiVersion: certmanager.k8s.io/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns01
+  namespace: istio-system
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: aaa@example.com
+    privateKeySecretRef:
+      name: letsencrypt-dns01
+    dns01:
+      providers:
+      - name: cloudflare
+        cloudflare:
+          email: aaa@example.com
+          apiKeySecretRef:
+            name: cloudflare-api-key
+            key: api-key
+---
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: xxx-example-com
+  namespace: istio-system
+spec:
+  secretName: istio-ingressgateway-certs
+  issuerRef:
+    name: letsencrypt-dns01
+    kind: ClusterIssuer
+  commonName: xxx.example.com
+  dnsNames:
+  - xxx.example.com
+  acme:
+    config:
+    - dns01:
+        provider: cloudflare
+      domains:
+      - xxx.example.com
+</code></pre>
+
+<p>これをapplyするとcertmanagerのログが流れ始める。何か間違いがあるとエラーになるのでなんとかする。</p>
+
+<pre><code>$ kubectl -n istio-system logs -f $(kubectl -n istio-system get pods -l app=certmanager -o jsonpath='{.items[0].metadata.name}')
+</code></pre>
+
+<p>証明書と秘密鍵のSecretはこんな感じ。</p>
+
+<pre><code>$ kubectl describe secret istio-ingressgateway-certs -n istio-system
+Name:         istio-ingressgateway-certs
+Namespace:    istio-system
+Labels:       &lt;none&gt;
+Annotations:  certmanager.k8s.io/alt-names=xxx.example.com
+              certmanager.k8s.io/common-name=xxx.example.com
+              certmanager.k8s.io/issuer-kind=ClusterIssuer
+              certmanager.k8s.io/issuer-name=letsencrypt-dns01
+
+Type:  kubernetes.io/tls
+
+Data
+====
+tls.key:  1675 bytes
+tls.crt:  3805 bytes
+</code></pre>
+
+<p><code>ingressgateway-certs</code>は自動で<code>/etc/istio/ingressgateway-certs</code>にマウントされる。
+このGatewayをapplyするとHTTPでアクセスした場合はリダイレクトし、HTTPSで正常にアクセスできるようになる。</p>
+
+<pre><code>apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: bookinfo-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - xxx.example.com
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - xxx.example.com
+    tls:
+      mode: SIMPLE
+      serverCertificate: /etc/istio/ingressgateway-certs/tls.crt
+      privateKey: /etc/istio/ingressgateway-certs/tls.key
 </code></pre>
 
         </div>

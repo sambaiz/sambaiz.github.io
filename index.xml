@@ -6,8 +6,161 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-09-02 23:50:00 &#43;0900 JST</updated>
+    <updated>2018-09-13 21:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>cert-managerで生成した証明書をIstioのGatewayに設定してHTTPS対応する</title>
+          <link>https://www.sambaiz.net/article/186/</link>
+          <pubDate>Thu, 13 Sep 2018 21:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/186/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://github.com/jetstack/cert-manager&#34;&gt;cert-manager&lt;/a&gt;はTLSの証明書を自動で生成し管理するK8sのアドオン。
+Istioにも含まれていて、これを使って&lt;a href=&#34;https://letsencrypt.org/&#34;&gt;Let&amp;rsquo;s Encrypt&lt;/a&gt;で証明書を生成しGatewayに設定することでHTTPS対応することができる。&lt;/p&gt;
+
+&lt;p&gt;デフォルトではcert-managerは入らないのでenabled=trueにしてインストールする。
+最初に入るLet&amp;rsquo;s EncryptのClusterIssuerはエラーになったので消す。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/185/&#34;&gt;IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set certmanager.enabled=true
+$ kubectl delete ClusterIssuer --all
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;確認用にBookInfoを動かす。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl label namespace default istio-injection=enabled
+$ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
+$ kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Let&amp;rsquo;s Encryptで使われている&lt;a href=&#34;https://github.com/ietf-wg-acme/acme&#34;&gt;ACME&lt;/a&gt;プロトコルのドメイン認証(Challenge)には
+&lt;code&gt;/.well-known/acme-challenge/{token}&lt;/code&gt;でHTTPレスポンスを返す&lt;a href=&#34;https://github.com/ietf-wg-acme/acme/blob/master/draft-ietf-acme-acme.md#http-challenge&#34;&gt;HTTP Challenge&lt;/a&gt;(http-01)と
+DNSのTXTレコードに書き込む&lt;a href=&#34;https://github.com/ietf-wg-acme/acme/blob/master/draft-ietf-acme-acme.md#dns-challenge&#34;&gt;DNS Challenge&lt;/a&gt;(dns-01)がある。
+HTTP Challengeは手軽に達成できる一方、CAからアクセスできるようにする必要がある。今回はDNS Challengeでやる。
+cert-managerはCloud DNSやRoute53などに&lt;a href=&#34;http://docs.cert-manager.io/en/latest/reference/issuers/acme/dns01.html&#34;&gt;対応&lt;/a&gt;していて、今回はCloudflareを使う。&lt;/p&gt;
+
+&lt;p&gt;DNSに書き込めるようにするためCloudflareのMy ProfileからGlobal API Keyを持ってきてBase64デコードしSecretに入れる。
+改行コードが含まれないように&lt;code&gt;-n&lt;/code&gt;を付ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ echo -n ***** | base64
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare-api-key
+  namespace: istio-system
+type: Opaque
+data:
+  api-key: *****
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Let&amp;rsquo;s EncryptのClusterIssuerと証明書を生成するドメインのCertificateを作成する。
+serverのURLは&lt;a href=&#34;https://letsencrypt.status.io/&#34;&gt;Status&lt;/a&gt;のページから確認できる。
+本番のURLは&lt;a href=&#34;https://letsencrypt.org/docs/rate-limits/&#34;&gt;レート制限&lt;/a&gt;があるので、まずはFakeの証明書が生成されるstgで試すとよい。&lt;/p&gt;
+
+&lt;p&gt;証明書を書くsecretNameは&lt;code&gt;istio-system&lt;/code&gt;ネームスペースの&lt;code&gt;istio-ingressgateway-certs&lt;/code&gt;にする&lt;a href=&#34;https://istio.io/docs/tasks/traffic-management/secure-ingress/#configure-a-tls-ingress-gateway&#34;&gt;必要がある&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: certmanager.k8s.io/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns01
+  namespace: istio-system
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: aaa@example.com
+    privateKeySecretRef:
+      name: letsencrypt-dns01
+    dns01:
+      providers:
+      - name: cloudflare
+        cloudflare:
+          email: aaa@example.com
+          apiKeySecretRef:
+            name: cloudflare-api-key
+            key: api-key
+---
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: xxx-example-com
+  namespace: istio-system
+spec:
+  secretName: istio-ingressgateway-certs
+  issuerRef:
+    name: letsencrypt-dns01
+    kind: ClusterIssuer
+  commonName: xxx.example.com
+  dnsNames:
+  - xxx.example.com
+  acme:
+    config:
+    - dns01:
+        provider: cloudflare
+      domains:
+      - xxx.example.com
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これをapplyするとcertmanagerのログが流れ始める。何か間違いがあるとエラーになるのでなんとかする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl -n istio-system logs -f $(kubectl -n istio-system get pods -l app=certmanager -o jsonpath=&#39;{.items[0].metadata.name}&#39;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;証明書と秘密鍵のSecretはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl describe secret istio-ingressgateway-certs -n istio-system
+Name:         istio-ingressgateway-certs
+Namespace:    istio-system
+Labels:       &amp;lt;none&amp;gt;
+Annotations:  certmanager.k8s.io/alt-names=xxx.example.com
+              certmanager.k8s.io/common-name=xxx.example.com
+              certmanager.k8s.io/issuer-kind=ClusterIssuer
+              certmanager.k8s.io/issuer-name=letsencrypt-dns01
+
+Type:  kubernetes.io/tls
+
+Data
+====
+tls.key:  1675 bytes
+tls.crt:  3805 bytes
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;ingressgateway-certs&lt;/code&gt;は自動で&lt;code&gt;/etc/istio/ingressgateway-certs&lt;/code&gt;にマウントされる。
+このGatewayをapplyするとHTTPでアクセスした場合はリダイレクトし、HTTPSで正常にアクセスできるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: bookinfo-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - xxx.example.com
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - xxx.example.com
+    tls:
+      mode: SIMPLE
+      serverCertificate: /etc/istio/ingressgateway-certs/tls.crt
+      privateKey: /etc/istio/ingressgateway-certs/tls.key
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -18,7 +171,7 @@
           <guid>https://www.sambaiz.net/article/185/</guid>
           <description>
 
-&lt;p&gt;Istioは&lt;a href=&#34;https://www.envoyproxy.io/&#34;&gt;Envoy&lt;/a&gt;というProxyをSidecarとしてPodに入れてトラフィックを通すことでマイクロサービスの複雑なRoutingやTelemetryをサービスのコードに手を入れずに行うことができるサービスメッシュ。
+&lt;p&gt;Istioは&lt;a href=&#34;https://www.envoyproxy.io/&#34;&gt;Envoy&lt;/a&gt;というProxyをSidecarとしてPodに入れてトラフィックを通すことでマイクロサービスのRoutingやTelemetryをサービスのコードに手を入れずに行うことができるサービスメッシュ。
 もともとEnvoy自体は単体で、コネクションを張りっぱなしのgRPC(HTTP/2)をK8sのServiceのL4ロードバランサーでは分散できない問題の解決方法の一つとして
 各PodのIPの一覧を返す&lt;a href=&#34;https://kubernetes.io/docs/concepts/services-networking/service/#headless-services&#34;&gt;Headless Service&lt;/a&gt;と使われていたが、各Manifestに入れたりConfigMapを編集したりする必要があり少し面倒だった。
 Istioにするとそれらが省けて、さらに賢いRoutingやモニタリングの仕組みまで付いてくるのでとても便利だ。&lt;/p&gt;
@@ -88,97 +241,10 @@ EnvoyはPilotからサービスディスカバリして他Envoyについて知�
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/173/&#34;&gt;GKEでのService(ClusterIP/NodePort/LoadBalancer)とIngress - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;apiVersion: networking.istio.io/v1alpha3
-kind: Gateway
-metadata:
-  name: my-gateway
-spec:
-  selector:
-    app: my-gatweway-controller
-  servers:
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    hosts:
-    - uk.bookinfo.com
-    - eu.bookinfo.com
-    tls:
-      httpsRedirect: true # sends 301 redirect for http requests
-  - port:
-      number: 443
-      name: https
-      protocol: HTTPS
-    hosts:
-    - uk.bookinfo.com
-    - eu.bookinfo.com
-    tls:
-      mode: SIMPLE #enables HTTPS on this port
-      serverCertificate: /etc/certs/servercert.pem
-      privateKey: /etc/certs/privatekey.pem
-&lt;/code&gt;&lt;/pre&gt;
-
 &lt;ul&gt;
 &lt;li&gt;&lt;a href=&#34;https://istio.io/docs/reference/config/istio.networking.v1alpha3/#VirtualService&#34;&gt;VirtualService&lt;/a&gt;: ルーティングのルール。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;pre&gt;&lt;code&gt;apiVersion: networking.istio.io/v1alpha3
-kind: VirtualService
-metadata:
-  name: reviews-route
-spec:
-  hosts:
-  - reviews.prod.svc.cluster.local
-  http:
-  - match:
-    - uri:
-        prefix: &amp;quot;/wpcatalog&amp;quot;
-    - uri:
-        prefix: &amp;quot;/consumercatalog&amp;quot;
-    rewrite:
-      uri: &amp;quot;/newcatalog&amp;quot;
-    route:
-    - destination:
-        host: reviews
-        subset: v1
-      weight: 50
-    - destination:
-        host: reviews
-        subset: v3
-      weight: 50
-  - route:
-    - destination:
-        host: reviews
-        subset: v1
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
 &lt;li&gt;&lt;a href=&#34;https://istio.io/docs/reference/config/istio.networking.v1alpha3/#DestinationRule&#34;&gt;DestinationRule&lt;/a&gt;: ロードバランシングのルール。&lt;/li&gt;
 &lt;/ul&gt;
-
-&lt;pre&gt;&lt;code&gt;apiVersion: networking.istio.io/v1alpha3
-kind: DestinationRule
-metadata:
-  name: reviews
-spec:
-  host: reviews
-  trafficPolicy:
-    loadBalancer:
-      simple: LEAST_CONN
-  subsets:
-  - name: v1
-    labels:
-      version: v1
-  - name: v2
-    labels:
-      version: v2
-  - name: v3
-    labels:
-      version: v3
-      trafficPolicy:
-        loadBalancer:
-          simple: ROUND_ROBIN
-&lt;/code&gt;&lt;/pre&gt;
 
 &lt;h3 id=&#34;例-https-istio-io-docs-examples-bookinfo&#34;&gt;&lt;a href=&#34;https://istio.io/docs/examples/bookinfo/&#34;&gt;例&lt;/a&gt;&lt;/h3&gt;
 
@@ -472,68 +538,9 @@ MixerがSPOFとなり可用性が下がるのではと思われるが、バッ�
 
 &lt;ul&gt;
 &lt;li&gt;&lt;a href=&#34;https://istio.io/docs/concepts/policies-and-telemetry/#handlers&#34;&gt;Handler(Adapter)&lt;/a&gt;: Mixerからバックエンドへ送る。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;pre&gt;&lt;code&gt;apiVersion: config.istio.io/v1alpha2
-kind: prometheus
-metadata:
-  name: handler
-  namespace: istio-system
-spec:
-  metrics:
-  - name: request_count
-    instance_name: requestcount.metric.istio-system
-    kind: COUNTER
-    label_names:
-    - destination_service
-    - destination_version
-    - response_code
-  - name: request_duration
-    instance_name: requestduration.metric.istio-system
-    kind: DISTRIBUTION
-    label_names:
-    - destination_service
-    - destination_version
-    - response_code
-    buckets:
-      explicit_buckets:
-        bounds: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
 &lt;li&gt;&lt;a href=&#34;https://istio.io/docs/concepts/policies-and-telemetry/#instances&#34;&gt;Instance&lt;/a&gt;: EnvoyからMixerに送られてきたAttributeをAdapterの入力へマッピングする。&lt;/li&gt;
-&lt;/ul&gt;
-
-&lt;pre&gt;&lt;code&gt;apiVersion: config.istio.io/v1alpha2
-kind: metric
-metadata:
-  name: requestduration
-  namespace: istio-system
-spec:
-  value: response.duration | &amp;quot;0ms&amp;quot;
-  dimensions:
-    destination_service: destination.service | &amp;quot;unknown&amp;quot;
-    destination_version: destination.labels[&amp;quot;version&amp;quot;] | &amp;quot;unknown&amp;quot;
-    response_code: response.code | 200
-  monitored_resource_type: &#39;&amp;quot;UNSPECIFIED&amp;quot;&#39;
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;ul&gt;
 &lt;li&gt;&lt;a href=&#34;https://istio.io/docs/concepts/policies-and-telemetry/#rules&#34;&gt;Rule&lt;/a&gt;: Handlerが特定のInstancesで呼び出されるルール。&lt;/li&gt;
 &lt;/ul&gt;
-
-&lt;pre&gt;&lt;code&gt;apiVersion: config.istio.io/v1alpha2
-kind: rule
-metadata:
-  name: promhttp
-  namespace: istio-system
-spec:
-  match: destination.service == &amp;quot;service1.ns.svc.cluster.local&amp;quot; &amp;amp;&amp;amp; request.headers[&amp;quot;x-user&amp;quot;] == &amp;quot;user1&amp;quot;
-  actions:
-  - handler: handler.prometheus
-    instances:
-    - requestduration.metric.istio-system
-&lt;/code&gt;&lt;/pre&gt;
 
 &lt;h3 id=&#34;例-https-istio-io-docs-tasks-telemetry-metrics-logs&#34;&gt;&lt;a href=&#34;https://istio.io/docs/tasks/telemetry/metrics-logs/&#34;&gt;例&lt;/a&gt;&lt;/h3&gt;
 
