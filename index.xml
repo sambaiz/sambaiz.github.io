@@ -6,8 +6,135 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-09-23 23:03:00 &#43;0900 JST</updated>
+    <updated>2018-09-30 14:13:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>PythonのType Hintsとmypy</title>
+          <link>https://www.sambaiz.net/article/188/</link>
+          <pubDate>Sun, 30 Sep 2018 14:13:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/188/</guid>
+          <description>
+
+&lt;p&gt;動的型付け言語であるPythonで型アノテーションを書くための構文。
+&lt;a href=&#34;https://www.python.org/dev/peps/pep-0484/&#34;&gt;PEP 484&lt;/a&gt;で提案され、Python 3.5で実装された。
+実行時には影響せず、&lt;a href=&#34;https://github.com/python/mypy&#34;&gt;mypy&lt;/a&gt;のようなツールで静的解析したりするために使われる。&lt;/p&gt;
+
+&lt;p&gt;mypyをインストールする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ python -m pip install -U mypy
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;以下のように引数と返り値に型を書くと、型が誤っている場合にmypyで検知できるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat main.py
+def foo(n: int) -&amp;gt; str:
+  return str(n)
+
+print(foo(3))
+print(foo(&#39;3&#39;))
+
+$ python main.py
+3
+3
+
+$ mypy main.py
+main.py:5: error: Argument 1 to &amp;quot;foo&amp;quot; has incompatible type &amp;quot;str&amp;quot;; expected &amp;quot;int&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;VSCode上でもmypyを有効にすると表示されるようになる。FormatterやLintの設定と併せて有効にしておくとよい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/125/&#34;&gt;PythonのLintとFormatter - sambagiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;quot;python.linting.mypyEnabled&amp;quot;: true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/188.png&#34; alt=&#34;VSCodeでの表示&#34; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;callable-https-www-python-org-dev-peps-pep-0484-callable&#34;&gt;&lt;a href=&#34;https://www.python.org/dev/peps/pep-0484/#callable&#34;&gt;Callable&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;Callable[[引数], 返り値]のように書く。引数を&amp;hellip;にすると返り値だけをチェックさせることができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from typing import Callable
+
+def foo(f: Callable[[int], None]) -&amp;gt; None:
+  f(1)
+
+def bar(f: Callable[..., None]) -&amp;gt; None:
+  f(1)
+
+def f1(x: int):
+  print(x)
+
+def f2(x: str):
+  print(x)
+
+foo(f1) # ok
+foo(f2) # error: Argument 1 to &amp;quot;foo&amp;quot; has incompatible type &amp;quot;Callable[[str], Any]&amp;quot;; expected &amp;quot;Callable[[int], None]&amp;quot;
+bar(f1) # ok
+bar(f2) # ok
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;generics-https-www-python-org-dev-peps-pep-0484-generics&#34;&gt;&lt;a href=&#34;https://www.python.org/dev/peps/pep-0484/#generics&#34;&gt;Generics&lt;/a&gt;&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;from typing import Dict
+from typing import TypeVar, Generic
+
+T = TypeVar(&#39;T&#39;)
+
+class Foo(Generic[T]):
+  def __init__(self, v: T) -&amp;gt; None:
+    self.v = v
+  
+  def getV(self) -&amp;gt; T:
+    return self.v
+
+m: Dict[str, Foo[int]] = {&#39;a&#39;: Foo(1)}
+m2: Dict[str, Foo[str]] = {&#39;a&#39;: Foo(&#39;1&#39;)}
+
+def bar(m: Dict[str, Foo[int]], key: str) -&amp;gt; Foo[int]:
+  return Foo(m[key]).getV()
+
+def bar2(m: Dict[str, Foo[int]], key: str) -&amp;gt; Foo[str]:
+  return Foo(m[key]).getV() # error: Incompatible return value type (got &amp;quot;Foo[int]&amp;quot;, expected &amp;quot;Foo[str]&amp;quot;)
+
+bar(m, &#39;a&#39;)
+bar(m2, &#39;a&#39;) # error: Argument 1 to &amp;quot;bar&amp;quot; has incompatible type &amp;quot;Dict[str, Foo[str]]&amp;quot;; expected &amp;quot;Dict[str, Foo[int]]&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;TypeVarは&lt;code&gt;TypeVar(&#39;T&#39;, int, float)&lt;/code&gt;のように取り得る型を指定したり、
+&lt;code&gt;TypeVar(&#39;T&#39;, bound=Employee)&lt;/code&gt;のようにupper boundを指定する(そのサブクラスが取り得る型)こともできる。
+また、取った型はデフォルトでinvariant(非変, そのスーパークラスもサブクラスも許容しない)として扱われるが、
+&lt;code&gt;covariant=True&lt;/code&gt;にするとcovariant(共変, サブクラスは許容する)として扱うことができる。&lt;/p&gt;
+
+&lt;h3 id=&#34;union-types-https-www-python-org-dev-peps-pep-0484-union-types&#34;&gt;&lt;a href=&#34;https://www.python.org/dev/peps/pep-0484/#union-types&#34;&gt;Union types&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;いずれかの型を取るUnion typeも書ける。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from typing import Union, Sequence
+
+def foo(e: Union[int, Sequence[int]]) -&amp;gt; Sequence[int]:
+    if isinstance(e, int):
+      return [e]
+    return e
+
+print(foo(1))
+print(foo([1]))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Union[T, None]はOptional[T]と同じ。Noneをデフォルト引数にすると自動でOptional[int]として扱われる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def foo(e: int = None):
+    if e:
+      print(e)
+foo(1)
+foo()
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -10304,6 +10431,12 @@ exclude =
     dist
 max-complexity = 10
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;加えてmypyを使うとType Hintsによる型の整合性をチェックできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/188/&#34;&gt;PythonのType Hintsとmypy - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
