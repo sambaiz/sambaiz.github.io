@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>vmstatのメモ - sambaiz-net</title>
-    <meta name="twitter:title" content="vmstatのメモ - sambaiz-net">
-    <meta property='og:title' content="vmstatのメモ - sambaiz-net">
+    <title>MySQLのtime_zoneとgo-sql-driver/mysqlの設定 - sambaiz-net</title>
+    <meta name="twitter:title" content="MySQLのtime_zoneとgo-sql-driver/mysqlの設定 - sambaiz-net">
+    <meta property='og:title' content="MySQLのtime_zoneとgo-sql-driver/mysqlの設定 - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="vmstat">
-      <meta name="twitter:description" content="vmstat">
+      <meta name="description" content="MySQLのtime_zoneとGo">
+      <meta name="twitter:description" content="MySQLのtime_zoneとGo">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/59/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/189/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "vmstatのメモ | sambaiz-net ",
-    "datePublished": "2017-02-06T22:45:00JST",
-    "dateModified": "2017-02-06T22:45:00JST",
+    "headline": "MySQLのtime_zoneとgo-sql-driver/mysqlの設定 | sambaiz-net ",
+    "datePublished": "2018-10-02T22:22:00JST",
+    "dateModified": "2018-10-02T22:22:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "vmstat"
+    "description": "MySQLのtime_zoneとGo"
   }
 </script>
 </head>
@@ -103,79 +103,164 @@
 
       <article class="single">
         <div class="single body">
-          <h1>vmstatのメモ</h1>
-          <p>(2017-02-06)</p>
+          <h1>MySQLのtime_zoneとgo-sql-driver/mysqlの設定</h1>
+          <p>(2018-10-02)</p>
           
 
-<pre><code>$ vmstat 間隔(秒)
-procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
- r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
- 0  0      0 118588  80388 2516284    0    0     2    77  141   85  1  0 98  0  0
+<p>MySQLのtime_zoneとgo-sql-driver/mysqlの設定による挙動を確認する。</p>
+
+<pre><code>&gt; select version();
+    +-----------+
+    | version() |
+    +-----------+
+    | 5.7.21    |
+    +-----------+
 </code></pre>
 
-<h2 id="procs">procs</h2>
+<p>タイムゾーンがロードされていない場合はロードする。</p>
 
-<ul>
-<li><p>r: 実行待ちプロセス数。CPUの処理が追いついていない。</p></li>
+<pre><code>&gt; select count(*) from mysql.time_zone \\G;
+*************************** 1. row ***************************
+count(*): 0
 
-<li><p>b: 割り込み不可能なスリープ中のプロセス数。I/O待ちらしい。</p></li>
-</ul>
+$ mysql_tzinfo_to_sql /usr/share/zoneinfo/ | mysql -u root mysql
+</code></pre>
 
-<h2 id="memory">memory</h2>
+<p>time_zoneはデフォルト値のSYSTEM。つまりJSTで、my.cnfのdefault-time-zoneで変更できる。
+NOW()もJSTの時間を返している。</p>
 
-<ul>
-<li><p>swpd: バーチャルメモリの使用量。</p></li>
+<pre><code>&gt; show variables like '%time_zone%';
++------------------+--------+
+| Variable_name    | Value  |
++------------------+--------+
+| system_time_zone | JST    |
+| time_zone        | SYSTEM |
++------------------+--------+
 
-<li><p>free: 空きメモリ量。</p></li>
+&gt; SELECT NOW();
+mysql&gt; SELECT NOW() \G;
+*************************** 1. row ***************************
+NOW(): 2018-10-02 20:26:29
+</code></pre>
 
-<li><p>buff: バッファに使われてるメモリ量。</p></li>
+<p>DATETIMEはそのまま格納され返される。
+TIMESTAMPはUTCに変換して格納され、
+返すときにtime_zoneに<a href="https://dev.mysql.com/doc/refman/5.7/en/time-zone-support.html">変換される</a>。
+したがってtime_zoneを変更するとDATETIMEは変わらず、TIMESTAMPは変わる。</p>
 
-<li><p>cache: キャッシュに使われているメモリ量。</p></li>
-</ul>
+<pre><code>&gt; CREATE TABLE t (
+    dt DATETIME,
+    ts TIMESTAMP
+);
+&gt; INSERT INTO t VALUES (NOW(), NOW());
+&gt; select * from t \G;
+*************************** 1. row ***************************
+dt: 2018-10-02 20:27:13
+ts: 2018-10-02 20:27:13
 
-<h2 id="swap">swap</h2>
+&gt; SET SESSION time_zone = &quot;UTC&quot;;
+&gt; select NOW() \G;
+*************************** 1. row ***************************
+NOW(): 2018-10-02 11:27:56
 
-<ul>
-<li><p>si: 秒あたりのスワップイン量。メモリが足りていない。</p></li>
+&gt; select * from t \G;
+*************************** 1. row ***************************
+dt: 2018-10-02 20:27:13
+ts: 2018-10-02 11:27:13
+</code></pre>
 
-<li><p>so: 秒あたりのスワップアウト量。</p></li>
-</ul>
+<h2 id="go-sql-driver-mysql">go-sql-driver/mysql</h2>
 
-<h2 id="io">io</h2>
+<p><a href="https://github.com/go-sql-driver/mysql">go-sql-driver/mysql</a>で
+Data Source Nameに<a href="https://github.com/go-sql-driver/mysql#loc">loc</a>とtime_zoneを付けて実行してみる。
+time.Localの影響を確認するためUTCでもJSTでもない<code>US/Alaska</code>にしている。</p>
 
-<ul>
-<li><p>bi: 秒あたりのブロックデバイスから受け取ったブロック数。</p></li>
+<pre><code>package main
 
-<li><p>bo: 秒あたりのブロックデバイスに送ったブロック数。</p></li>
-</ul>
+import (
+    &quot;database/sql&quot;
+    &quot;fmt&quot;
+    &quot;math&quot;
+    &quot;time&quot;
 
-<h2 id="system">system</h2>
+    _ &quot;github.com/go-sql-driver/mysql&quot;
+)
+    
+const format = &quot;2006-01-02 15:04:05 Z0700&quot;
+    
+func main() {
+    var err error
+    if time.Local, err = time.LoadLocation(&quot;US/Alaska&quot;); err != nil {
+        panic(err)
+    }
+    now := time.Now()
+    fmt.Printf(&quot;%15s: %s\n&quot;, &quot;time.Now()&quot;, now.Format(format))
+    fmt.Println(&quot;* none&quot;)
+    run(now, &quot;root:@/hoge?parseTime=true&quot;)
+    fmt.Println(&quot;* loc (mysql's timezone != Local timezone)&quot;)
+    run(now, &quot;root:@/hoge?parseTime=true&amp;loc=Local&quot;)
+    fmt.Println(&quot;* loc &amp; time_zone&quot;)
+    run(now, &quot;root:@/hoge?parseTime=true&amp;loc=Local&amp;time_zone=%27US%2FAlaska%27&quot;)
+}
 
-<ul>
-<li><p>in: 秒あたりの割り込み回数。</p></li>
+func run(now time.Time, src string) {
+    db, err := sql.Open(&quot;mysql&quot;, src)
+    if err != nil {
+        panic(err)
+    }
+    defer db.Close()
 
-<li><p>cs: 秒あたりの<a href="https://ja.wikipedia.org/wiki/%E3%82%B3%E3%83%B3%E3%83%86%E3%82%AD%E3%82%B9%E3%83%88%E3%82%B9%E3%82%A4%E3%83%83%E3%83%81">コンテキストスイッチ</a>の回数。</p></li>
-</ul>
+    if _, err := db.Exec(&quot;DELETE FROM t&quot;); err != nil {
+        panic(err)
+    }
 
-<h2 id="cpu">cpu</h2>
+    if _, err := db.Exec(&quot;INSERT INTO t VALUES (NOW(), NOW())&quot;); err != nil {
+        panic(err)
+    }
 
-<ul>
-<li><p>us: カーネル以外のコードでかかっている時間。</p></li>
+    if _, err := db.Exec(&quot;INSERT INTO t VALUES (?, ?)&quot;, now, now); err != nil {
+        panic(err)
+    }
 
-<li><p>sy: カーネルコードでかかっている時間。</p></li>
+    rows, err := db.Query(&quot;SELECT dt, ts FROM t&quot;)
+    if err != nil {
+        panic(err)
+    }
+    i := 0
+    title := []string{&quot;mysql NOW()&quot;, &quot;go time.Now()&quot;}
+    for rows.Next() {
+        var datetime, timestamp time.Time
+        if err := rows.Scan(&amp;datetime, &amp;timestamp); err != nil {
+            panic(err)
+        }
+        fmt.Printf(&quot;%15s: %s, %s -&gt; %v\n&quot;,
+            title[i],
+            datetime.Format(format),
+            timestamp.Format(format),
+            math.Abs(float64(datetime.Unix()-now.Unix())) &lt; 10,
+        )
+        i++
+    }
+}
+</code></pre>
 
-<li><p>id: アイドルタイム。0だとCPUが全力で仕事中。</p></li>
+<p>locはtime.Timeのタイムゾーンで、付けないとUTCになる。
+これはMySQLサーバーのtime_zoneには影響せず、NOW()の値はLocalと異なりJSTなので値がおかしくなる。
+一方、time.Now()の方はタイムゾーンが考慮されているので値自体は正しい。
+time_zoneを付けると<code>SET time_zone</code>してくれてNOW()の値も正しくなる。</p>
 
-<li><p>wa: IO待ち時間。</p></li>
-
-<li><p>st: 要求したがCPUリソースを割り当ててもらえなかった時間。</p></li>
-</ul>
-
-<h2 id="参考">参考</h2>
-
-<p><a href="https://orebibou.com/2015/07/vmstat%E3%82%B3%E3%83%9E%E3%83%B3%E3%83%89%E3%81%A7%E8%A6%9A%E3%81%88%E3%81%A6%E3%81%8A%E3%81%8D%E3%81%9F%E3%81%84%E4%BD%BF%E3%81%84%E6%96%B98%E5%80%8B/">vmstatコマンドで覚えておきたい使い方8個(+1個) | 俺的備忘録 〜なんかいろいろ〜</a></p>
-
-<p><a href="https://blogs.oracle.com/yappri/entry/vmstat">vmstat コマンドの読み方 (やっぱり Sun がスキ！)</a></p>
+<pre><code>$ go run main.go
+        time.Now(): 2018-10-02 03:43:13 -0800
+* none
+    mysql NOW(): 2018-10-02 20:43:13 Z, 2018-10-02 20:43:13 Z -&gt; false
+    go time.Now(): 2018-10-02 11:43:14 Z, 2018-10-02 11:43:14 Z -&gt; true
+* loc (mysql's timezone != Local timezone)
+    mysql NOW(): 2018-10-02 20:43:13 -0800, 2018-10-02 20:43:13 -0800 -&gt; false
+    go time.Now(): 2018-10-02 03:43:14 -0800, 2018-10-02 03:43:14 -0800 -&gt; true
+* loc &amp; time_zone
+    mysql NOW(): 2018-10-02 03:43:13 -0800, 2018-10-02 03:43:13 -0800 -&gt; true
+    go time.Now(): 2018-10-02 03:43:14 -0800, 2018-10-02 03:43:14 -0800 -&gt; true
+</code></pre>
 
         </div>
       </article>

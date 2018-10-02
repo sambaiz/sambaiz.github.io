@@ -6,8 +6,175 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-09-30 14:13:00 &#43;0900 JST</updated>
+    <updated>2018-10-02 22:22:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>MySQLのtime_zoneとgo-sql-driver/mysqlの設定</title>
+          <link>https://www.sambaiz.net/article/189/</link>
+          <pubDate>Tue, 02 Oct 2018 22:22:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/189/</guid>
+          <description>
+
+&lt;p&gt;MySQLのtime_zoneとgo-sql-driver/mysqlの設定による挙動を確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; select version();
+    +-----------+
+    | version() |
+    +-----------+
+    | 5.7.21    |
+    +-----------+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;タイムゾーンがロードされていない場合はロードする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; select count(*) from mysql.time_zone \\G;
+*************************** 1. row ***************************
+count(*): 0
+
+$ mysql_tzinfo_to_sql /usr/share/zoneinfo/ | mysql -u root mysql
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;time_zoneはデフォルト値のSYSTEM。つまりJSTで、my.cnfのdefault-time-zoneで変更できる。
+NOW()もJSTの時間を返している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; show variables like &#39;%time_zone%&#39;;
++------------------+--------+
+| Variable_name    | Value  |
++------------------+--------+
+| system_time_zone | JST    |
+| time_zone        | SYSTEM |
++------------------+--------+
+
+&amp;gt; SELECT NOW();
+mysql&amp;gt; SELECT NOW() \G;
+*************************** 1. row ***************************
+NOW(): 2018-10-02 20:26:29
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;DATETIMEはそのまま格納され返される。
+TIMESTAMPはUTCに変換して格納され、
+返すときにtime_zoneに&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.7/en/time-zone-support.html&#34;&gt;変換される&lt;/a&gt;。
+したがってtime_zoneを変更するとDATETIMEは変わらず、TIMESTAMPは変わる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; CREATE TABLE t (
+    dt DATETIME,
+    ts TIMESTAMP
+);
+&amp;gt; INSERT INTO t VALUES (NOW(), NOW());
+&amp;gt; select * from t \G;
+*************************** 1. row ***************************
+dt: 2018-10-02 20:27:13
+ts: 2018-10-02 20:27:13
+
+&amp;gt; SET SESSION time_zone = &amp;quot;UTC&amp;quot;;
+&amp;gt; select NOW() \G;
+*************************** 1. row ***************************
+NOW(): 2018-10-02 11:27:56
+
+&amp;gt; select * from t \G;
+*************************** 1. row ***************************
+dt: 2018-10-02 20:27:13
+ts: 2018-10-02 11:27:13
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;go-sql-driver-mysql&#34;&gt;go-sql-driver/mysql&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/go-sql-driver/mysql&#34;&gt;go-sql-driver/mysql&lt;/a&gt;で
+Data Source Nameに&lt;a href=&#34;https://github.com/go-sql-driver/mysql#loc&#34;&gt;loc&lt;/a&gt;とtime_zoneを付けて実行してみる。
+time.Localの影響を確認するためUTCでもJSTでもない&lt;code&gt;US/Alaska&lt;/code&gt;にしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+    &amp;quot;database/sql&amp;quot;
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;math&amp;quot;
+    &amp;quot;time&amp;quot;
+
+    _ &amp;quot;github.com/go-sql-driver/mysql&amp;quot;
+)
+    
+const format = &amp;quot;2006-01-02 15:04:05 Z0700&amp;quot;
+    
+func main() {
+    var err error
+    if time.Local, err = time.LoadLocation(&amp;quot;US/Alaska&amp;quot;); err != nil {
+        panic(err)
+    }
+    now := time.Now()
+    fmt.Printf(&amp;quot;%15s: %s\n&amp;quot;, &amp;quot;time.Now()&amp;quot;, now.Format(format))
+    fmt.Println(&amp;quot;* none&amp;quot;)
+    run(now, &amp;quot;root:@/hoge?parseTime=true&amp;quot;)
+    fmt.Println(&amp;quot;* loc (mysql&#39;s timezone != Local timezone)&amp;quot;)
+    run(now, &amp;quot;root:@/hoge?parseTime=true&amp;amp;loc=Local&amp;quot;)
+    fmt.Println(&amp;quot;* loc &amp;amp; time_zone&amp;quot;)
+    run(now, &amp;quot;root:@/hoge?parseTime=true&amp;amp;loc=Local&amp;amp;time_zone=%27US%2FAlaska%27&amp;quot;)
+}
+
+func run(now time.Time, src string) {
+    db, err := sql.Open(&amp;quot;mysql&amp;quot;, src)
+    if err != nil {
+        panic(err)
+    }
+    defer db.Close()
+
+    if _, err := db.Exec(&amp;quot;DELETE FROM t&amp;quot;); err != nil {
+        panic(err)
+    }
+
+    if _, err := db.Exec(&amp;quot;INSERT INTO t VALUES (NOW(), NOW())&amp;quot;); err != nil {
+        panic(err)
+    }
+
+    if _, err := db.Exec(&amp;quot;INSERT INTO t VALUES (?, ?)&amp;quot;, now, now); err != nil {
+        panic(err)
+    }
+
+    rows, err := db.Query(&amp;quot;SELECT dt, ts FROM t&amp;quot;)
+    if err != nil {
+        panic(err)
+    }
+    i := 0
+    title := []string{&amp;quot;mysql NOW()&amp;quot;, &amp;quot;go time.Now()&amp;quot;}
+    for rows.Next() {
+        var datetime, timestamp time.Time
+        if err := rows.Scan(&amp;amp;datetime, &amp;amp;timestamp); err != nil {
+            panic(err)
+        }
+        fmt.Printf(&amp;quot;%15s: %s, %s -&amp;gt; %v\n&amp;quot;,
+            title[i],
+            datetime.Format(format),
+            timestamp.Format(format),
+            math.Abs(float64(datetime.Unix()-now.Unix())) &amp;lt; 10,
+        )
+        i++
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;locはtime.Timeのタイムゾーンで、付けないとUTCになる。
+これはMySQLサーバーのtime_zoneには影響せず、NOW()の値はLocalと異なりJSTなので値がおかしくなる。
+一方、time.Now()の方はタイムゾーンが考慮されているので値自体は正しい。
+time_zoneを付けると&lt;code&gt;SET time_zone&lt;/code&gt;してくれてNOW()の値も正しくなる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go run main.go
+        time.Now(): 2018-10-02 03:43:13 -0800
+* none
+    mysql NOW(): 2018-10-02 20:43:13 Z, 2018-10-02 20:43:13 Z -&amp;gt; false
+    go time.Now(): 2018-10-02 11:43:14 Z, 2018-10-02 11:43:14 Z -&amp;gt; true
+* loc (mysql&#39;s timezone != Local timezone)
+    mysql NOW(): 2018-10-02 20:43:13 -0800, 2018-10-02 20:43:13 -0800 -&amp;gt; false
+    go time.Now(): 2018-10-02 03:43:14 -0800, 2018-10-02 03:43:14 -0800 -&amp;gt; true
+* loc &amp;amp; time_zone
+    mysql NOW(): 2018-10-02 03:43:13 -0800, 2018-10-02 03:43:13 -0800 -&amp;gt; true
+    go time.Now(): 2018-10-02 03:43:14 -0800, 2018-10-02 03:43:14 -0800 -&amp;gt; true
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -18,9 +185,9 @@
           <guid>https://www.sambaiz.net/article/188/</guid>
           <description>
 
-&lt;p&gt;動的型付け言語であるPythonで型アノテーションを書くための構文。
+&lt;p&gt;動的型付け言語であるPythonで型アノテーションを書けるようにするための構文。
 &lt;a href=&#34;https://www.python.org/dev/peps/pep-0484/&#34;&gt;PEP 484&lt;/a&gt;で提案され、Python 3.5で実装された。
-実行時には影響せず、&lt;a href=&#34;https://github.com/python/mypy&#34;&gt;mypy&lt;/a&gt;のようなツールで静的解析したりするために使われる。&lt;/p&gt;
+実行には影響せず、&lt;a href=&#34;https://github.com/python/mypy&#34;&gt;mypy&lt;/a&gt;のようなツールで静的解析したりするために使われる。&lt;/p&gt;
 
 &lt;p&gt;mypyをインストールする。&lt;/p&gt;
 
@@ -42,6 +209,22 @@ $ python main.py
 
 $ mypy main.py
 main.py:5: error: Argument 1 to &amp;quot;foo&amp;quot; has incompatible type &amp;quot;str&amp;quot;; expected &amp;quot;int&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;また、Type Hintsがないライブラリなどのために&lt;a href=&#34;https://www.python.org/dev/peps/pep-0484/#stub-files&#34;&gt;Stub&lt;/a&gt;ファイルを別に作って型を書くこともできるようにもなっている。デフォルトではStubがないモジュールはエラーになってしまうので必要に応じて&lt;a href=&#34;https://mypy.readthedocs.io/en/latest/running_mypy.html#ignore-missing-imports&#34;&gt;ignore_missing_import&lt;/a&gt;する。
+mypy.iniやsetup.cfgに設定を書くと自動で&lt;a href=&#34;https://mypy.readthedocs.io/en/latest/config_file.html#config-file&#34;&gt;使われる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat main.py
+import numpy as np
+
+$ mypy main.py
+main.py:1: error: No library stub file for module &#39;numpy&#39;
+main.py:1: note: (Stub files are from https://github.com/python/typeshed)
+
+$ vi mypy.ini
+[mypy]
+[mypy-numpy]
+ignore_missing_imports = True
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;VSCode上でもmypyを有効にすると表示されるようになる。FormatterやLintの設定と併せて有効にしておくとよい。&lt;/p&gt;
@@ -124,7 +307,7 @@ print(foo(1))
 print(foo([1]))
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;Union[T, None]はOptional[T]と同じ。Noneをデフォルト引数にすると自動でOptional[int]として扱われる。&lt;/p&gt;
+&lt;p&gt;Union[T, None]はOptional[T]と同じ。Noneをデフォルト引数にすると自動でOptional[T]として扱われる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;def foo(e: int = None):
     if e:
