@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する - sambaiz-net</title>
-    <meta name="twitter:title" content="fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する - sambaiz-net">
-    <meta property='og:title' content="fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する - sambaiz-net">
+    <title>Kubernetesでliveness/readinessProbeのexec commandが実行される流れ - sambaiz-net</title>
+    <meta name="twitter:title" content="Kubernetesでliveness/readinessProbeのexec commandが実行される流れ - sambaiz-net">
+    <meta property='og:title' content="Kubernetesでliveness/readinessProbeのexec commandが実行される流れ - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="Firehoseはよ">
-      <meta name="twitter:description" content="Firehoseはよ">
+      <meta name="description" content="kubelet">
+      <meta name="twitter:description" content="kubelet">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/73/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/190/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する | sambaiz-net ",
-    "datePublished": "2017-02-26T18:56:00JST",
-    "dateModified": "2017-02-26T18:56:00JST",
+    "headline": "Kubernetesでliveness/readinessProbeのexec commandが実行される流れ | sambaiz-net ",
+    "datePublished": "2018-10-06T16:32:00JST",
+    "dateModified": "2018-10-06T16:32:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Firehoseはよ"
+    "description": "kubelet"
   }
 </script>
 </head>
@@ -103,118 +103,84 @@
 
       <article class="single">
         <div class="single body">
-          <h1>fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する</h1>
-          <p>(2017-02-26)</p>
-          
+          <h1>Kubernetesでliveness/readinessProbeのexec commandが実行される流れ</h1>
+          <p>(2018-10-06)</p>
+          <p>Kubernetesの<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/">liveness/readinessProbe</a>
+はPodが生きているか/リクエストを受けられるかの判定で、
+後者はアプリケーションの起動に時間がかかる場合などに使われる。
+ヘルスチェックのようなエンドポイントを叩くのはhttpGetでできるが、任意のcommandを実行することもできる。</p>
 
-<p><a href="https://github.com/awslabs/aws-fluent-plugin-kinesis">aws-fluent-plugin-kinesis</a>でKinesis Streamsに送り、Lambdaで読んでS3に保存する。
-要するにFirehoseのようなことをやりたいのだけれどTokyoリージョンにまだ来ないので自分でやる。</p>
-
-<h2 id="fluentdで送る">fluentdで送る</h2>
-
-<pre><code>$ td-agent-gem install fluent-plugin-kinesis
+<pre><code>livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+    httpHeaders:
+    - name: X-Custom-Header
+      value: Awesome
 </code></pre>
 
-<p><code>try_flush_interval</code>と<code>queued_chunk_flush_interval</code>はドキュメントには載っていないが、
-以下のページによるとそれぞれqueueに次のchunkがないときとあるときのflushする間隔。
-いずれもデフォルトは1だが、これを減らすことでもっと頻繁に吐き出されるようになるらしい。</p>
+<p>Manifestに書かれたProbeは、
+各ノードで動いている<a href="https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/">kubelet</a>が
+<a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/kubelet.go#L1983">Podが追加されたとき</a>にworkerを
+<a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/prober/prober_manager.go#L157">作って</a>
+<a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/prober/prober.go#L147">runProbe()</a>で実行させている。</p>
 
-<p><a href="https://github.com/sonots/fluentd-scr/blob/master/02_out_forward_buffered.md">Fluentd の out_forward と BufferedOutput</a></p>
-
-<p>あとシャードに振り分けるための<a href="https://github.com/awslabs/aws-fluent-plugin-kinesis#partition_key">partition_key</a>
-を指定できる。デフォルトはランダム。</p>
-
-<pre><code>&lt;source&gt;
-  @type tail
-  path /var/log/td-agent/hoge.log
-  pos_file /etc/td-agent/log.pos
-  tag hoge.log
-  format json
-
-  time_key timestamp
-  # 2017-01-01T01:01:01+0900
-  time_format %Y-%m-%dT%H:%M:%S%z
-&lt;/source&gt;
-
-&lt;match hoge.log&gt;
-  @type kinesis_streams
-  region ap-northeast-1
-  stream_name teststream
-  include_time_key true
-
-  flush_interval 1
-  buffer_chunk_limit 1m
-  try_flush_interval 0.1
-  queued_chunk_flush_interval 0.01
-  num_threads 15
-&lt;/match&gt;
-</code></pre>
-
-<p>いくつか送ってみる。</p>
-
-<pre><code>for i in `seq 1 1000`
-do
-  echo '{&quot;hoge&quot;: &quot;fuga&quot;, &quot;timestamp&quot;: &quot;2017-01-01T01:01:01+0900&quot;}' &gt;&gt; /var/log/td-agent/hoge.log
-done
-</code></pre>
-
-<p>kinesisのシャードが足りないと詰まってしまうので注意。</p>
-
-<p><a href="https://www.sambaiz.net/article/84/">FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ - sambaiz.net</a></p>
-
-<h2 id="lambdaで読む">Lambdaで読む</h2>
-
-<p>Lambdaのトリガーの設定でKinesisを選ぶと、バッチサイズや開始位置を設定できる。</p>
-
-<p><img src="https://www.sambaiz.net/images/73-lambda-kinesis.png" alt="トリガーの設定" /></p>
-
-<p>コードはこんな感じ。</p>
-
-<pre><code>'use strict';
-
-const zlib = require('zlib');
-const aws = require('aws-sdk');
-const s3 = new aws.S3({ apiVersion: '2006-03-01' });
-const BUCKET_NAME = process.env.BUCKET_NAME; // 環境変数で設定する
-
-exports.handler = (event, context, callback) =&gt; {
-
-    const data = event.Records.map((record) =&gt; new Buffer(record.kinesis.data, 'base64').toString()).join(&quot;\n&quot;);
-    const key = new Date().toISOString();
-    
-    putS3(key, data, true).then(
-        (data) =&gt; callback(null, `Successfully processed ${event.Records.length} records.`),
-        (err) =&gt; callback(err, null)
-    );
-};
-
-function putS3(key, data, gzip){    
-    return new Promise((resolve, reject) =&gt; {
-        
-        const params = {
-            Bucket: BUCKET_NAME,
-            Key: key
-        };
-
-        if(gzip){
-            params.Body = zlib.gzipSync(data);
-            params.ContentEncoding = &quot;gzip&quot;;
-        }else{
-            params.Body = data;
-        }
-        
-        s3.putObject(params, (err, data) =&gt; {
-            if (err) reject(err);
-            else resolve(data);
-        });
-    });
+<pre><code>if p.Exec != nil {
+    glog.V(4).Infof(&quot;Exec-Probe Pod: %v, Container: %v, Command: %v&quot;, pod, container, p.Exec.Command)
+    command := kubecontainer.ExpandContainerCommandOnlyStatic(p.Exec.Command, container.Env)
+    return pb.exec.Probe(pb.newExecInContainer(container, containerID, command, timeout))
 }
 </code></pre>
 
-<p>トリガーを有効にするとイベントが発火してS3に保存されるようになった。</p>
+<p>まずcommandに含まれる<code>$( )</code>で囲まれた文字列を
+<a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/third_party/forked/golang/expansion/expand.go#L38">Expand()</a>
+で存在すればcontainerのenvの値に置き換える。</p>
 
-<p>ただ、Kinesisをイベントトリガーにして都度出力すると、1ファイルのサイズが非常に小さくなってしまう。
-なんとかして都度出力しないようにするか、あるいは時間トリガーで実行するか、いずれにしてもどこまで読んだか記録しておかなくちゃいけないのでちょっと面倒だ。バッファリングしてくれるFirehoseが早く日本にも来て欲しい。</p>
+<p>その後、
+<a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/kuberuntime/kuberuntime_container.go#L778">RunInContainer</a>で、
+コンテナランタイムがK8s標準のCRI(Container Runtime Interface)に対応している場合はその<a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/apis/cri/services.go#L50">API</a>の、
+対応していない場合は~shimパッケージのExecSync()が呼ばれ、コンテナ内でcommandを実行させて結果を受け取り、終了コードが0でなければエラーとする。</p>
+
+<p><code>$( )</code>でenvの値が使えることを確認する。</p>
+
+<pre><code>$ kubectl config use-context docker-for-desktop
+$ cat test.yaml
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: &quot;test&quot;
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: &quot;test&quot;
+    spec:
+      containers:
+        - name: &quot;test&quot;
+          image: &quot;alpine&quot;
+          command: [&quot;top&quot;]
+          env:
+          - name: TEST
+            value: &quot;foobar&quot;
+          ports:
+          - containerPort: 5000
+            name: grpc
+          readinessProbe:
+            exec:
+              command:
+              - test
+              - $(TEST)
+              - =
+              - foobar
+            initialDelaySeconds: 0
+            timeoutSeconds: 1
+
+$ kubectl apply test.yaml
+$ kubectl describe pod $(kubectl get pods -l app=test -o jsonpath='{.items[0].metadata.name}')
+test-85994ddf4d-gpxpq       1/1       Running   0          9s
+</code></pre>
 
         </div>
       </article>

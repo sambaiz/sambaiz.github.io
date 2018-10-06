@@ -6,10 +6,24 @@
     <description>Recent content in Kubernetes on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Thu, 13 Sep 2018 21:55:00 +0900</lastBuildDate>
+    <lastBuildDate>Sat, 06 Oct 2018 16:32:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/tags/kubernetes/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Kubernetesでliveness/readinessProbeのexec commandが実行される流れ</title>
+      <link>https://www.sambaiz.net/article/190/</link>
+      <pubDate>Sat, 06 Oct 2018 16:32:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/190/</guid>
+      <description>Kubernetesのliveness/readinessProbe はPodが生きているか/リクエストを受けられるかの判定で、 後者はアプリケーションの起動に時間がかかる場合などに使われる。 ヘルスチェックのようなエンドポイントを叩くのはhttpGetでできるが、任意のcommandを実行することもできる。
+livenessProbe: httpGet: path: /healthz port: 8080 httpHeaders: - name: X-Custom-Header value: Awesome  Manifestに書かれたProbeは、 各ノードで動いているkubeletが Podが追加されたときにworkerを 作って runProbe()で実行させている。
+if p.Exec != nil { glog.V(4).Infof(&amp;quot;Exec-Probe Pod: %v, Container: %v, Command: %v&amp;quot;, pod, container, p.Exec.Command) command := kubecontainer.ExpandContainerCommandOnlyStatic(p.Exec.Command, container.Env) return pb.exec.Probe(pb.newExecInContainer(container, containerID, command, timeout)) }  まずcommandに含まれる$( )で囲まれた文字列を Expand() で存在すればcontainerのenvの値に置き換える。
+その後、 RunInContainerで、 コンテナランタイムがK8s標準のCRI(Container Runtime Interface)に対応している場合はそのAPIの、 対応していない場合は~shimパッケージのExecSync()が呼ばれ、コンテナ内でcommandを実行させて結果を受け取り、終了コードが0でなければエラーとする。
+$( )でenvの値が使えることを確認する。
+$ kubectl config use-context docker-for-desktop $ cat test.yaml --- apiVersion: extensions/v1beta1 kind: Deployment metadata: name: &amp;quot;test&amp;quot; spec: replicas: 1 template: metadata: labels: app: &amp;quot;test&amp;quot; spec: containers: - name: &amp;quot;test&amp;quot; image: &amp;quot;alpine&amp;quot; command: [&amp;quot;top&amp;quot;] env: - name: TEST value: &amp;quot;foobar&amp;quot; ports: - containerPort: 5000 name: grpc readinessProbe: exec: command: - test - $(TEST) - = - foobar initialDelaySeconds: 0 timeoutSeconds: 1 $ kubectl apply test.</description>
+    </item>
     
     <item>
       <title>cert-managerで生成した証明書をIstioのGatewayに設定してHTTPS対応する</title>

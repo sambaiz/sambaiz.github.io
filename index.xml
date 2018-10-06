@@ -6,8 +6,95 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-10-02 22:22:00 &#43;0900 JST</updated>
+    <updated>2018-10-06 16:32:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Kubernetesでliveness/readinessProbeのexec commandが実行される流れ</title>
+          <link>https://www.sambaiz.net/article/190/</link>
+          <pubDate>Sat, 06 Oct 2018 16:32:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/190/</guid>
+          <description>&lt;p&gt;Kubernetesの&lt;a href=&#34;https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/&#34;&gt;liveness/readinessProbe&lt;/a&gt;
+はPodが生きているか/リクエストを受けられるかの判定で、
+後者はアプリケーションの起動に時間がかかる場合などに使われる。
+ヘルスチェックのようなエンドポイントを叩くのはhttpGetでできるが、任意のcommandを実行することもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+    httpHeaders:
+    - name: X-Custom-Header
+      value: Awesome
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Manifestに書かれたProbeは、
+各ノードで動いている&lt;a href=&#34;https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/&#34;&gt;kubelet&lt;/a&gt;が
+&lt;a href=&#34;https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/kubelet.go#L1983&#34;&gt;Podが追加されたとき&lt;/a&gt;にworkerを
+&lt;a href=&#34;https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/prober/prober_manager.go#L157&#34;&gt;作って&lt;/a&gt;
+&lt;a href=&#34;https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/prober/prober.go#L147&#34;&gt;runProbe()&lt;/a&gt;で実行させている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;if p.Exec != nil {
+    glog.V(4).Infof(&amp;quot;Exec-Probe Pod: %v, Container: %v, Command: %v&amp;quot;, pod, container, p.Exec.Command)
+    command := kubecontainer.ExpandContainerCommandOnlyStatic(p.Exec.Command, container.Env)
+    return pb.exec.Probe(pb.newExecInContainer(container, containerID, command, timeout))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まずcommandに含まれる&lt;code&gt;$( )&lt;/code&gt;で囲まれた文字列を
+&lt;a href=&#34;https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/third_party/forked/golang/expansion/expand.go#L38&#34;&gt;Expand()&lt;/a&gt;
+で存在すればcontainerのenvの値に置き換える。&lt;/p&gt;
+
+&lt;p&gt;その後、
+&lt;a href=&#34;https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/kuberuntime/kuberuntime_container.go#L778&#34;&gt;RunInContainer&lt;/a&gt;で、
+コンテナランタイムがK8s標準のCRI(Container Runtime Interface)に対応している場合はその&lt;a href=&#34;https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/apis/cri/services.go#L50&#34;&gt;API&lt;/a&gt;の、
+対応していない場合は~shimパッケージのExecSync()が呼ばれ、コンテナ内でcommandを実行させて結果を受け取り、終了コードが0でなければエラーとする。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;$( )&lt;/code&gt;でenvの値が使えることを確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl config use-context docker-for-desktop
+$ cat test.yaml
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: &amp;quot;test&amp;quot;
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: &amp;quot;test&amp;quot;
+    spec:
+      containers:
+        - name: &amp;quot;test&amp;quot;
+          image: &amp;quot;alpine&amp;quot;
+          command: [&amp;quot;top&amp;quot;]
+          env:
+          - name: TEST
+            value: &amp;quot;foobar&amp;quot;
+          ports:
+          - containerPort: 5000
+            name: grpc
+          readinessProbe:
+            exec:
+              command:
+              - test
+              - $(TEST)
+              - =
+              - foobar
+            initialDelaySeconds: 0
+            timeoutSeconds: 1
+
+$ kubectl apply test.yaml
+$ kubectl describe pod $(kubectl get pods -l app=test -o jsonpath=&#39;{.items[0].metadata.name}&#39;)
+test-85994ddf4d-gpxpq       1/1       Running   0          9s
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -15688,7 +15775,9 @@ uploadTask.cancel();
           <pubDate>Sat, 15 Apr 2017 19:45:00 &#43;0900</pubDate>
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/93/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/alter-table.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: 13.1.7 ALTER TABLE 構文&lt;/a&gt;&lt;/p&gt;
+          <description>&lt;p&gt;しばらく書かないとどういう構文だったか忘れてしまう。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://dev.mysql.com/doc/refman/5.6/ja/alter-table.html&#34;&gt;MySQL :: MySQL 5.6 リファレンスマニュアル :: 13.1.7 ALTER TABLE 構文&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;CREATE TABLE t0 (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -15707,7 +15796,7 @@ ALTER TABLE t1
   MODIFY COLUMN c1 VARCHAR(30) NOT NULL,
   DROP COLUMN c2,
   ADD INDEX (c3),
-  ADD FOREIGN KEY (t2_id) REFERENCES t2(id) ON UPDATE CASCADE ON DELETE CASCADE
+  ADD FOREIGN KEY (t2_id) REFERENCES t2(id) ON UPDATE RESTRICT ON DELETE RESTRICT
 ;
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -15722,7 +15811,7 @@ Create Table: CREATE TABLE `t1` (
   PRIMARY KEY (`id`),
   KEY `c3` (`c3`),
   KEY `t2_id` (`t2_id`),
-  CONSTRAINT `t1_ibfk_1` FOREIGN KEY (`t2_id`) REFERENCES `t2` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `t1_ibfk_1` FOREIGN KEY (`t2_id`) REFERENCES `t2` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 1 row in set (0.00 sec)
 &lt;/code&gt;&lt;/pre&gt;
