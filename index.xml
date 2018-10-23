@@ -6,8 +6,222 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-10-21 19:30:00 &#43;0900 JST</updated>
+    <updated>2018-10-24 01:33:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Goで高速にJSONを扱うライブラリeasyjsonとfastjson</title>
+          <link>https://www.sambaiz.net/article/193/</link>
+          <pubDate>Wed, 24 Oct 2018 01:33:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/193/</guid>
+          <description>
+
+&lt;h2 id=&#34;easyjson-https-github-com-mailru-easyjson&#34;&gt;&lt;a href=&#34;https://github.com/mailru/easyjson&#34;&gt;easyjson&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;easyjsonは以下のようなstructごとのコードを自動生成してReflectionなしで高速にJSON Marshal/Unmarshalできるようにするライブラリ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get -u github.com/mailru/easyjson/...
+$ cat struct.go
+package a
+
+type Foo struct {
+        A string `json:&amp;quot;a,omitempty&amp;quot;`
+        B *Bar
+}
+
+type Bar struct {
+        C []int          `json:&amp;quot;c&amp;quot;`
+        D map[string]int `json:&amp;quot;d&amp;quot;`
+}
+
+$ easyjson -all struct.go
+$ cat struct_easyjson.go
+...
+func easyjson9f2eff5fEncodeGithubComSambaizBenchjsonA(out *jwriter.Writer, in Foo) {
+	out.RawByte(&#39;{&#39;)
+	first := true
+	_ = first
+	if in.A != &amp;quot;&amp;quot; {
+		const prefix string = &amp;quot;,\&amp;quot;a\&amp;quot;:&amp;quot;
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		out.String(string(in.A))
+	}
+	{
+		const prefix string = &amp;quot;,\&amp;quot;B\&amp;quot;:&amp;quot;
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		if in.B == nil {
+			out.RawString(&amp;quot;null&amp;quot;)
+		} else {
+			(*in.B).MarshalEasyJSON(out)
+		}
+	}
+	out.RawByte(&#39;}&#39;)
+}
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;標準のencoding/jsonと同じ様に使える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;x := a.Foo{
+    B: &amp;amp;a.Bar{
+        C: []int{1, 2, 3},
+    },
+}
+b, err := easyjson.Marshal(x)
+if err != nil {
+    panic(err)
+}
+fmt.Println(string(b)) // {&amp;quot;B&amp;quot;:{&amp;quot;c&amp;quot;:[1,2,3],&amp;quot;d&amp;quot;:null}}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;fastjson-https-github-com-valyala-fastjson&#34;&gt;&lt;a href=&#34;https://github.com/valyala/fastjson&#34;&gt;fastjson&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;fastjsonはstructを介さず、ParseしてGetIntのような関数で取り出す。
+そのため持ち回すとデータ形式が分からなくなるという問題はあるが、曖昧な型のJSONを扱う際はかえって使いやすいかもしれない。
+MarshalToの引数には[]byteを渡せてnilを渡すとallocateされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;var p fastjson.Parser
+value, err := p.Parse(`{&amp;quot;a&amp;quot;: {&amp;quot;b&amp;quot;: 100, &amp;quot;c&amp;quot;: null}}`)
+fmt.Println(value.GetInt(&amp;quot;a&amp;quot;, &amp;quot;b&amp;quot;)) // 100
+fmt.Println(value.GetStringBytes(&amp;quot;a&amp;quot;, &amp;quot;b&amp;quot;)) // []
+fmt.Println(string(value.MarshalTo(nil))) // {&amp;quot;a&amp;quot;:{&amp;quot;b&amp;quot;:100,&amp;quot;c&amp;quot;:null}}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ベンチマーク&#34;&gt;ベンチマーク&lt;/h2&gt;
+
+&lt;p&gt;簡単な例でベンチマークを取ってみる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/47/&#34;&gt;go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;encoding/json&amp;quot;
+	&amp;quot;strings&amp;quot;
+	&amp;quot;testing&amp;quot;
+
+	&amp;quot;github.com/mailru/easyjson&amp;quot;
+	&amp;quot;github.com/sambaiz/benchjson/a&amp;quot;
+	&amp;quot;github.com/valyala/fastjson&amp;quot;
+)
+
+var target = a.Foo{
+	A: strings.Repeat(&amp;quot;ABCD&amp;quot;, 100),
+	B: &amp;amp;a.Bar{
+		C: []int{1, 2, 3},
+		D: map[string]int{
+			&amp;quot;AAA&amp;quot;: 100,
+			&amp;quot;BBB&amp;quot;: 200,
+			&amp;quot;CCC&amp;quot;: 300,
+			&amp;quot;DDD&amp;quot;: 400,
+		},
+	},
+}
+
+func targetBytes() []byte {
+	dat, err := easyjson.Marshal(target)
+	if err != nil {
+		panic(err)
+	}
+	return dat
+}
+
+func BenchmarkEncodingJSONMarshal(b *testing.B) {
+	for i := 0; i &amp;lt; b.N; i++ {
+		_, err := json.Marshal(target)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkEasyJSONMarshal(b *testing.B) {
+	for i := 0; i &amp;lt; b.N; i++ {
+		_, err := easyjson.Marshal(target)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkFastJSONMarshalTo(b *testing.B) {
+	dat := targetBytes()
+	var p fastjson.Parser
+	value, err := p.ParseBytes(dat)
+	if err != nil {
+		b.Error(err)
+	}
+	b.ResetTimer()
+	for i := 0; i &amp;lt; b.N; i++ {
+		value.MarshalTo(nil)
+	}
+}
+
+func BenchmarkEncodingJSONUnmarshal(b *testing.B) {
+	dat := targetBytes()
+	v := a.Foo{}
+	b.ResetTimer()
+	for i := 0; i &amp;lt; b.N; i++ {
+		err := json.Unmarshal(dat, &amp;amp;v)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkEasyJSONUnmarshal(b *testing.B) {
+	dat := targetBytes()
+	v := a.Foo{}
+	b.ResetTimer()
+	for i := 0; i &amp;lt; b.N; i++ {
+		err := easyjson.Unmarshal(dat, &amp;amp;v)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkFastJSONParse(b *testing.B) {
+	dat := targetBytes()
+	var p fastjson.Parser
+	b.ResetTimer()
+	for i := 0; i &amp;lt; b.N; i++ {
+		_, err := p.ParseBytes(dat)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;確かにencoding/jsonと比べて格段に速い。適所で使っていきたい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go test --bench .
+goos: darwin
+goarch: amd64
+pkg: github.com/sambaiz/benchjson
+BenchmarkEncodingJSONMarshal-4     	  300000	      4548 ns/op
+BenchmarkEasyJSONMarshal-4         	 1000000	      1829 ns/op
+BenchmarkFastJSONMarshalTo-4       	 3000000	       429 ns/op
+BenchmarkEncodingJSONUnmarshal-4   	  300000	      5143 ns/op
+BenchmarkEasyJSONUnmarshal-4       	 1000000	      1780 ns/op
+BenchmarkFastJSONParse-4           	 5000000	       373 ns/op
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -6244,7 +6458,9 @@ $ wget https://raw.githubusercontent.com/aws/amazon-cognito-identity-js/master/d
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;Sign UpからAPIを呼ぶところまでのボタンを並べた。
-SignInすると以下のデータをそのページのドメインのLocal Storageに保持する。&lt;/p&gt;
+SignInすると&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-with-identity-providers.html&#34;&gt;OIDC標準のトークン&lt;/a&gt;がそのページのドメインのLocal Storageに書かれる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.idToken
 CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.accessToken
@@ -6253,7 +6469,7 @@ CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.&amp;lt;name&amp;gt;.clo
 CognitoIdentityServiceProvider.&amp;lt;clientId&amp;gt;.LastAuthUser
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;APIを呼ぶときはidToken(JWT)をAuthorization Headerに乗せる。&lt;/p&gt;
+&lt;p&gt;APIを呼ぶときはidTokenをAuthorization Headerに乗せる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;&amp;lt;button id=&amp;quot;signUp&amp;quot;&amp;gt;Sign Up&amp;lt;/button&amp;gt;
 &amp;lt;p&amp;gt;&amp;lt;label&amp;gt;Code:&amp;lt;input type=&amp;quot;text&amp;quot; id=&amp;quot;code&amp;quot;&amp;gt;&amp;lt;/label&amp;gt;&amp;lt;/p&amp;gt;
@@ -6459,10 +6675,7 @@ functions:
             arn: ***** # UserPool&#39;s ARN
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;JWTは.で区切った真ん中がBase64 encodeされたpayloadになっている。
-これをdecodeして返してみる。&lt;/p&gt;
-
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;JWTのpayloadをdecodeして返してみる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat handler.js
 &#39;use strict&#39;;
@@ -22684,7 +22897,7 @@ func BenchmarkFibonacci(b *testing.B) {
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;これを&lt;code&gt;go test -bench&lt;/code&gt;で実行するとベンチマークが取れる。さらに&lt;code&gt;-benchmem&lt;/code&gt;を付けるとメモリアロケーションの情報も出る。
-また、&lt;code&gt;-cpuprofile&lt;/code&gt;でCPUのプロファイルを出力し、pprocに渡すことでどの部分で時間がかかっているかを調べることができる。&lt;/p&gt;
+また、&lt;code&gt;-cpuprofile&lt;/code&gt;でCPUのプロファイルを出力し、pprofに渡すことでどの部分で時間がかかっているかを調べることができる。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://golang.org/cmd/go/#hdr-Description_of_testing_flags&#34;&gt;https://golang.org/cmd/go/#hdr-Description_of_testing_flags&lt;/a&gt;&lt;/p&gt;
 

@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる - sambaiz-net</title>
-    <meta name="twitter:title" content="go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる - sambaiz-net">
-    <meta property='og:title' content="go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる - sambaiz-net">
+    <title>Goで高速にJSONを扱うライブラリeasyjsonとfastjson - sambaiz-net</title>
+    <meta name="twitter:title" content="Goで高速にJSONを扱うライブラリeasyjsonとfastjson - sambaiz-net">
+    <meta property='og:title' content="Goで高速にJSONを扱うライブラリeasyjsonとfastjson - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="速くする">
-      <meta name="twitter:description" content="速くする">
+      <meta name="description" content="JSON">
+      <meta name="twitter:description" content="JSON">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/47/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/193/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる | sambaiz-net ",
-    "datePublished": "2017-01-04T23:58:00JST",
-    "dateModified": "2017-01-04T23:58:00JST",
+    "headline": "Goで高速にJSONを扱うライブラリeasyjsonとfastjson | sambaiz-net ",
+    "datePublished": "2018-10-24T01:33:00JST",
+    "dateModified": "2018-10-24T01:33:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "速くする"
+    "description": "JSON"
   }
 </script>
 </head>
@@ -103,100 +103,211 @@
 
       <article class="single">
         <div class="single body">
-          <h1>go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる</h1>
-          <p>(2017-01-04)</p>
-          <p>この関数のベンチマークを取る。</p>
+          <h1>Goで高速にJSONを扱うライブラリeasyjsonとfastjson</h1>
+          <p>(2018-10-24)</p>
+          
 
-<pre><code>package cal
+<h2 id="easyjson-https-github-com-mailru-easyjson"><a href="https://github.com/mailru/easyjson">easyjson</a></h2>
 
-import (
-	&quot;math/big&quot;
-)
+<p>easyjsonは以下のようなstructごとのコードを自動生成してReflectionなしで高速にJSON Marshal/Unmarshalできるようにするライブラリ。</p>
 
-var cache = map[int]*big.Int{}
+<pre><code>$ go get -u github.com/mailru/easyjson/...
+$ cat struct.go
+package a
 
-func resetCache() {
-	cache = map[int]*big.Int{}
+type Foo struct {
+        A string `json:&quot;a,omitempty&quot;`
+        B *Bar
 }
 
-func Fibonacci(n int) *big.Int {
-
-	if c := cache[n]; c != nil {
-		return c
-	}
-
-	ret := new(big.Int)
-	before := big.NewInt(1)
-	for i := 1; i &lt; n; i++ {
-		tmp := new(big.Int).Add(ret, before)
-		before = ret
-		ret = tmp
-		cache[i] = ret
-	}
-	cache[n] = ret
-	return ret
-}
-</code></pre>
-
-<p>引数にtesting.Bを取る、Benchmarkから始まる関数を書いて、b.N回ループさせる。</p>
-
-<pre><code>package cal
-
-import (
-	&quot;math/big&quot;
-	&quot;testing&quot;
-)
-
-func TestFibonacci(t *testing.T) {
-	if f := Fibonacci(10); f.String() != big.NewInt(34).String() {
-		t.Errorf(&quot;%d != %d (expected)&quot;, f, big.NewInt(34))
-	}
+type Bar struct {
+        C []int          `json:&quot;c&quot;`
+        D map[string]int `json:&quot;d&quot;`
 }
 
-func BenchmarkFibonacci(b *testing.B) {
-	for i := 0; i &lt; b.N; i++ {
-		b.StopTimer()
-		resetCache()
-		b.StartTimer()
-		Fibonacci(100)
+$ easyjson -all struct.go
+$ cat struct_easyjson.go
+...
+func easyjson9f2eff5fEncodeGithubComSambaizBenchjsonA(out *jwriter.Writer, in Foo) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	if in.A != &quot;&quot; {
+		const prefix string = &quot;,\&quot;a\&quot;:&quot;
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		out.String(string(in.A))
 	}
+	{
+		const prefix string = &quot;,\&quot;B\&quot;:&quot;
+		if first {
+			first = false
+			out.RawString(prefix[1:])
+		} else {
+			out.RawString(prefix)
+		}
+		if in.B == nil {
+			out.RawString(&quot;null&quot;)
+		} else {
+			(*in.B).MarshalEasyJSON(out)
+		}
+	}
+	out.RawByte('}')
 }
-</code></pre>
-
-<p>これを<code>go test -bench</code>で実行するとベンチマークが取れる。さらに<code>-benchmem</code>を付けるとメモリアロケーションの情報も出る。
-また、<code>-cpuprofile</code>でCPUのプロファイルを出力し、pprofに渡すことでどの部分で時間がかかっているかを調べることができる。</p>
-
-<p><a href="https://golang.org/cmd/go/#hdr-Description_of_testing_flags">https://golang.org/cmd/go/#hdr-Description_of_testing_flags</a></p>
-
-<pre><code>$ go test -bench Fibonacci -benchmem -o pprof/test.bin  -cpuprofile pprof/cpu.out ./cal
-BenchmarkFibonacci-4   	   50000	     32788 ns/op	   13344 B/op	     211 allocs/op
-PASS
-ok  	github.com/sambaiz/try-pprof/cal	3.406s
-
-$ go tool pprof --text pprof/test.bin pprof/cpu.out
-3.80s of 3.83s total (99.22%)
-Dropped 17 nodes (cum &lt;= 0.02s)
-      flat  flat%   sum%        cum   cum%
-     2.31s 60.31% 60.31%      2.31s 60.31%  runtime.mach_semaphore_signal
-     0.38s  9.92% 70.23%      0.38s  9.92%  runtime.mach_semaphore_timedwait
-     0.32s  8.36% 78.59%      0.32s  8.36%  runtime.mach_semaphore_wait
-     0.27s  7.05% 85.64%      0.27s  7.05%  runtime.usleep
-     0.14s  3.66% 89.30%      0.14s  3.66%  runtime.deductSweepCredit
-     0.09s  2.35% 91.64%      0.28s  7.31%  runtime.mallocgc
-     0.04s  1.04% 92.69%      0.14s  3.66%  runtime.mapassign1
-     0.04s  1.04% 93.73%      0.05s  1.31%  runtime.updatememstats
-     0.03s  0.78% 94.52%      0.13s  3.39%  math/big.nat.add
-     0.03s  0.78% 95.30%      0.03s  0.78%  runtime.aeshash64
 ...
 </code></pre>
 
-<p>graphvizをインストールすることでsvgのグラフを出すこともできる。</p>
+<p>標準のencoding/jsonと同じ様に使える。</p>
 
-<pre><code>$ brew install graphviz
-$ go tool pprof --svg pprof/test.bin pprof/cpu.out &gt; pprof/test.svg
+<pre><code>x := a.Foo{
+    B: &amp;a.Bar{
+        C: []int{1, 2, 3},
+    },
+}
+b, err := easyjson.Marshal(x)
+if err != nil {
+    panic(err)
+}
+fmt.Println(string(b)) // {&quot;B&quot;:{&quot;c&quot;:[1,2,3],&quot;d&quot;:null}}
 </code></pre>
 
-<p><img src="https://www.sambaiz.net/images/47.png" alt="svgで出力したもの" /></p>
+<h2 id="fastjson-https-github-com-valyala-fastjson"><a href="https://github.com/valyala/fastjson">fastjson</a></h2>
+
+<p>fastjsonはstructを介さず、ParseしてGetIntのような関数で取り出す。
+そのため持ち回すとデータ形式が分からなくなるという問題はあるが、曖昧な型のJSONを扱う際はかえって使いやすいかもしれない。
+MarshalToの引数には[]byteを渡せてnilを渡すとallocateされる。</p>
+
+<pre><code>var p fastjson.Parser
+value, err := p.Parse(`{&quot;a&quot;: {&quot;b&quot;: 100, &quot;c&quot;: null}}`)
+fmt.Println(value.GetInt(&quot;a&quot;, &quot;b&quot;)) // 100
+fmt.Println(value.GetStringBytes(&quot;a&quot;, &quot;b&quot;)) // []
+fmt.Println(string(value.MarshalTo(nil))) // {&quot;a&quot;:{&quot;b&quot;:100,&quot;c&quot;:null}}
+</code></pre>
+
+<h2 id="ベンチマーク">ベンチマーク</h2>
+
+<p>簡単な例でベンチマークを取ってみる。</p>
+
+<p><a href="https://www.sambaiz.net/article/47/">go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる - sambaiz-net</a></p>
+
+<pre><code>package main
+
+import (
+	&quot;encoding/json&quot;
+	&quot;strings&quot;
+	&quot;testing&quot;
+
+	&quot;github.com/mailru/easyjson&quot;
+	&quot;github.com/sambaiz/benchjson/a&quot;
+	&quot;github.com/valyala/fastjson&quot;
+)
+
+var target = a.Foo{
+	A: strings.Repeat(&quot;ABCD&quot;, 100),
+	B: &amp;a.Bar{
+		C: []int{1, 2, 3},
+		D: map[string]int{
+			&quot;AAA&quot;: 100,
+			&quot;BBB&quot;: 200,
+			&quot;CCC&quot;: 300,
+			&quot;DDD&quot;: 400,
+		},
+	},
+}
+
+func targetBytes() []byte {
+	dat, err := easyjson.Marshal(target)
+	if err != nil {
+		panic(err)
+	}
+	return dat
+}
+
+func BenchmarkEncodingJSONMarshal(b *testing.B) {
+	for i := 0; i &lt; b.N; i++ {
+		_, err := json.Marshal(target)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkEasyJSONMarshal(b *testing.B) {
+	for i := 0; i &lt; b.N; i++ {
+		_, err := easyjson.Marshal(target)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkFastJSONMarshalTo(b *testing.B) {
+	dat := targetBytes()
+	var p fastjson.Parser
+	value, err := p.ParseBytes(dat)
+	if err != nil {
+		b.Error(err)
+	}
+	b.ResetTimer()
+	for i := 0; i &lt; b.N; i++ {
+		value.MarshalTo(nil)
+	}
+}
+
+func BenchmarkEncodingJSONUnmarshal(b *testing.B) {
+	dat := targetBytes()
+	v := a.Foo{}
+	b.ResetTimer()
+	for i := 0; i &lt; b.N; i++ {
+		err := json.Unmarshal(dat, &amp;v)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkEasyJSONUnmarshal(b *testing.B) {
+	dat := targetBytes()
+	v := a.Foo{}
+	b.ResetTimer()
+	for i := 0; i &lt; b.N; i++ {
+		err := easyjson.Unmarshal(dat, &amp;v)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkFastJSONParse(b *testing.B) {
+	dat := targetBytes()
+	var p fastjson.Parser
+	b.ResetTimer()
+	for i := 0; i &lt; b.N; i++ {
+		_, err := p.ParseBytes(dat)
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+</code></pre>
+
+<p>確かにencoding/jsonと比べて格段に速い。適所で使っていきたい。</p>
+
+<pre><code>$ go test --bench .
+goos: darwin
+goarch: amd64
+pkg: github.com/sambaiz/benchjson
+BenchmarkEncodingJSONMarshal-4     	  300000	      4548 ns/op
+BenchmarkEasyJSONMarshal-4         	 1000000	      1829 ns/op
+BenchmarkFastJSONMarshalTo-4       	 3000000	       429 ns/op
+BenchmarkEncodingJSONUnmarshal-4   	  300000	      5143 ns/op
+BenchmarkEasyJSONUnmarshal-4       	 1000000	      1780 ns/op
+BenchmarkFastJSONParse-4           	 5000000	       373 ns/op
+</code></pre>
 
         </div>
       </article>
