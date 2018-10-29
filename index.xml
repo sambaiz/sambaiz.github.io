@@ -11,20 +11,21 @@
     
       
         <item>
-          <title>同じ/異なるドメインのiframeの中からできること/できないこと</title>
+          <title>同じ/異なるオリジンのiframeの中からできること</title>
           <link>https://www.sambaiz.net/article/194/</link>
           <pubDate>Wed, 24 Oct 2018 23:48:00 &#43;0900</pubDate>
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/194/</guid>
           <description>
 
-&lt;p&gt;同じ/異なるドメインのiframeの中からできること/できないことを確認する。
-Web広告ではCSSの影響を分離したり、JSのグローバルスコープを汚染しないためによく使われている。&lt;/p&gt;
+&lt;p&gt;同じ/異なるオリジンのiframeの中からできることを確認する。同じ&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/Security/Same-origin_policy&#34;&gt;オリジン&lt;/a&gt;というのは
+ホストだけではなくプロトコルやポート番号も同じということ。
+Web広告ではCSSやJSのグローバルスコープといったページ全体に及ぶ影響を分離するためによく使われている。&lt;/p&gt;
 
 &lt;h2 id=&#34;検証用ページ&#34;&gt;検証用ページ&lt;/h2&gt;
 
 &lt;p&gt;3つのiframeがあるページを作った。
-それぞれJSで書き込むのと、同じドメインのhtmlを参照しているものと、異なるドメインのhtmlを参照しているもの。&lt;/p&gt;
+それぞれabout:blankで動的に書き込むのと、同じオリジンのhtmlを参照しているものと、異なるオリジンのhtmlを参照しているもの。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat index.html
 &amp;lt;html&amp;gt;
@@ -39,7 +40,7 @@ p{
 &amp;lt;/head&amp;gt;
 &amp;lt;body&amp;gt;
   &amp;lt;p&amp;gt;parent&amp;lt;/p&amp;gt;
-  &amp;lt;div&amp;gt;&amp;lt;iframe id=&amp;quot;if1&amp;quot;&amp;gt;&amp;lt;/iframe&amp;gt;&amp;lt;/div&amp;gt;
+  &amp;lt;div&amp;gt;&amp;lt;iframe src=&amp;quot;about:blank&amp;quot; id=&amp;quot;if1&amp;quot;&amp;gt;&amp;lt;/iframe&amp;gt;&amp;lt;/div&amp;gt;
   &amp;lt;script type=&amp;quot;text/javascript&amp;quot;&amp;gt;
     var parentValue = &amp;quot;PARENT&amp;quot;;
     window.addEventListener(&amp;quot;message&amp;quot;, (event) =&amp;gt; {
@@ -102,7 +103,7 @@ console.log(`${location.href} childValue: ${el.contentWindow.childValue}`);
 
 &lt;h2 id=&#34;実行&#34;&gt;実行&lt;/h2&gt;
 
-&lt;p&gt;異なるドメインを作るためにngrokを立ち上げる。&lt;/p&gt;
+&lt;p&gt;異なるホストにするためngrokを立ち上げる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm install http-server -g
 $ http-server -p 3000
@@ -122,15 +123,15 @@ message from http://localhost:3000:
 message from https://*****.ngrok.io: aaaa
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;そのまま書き込んだ(src=about:brank)場合と同じドメインの場合の挙動は同じで、parentの値やiframeを参照して書き換えることもできる。
-これを利用したのが、Web広告の標準規格を定める&lt;a href=&#34;https://www.iab.com/&#34;&gt;IAB&lt;/a&gt;の&lt;a href=&#34;https://www.iab.com/wp-content/uploads/2015/09/rich_media_ajax_best_practices.pdf&#34;&gt;Best Practices for Rich Media Ads&lt;/a&gt;で言及されているFriendly IFrame(FIF)。
-やることはabout:brankまたは同じドメインのiframeの中に、対象スクリプトをsrcとしたscriptタグを入れて&lt;code&gt;inDapIF = true&lt;/code&gt;を定義するだけ。
-これによってiframeの恩恵を受けながら広告のスクリプトで計測や表示領域を拡大縮小させるような表現ができる。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;about:blank&lt;/code&gt;は表示ページと同じオリジンになるので、srcが同じオリジンの場合の挙動と同じでparentの値やiframeを参照して書き換えることもできる。
+Web広告の標準規格を定める&lt;a href=&#34;https://www.iab.com/&#34;&gt;IAB&lt;/a&gt;の&lt;a href=&#34;https://www.iab.com/wp-content/uploads/2015/09/rich_media_ajax_best_practices.pdf&#34;&gt;Best Practices for Rich Media Ads&lt;/a&gt;で言及されているFriendly IFrame(FIF)は
+about:brankのiframeの中に、対象スクリプトをsrcとしたscriptタグを入れて&lt;code&gt;inDapIF = true&lt;/code&gt;を定義してFIF内で実行されていることを通知するというもの。これによって広告のスクリプトにdocument.write()のようなページの描画に問題を起こし得るコードが含まれていても、iframeで影響を分離しながら
+計測や表示領域の拡大縮小などはさせることができる。裏を返せばやろうと思えば何でもできるので悪意のあるスクリプトに対する防衛策にはならない。&lt;/p&gt;
 
-&lt;p&gt;ドメインが異なる場合は値を参照しようとするとブロックされる。
+&lt;p&gt;オリジンが異なる場合は値を参照しようとするとブロックされる。
 ただしparentのwindow自体は参照できるのでpostMessage()で外側とやりとりすることはできる。
-同じくIABが定めた&lt;a href=&#34;https://www.iab.com/wp-content/uploads/2014/08/SafeFrames_v1.1_final.pdf&#34;&gt;SafeFrame&lt;/a&gt;では
-iframeを異なるドメインにして直接外側に干渉させず、SafeFrame APIを介して拡大などさせることでセキュアにする。&lt;/p&gt;
+これを利用したのが同じくIABが定めた&lt;a href=&#34;https://www.iab.com/wp-content/uploads/2014/08/SafeFrames_v1.1_final.pdf&#34;&gt;SafeFrame&lt;/a&gt;で、
+iframeを異なるオリジンにして直接外側に干渉させず、SafeFrame APIを介して拡大などさせることでセキュアにする。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/156/&#34;&gt;ブラウザのwindow間の値渡し - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
@@ -447,7 +448,7 @@ BenchmarkFastJSONParse-4           	 5000000	       373 ns/op
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/191-gradient.png&#34; alt=&#34;勾配降下法&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;ほかに局所最適解で止まるのを避ける手法として、サンプル全体ではなく、毎回異なる一部を使う確率的勾配降下法がある。&lt;/p&gt;
+&lt;p&gt;ほかに局所最適解で止まるのを避ける手法として、サンプル全体ではなく毎回異なる一部を使う(Minibatch)確率的勾配降下法(SGD: Stochastic Gradient Descent)や、SGDに慣性を追加したMomentumなどがある。&lt;/p&gt;
 
 &lt;h2 id=&#34;多クラスロジスティック回帰&#34;&gt;多クラスロジスティック回帰&lt;/h2&gt;
 
@@ -10023,6 +10024,8 @@ PのエントロピーにPのQに対するKL情報量を足したもの。&lt;/p
 
 &lt;p&gt;バックプロバゲーション(誤差逆伝播法)するために微分できる必要がある。&lt;/p&gt;
 
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/192/&#34;&gt;MLPと誤差逆伝搬法(Backpropagation) - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
 &lt;p&gt;Tensorflowでは以下の活性化関数が&lt;a href=&#34;https://www.tensorflow.org/api_guides/python/nn#Activation_Functions&#34;&gt;用意されている&lt;/a&gt;。&lt;/p&gt;
 
 &lt;h3 id=&#34;sigmoid-https-www-tensorflow-org-api-docs-python-tf-sigmoid&#34;&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/sigmoid&#34;&gt;sigmoid&lt;/a&gt;&lt;/h3&gt;
@@ -10032,7 +10035,7 @@ PのエントロピーにPのQに対するKL情報量を足したもの。&lt;/p
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/133-sigmoid-f.png&#34; alt=&#34;シグモイド関数の式と微分&#34; /&gt;&lt;/p&gt;
 
 &lt;p&gt;値域は(0,1)で&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%82%B7%E3%82%B0%E3%83%A2%E3%82%A4%E3%83%89&#34;&gt;シグマの語末系ςに似たS字を描く&lt;/a&gt;。
-xが大きいときに微分係数が小さくなるため、何層もこの関数を適用するとき、バックプロバゲーションで微分係数を掛けた結果、勾配が消滅(Gradient vanishing)する問題があり、あまり使われないようだ。値域が(-1,1)で似たグラフを描く&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/tanh&#34;&gt;tanh&lt;/a&gt;(Hyperbolic tangent)もある。&lt;/p&gt;
+微分係数がそれほど大きくないので何層もこの関数を適用すると、バックプロバゲーションで微分係数を掛けていった結果、勾配が消失する問題がありあまり使われない。値域が(-1,1)で似たグラフを描く&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/tanh&#34;&gt;tanh&lt;/a&gt;(Hyperbolic tangent)もある。&lt;/p&gt;
 
 &lt;h3 id=&#34;softsign-https-www-tensorflow-org-api-docs-python-tf-nn-softsign&#34;&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/nn/softsign&#34;&gt;softsign&lt;/a&gt;&lt;/h3&gt;
 
@@ -10057,7 +10060,7 @@ xが大きいときに微分係数が小さくなるため、何層もこの関�
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/133-relu-f.png&#34; alt=&#34;ReLU関数の式と微分&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;単純だけど最有力。Gradient vanishingも起きない。x=0で微分できないが0か1として扱われる。&lt;/p&gt;
+&lt;p&gt;単純だけど最有力。勾配消失も起きない。x=0で微分できないが0か1として扱われる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;def deriv_relu(x):
     return np.where(x &amp;gt; 0, 1, 0)
