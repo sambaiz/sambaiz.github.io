@@ -6,8 +6,186 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-10-24 23:48:00 &#43;0900 JST</updated>
+    <updated>2018-11-03 18:03:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>TensorFlowのtf.data API</title>
+          <link>https://www.sambaiz.net/article/195/</link>
+          <pubDate>Sat, 03 Nov 2018 18:03:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/195/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/guide/datasets&#34;&gt;Importing Data  |  TensorFlow&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;入力データを準備してイテレータを作成するAPI。&lt;/p&gt;
+
+&lt;h2 id=&#34;dataset-https-www-tensorflow-org-api-docs-python-tf-data-dataset-の作成&#34;&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset&#34;&gt;Dataset&lt;/a&gt;の作成&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#from_tensor_slices&#34;&gt;from_tensor_slices()&lt;/a&gt;でDatasetを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;dataset = tf.data.Dataset.from_tensor_slices(
+   {&amp;quot;a&amp;quot;: tf.random_uniform([4]),
+    &amp;quot;b&amp;quot;: tf.random_uniform([4, 100], maxval=100, dtype=tf.int32)})
+print(dataset.output_types) # {&#39;a&#39;: tf.float32, &#39;b&#39;: tf.int32}
+print(dataset.output_shapes) # {&#39;a&#39;: TensorShape([]), &#39;b&#39;: TensorShape([Dimension(100)])}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;引数にnumpyのndarrayを渡すとtf.constant()で変換されてグラフに乗る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;dataset = tf.data.Dataset.from_tensor_slices(np.arange(9).reshape((3, 3)))
+print(dataset.output_types) # &amp;lt;dtype: &#39;int64&#39;&amp;gt;
+print(dataset.output_shapes) # (3,)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;データが1GBを超える場合グラフのシリアライズ上限を超えてしまうことがある。後述するinitializableイテレータの初期化時にndarrayを渡すとこれを避けられる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/contrib/data/CsvDataset&#34;&gt;tf.contrib.data.CsvDataset&lt;/a&gt;でCSVからDatasetを作ることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat file1.csv
+a,b,c,d
+1,2,3,4
+2,3,4,5
+6,7,8,9
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;filenames = [&amp;quot;file1.csv&amp;quot;]
+record_defaults = [tf.float32] * 2 # Two required float columns
+dataset = tf.contrib.data.CsvDataset(filenames, record_defaults, header=True, select_cols=[1,3])
+print(dataset.output_types) # (tf.float32, tf.float32)
+print(dataset.output_shapes) # (TensorShape([]), TensorShape([]))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;前処理&#34;&gt;前処理&lt;/h3&gt;
+
+&lt;p&gt;Datasetは
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#map&#34;&gt;map&lt;/a&gt;や
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#flat_map&#34;&gt;flat_map&lt;/a&gt;、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#filter&#34;&gt;filter&lt;/a&gt;で加工でき、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#batch&#34;&gt;batch&lt;/a&gt;を作ったり
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#repeat&#34;&gt;repeat&lt;/a&gt;したり
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#shuffle&#34;&gt;shuffle&lt;/a&gt;できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;dataset = tf.data.Dataset.range(5).map(lambda d: d*2) # 0 2 4 6 8
+dataset = tf.data.Dataset.from_tensor_slices((np.arange(4).reshape((2,2)))).flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x * 2)) # 0 2 4 6
+dataset = tf.data.Dataset.range(5).filter(lambda d: tf.equal(tf.mod(d, 2), 0)) # 0 2 4
+
+dataset = tf.data.Dataset.range(10).batch(4) # [0 1 2 3] [4 5 6 7] [8 9]
+dataset = tf.data.Dataset.range(3).repeat(3) # 0 1 2 0 1 2 0 1 2
+dataset = tf.data.Dataset.range(5).shuffle(buffer_size=10) # 1 0 3 4 2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;iterator-https-www-tensorflow-org-api-docs-python-tf-data-iterator-の作成&#34;&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Iterator&#34;&gt;Iterator&lt;/a&gt;の作成&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Iterator#get_next&#34;&gt;get_next()&lt;/a&gt;で次の要素が取れる。&lt;/p&gt;
+
+&lt;h3 id=&#34;one-shot&#34;&gt;one-shot&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#make_one_shot_iterator&#34;&gt;make_one_shot_iterator()&lt;/a&gt;で作れるone-shotイテレータはDatasetを一周イテレートする基本的なイテレータ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;dataset = tf.data.Dataset.range(100)
+iterator = dataset.make_one_shot_iterator()
+next_element = iterator.get_next()
+
+with tf.Session() as sess:
+    try:
+        while True:
+            print(sess.run(next_element)) # 0 1 2, ..., 99
+    except tf.errors.OutOfRangeError:
+        pass
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;initializable&#34;&gt;initializable&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Dataset#make_initializable_iterator&#34;&gt;make_initializable_iterator()&lt;/a&gt;で単一Datasetから作れるinitializableイテレータはDatasetのplaceholderを初期化できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;max_value = tf.placeholder(tf.int64, shape=[])
+dataset = tf.data.Dataset.range(max_value)
+iterator = dataset.make_initializable_iterator()
+next_element = iterator.get_next()
+
+with tf.Session() as sess:
+    sess.run(iterator.initializer, feed_dict={max_value: 10})
+    try:
+        while True:
+            print(sess.run(next_element)) # 0 1 2, ..., 9
+    except tf.errors.OutOfRangeError:
+        pass
+    print(&amp;quot;---&amp;quot;)
+    sess.run(iterator.initializer, feed_dict={max_value: 20})
+    try:
+        while True:
+            print(sess.run(next_element)) # 0 1 2, ..., 19
+    except tf.errors.OutOfRangeError:
+        pass
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;reinitializable&#34;&gt;reinitializable&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Iterator#from_structure&#34;&gt;Iterator.from_structure()&lt;/a&gt;でtypeとshapeから作れるreinitializableイテレータは複数のDatasetで初期化できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;training_dataset = tf.data.Dataset.from_tensor_slices(np.arange(9).reshape((3, 3)))
+validation_dataset = tf.data.Dataset.from_tensor_slices(np.arange(9).reshape((3, 3)) * 2)
+
+iterator = tf.data.Iterator.from_structure(training_dataset.output_types,
+                                           training_dataset.output_shapes)
+next_element = iterator.get_next()
+training_init_op = iterator.make_initializer(training_dataset)
+validation_init_op = iterator.make_initializer(validation_dataset)
+
+with tf.Session() as sess:
+    sess.run(training_init_op)
+    try:
+        while True:
+            print(sess.run(next_element)) # [0 1 2] [3 4 5] [6 7 8]
+    except tf.errors.OutOfRangeError:
+        pass
+    print(&amp;quot;---&amp;quot;)
+    sess.run(validation_init_op)
+    try:
+        while True:
+            print(sess.run(next_element)) # [0 2 4] [ 6  8 10] [12 14 16]
+    except tf.errors.OutOfRangeError:
+        pass
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;feedable&#34;&gt;feedable&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/data/Iterator#from_string_handle&#34;&gt;Iterator.from_string_handle()&lt;/a&gt;でplaceholderとtypeとshapeから作れるfeedableイテレータは
+reinitializableと同じく複数のDatasetを切り替えることができるが、
+初期化はせずrun時にDatasetのhandleをplaceholderの値として渡す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;training_dataset = tf.data.Dataset.from_tensor_slices(np.arange(9).reshape((3, 3)))
+validation_dataset = tf.data.Dataset.from_tensor_slices(np.arange(9).reshape((3, 3)) * 2)
+
+handle = tf.placeholder(tf.string, shape=[])
+iterator = tf.data.Iterator.from_string_handle(
+    handle, training_dataset.output_types, training_dataset.output_shapes)
+next_element = iterator.get_next()
+
+training_iterator = training_dataset.make_one_shot_iterator()
+validation_iterator = validation_dataset.make_one_shot_iterator()
+
+with tf.Session() as sess:
+    sess.run(training_init_op)
+    training_handle = sess.run(training_iterator.string_handle())
+    validation_handle = sess.run(validation_iterator.string_handle())
+    try:
+        while True:
+            print(sess.run(next_element, feed_dict={handle: training_handle})) # [0 1 2] [3 4 5] [6 7 8]
+    except tf.errors.OutOfRangeError:
+        pass
+    try:
+        while True:
+            print(sess.run(next_element, feed_dict={handle: validation_handle})) # [0 2 4] [ 6  8 10] [12 14 16]
+    except tf.errors.OutOfRangeError:
+        pass
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -6851,7 +7029,9 @@ module.exports.secret = (event, context, callback) =&amp;gt; {
 
 &lt;h2 id=&#34;直接windowを参照する&#34;&gt;直接Windowを参照する&lt;/h2&gt;
 
-&lt;p&gt;プロトコル、ポート、ドメインが全て同じ場合は、親は&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/API/window.open&#34;&gt;open()&lt;/a&gt;した返り値で、子はwindow.openerで相手のwindowが取れて、直接参照したりDOMを操作したりすることもできる。&lt;/p&gt;
+&lt;p&gt;オリジン(プロトコル+ポート+ホスト)が同じ場合は、親は&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/API/window.open&#34;&gt;open()&lt;/a&gt;した返り値で、子はwindow.openerで相手のwindowが取れて、直接参照したりDOMを操作したりすることもできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/194/&#34;&gt;同じ/異なるオリジンのiframeの中からできること - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat index.html
 &amp;lt;button id=&amp;quot;btn&amp;quot;&amp;gt;Open window&amp;lt;/button&amp;gt;
@@ -6897,13 +7077,13 @@ module.exports.secret = (event, context, callback) =&amp;gt; {
 &amp;lt;/script&amp;gt;
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;確認する際はドメインの制約を満たすため&lt;a href=&#34;https://github.com/cloudhead/node-static&#34;&gt;node-static&lt;/a&gt;などでサーバーを立てる必要がある。&lt;/p&gt;
+&lt;p&gt;確認する際は&lt;a href=&#34;https://github.com/cloudhead/node-static&#34;&gt;node-static&lt;/a&gt;などでサーバーを立てる必要がある。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/156-1.gif&#34; alt=&#34;直接Windowを参照する値渡し&#34; /&gt;&lt;/p&gt;
 
 &lt;h2 id=&#34;postmessage-https-developer-mozilla-org-ja-docs-web-api-window-postmessage-を使う&#34;&gt;&lt;a href=&#34;https://developer.mozilla.org/ja/docs/Web/API/Window/postMessage&#34;&gt;postMessage()&lt;/a&gt;を使う&lt;/h2&gt;
 
-&lt;p&gt;postMessageで送り、messageのeventで受け取れる。ドメインなどが異なっていてもよいが、
+&lt;p&gt;postMessageで送り、messageのeventで受け取れる。オリジンが異なっていてもよいが、
 どこからでも送れてしまうので、ハンドリングする際は&lt;code&gt;event.origin&lt;/code&gt;が意図したものかチェックしなくてはならない。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat index.html
@@ -10060,7 +10240,7 @@ PのエントロピーにPのQに対するKL情報量を足したもの。&lt;/p
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/133-relu-f.png&#34; alt=&#34;ReLU関数の式と微分&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;単純だけど最有力。勾配消失も起きない。x=0で微分できないが0か1として扱われる。&lt;/p&gt;
+&lt;p&gt;単純だけど最有力。勾配消失も起きにくい。x=0で微分できないが0か1として扱われる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;def deriv_relu(x):
     return np.where(x &amp;gt; 0, 1, 0)
@@ -10069,11 +10249,23 @@ PのエントロピーにPのQに対するKL情報量を足したもの。&lt;/p
 &lt;p&gt;softplusと比べてexpやlogを含まない分高速に計算できるので、
 膨大で複雑なデータセットに対して多くの層を用いることができる。&lt;/p&gt;
 
-&lt;p&gt;0以下は等しく0になるため、トレーニング中に落ちてしまうとニューロンが死んでしまうことがある。
-そのような場合は0以下のとき&lt;code&gt;y = exp(x) - 1&lt;/code&gt;にする&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/nn/elu&#34;&gt;ELU&lt;/a&gt;(Exponential Linear Unit)
-などを使う。&lt;/p&gt;
+&lt;p&gt;0以下は等しく0になるため、学習中に落ちてしまうとニューロンが死んでしまう。
+これを避けるため0以下のとき&lt;code&gt;y = exp(x) - 1&lt;/code&gt;にする&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/nn/elu&#34;&gt;ELU&lt;/a&gt;(Exponential Linear Unit)
+というのもある。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/133-elu.png&#34; alt=&#34;ELU&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;比較的起きにくいとはいえ、層を深くすると勾配消失する可能性は高まる。
+活性化関数ごとに異なる重みの初期値によってこれを緩和でき、ReLUでは入力次元数によるHe Initializationというのが提案されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;rng = np.random.RandomState(1234)
+n_in = 10 # 入力次元数
+rng.uniform(
+    low=-np.sqrt(6/n_in),
+    high=+np.sqrt(6/n_in),
+    size=5
+) # He Initialization
+&lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
@@ -28553,8 +28745,7 @@ Pipeline scriptの複数リポジトリを指定するところはこんな感�
           <guid>https://www.sambaiz.net/article/15/</guid>
           <description>
 
-&lt;p&gt;久々にGolangを書くことになったので、以下の記事を参考にして簡単なAPIとそのテストを書いてみた。
-コードは&lt;a href=&#34;https://github.com/sambaiz/go-api-with-test&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;以下の記事を参考にして簡単なAPIとそのテストを書いてみた。コードは&lt;a href=&#34;https://github.com/sambaiz/go-api-with-test&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;http://ameblo.jp/principia-ca/entry-12130127314.html&#34;&gt;Go言語でTestableなWebアプリケーションを目指して｜サイバーエージェント 公式エンジニアブログ&lt;/a&gt;&lt;/p&gt;
 
@@ -28669,9 +28860,7 @@ DROP TABLE message;
 
 &lt;p&gt;
 テスト時には&lt;a href=&#34;https://github.com/golang/mock&#34;&gt;mock&lt;/a&gt;を渡す。
-&lt;code&gt;mockgen&lt;/code&gt;でmockを生成し、以下のようにして入力と出力を指定することができる。
-これによってテストでdbを参照するのがdaoだけになり、各パッケージを並行してテストできるようになる、ということが
-記事に書いてあった。mockを簡単に用意できるのがいい。&lt;/p&gt;
+&lt;code&gt;mockgen&lt;/code&gt;でmockを生成し、以下のようにして入力と出力を指定することができる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ go get github.com/golang/mock/gomock
 $ go get github.com/golang/mock/mockgen
@@ -28686,6 +28875,11 @@ messageDaoMoc := dao.NewMockMessage(ctl)
 messageDaoMoc.EXPECT().Create(message.Content).Return(int64(1), nil)
 messageDaoMoc.EXPECT().FindById(message.ID).Return(&amp;amp;message, nil)
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;何も指定しないと1回も呼ばれなかったり、2回以上呼ばれるとエラーになるが、
+&lt;a href=&#34;https://godoc.org/github.com/golang/mock/gomock#Call.MinTimes&#34;&gt;MinTimes()&lt;/a&gt;などで柔軟に書くこともできる。
+とはいえmockの内容によっては無理にgomockを使うと真にテストしたいことが埋もれてしまうことがあるので、
+あくまでmockを作る選択肢の一つとして考えておくと良いと思う。&lt;/p&gt;
 </description>
         </item>
       
