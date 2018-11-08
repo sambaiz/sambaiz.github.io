@@ -6,10 +6,24 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sat, 03 Nov 2018 18:03:00 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 09 Nov 2018 00:30:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>FargateでECSを使う</title>
+      <link>https://www.sambaiz.net/article/196/</link>
+      <pubDate>Fri, 09 Nov 2018 00:30:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/196/</guid>
+      <description>ECSはAWSのコンテナオーケストレーションサービス。 クラスタはEC2上に立てることもできるが、その場合Auto Scalingグループの設定やスケールイン時のdrainなどを考慮する必要がある。 Fargateで起動するとサーバーレスで実行でき、バックエンドの管理が必要がなくなる。 料金は割り当てたvCPUとメモリによって、最低1分の1秒単位で課金される。 Lambdaと同じくリソースあたりでいうとオンデマンドのEC2と比較して割高。ただし柔軟にリソースが指定できる分いくらか差は縮まる。 特にバッチ処理のように常にリソースが必要ないタスクは都度インスタンスを立ち上げるのも面倒なので良いと思う。
+AWSにはKubernetesクラスタを立てられるEKSもあるが、こちらはまだFargateに対応していない。 もしかしたら今月末のre:Inventで何か発表されるかもしれない。
+Clusterの作成 まずはClusterを作成する。
+$ aws ecs create-cluster --cluster-name test  Taskの作成 イメージやポートマッピング、ヘルスチェックや割り当てるリソースといったContainer definition を含むTask definitionを書く。 Fargateの場合networkModeはawsvpc固定になる。
+{ &amp;quot;family&amp;quot;: &amp;quot;test-task&amp;quot;, &amp;quot;networkMode&amp;quot;: &amp;quot;awsvpc&amp;quot;, &amp;quot;containerDefinitions&amp;quot;: [ { &amp;quot;name&amp;quot;: &amp;quot;nginx&amp;quot;, &amp;quot;image&amp;quot;: &amp;quot;nginx:1.15&amp;quot;, &amp;quot;portMappings&amp;quot;: [ { &amp;quot;containerPort&amp;quot;: 80, &amp;quot;hostPort&amp;quot;: 80, &amp;quot;protocol&amp;quot;: &amp;quot;tcp&amp;quot; } ], &amp;quot;essential&amp;quot;: true } ], &amp;quot;requiresCompatibilities&amp;quot;: [ &amp;quot;FARGATE&amp;quot; ], &amp;quot;cpu&amp;quot;: &amp;quot;256&amp;quot;, &amp;quot;memory&amp;quot;: &amp;quot;512&amp;quot; }  register-task-definitionする。
+$ aws ecs register-task-definition --cli-input-json file://$(pwd)/task.json $ aws ecs list-task-definitions &amp;quot;taskDefinitionArns&amp;quot;: [ &amp;quot;arn:aws:ecs:ap-northeast-1:*****:task-definition/test-task:1&amp;quot; ] }  Serviceの作成 Taskの数とVPC、ロードバランサーはServiceで定義される。</description>
+    </item>
     
     <item>
       <title>TensorFlowのtf.data API</title>
@@ -2685,7 +2699,7 @@ $ docker network create -d bridge --subnet 172.25.0.0/16 isolated_nw $ docker ne
       <description>前回に引き続き、まとめながら進めていく。
 Deep MNIST for Experts
 Start TensorFlow InteractiveSession 今回は、前回のようにグラフを作成してからSessionを開始する代わりに InteractiveSessionを使う。 グラフを作成し実行するのをインタラクティブに行うことができ、IPythonのような環境で便利だ。
-import tensorflow as tf sess = tf.InteractiveSession()  Build a Multilayer Convolutional Network 前回のシンプルなモデルではあまり良い結果が出なかった。 そこで、今回はもう少し洗練されたモデル、小さな畳み込みニューラルネットワークを作成する。
+import tensorflow as tf sess = tf.InteractiveSession()  Build a Multilayer Convolutional Network 前回のシンプルなモデルではあまり良い結果が出なかった。 そこで、今回はもう少し良いモデルの畳み込みニューラルネットワークを作成する。
 Weight Initialization 勾配が0になるのを避けるために重みの初期化時にノイズを付ける。 tf.truncated_normalは正規分布で、μ±2σ範囲内のランダムな値を返す。 以下の例だと、meanのデフォルトが0.0なので、正規分布 N(0, 0.01)の、-0.2&amp;lt;=x&amp;lt;=0.2な値がランダムに返ることになる。
 また、ReLU(Rectified Linear Unit, 正規化線形関数)ニューロンを使うので、&amp;rdquo;死んだニューロン&amp;rdquo;を避けるために、バイアスは小さな正の値で初期化する。
 ニューラルネットワークと活性化関数 - sambaiz-net

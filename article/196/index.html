@@ -15,17 +15,17 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:site" content="@sambaiz">
     
-    <title>TensorFlow/RNNで連続的な値の時系列データを予測する - sambaiz-net</title>
-    <meta name="twitter:title" content="TensorFlow/RNNで連続的な値の時系列データを予測する - sambaiz-net">
-    <meta property='og:title' content="TensorFlow/RNNで連続的な値の時系列データを予測する - sambaiz-net">
+    <title>FargateでECSを使う - sambaiz-net</title>
+    <meta name="twitter:title" content="FargateでECSを使う - sambaiz-net">
+    <meta property='og:title' content="FargateでECSを使う - sambaiz-net">
     <meta property="og:type" content="article">
     
-      <meta name="description" content="RNN">
-      <meta name="twitter:description" content="RNN">
+      <meta name="description" content="サーバーレスにコンテナを立ち上げる">
+      <meta name="twitter:description" content="サーバーレスにコンテナを立ち上げる">
     
     
 
-    <meta property="og:url" content="https://www.sambaiz.net/article/154/">
+    <meta property="og:url" content="https://www.sambaiz.net/article/196/">
     <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
     <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
     <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -38,9 +38,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "TensorFlow/RNNで連続的な値の時系列データを予測する | sambaiz-net ",
-    "datePublished": "2018-02-11T19:49:00JST",
-    "dateModified": "2018-02-11T19:49:00JST",
+    "headline": "FargateでECSを使う | sambaiz-net ",
+    "datePublished": "2018-11-09T00:30:00JST",
+    "dateModified": "2018-11-09T00:30:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -62,7 +62,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "RNN"
+    "description": "サーバーレスにコンテナを立ち上げる"
   }
 </script>
 </head>
@@ -103,153 +103,108 @@
 
       <article class="single">
         <div class="single body">
-          <h1>TensorFlow/RNNで連続的な値の時系列データを予測する</h1>
-          <p>(2018-02-11)</p>
+          <h1>FargateでECSを使う</h1>
+          <p>(2018-11-09)</p>
           
 
-<p><a href="https://www.sambaiz.net/article/146/">TensorFlowのRNN(LSTM)のチュートリアルのコードを読む - sambaiz-net</a></p>
+<p>ECSはAWSのコンテナオーケストレーションサービス。
+クラスタは<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/launch_types.html#launch-type-ec2">EC2上に立てる</a>こともできるが、その場合Auto Scalingグループの設定や<a href="https://aws.amazon.com/jp/blogs/news/how-to-automate-container-instance-draining-in-amazon-ecs/">スケールイン時のdrain</a>などを考慮する必要がある。
+<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/launch_types.html#launch-type-fargate">Fargate</a>で起動するとサーバーレスで実行でき、バックエンドの管理が必要がなくなる。
+<a href="https://aws.amazon.com/jp/fargate/pricing/">料金</a>は割り当てたvCPUとメモリによって、最低1分の1秒単位で課金される。
+Lambdaと同じくリソースあたりでいうとオンデマンドのEC2と比較して割高。ただし柔軟にリソースが指定できる分いくらか差は縮まる。
+特にバッチ処理のように常にリソースが必要ないタスクは都度インスタンスを立ち上げるのも面倒なので良いと思う。</p>
 
-<p>チュートリアルで扱ったのは語彙数分の単語、つまり離散的な値だったが、今回は連続的な値を取る場合のモデルを作る。
-全体のコードは<a href="https://github.com/sambaiz/my_jupyter_notebook/blob/master/rnn-continuous.ipynb">ここ</a>。</p>
+<p>AWSにはKubernetesクラスタを立てられるEKSもあるが、こちらはまだFargateに対応していない。
+もしかしたら今月末の<a href="https://reinvent.awsevents.com/">re:Invent</a>で何か発表されるかもしれない。</p>
 
-<h3 id="入力">入力</h3>
+<h2 id="clusterの作成">Clusterの作成</h2>
 
-<p>以下の関数によって生成した1次元のデータ列。
-これをstrideした最後のデータ、つまり時系列的に次に来るものを予測させる。</p>
+<p>まずはClusterを作成する。</p>
 
-<pre><code>def make_time_series_data(size):
-  data = []
-  for i in range(size):
-    data.append(sin(random.normalvariate(i,0.1)*0.1))
-  return np.reshape(np.array(data, dtype=np.float32), (size,1))
-
-def make_batch(data, batch_size, num_steps, num_dimensions, name=None):
-  epoch_size =  data.size // (batch_size*num_steps*num_dimensions)
-  data = np.lib.stride_tricks.as_strided(
-    data, 
-    shape=
-      (epoch_size,
-        batch_size, 
-       num_steps+1,
-       num_dimensions),
-    strides=(
-        4*batch_size*num_steps*num_dimensions, 
-        4*num_steps*num_dimensions, 
-        4*num_dimensions, 
-        4 # bytes
-    ), 
-    writeable=False
-  )
-  
-  return data[:, :, :-1], data[:, :, 1:]
+<pre><code>$ aws ecs create-cluster --cluster-name test
 </code></pre>
 
-<h3 id="モデル">モデル</h3>
+<p><img src="https://www.sambaiz.net/images/196.png" alt="ECSオブジェクト" /></p>
 
-<p>input layerでLSTMのhidden_sizeに合わせて、output layerで予測値を得ている。
-lossはMSE(Mean squared error)。Optimizerは<a href="https://www.tensorflow.org/api_docs/python/tf/train/GradientDescentOptimizer">GradientDecentOptimizer</a>を使っている。</p>
+<h2 id="taskの作成">Taskの作成</h2>
 
-<p>チュートリアルでは自力で各time_stepの値を<a href="https://github.com/tensorflow/models/blob/12f279d6f4cb33574bc20109b41eb8a59f40cfd1/tutorials/rnn/ptb/ptb_word_lm.py#L141">入れていた</a>けど、
-今回は<a href="https://www.tensorflow.org/api_docs/python/tf/nn/dynamic_rnn">dynamic_rnn()</a>に任せている。</p>
+<p>イメージやポートマッピング、ヘルスチェックや割り当てるリソースといった<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_definition_parameters.html#container_definitions">Container definition</a>
+を含む<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_definition_parameters.html">Task definition</a>を書く。
+Fargateの場合networkModeはawsvpc固定になる。</p>
 
-<pre><code>class Model(object):
-  def __init__(self, config, is_training=False):
-    # config
-    self.batch_size = config.batch_size
-    self.num_steps = config.num_steps
-    self.num_dimensions = config.num_dimensions
-    self.keep_prob = config.keep_prob
-    self.hidden_size = config.hidden_size
-    self.num_layers = config.num_layers
-    
-    # placeholder
-    self.input = tf.placeholder(tf.float32, [None, self.num_steps, self.num_dimensions], name=&quot;input&quot;)
-    self.input_strided = tf.placeholder(tf.float32, [self.batch_size, self.num_steps, self.num_dimensions], name=&quot;input_strided&quot;)
-    self.lr = tf.placeholder(tf.float32, name=&quot;learning_rate&quot;)
-    
-    # input layer
-    input = tf.reshape(self.input, [-1, self.num_dimensions])
-    input_w = tf.get_variable(&quot;input_w&quot;, [self.num_dimensions, self.hidden_size], dtype=tf.float32)
-    input_b = tf.get_variable(&quot;input_b&quot;, [self.hidden_size], dtype=tf.float32)
-    input = tf.nn.xw_plus_b(input, input_w, input_b)
-    input = tf.reshape(input, [self.batch_size, self.num_steps, self.hidden_size])
-    
-    # LSTM layer
-    output, state = self._build_rnn_graph(input, is_training)
-    
-    # output layer
-    output = tf.reshape(output, [-1, self.hidden_size])
-    output_w = tf.get_variable(&quot;output_w&quot;, [self.hidden_size, 1], dtype=tf.float32)
-    output_b = tf.get_variable(&quot;output_b&quot;, [1], dtype=tf.float32)
-    output = tf.nn.xw_plus_b(output, output_w, output_b)
-    self.output = tf.reshape(output, [self.batch_size, self.num_steps, 1])
-    
-    self.cost = tf.reduce_mean(tf.square(self.output[:, -1, :] - self.input_strided[:, -1, :]))
-    self.train_op = tf.train.GradientDescentOptimizer(self.lr).minimize(self.cost, global_step=tf.train.get_or_create_global_step())
-
-  def _build_rnn_graph(self, input, is_training):
-    def make_cell():
-      cell = tf.contrib.rnn.LSTMBlockCell(
-        self.hidden_size, forget_bias=0.0)
-      if is_training and self.keep_prob &lt; 1:
-        cell = tf.contrib.rnn.DropoutWrapper(
-          cell, output_keep_prob=self.keep_prob)
-      return cell
-
-    cell = tf.contrib.rnn.MultiRNNCell(
-      [make_cell() for _ in range(self.num_layers)], state_is_tuple=True)
-    initial_state = cell.zero_state(self.batch_size, tf.float32)
-    output, state = tf.nn.dynamic_rnn(cell, input, initial_state=initial_state)
-    return output, state
-
-  def learn(self, session, input, input_strided, learning_rate):
-    fetches = {
-      &quot;cost&quot;: self.cost,
-      &quot;train_op&quot;: self.train_op
-    }
-    feed_dict = {
-      self.input: input,
-      self.input_strided: input_strided,
-      self.lr: learning_rate
-    }
-    vals = session.run(fetches, feed_dict=feed_dict)
-    cost = vals[&quot;cost&quot;]
-    return cost
-
-  def predict(self, session, input):
-    feed_dict = {
-      self.input: np.reshape(input, (1, input.shape[0], input.shape[1]))
-    }
-    return session.run(self.output, feed_dict=feed_dict)[0,-1]
+<pre><code>{
+    &quot;family&quot;: &quot;test-task&quot;, 
+    &quot;networkMode&quot;: &quot;awsvpc&quot;, 
+    &quot;containerDefinitions&quot;: [
+        {
+            &quot;name&quot;: &quot;nginx&quot;, 
+            &quot;image&quot;: &quot;nginx:1.15&quot;, 
+            &quot;portMappings&quot;: [
+                {
+                    &quot;containerPort&quot;: 80, 
+                    &quot;hostPort&quot;: 80, 
+                    &quot;protocol&quot;: &quot;tcp&quot;
+                }
+            ], 
+            &quot;essential&quot;: true
+        }
+    ], 
+    &quot;requiresCompatibilities&quot;: [
+        &quot;FARGATE&quot;
+    ], 
+    &quot;cpu&quot;: &quot;256&quot;, 
+    &quot;memory&quot;: &quot;512&quot;
+}
 </code></pre>
 
-<h3 id="ハイパーパラメータ">ハイパーパラメータ</h3>
+<p>register-task-definitionする。</p>
 
-<p>調整が難しい。<code>max_epoch</code>は学習率の初期値(<code>learning_rate</code>)で学習し続けるepochの数なわけなんだけど、
-これを大きくして一気にlossを減らしていこうとしたら案外簡単に収束しなくなってしまった。
-<code>num_steps</code>、つまり予測するのに見る数は今回のデータの場合そんなに大きくある必要はなくて、
-むしろ大きくすると平たいグラフになって最大値や最小値との誤差が大きくなった。
-<code>hidden_size</code>や<code>num_layers</code>は増やしても良さそうだけどメモリが足りなかった。</p>
-
-<pre><code>class Config(object):
-  init_scale = 0.1
-  learning_rate = 1.0
-  num_layers = 2
-  num_steps = 5
-  hidden_size = 200
-  max_epoch = 3
-  batch_size = 3000
-  num_dimensions = 1
-  keep_prob = 1.0
-  lr_decay = 0.5
+<pre><code>$ aws ecs register-task-definition --cli-input-json file://$(pwd)/task.json
+$ aws ecs list-task-definitions
+    &quot;taskDefinitionArns&quot;: [
+        &quot;arn:aws:ecs:ap-northeast-1:*****:task-definition/test-task:1&quot;
+    ]
+}
 </code></pre>
 
-<h3 id="学習結果">学習結果</h3>
+<h2 id="serviceの作成">Serviceの作成</h2>
 
-<p>300000個のデータから学習して予測させたところ
-予測値は実際の値と比べて振幅が少なくなってしまった。</p>
+<p>Taskの数とVPC、ロードバランサーは<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/service_definition_parameters.html">Service</a>で定義される。</p>
 
-<p><img src="https://www.sambaiz.net/images/154.png" alt="実際のデータと予測結果のグラフ" /></p>
+<pre><code>{
+    &quot;cluster&quot;: &quot;test&quot;,
+    &quot;serviceName&quot;: &quot;test-service&quot;,
+    &quot;taskDefinition&quot;: &quot;test-task:1&quot;,
+    &quot;desiredCount&quot;: 2,
+    &quot;launchType&quot;: &quot;FARGATE&quot;,
+    &quot;networkConfiguration&quot;: {
+        &quot;awsvpcConfiguration&quot;: {
+            &quot;subnets&quot;: [
+                &quot;subnet-*****&quot;
+            ],
+            &quot;securityGroups&quot;: [
+                &quot;sg-******&quot;
+            ],
+            &quot;assignPublicIp&quot;: &quot;ENABLED&quot;
+        }
+    }
+}
+</code></pre>
+
+<p>Serviceを作成する。</p>
+
+<pre><code>$ aws ecs create-service --cli-input-json file://$(pwd)/service.json
+$ aws ecs list-services --cluster test
+{
+    &quot;serviceArns&quot;: [
+        &quot;arn:aws:ecs:ap-northeast-1:*****:service/test-service&quot;
+    ]
+}
+</code></pre>
+
+<p>TaskのNetworkのところにあるPublicIPにアクセスするとWelcome to nginx!の表示が確認できる。</p>
+
+<p><img src="https://www.sambaiz.net/images/196-2.png" alt="TaskのNetwork" /></p>
 
         </div>
       </article>
