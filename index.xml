@@ -22,8 +22,11 @@
 クラスタは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/launch_types.html#launch-type-ec2&#34;&gt;EC2上に立てる&lt;/a&gt;こともできるが、その場合Auto Scalingグループの設定や&lt;a href=&#34;https://aws.amazon.com/jp/blogs/news/how-to-automate-container-instance-draining-in-amazon-ecs/&#34;&gt;スケールイン時のdrain&lt;/a&gt;などを考慮する必要がある。
 &lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/launch_types.html#launch-type-fargate&#34;&gt;Fargate&lt;/a&gt;で起動するとサーバーレスで実行でき、バックエンドの管理が必要がなくなる。
 &lt;a href=&#34;https://aws.amazon.com/jp/fargate/pricing/&#34;&gt;料金&lt;/a&gt;は割り当てたvCPUとメモリによって、最低1分の1秒単位で課金される。
-Lambdaと同じくリソースあたりでいうとオンデマンドのEC2と比較して割高。ただし柔軟にリソースが指定できる分いくらか差は縮まる。
-特にバッチ処理のように常にリソースが必要ないタスクは都度インスタンスを立ち上げるのも面倒なので良いと思う。&lt;/p&gt;
+Lambdaと同じくリソースあたりでいうとオンデマンドのEC2と比較して割高。ただし柔軟にリソースが指定できる分いくらか差は縮まる。&lt;/p&gt;
+
+&lt;p&gt;特にバッチ処理のように常にリソースが必要ないTaskは都度インスタンスを立ち上げるのも面倒なので良いと思う。
+Lambdaと比較すると、実行環境を自由に作れるのと実行時間に制限がないというところが良いが、
+Taskを作るトリガーは現状cronだけなのでそれ以外のイベントで実行したい場合はLambdaと組み合わせる必要がある。&lt;/p&gt;
 
 &lt;p&gt;AWSにはKubernetesクラスタを立てられるEKSもあるが、こちらはまだFargateに対応していない。
 もしかしたら今月末の&lt;a href=&#34;https://reinvent.awsevents.com/&#34;&gt;re:Invent&lt;/a&gt;で何か発表されるかもしれない。&lt;/p&gt;
@@ -37,7 +40,7 @@ Lambdaと同じくリソースあたりでいうとオンデマンドのEC2と�
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/196.png&#34; alt=&#34;ECSオブジェクト&#34; /&gt;&lt;/p&gt;
 
-&lt;h2 id=&#34;taskの作成&#34;&gt;Taskの作成&lt;/h2&gt;
+&lt;h2 id=&#34;taskの登録&#34;&gt;Taskの登録&lt;/h2&gt;
 
 &lt;p&gt;イメージやポートマッピング、ヘルスチェックや割り当てるリソースといった&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_definition_parameters.html#container_definitions&#34;&gt;Container definition&lt;/a&gt;
 を含む&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_definition_parameters.html&#34;&gt;Task definition&lt;/a&gt;を書く。
@@ -68,7 +71,7 @@ Fargateの場合networkModeはawsvpc固定になる。&lt;/p&gt;
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;register-task-definitionする。&lt;/p&gt;
+&lt;p&gt;Taskを登録する。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ aws ecs register-task-definition --cli-input-json file://$(pwd)/task.json
 $ aws ecs list-task-definitions
@@ -78,9 +81,41 @@ $ aws ecs list-task-definitions
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h2 id=&#34;serviceの作成&#34;&gt;Serviceの作成&lt;/h2&gt;
+&lt;h2 id=&#34;taskを実行&#34;&gt;Taskを実行&lt;/h2&gt;
 
-&lt;p&gt;Taskの数とVPC、ロードバランサーは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/service_definition_parameters.html&#34;&gt;Service&lt;/a&gt;で定義される。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cli/latest/reference/ecs/run-task.html&#34;&gt;run-task&lt;/a&gt;でTaskを実行できる。
+外からアクセスできるようにPublicIPを割り当てている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;cluster&amp;quot;: &amp;quot;test&amp;quot;,
+  &amp;quot;taskDefinition&amp;quot;: &amp;quot;test-task:1&amp;quot;,
+  &amp;quot;launchType&amp;quot;: &amp;quot;FARGATE&amp;quot;,
+  &amp;quot;networkConfiguration&amp;quot;: {
+    &amp;quot;awsvpcConfiguration&amp;quot;: {
+      &amp;quot;subnets&amp;quot;: [
+        &amp;quot;subnet-*****&amp;quot;
+      ],
+      &amp;quot;securityGroups&amp;quot;: [
+        &amp;quot;sg-*****&amp;quot;
+      ],
+      &amp;quot;assignPublicIp&amp;quot;: &amp;quot;ENABLED&amp;quot;
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws ecs run-task --cli-input-json file://$(pwd)/run-task.json
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;TaskのNetworkのところにPublicIPが出ていて、アクセスするとWelcome to nginx!の表示が確認できる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/196-2.png&#34; alt=&#34;TaskのNetwork&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;serviceを作成&#34;&gt;Serviceを作成&lt;/h2&gt;
+
+&lt;p&gt;上の方法でTaskを実行することもできるが、
+常時動くアプリケーションの場合、何か問題が起きてTaskが終了したら復活してほしい。
+それをやるのが&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/service_definition_parameters.html&#34;&gt;Service&lt;/a&gt;で、K8sでいうDeploymentのようなリソース。ELBと紐づけると複数のTaskで負荷分散できる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;{
     &amp;quot;cluster&amp;quot;: &amp;quot;test&amp;quot;,
@@ -102,7 +137,7 @@ $ aws ecs list-task-definitions
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;Serviceを作成する。&lt;/p&gt;
+&lt;p&gt;Serviceを作成するとdesiredCountの分Taskが立ち上がり、Taskを消すと再びその数になるように立ち上がる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ aws ecs create-service --cli-input-json file://$(pwd)/service.json
 $ aws ecs list-services --cluster test
@@ -112,10 +147,6 @@ $ aws ecs list-services --cluster test
     ]
 }
 &lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;TaskのNetworkのところにあるPublicIPにアクセスするとWelcome to nginx!の表示が確認できる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/196-2.png&#34; alt=&#34;TaskのNetwork&#34; /&gt;&lt;/p&gt;
 </description>
         </item>
       
