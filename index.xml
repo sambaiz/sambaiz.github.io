@@ -6,8 +6,125 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-11-09 00:30:00 &#43;0900 JST</updated>
+    <updated>2018-11-11 15:10:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>TensorFlow&#43;numpyでData Augmentationして画像の学習データを増やす</title>
+          <link>https://www.sambaiz.net/article/197/</link>
+          <pubDate>Sun, 11 Nov 2018 15:10:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/197/</guid>
+          <description>
+
+&lt;p&gt;Data Augmentationは学習データを加工したものを学習データに加えることで数を増やすというもの。
+加工したデータには通常元のものと同じラベルが付くことになるが、
+例えば画像を反転や回転させても元々のものと同じだと認識されるべきだとしたら妥当だ。
+つまり、なんでもすれば良いわけではなくデータセットに応じた、元のデータと同じラベルが付くような加工をする必要があり、
+裏を返せばそのような違いがあっても同じものであることをモデルに学習させることができる。&lt;/p&gt;
+
+&lt;p&gt;今回はData Augmentationの手法をTensorFlowやnumpyの関数でおなじみLennaの画像に適用する。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/197-lenna.png&#34; alt=&#34;Lenna&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;必要なパッケージと画像をimportする。Jupyter Notebooksで実行する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;%matplotlib inline
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+im = Image.open(&amp;quot;lenna.png&amp;quot;, &amp;quot;r&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;flipping&#34;&gt;Flipping&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/image/flip_left_right&#34;&gt;flip_left_right()&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/image/random_flip_left_right&#34;&gt;random_flip_left_right()&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/image/flip_up_down&#34;&gt;flip_up_down()&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/image/random_flip_up_down&#34;&gt;random_flip_up_down()&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;左右と上下の反転。randomは1/2で反転する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;fliph = tf.image.flip_left_right(im)
+flipv = tf.image.flip_up_down(im)
+
+with tf.Session() as sess:
+    results = sess.run([fliph, flipv])
+plt.imshow(np.hstack(results))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/197-lenna2.png&#34; alt=&#34;左右と上下反転したLenna&#34; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;rotating&#34;&gt;Rotating&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/image/rot90&#34;&gt;rot90()&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;反時計周りに90度回転させる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;rot90 = tf.image.rot90(im)
+
+with tf.Session() as sess:
+    results = sess.run([rot90])
+plt.imshow(np.hstack(results))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/197-lenna3.png&#34; alt=&#34;90度回転したLenna&#34; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;cropping&#34;&gt;Cropping&lt;/h3&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/image/central_crop&#34;&gt;central_crop()&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/image/crop_to_bounding_box&#34;&gt;crop_to_bounding_box()&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/image/random_crop&#34;&gt;random_crop()&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;中央と一部分の切り取り。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;central_crop = tf.image.central_crop(im, 0.7)
+crop_to_box =  tf.image.crop_to_bounding_box(im, 50, 50, 100, 100)
+ops = [tf.cast(tf.image.resize_images(op, (200, 200)), tf.uint8) for op in [central_crop, crop_to_box]]
+with tf.Session() as sess:
+    results = sess.run(ops)
+plt.imshow(np.hstack(results))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/197-lenna4.png&#34; alt=&#34;中央と一部分を切り取ったLenna&#34; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;cutout&#34;&gt;Cutout&lt;/h3&gt;
+
+&lt;p&gt;以下の論文にあるランダムな正方形の領域をマスキングすることで、画像の一部分だけではなくなるべく全体のコンテキストを使わせる手法。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://arxiv.org/abs/1708.04552&#34;&gt;Terrance DeVries, Graham W. Taylor (2017) Improved Regularization of Convolutional Neural Networks with Cutout&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/187/&#34;&gt;numpyの関数 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def random_cutout(image, size = 100):
+    w = image.shape[0]
+    h = image.shape[1]
+    mask = np.ones((w, h, 3), np.uint8)
+    x = np.random.randint(w)
+    y = np.random.randint(h)
+    x1 = np.clip(x - size // 2, 0, w)
+    x2 = np.clip(x + size // 2, 0, w)
+    y1 = np.clip(y - size // 2, 0, h)
+    y2 = np.clip(y + size // 2, 0, h)
+    mask[x1: x2, y1: y2] = 0
+    return im * mask
+
+result = random_cutout(np.array(im))
+plt.imshow(result)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/197-lenna5.png&#34; alt=&#34;CutoutしたLenna&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
