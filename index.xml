@@ -6,8 +6,132 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-11-11 15:10:00 &#43;0900 JST</updated>
+    <updated>2018-11-14 02:52:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Deep LearningのBatch Normalizationの効果をTensorFlowで確認する</title>
+          <link>https://www.sambaiz.net/article/198/</link>
+          <pubDate>Wed, 14 Nov 2018 02:52:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/198/</guid>
+          <description>
+
+&lt;h2 id=&#34;batch-normalizationとは&#34;&gt;Batch Normalizationとは&lt;/h2&gt;
+
+&lt;p&gt;Deep Learningでは各層の学習を同時に行うため、前の層の変更によって各層の入力の分布が変わってしまうinternal covariate shiftという現象が起こり、そのためにパラメータの初期化をうまくやる必要があったり、学習率を大きくできず多くのステップを要する。
+以下の論文で発表されたBatch Normalization(BN)は各層の入力を正規化して分布を固定することでこれを解決するというもの。
+画像認識のコンテスト&lt;a href=&#34;http://image-net.org/challenges/LSVRC/2015/results&#34;&gt;ILSVRC 2015&lt;/a&gt;で1位を取った&lt;a href=&#34;https://arxiv.org/abs/1512.03385&#34;&gt;ResNet(Residual Network)&lt;/a&gt;でも使われている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://arxiv.org/abs/1502.03167&#34;&gt;Sergey Ioffe, Christian Szegedy (2015) Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;具体的にはWx+bと活性化関数の間にBNの層を入れる。μ、σ^2は入力xの平均と分散。
+単に正規化するだけでは表現力が下がってしまうのでγとβでスケールやシフトできるようにする。これらの変数は他のパラメータと同様に学習させる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/198.png&#34; alt=&#34;BN層の演算&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;tensorflowでの確認&#34;&gt;TensorFlowでの確認&lt;/h2&gt;
+
+&lt;p&gt;TensorFlowでは&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization&#34;&gt;batch_normalization()&lt;/a&gt;がすでに実装されているのでこれを使う。&lt;/p&gt;
+
+&lt;p&gt;以下のCNNで学習率を高めに設定しBNありなしの結果を比較する。学習データはmnist。MonitoredSessionでcostをsummaryとして出力しTensorBoardで見られるようにしている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/147/&#34;&gt;TensorBoardでsummaryやグラフを見る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/175/&#34;&gt;TensorFlowのMonitoredSessionとSessionRunHookとsummaryのエラー - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import pandas as pd
+import numpy as np
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+from sklearn.metrics import accuracy_score
+
+train = pd.read_csv(&#39;./train.csv&#39;)
+(x_train, x_valid ,y_train, y_valid) = train_test_split(
+    train.drop(&#39;label&#39;, axis=1).values.reshape((-1, 28, 28, 1)), 
+    np.identity(10)[train[&#39;label&#39;]], 
+    test_size = 0.1, random_state = 100)
+
+print(&amp;quot;data shape: {}, label shape {}&amp;quot;.format(x_train.shape, y_train.shape))
+
+tf.reset_default_graph()
+
+class ConvBnRelu:
+    def __init__(self, filters, kernel_size):
+        self.filters = filters
+        self.kernel_size= kernel_size
+        
+    def __call__(self, x, use_bn, is_training):
+        h = tf.layers.Conv2D(filters=self.filters, kernel_size=self.kernel_size)(x)
+        h = tf.cond(
+            use_bn,
+            true_fn=lambda: tf.layers.batch_normalization(h, training=is_training),
+            false_fn=lambda: h
+        )
+        return tf.nn.relu(h)
+
+is_training = tf.placeholder(tf.bool, shape=())
+use_bn = tf.placeholder(tf.bool, shape=())
+x = tf.placeholder(shape=[None, 28, 28, 1], dtype=tf.float32)
+t = tf.placeholder(tf.float32, [None, 10])
+
+with tf.name_scope(&amp;quot;Conv1&amp;quot;):
+    h = ConvBnRelu(filters=32, kernel_size= [3, 3])(x, use_bn, is_training)
+    h = tf.layers.MaxPooling2D(pool_size=[2, 2], strides=2)(h)
+
+with tf.name_scope(&amp;quot;Conv2&amp;quot;):
+    h = ConvBnRelu(filters= 64, kernel_size= [3, 3])(h, use_bn, is_training)
+    h = tf.layers.MaxPooling2D(pool_size=[2, 2], strides=2)(h)
+
+h = tf.layers.Flatten()(h)
+y = tf.layers.Dense(units=10, activation=tf.nn.softmax)(h)
+
+global_step=tf.train.get_or_create_global_step()
+cost = - tf.reduce_mean(tf.reduce_sum(t * tf.log(tf.clip_by_value(y, 1e-10, y)), axis=1))
+summary_cost = tf.summary.scalar(&#39;cost&#39;, cost)
+optimizer = tf.train.AdamOptimizer(0.01).minimize(cost, global_step=global_step)
+
+EPOCH_NUM = 5
+BATCH_SIZE = 100
+
+hooks = [
+    tf.train.StopAtStepHook(last_step=EPOCH_NUM*(len(x_train) // BATCH_SIZE))
+]
+
+init = tf.global_variables_initializer()
+
+for bn in [False, True]:
+    epoch = -1
+    print(&amp;quot;--- use binary norm: {} ---&amp;quot;.format(bn))
+    with tf.train.MonitoredTrainingSession(
+        hooks=hooks, 
+        summary_dir=&amp;quot;/home/jovyan/summary&amp;quot;,
+        save_summaries_steps=100) as sess:    
+        sess.run(init, feed_dict={x: x_valid, t: y_valid, is_training: False, use_bn: bn})
+        while not sess.should_stop():
+            epoch += 1
+            y_pred, cost_valid, _ = sess.run([y, cost, summary_cost], feed_dict={x: x_valid, t: y_valid, is_training: False, use_bn: bn})
+            print(&amp;quot;epoch: {:2d}, cost: {:.4f}, accuracy: {:.4f}&amp;quot;.format(
+                epoch, cost_valid, accuracy_score(y_pred.argmax(axis=1), y_valid.argmax(axis=1))))
+            x_train, y_train = shuffle(x_train, y_train, random_state=100)
+            for batch in range(len(x_train) // BATCH_SIZE):
+                start = batch * BATCH_SIZE
+                end = start + BATCH_SIZE
+                sess.run(optimizer, feed_dict={x: x_train[start:end], t: y_train[start:end], is_training: True, use_bn: bn})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;BNを行わなかったときの結果。コストを下げられていない。ちなみに学習率を0.01から0.001にしたら下げられるようになった。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/198-2.png&#34; alt=&#34;BNしない場合のコスト&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;一方、BNを行ったときの結果がこれ。学習率はそのままで順調にコストを下げることができている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/198-3.png&#34; alt=&#34;BNした場合のコスト&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -24,7 +148,7 @@
 つまり、なんでもすれば良いわけではなくデータセットに応じた、元のデータと同じラベルが付くような加工をする必要があり、
 裏を返せばそのような違いがあっても同じものであることをモデルに学習させることができる。&lt;/p&gt;
 
-&lt;p&gt;今回はData Augmentationの手法をTensorFlowやnumpyの関数でおなじみLennaの画像に適用する。&lt;/p&gt;
+&lt;p&gt;今回はData Augmentationで行われる加工をTensorFlowやnumpyの関数でおなじみLennaの画像に行う。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/197-lenna.png&#34; alt=&#34;Lenna&#34; /&gt;&lt;/p&gt;
 
@@ -8236,6 +8360,12 @@ Appに紐づくBot Userを追加後、Install Appすると&lt;code&gt;Bot User O
 &lt;pre&gt;&lt;code&gt;flags.DEFINE_string(&amp;quot;save_path&amp;quot;, &amp;quot;.&amp;quot;, &amp;quot;Model output directory.&amp;quot;)
 sv = tf.train.Supervisor(logdir=FLAGS.save_path)
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;追記(2018-11-14): Supervisorはdeprecatedなので以下の記事でやっているようにMonitoredTrainingSessionを使うとよい。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/198/&#34;&gt;Deep LearningのBatch Normalizationの効果をTensorFlowで確認する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
 
 &lt;pre&gt;&lt;code&gt;# tensorboard --logdir=models/tutorials/rnn/ptb
 &lt;/code&gt;&lt;/pre&gt;
