@@ -6,8 +6,319 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-11-14 02:52:00 &#43;0900 JST</updated>
+    <updated>2018-11-27 09:57:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>TensorFlowのモデルをTPUに対応させてColabで学習させる</title>
+          <link>https://www.sambaiz.net/article/199/</link>
+          <pubDate>Tue, 27 Nov 2018 09:57:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/199/</guid>
+          <description>
+
+&lt;p&gt;TPU(Tensor Processing Unit)は
+Google開発のニューラルネットワークの学習に特化したASIC(Application Specific Integrated Circuit)。
+&lt;a href=&#34;https://cloudplatform-jp.googleblog.com/2017/05/an-in-depth-look-at-googles-first-tensor-processing-unit-tpu.html&#34;&gt;一般的なGPUと比べて15~30倍もの性能が出る&lt;/a&gt;
+らしく検索や翻訳などGoogleのサービスでも使われている。&lt;/p&gt;
+
+&lt;p&gt;TPUを使える環境として、無料で使えるJupyter Notebooksの&lt;a href=&#34;https://colab.research.google.com/&#34;&gt;Google Colab&lt;/a&gt;と
+GCPの&lt;a href=&#34;https://cloud.google.com/tpu/&#34;&gt;Cloud TPU&lt;/a&gt;がある。ColabのTPUも裏側ではCloud TPUが動いている。
+Cloud TPUはVMから接続して使うことになるので、TPUの&lt;a href=&#34;https://cloud.google.com/tpu/docs/pricing&#34;&gt;料金&lt;/a&gt;に加えてVMの料金もかかる。&lt;/p&gt;
+
+&lt;h2 id=&#34;モデルのtpu対応&#34;&gt;モデルのTPU対応&lt;/h2&gt;
+
+&lt;p&gt;CNNのモデルを&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/contrib/tpu/TPUEstimator&#34;&gt;TPUEstimator&lt;/a&gt;でTPUに対応させる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.tensorflow.org/guide/estimators&#34;&gt;Estimator&lt;/a&gt;はTensorFlowの高レベルAPIで、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/estimator/Estimator#train&#34;&gt;train()&lt;/a&gt;、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/estimator/Estimator#evaluate&#34;&gt;evaluate()&lt;/a&gt;、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/estimator/Estimator#predict&#34;&gt;predict()&lt;/a&gt;、
+&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/estimator/Estimator#export_saved_model&#34;&gt;export_saved_model()&lt;/a&gt;
+といったモデルの学習から保存まで必要な機能を一通り提供する。&lt;/p&gt;
+
+&lt;p&gt;初めは比較的低レベルのAPIを使おうとしていたが、TPUへのコンパイルがうまくいかないなど様々な問題にあたって大変だったので使っておくと良いと思う。
+それでもトライアンドエラーの繰り返しで、典型的なものは&lt;a href=&#34;https://cloud.google.com/tpu/docs/troubleshooting&#34;&gt;Troubleshooting&lt;/a&gt;にあるが、ないものは調べるなりしてなんとかやっていくしかない。&lt;/p&gt;
+
+&lt;p&gt;定数などの定義。BATCH_SIZEはCloud TPUのシャード数の8で割り切れる値にする必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import pandas as pd
+from sklearn.model_selection import train_test_split
+import tensorflow as tf
+import numpy as np
+flags = tf.app.flags
+flags.DEFINE_boolean(&#39;use_tpu&#39;, True, &#39;use tpu or not&#39;)
+tf.app.flags.DEFINE_string(&#39;f&#39;, &#39;&#39;, &#39;kernel&#39;)
+FLAGS = flags.FLAGS
+
+EPOCH_NUM = 100
+BATCH_SIZE = 800 # must be divisible by number of replicas 8
+EVAL_BATCH_SIZE = 800
+SHARD_NUM = 8 # A single Cloud TPU has 8 shards.
+ITERATION_NUM = 100 # Number of training steps to run on the Cloud TPU before returning control.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;入力データの準備&#34;&gt;入力データの準備&lt;/h3&gt;
+
+&lt;p&gt;入力は関数で渡し、tf.data APIのdatasetを返せばイテレートしてくれる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/195/&#34;&gt;TensorFlowのtf.data API - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;batch()でdrop_remainderをTrueにしないとTPUのコンパイルで失敗する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from google.colab import auth
+from googleapiclient.discovery import build
+from io import BytesIO
+
+auth.authenticate_user()
+bucket = &amp;quot;&amp;lt;bucket_name&amp;gt;&amp;quot;
+gcs_service = build(&#39;storage&#39;, &#39;v1&#39;)
+train_data = gcs_service.objects().get_media(bucket=bucket, object=&#39;train.csv&#39;).execute()
+train = pd.read_csv(BytesIO(train_data))
+
+MODEL_DIR = &#39;gs://{}/model/tpu&#39;.format(bucket)
+
+(x_train, x_valid, y_train, y_valid) = train_test_split(
+    train.drop(&#39;label&#39;, axis=1).values.reshape((-1, 28, 28, 1)).astype(np.float32), 
+    np.identity(10)[train[&#39;label&#39;]].astype(np.float32), 
+    test_size = 0.1, random_state = 100)
+
+def train_input_fn(params):
+    dataset = tf.data.Dataset.from_tensor_slices(({&#39;x&#39;: x_train}, y_train)) # (features, labels)
+    dataset = dataset.shuffle(buffer_size=1000)
+    dataset = dataset.batch(params[&#39;batch_size&#39;], drop_remainder=True)
+    return dataset
+
+def valid_input_fn(params):
+    dataset = tf.data.Dataset.from_tensor_slices(({&#39;x&#39;: x_valid}, y_valid))
+    dataset = dataset.batch(params[&#39;batch_size&#39;], drop_remainder=True)
+    return dataset
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;入出力するファイルはローカルではなくGCSなどに置く必要があるのでCloud TPUからも読み書きできるようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;domain&amp;quot;: &amp;quot;global&amp;quot;,
+    &amp;quot;reason&amp;quot;: &amp;quot;forbidden&amp;quot;,
+    &amp;quot;message&amp;quot;: &amp;quot;service-******@cloud-tpu.iam.gserviceaccount.com does not have storage.objects.create access to &amp;lt;bucket_name&amp;gt;.&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;!gsutil acl ch -u service-*****@cloud-tpu.iam.gserviceaccount.com:WRITER gs://&amp;lt;bucket_name&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;モデルの作成&#34;&gt;モデルの作成&lt;/h3&gt;
+
+&lt;p&gt;Estimatorには次のシグネチャのmodel_fnを渡す。
+引数のfeaturesとlabelsはinput_fnの返り値で、
+modeは&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/estimator/ModeKeys&#34;&gt;tf.estimator.ModeKeys&lt;/a&gt;の&lt;code&gt;TRAIN&lt;/code&gt;、&lt;code&gt;EVAL&lt;/code&gt;、&lt;code&gt;PREDICT&lt;/code&gt;で、
+paramsはEstimator生成時に渡せるパラメータ。
+optimizerは&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/contrib/tpu/CrossShardOptimizer&#34;&gt;CrossShardOptimizer&lt;/a&gt;で&lt;a href=&#34;https://www.tensorflow.org/guide/using_tpu#optimizer&#34;&gt;wrapする&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;TPUに対応している&lt;a href=&#34;https://cloud.google.com/tpu/docs/tensorflow-ops&#34;&gt;op&lt;/a&gt;で作る必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def model_fn(features, labels, mode, params):
+    def metric_fn(labels, logits):
+        return {
+            &#39;accuracy&#39;: tf.metrics.accuracy(
+                labels=tf.argmax(labels, axis=1), predictions=tf.argmax(logits, axis=1))
+         }
+    is_training = tf.equal(mode, tf.estimator.ModeKeys.TRAIN)
+    conv1 = tf.layers.conv2d(
+        inputs=features[&#39;x&#39;],
+        filters=32, 
+        kernel_size=[5, 5], 
+        padding=&amp;quot;same&amp;quot;, 
+        activation=tf.nn.relu)
+    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+    conv2 = tf.layers.conv2d(
+        inputs=pool1, 
+        filters=64, 
+        kernel_size=[5, 5],
+        padding=&amp;quot;same&amp;quot;, 
+        activation=tf.nn.relu)
+    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+    pool2_flat = tf.layers.flatten(pool2)
+    dense = tf.layers.dense(inputs=pool2_flat, units=128, activation=tf.nn.relu)
+    dropout = tf.layers.dropout(
+        inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+    logits = tf.layers.dense(inputs=dropout, units=10)
+
+    loss = tf.losses.softmax_cross_entropy(
+        onehot_labels=labels, logits=logits)
+    
+    if mode == tf.estimator.ModeKeys.EVAL:
+        return tf.contrib.tpu.TPUEstimatorSpec(mode, loss=loss, 
+                                               eval_metrics=(metric_fn, [labels, logits]))
+
+    optimizer = tf.train.AdamOptimizer(0.01)
+    if FLAGS.use_tpu:
+        optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
+
+    return tf.contrib.tpu.TPUEstimatorSpec(
+        mode=mode,
+        loss=loss,
+        train_op=optimizer.minimize(loss, tf.train.get_or_create_global_step()))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;tpuestimatorの生成&#34;&gt;TPUEstimatorの生成&lt;/h3&gt;
+
+&lt;p&gt;TPUのアドレスが環境変数COLAB_TPU_ADDRに入るのでこれをmasterとする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;if FLAGS.use_tpu:
+    master = &#39;grpc://&#39; + os.environ[&#39;COLAB_TPU_ADDR&#39;]
+    run_config = tf.contrib.tpu.RunConfig(
+        master=master,
+        session_config=tf.ConfigProto(
+            allow_soft_placement=True, log_device_placement=True),
+        tpu_config=tf.contrib.tpu.TPUConfig(ITERATION_NUM, SHARD_NUM))
+else:
+    run_config = tf.contrib.tpu.RunConfig()
+
+classifier = tf.contrib.tpu.TPUEstimator(
+    model_fn=model_fn,
+    model_dir=MODEL_DIR,
+    config=run_config,
+    params={},
+    train_batch_size=BATCH_SIZE,
+    eval_batch_size=EVAL_BATCH_SIZE,
+    use_tpu=FLAGS.use_tpu)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;学習&#34;&gt;学習&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;for epoch in range(EPOCH_NUM):
+  max_steps = len(x_train)*(epoch+1)//BATCH_SIZE
+  valid_steps = len(x_valid)//EVAL_BATCH_SIZE
+  if FLAGS.use_tpu: 
+    max_steps //= SHARD_NUM
+  train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=max_steps)
+  eval_spec = tf.estimator.EvalSpec(input_fn=valid_input_fn, steps=valid_steps)
+  result = tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
+  if result[0] is not None:
+    print(&#39;epoch: {}, loss: {} accuracy: {}&#39;.format(epoch+1, result[0][&#39;loss&#39;], result[0][&#39;accuracy&#39;]))
+  else:
+    print(&#39;epoch: {} is already trained&#39;.format(epoch+1))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;colabでtensorboardを開く&#34;&gt;ColabでTensorBoardを開く&lt;/h2&gt;
+
+&lt;p&gt;このスクリプトを実行するとTensorBoardを立ち上げてngrokで外に開いてくれる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/mixuala/colab_utils&#34;&gt;mixuala/colab_utils&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;!git clone https://github.com/mixuala/colab_utils
+import os
+import colab_utils.tboard
+
+# set paths
+ROOT = %pwd
+LOG_DIR = os.path.join(ROOT, &#39;model&#39;)
+colab_utils.tboard.launch_tensorboard(bin_dir=ROOT, log_dir=LOG_DIR)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;結果&#34;&gt;結果&lt;/h2&gt;
+
+&lt;p&gt;学習させて実行時間を計測する。計測はセルの頭に&lt;code&gt;%%time&lt;/code&gt;を付けるとできる。&lt;/p&gt;
+
+&lt;h3 id=&#34;cpu&#34;&gt;CPU&lt;/h3&gt;
+
+&lt;p&gt;ベースライン。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CPU times: user 18min 28s, sys: 32.8 s, total: 19min 1s
+Wall time: 14min 33s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;gpu&#34;&gt;GPU&lt;/h3&gt;
+
+&lt;p&gt;ランタイムからアクセラレータをGPUに設定。使われるGPUはNVIDIAの&lt;a href=&#34;https://www.nvidia.co.jp/object/tesla-k80-jp.html&#34;&gt;Tesla K80&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from tensorflow.python.client import device_lib
+device_lib.list_local_devices()
+# ...
+# physical_device_desc: &amp;quot;device: 0, name: Tesla K80, pci bus id: 0000:00:04.0, compute capability: 3.7&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CPU times: user 3min 2s, sys: 24.2 s, total: 3min 26s
+Wall time: 8min 6s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;tpu&#34;&gt;TPU&lt;/h3&gt;
+
+&lt;p&gt;アクセラレータをTPUに変更。
+GPUより速くなることを期待したが、むしろCPUよりも遅くなってしまった。その上精度の伸びも遅くて良いところがない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CPU times: user 3min, sys: 23.8 s, total: 3min 24s
+Wall time: 15min
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;再チャレンジ&#34;&gt;再チャレンジ&lt;/h2&gt;
+
+&lt;p&gt;エポックの立ち上がりが遅いので学習を切らずに続けて行わせてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;
+def train_input_fn(params):
+    dataset = tf.data.Dataset.from_tensor_slices(({&#39;x&#39;: x_train}, y_train)) # (features, labels)
+    dataset = dataset.shuffle(buffer_size=1000)
+    dataset = dataset.batch(params[&#39;batch_size&#39;], drop_remainder=True)
+    dataset = dataset.repeat(EPOCH_NUM)
+    return dataset
+
+epoch = EPOCH_NUM-1
+max_steps = len(x_train)*(epoch+1)/BATCH_SIZE
+valid_steps = len(x_valid)//EVAL_BATCH_SIZE
+if FLAGS.use_tpu: 
+  max_steps //= SHARD_NUM
+train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=max_steps)
+eval_spec = tf.estimator.EvalSpec(input_fn=valid_input_fn, steps=valid_steps)
+result = tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
+if result[0] is not None:
+  print(&#39;epoch: {}, loss: {} accuracy: {}&#39;.format(epoch+1, result[0][&#39;loss&#39;],  result[0][&#39;accuracy&#39;]))
+else:
+  print(&#39;epoch: {} is already trained&#39;.format(epoch+1))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを実行したところGPUと同程度には速くなった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# GPU
+CPU times: user 40.9 s, sys: 7.8 s, total: 48.7 s
+Wall time: 1min 43s
+
+# TPU
+CPU times: user 35.2 s, sys: 4.46 s, total: 39.7 s
+Wall time: 1min 34s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;さらにEPOCH_NUMを5から100にして再計測する。&lt;/p&gt;
+
+&lt;h2 id=&#34;結果-1&#34;&gt;結果&lt;/h2&gt;
+
+&lt;h3 id=&#34;gpu-1&#34;&gt;GPU&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;CPU times: user 3min 27s, sys: 2min, total: 5min 28s
+Wall time: 6min 5s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;tpu-1&#34;&gt;TPU&lt;/h3&gt;
+
+&lt;p&gt;EPOCH数を大幅に増やしたのにも関わらずほとんど実行時間が変わらず、とても速い。
+CPU時間も変わっていないので演算がTPUで完結していてCPU-TPU間のデータの受け渡しが最小限で済んでいるのかもしれない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CPU times: user 34.5 s, sys: 7.32 s, total: 41.8 s
+Wall time: 1min 38s
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://medium.com/deep-learning-turkey/google-colab-free-gpu-tutorial-e113627b9f5d&#34;&gt;Google Colab Free GPU Tutorial – Deep Learning Turkey – Medium&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://qiita.com/koshian2/items/fb989cebe0266d1b32fc&#34;&gt;Google ColabのTPUで対GPUの最速に挑戦する - Qiita&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -8408,7 +8719,7 @@ name_scopeで分けておくと見やすい。&lt;/p&gt;
 
 &lt;p&gt;これらを解決するのがLSTM(Long Short Term Memory networks)で、
 勾配消失は活性化関数がxで重みが単位行列のニューロンのCEC(Constant Error Carousel)によって常に誤差に掛けられる係数を1にすることで防ぎ、
-入力/出力重み衝突は必要な入出力を通したり不必要な情報は忘れさせるための値域(0,1)の値を掛けるinput gate、forget gate、output gateによって回避する。gateは入力と前回の出力によって制御される。&lt;/p&gt;
+入力/出力重み衝突は必要な入出力を通したり不必要な情報は忘れさせるために値域(0,1)の値を掛けるinput gate、forget gate、output gateによって回避する。gateは入力と前回の出力によって制御される。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/146-lstm.png&#34; alt=&#34;RNN&#34; /&gt;&lt;/p&gt;
 
