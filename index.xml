@@ -6,12 +6,40 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2018</rights>
-    <updated>2018-11-27 09:57:00 &#43;0900 JST</updated>
+    <updated>2018-12-01 23:09:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>TensorFlowのモデルをTPUに対応させてColabで学習させる</title>
+          <title>Encoder-Decoder RNNのAttention</title>
+          <link>https://www.sambaiz.net/article/200/</link>
+          <pubDate>Sat, 01 Dec 2018 23:09:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/200/</guid>
+          <description>&lt;p&gt;Encoder-Decoder RNNは入力用のEncoderと出力用のDecoderの2つのLSTMを組み合わせたもので、EncoderのStateはDecoderに繋げる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/200.png&#34; alt=&#34;Encoder-Decoder RNN&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;したがって入力データはDecoderに渡されるStateにまとめられることになるが、
+出力ごとに入力時系列の重要な部分は異なるため、特定の部分に注目できるようにすると良い結果が期待できる。
+次の論文ではAttention Layerを追加することでこれを行い翻訳の精度を向上させている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://arxiv.org/abs/1508.04025&#34;&gt;Minh-Thang Luong, Hieu Pham, Christopher D. Manning (2015) Effective Approaches to Attention-based Neural Machine Translation&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Attention LayerはEncoderの出力とDecoderの対象の出力からどの部分を重要とするかを表すAlign weightsと
+Encoderの出力を掛けたものをContext vectorとして出力する。
+scoreにはそのまま掛けたものや(&lt;code&gt;h_{dec}h_{enc}&lt;/code&gt;)、重みとDecoderの出力のみを掛ける(&lt;code&gt;Wh_{dec}&lt;/code&gt;)といったものが使われる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/200-2.png&#34; alt=&#34;Attention Layer&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/200-3.png&#34; alt=&#34;Align weightsとContext vectorの式&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>TensorFlowのモデルをTPUに対応させてColabで学習し実行時間を計測する</title>
           <link>https://www.sambaiz.net/article/199/</link>
           <pubDate>Tue, 27 Nov 2018 09:57:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -25,7 +53,7 @@ Google開発のニューラルネットワークの学習に特化したASIC(App
 
 &lt;p&gt;TPUを使える環境として、無料で使えるJupyter Notebooksの&lt;a href=&#34;https://colab.research.google.com/&#34;&gt;Google Colab&lt;/a&gt;と
 GCPの&lt;a href=&#34;https://cloud.google.com/tpu/&#34;&gt;Cloud TPU&lt;/a&gt;がある。ColabのTPUも裏側ではCloud TPUが動いている。
-Cloud TPUはVMから接続して使うことになるので、TPUの&lt;a href=&#34;https://cloud.google.com/tpu/docs/pricing&#34;&gt;料金&lt;/a&gt;に加えてVMの料金もかかる。&lt;/p&gt;
+Cloud TPUを直に使うとVMから接続して使うことになるので、TPUの&lt;a href=&#34;https://cloud.google.com/tpu/docs/pricing&#34;&gt;料金&lt;/a&gt;に加えてVMの料金もかかる。&lt;/p&gt;
 
 &lt;h2 id=&#34;モデルのtpu対応&#34;&gt;モデルのTPU対応&lt;/h2&gt;
 
@@ -38,7 +66,7 @@ Cloud TPUはVMから接続して使うことになるので、TPUの&lt;a href=&
 &lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/estimator/Estimator#export_saved_model&#34;&gt;export_saved_model()&lt;/a&gt;
 といったモデルの学習から保存まで必要な機能を一通り提供する。&lt;/p&gt;
 
-&lt;p&gt;初めは比較的低レベルのAPIを使おうとしていたが、TPUへのコンパイルがうまくいかないなど様々な問題にあたって大変だったので使っておくと良いと思う。
+&lt;p&gt;初めは比較的低レベルのAPIを使おうとしていたが、XLA(Accelerated Linear Algebra)によるコンパイルがうまくいかないなど様々な問題にあたって大変だったので使っておくと良いと思う。
 それでもトライアンドエラーの繰り返しで、典型的なものは&lt;a href=&#34;https://cloud.google.com/tpu/docs/troubleshooting&#34;&gt;Troubleshooting&lt;/a&gt;にあるが、ないものは調べるなりしてなんとかやっていくしかない。&lt;/p&gt;
 
 &lt;p&gt;定数などの定義。BATCH_SIZEはCloud TPUのシャード数の8で割り切れる値にする必要がある。&lt;/p&gt;
@@ -65,7 +93,7 @@ ITERATION_NUM = 100 # Number of training steps to run on the Cloud TPU before re
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/195/&#34;&gt;TensorFlowのtf.data API - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;batch()でdrop_remainderをTrueにしないとTPUのコンパイルで失敗する。&lt;/p&gt;
+&lt;p&gt;batch()でdrop_remainderをTrueにして端数を切り捨てないと、shapeが確定せずコンパイルできない。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;from google.colab import auth
 from googleapiclient.discovery import build
@@ -23644,8 +23672,6 @@ type BadStudent struct {
 
 &lt;p&gt;今回の場合、defaultStudentにPublicなデフォルト実装があってそれを使うので埋め込んだ方が自然なような気もするけど、
 そうでなければ埋め込まない方が移譲していることが分かりやすいと思う。せいぜい数文字増えるだけだし。&lt;/p&gt;
-
-&lt;p&gt;埋め込みは便利だけど、継承ではないことを理解して使おう。&lt;/p&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
