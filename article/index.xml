@@ -6,10 +6,25 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Tue, 18 Dec 2018 01:00:00 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 01 Jan 2019 17:50:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する</title>
+      <link>https://www.sambaiz.net/article/203/</link>
+      <pubDate>Tue, 01 Jan 2019 17:50:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/203/</guid>
+      <description>AWS GlueはマネージドなETL(Extract/Transform/Load)サービスで、Sparkを使ってS3などにあるデータを読み込み加工して変換出力したり、AthenaやRedshift Spectrumで参照できるデータカタログを提供する。 今回はS3のCSVを読み込んで加工し、列指向フォーマットParquetに変換しパーティションを切って出力、その後クローラを回してデータカタログにテーブルを作成してAthenaで参照できることを確認する。
+料金はジョブがDPU(4vCPU/16GBメモリ)時間あたり$0.44(最低2DPU/10分)かかる。 また、クローラも同様にDPUで課金される。
+ジョブのスクリプトのアップロード スクリプトをS3に上げる。 GlueはSpark標準のDataFrameを扱うこともできるが、独自にスキーマを柔軟に扱えるDynamicFrameというのをサポートしている。DataFrameとは相互に変換できるので、SQL文の実行などDataFrameにしかないAPIを使いたい場合は変換する。
+data_frame = dynamc_frame.toDF() data_frame.toDF().createOrReplaceTempView(&#39;t1&#39;) data_frame2 = spark.sql(&#39;SELECT * FROM t1&#39;)  入力は為替データのCSV。
+$ less kawase1.csv Date,USD,GBP,EUR,CAD,CHF,SEK,DKK,NOK,AUD,NZD 2002/4/1,133.15,189.79,116.12,83.48,79.28,12.87,15.63,15.08,71.14,58.8 ... $ less kawase2.csv Date,ZAR,BHD,HKD,INR,PHP,SGD,THB,KWD,SAR,AED,MXN,TWD 2002/4/1,11.76,353.65,17.07,2.73,2.61,72.21,3.07,434.14,35.52,36.26,14.81,3.82 ...  やることは次の通り。
+ create_dynamic_frame.from_options()でS3のCSVを読んでDynamicFrameを生成 Dateでjoin() apply_mapping()でフィールド名と型をマッピングする map()でDateをyear, month, dateの3フィールドに分割、各値をUSDとの比にする create_dynamic_frame.from_options()でパーティションをyearで切ってフォーマットはParquetで書き込む クローラの実行を開始する  transformation_ctxは後述するジョブのブックマークで使われる一意な識別子。
+import sys import datetime import boto3 from awsglue.utils import getResolvedOptions from pyspark.context import SparkContext from awsglue.context import GlueContext from awsglue.job import Job args = getResolvedOptions(sys.</description>
+    </item>
     
     <item>
       <title>強化学習とDQN(Deep Q-network)</title>
@@ -22,8 +37,8 @@
 どんな状態においても状態価値関数を最大化させる最適方策π*を探すにあたり、定義通り将来の報酬を待つのではなく、即時報酬Rで状態価値関数Vを更新していく。これをTD(Temporal difference)学習という。
 取り得る状態数が多いと収束するまでの時間が長くなる問題があって、これを価値関数の近似によって解消するのがDQN。
 DQN (Deep Q-Network) DNNでQ学習を行う。Q学習というのは状態sのときに行動aしたときの報酬の期待値である行動価値関数Qを最大化させるように学習させるもので、 最も良かった行動でQを更新していく。 未知の行動を探索するかどうかはバンディットアルゴリズムのε-greedyによって確率的に決定し、学習が進むにつれて確率は下がっていく。
-前もってランダムに行動と結果をサンプリングし学習の際に使う、ER(Experience Replay)というテクニックが使われる。 これによって実行回数が減るだけではなく、時系列的な相関を減らし効率的に学習させることができる。
-またmain-networkとは別に、同じ形式のtarget-networkを作ってQ(s&amp;rsquo;=s_{t+1}, a)の値を出すのに使う。 target-networkのパラメータはmain-networkのものを定期的に同期させる以外では更新しない。これによって学習を安定させることができる。 これをFixed Target Q-Networkという。
+前もってランダムに行動と結果をサンプリングしておき学習の際に使う、ER(Experience Replay)というテクニックが使われる。 これによって実行回数が減るだけではなく、時系列的な相関を減らし効率的に学習させることができる。
+またmain-networkとは別に、同じ形式のtarget-networkを作ってQ(s&amp;rsquo;=s_{t+1}, a)の値を出すのに使う。 target-networkのパラメータはmain-networkのものを定期的に同期させる以外では更新しないことで学習を安定させることができる。 これをFixed Target Q-Networkという。
 参考 強化学習の基礎
 第14回　深層強化学習DQN（Deep Q-Network）の解説｜Tech Book Zone Manatee</description>
     </item>
@@ -166,7 +181,7 @@ $ go get -u github.com/mailru/easyjson/... $ cat struct.go package a type Foo st
 入出力がx、y、層の数がLでl層目での重みとバイアスをW^(l), b^(l)、活性化関数をf^(l)、活性化関数適用前後をu^(l)とh^(l)とし、入力層を0層目とすると各層での演算は以下の式で表される。
 活性化関数は非線形で微分可能な関数で、計算速度や勾配消失の面でReLUが最有力。
 ニューラルネットワークと活性化関数 - sambaiz-net
-各層の最適なWとbを探すのにロジスティック回帰と同様に勾配降下法を使うことができる。 誤差関数は分類の場合は交差エントロピーが、回帰の場合は平均二乗誤差(MSE, Mean Squared Error)が使われる。
+各層の最適なWとbを探すのにロジスティック回帰と同様に勾配降下法を使うことができる。 誤差関数は分類の場合は交差エントロピーが、回帰の場合は平均二乗誤差(MSE, Mean Squared Error) または外れ値に引っ張られづらくしたHuber損失などが使われる。
 隠れ層の勾配はそれより後ろの層での演算が影響するので、入力から出力への順伝搬に対して 出力から入力への逆伝播で誤差の情報を前の層に伝播させていく。これを誤差逆伝播法(Backpropagation)という。
 出力から遠くなればなるほど連鎖律が長くなっていくが、途中までは後ろの層と共通になっている。 ということで順伝搬時のhを保存しておき一つ後ろの層のWと誤差δを渡してやれば必要最小限の演算で済み、実行時間を短くすることができる。
 参考 深層学習</description>

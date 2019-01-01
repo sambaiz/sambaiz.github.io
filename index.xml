@@ -5,9 +5,177 @@
     <link>https://www.sambaiz.net/</link>
     <language>ja</language>
     <author>sambaiz</author>
-    <rights>(C) 2018</rights>
-    <updated>2018-12-18 01:00:00 &#43;0900 JST</updated>
+    <rights>(C) 2019</rights>
+    <updated>2019-01-01 17:50:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する</title>
+          <link>https://www.sambaiz.net/article/203/</link>
+          <pubDate>Tue, 01 Jan 2019 17:50:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/203/</guid>
+          <description>
+
+&lt;p&gt;AWS GlueはマネージドなETL(Extract/Transform/Load)サービスで、&lt;a href=&#34;https://spark.apache.org/&#34;&gt;Spark&lt;/a&gt;を使ってS3などにあるデータを読み込み加工して変換出力したり、AthenaやRedshift Spectrumで参照できるデータカタログを提供する。
+今回はS3のCSVを読み込んで加工し、列指向フォーマットParquetに変換しパーティションを切って出力、その後クローラを回してデータカタログにテーブルを作成してAthenaで参照できることを確認する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/glue/pricing/&#34;&gt;料金&lt;/a&gt;はジョブがDPU(4vCPU/16GBメモリ)時間あたり$0.44(最低2DPU/10分)かかる。
+また、クローラも同様にDPUで課金される。&lt;/p&gt;
+
+&lt;h2 id=&#34;ジョブのスクリプトのアップロード&#34;&gt;ジョブのスクリプトのアップロード&lt;/h2&gt;
+
+&lt;p&gt;スクリプトをS3に上げる。
+GlueはSpark標準のDataFrameを扱うこともできるが、独自にスキーマを柔軟に扱える&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html&#34;&gt;DynamicFrame&lt;/a&gt;というのをサポートしている。DataFrameとは相互に変換できるので、SQL文の実行などDataFrameにしかないAPIを使いたい場合は変換する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;data_frame = dynamc_frame.toDF()
+data_frame.toDF().createOrReplaceTempView(&#39;t1&#39;)
+data_frame2 = spark.sql(&#39;SELECT * FROM t1&#39;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;入力は為替データのCSV。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ less kawase1.csv
+Date,USD,GBP,EUR,CAD,CHF,SEK,DKK,NOK,AUD,NZD
+2002/4/1,133.15,189.79,116.12,83.48,79.28,12.87,15.63,15.08,71.14,58.8
+...
+
+$ less kawase2.csv
+Date,ZAR,BHD,HKD,INR,PHP,SGD,THB,KWD,SAR,AED,MXN,TWD
+2002/4/1,11.76,353.65,17.07,2.73,2.61,72.21,3.07,434.14,35.52,36.26,14.81,3.82
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;やることは次の通り。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame-reader.html#aws-glue-api-crawler-pyspark-extensions-dynamic-frame-reader-from_options&#34;&gt;create_dynamic_frame.from_options()&lt;/a&gt;でS3のCSVを読んでDynamicFrameを生成&lt;/li&gt;
+&lt;li&gt;Dateで&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html#aws-glue-api-crawler-pyspark-extensions-dynamic-frame-join&#34;&gt;join()&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html#aws-glue-api-crawler-pyspark-extensions-dynamic-frame-apply_mapping&#34;&gt;apply_mapping()&lt;/a&gt;でフィールド名と型をマッピングする&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html#aws-glue-api-crawler-pyspark-extensions-dynamic-frame-map&#34;&gt;map()&lt;/a&gt;でDateをyear, month, dateの3フィールドに分割、各値をUSDとの比にする&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame-writer.html#aws-glue-api-crawler-pyspark-extensions-dynamic-frame-writer-from_options&#34;&gt;create_dynamic_frame.from_options()&lt;/a&gt;でパーティションをyearで&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-programming-etl-partitions.html#aws-glue-programming-etl-partitions-writing&#34;&gt;切って&lt;/a&gt;フォーマットはParquetで書き込む&lt;/li&gt;
+&lt;li&gt;クローラの実行を開始する&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;transformation_ctxは後述するジョブのブックマークで使われる一意な識別子。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import sys
+import datetime
+import boto3
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+
+args = getResolvedOptions(sys.argv, [&amp;quot;JOB_NAME&amp;quot;])
+
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args[&amp;quot;JOB_NAME&amp;quot;], args)
+
+
+def split_date(rec):
+    date = datetime.datetime.strptime(rec[&amp;quot;Date&amp;quot;], &amp;quot;%Y/%m/%d&amp;quot;)
+    rec[&amp;quot;year&amp;quot;] = date.year
+    rec[&amp;quot;month&amp;quot;] = date.month
+    rec[&amp;quot;day&amp;quot;] = date.day
+    return rec
+
+
+def convert_ratio_usd(rec):
+    ret = {}
+    for field in rec:
+        ret[field] = rec[field]
+        if field not in [&amp;quot;year&amp;quot;, &amp;quot;month&amp;quot;, &amp;quot;day&amp;quot;]:
+            ret[field] /= rec[&amp;quot;usd&amp;quot;]
+    return ret
+
+
+input_df = glueContext.create_dynamic_frame.from_options(
+    transformation_ctx=&amp;quot;source&amp;quot;,
+    connection_type=&amp;quot;s3&amp;quot;,
+    connection_options={&amp;quot;paths&amp;quot;: [&amp;quot;s3://*****/kawase1.csv&amp;quot;]},
+    format=&amp;quot;csv&amp;quot;,
+    format_options={&amp;quot;withHeader&amp;quot;: True})
+input_df2 = glueContext.create_dynamic_frame.from_options(
+    transformation_ctx=&amp;quot;source&amp;quot;,
+    connection_type=&amp;quot;s3&amp;quot;,
+    connection_options={&amp;quot;paths&amp;quot;: [&amp;quot;s3://*****/kawase2.csv&amp;quot;]},
+    format=&amp;quot;csv&amp;quot;,
+    format_options={&amp;quot;withHeader&amp;quot;: True})
+
+output_df = input_df.join(
+    [&amp;quot;Date&amp;quot;], [&amp;quot;Date&amp;quot;], input_df2, transformation_ctx=&amp;quot;info&amp;quot;).map(
+        split_date, transformation_ctx=&amp;quot;split_date&amp;quot;).apply_mapping(
+            [(&amp;quot;year&amp;quot;, &amp;quot;smallint&amp;quot;, &amp;quot;year&amp;quot;, &amp;quot;smallint&amp;quot;),
+             (&amp;quot;month&amp;quot;, &amp;quot;smallint&amp;quot;, &amp;quot;month&amp;quot;, &amp;quot;smallint&amp;quot;),
+             (&amp;quot;day&amp;quot;, &amp;quot;smallint&amp;quot;, &amp;quot;day&amp;quot;, &amp;quot;smallint&amp;quot;),
+             (&amp;quot;USD&amp;quot;, &amp;quot;string&amp;quot;, &amp;quot;usd&amp;quot;, &amp;quot;double&amp;quot;),
+             (&amp;quot;EUR&amp;quot;, &amp;quot;string&amp;quot;, &amp;quot;eur&amp;quot;, &amp;quot;double&amp;quot;),
+             (&amp;quot;AUD&amp;quot;, &amp;quot;string&amp;quot;, &amp;quot;aud&amp;quot;, &amp;quot;double&amp;quot;),
+             (&amp;quot;ZAR&amp;quot;, &amp;quot;string&amp;quot;, &amp;quot;zar&amp;quot;, &amp;quot;double&amp;quot;)],
+            transformation_ctx=&amp;quot;apply_mapping&amp;quot;).map(
+                convert_ratio_usd, transformation_ctx=&amp;quot;convert_ratio_usd&amp;quot;)
+
+glueContext.write_dynamic_frame.from_options(
+    frame=output_df,
+    connection_type=&amp;quot;s3&amp;quot;,
+    connection_options={
+        &amp;quot;path&amp;quot;: &amp;quot;s3://*****/target&amp;quot;,
+        &amp;quot;partitionKeys&amp;quot;: [&amp;quot;year&amp;quot;],
+        &amp;quot;compression&amp;quot;: &amp;quot;gzip&amp;quot;
+    },
+    format=&amp;quot;parquet&amp;quot;,
+    transformation_ctx=&amp;quot;sink&amp;quot;)
+job.commit()
+
+glue_client = boto3.client(&#39;glue&#39;, region_name=&#39;us-east-1&#39;)
+glue_client.start_crawler(Name=&#39;kawase&#39;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Glueのロールで読める場所にアップロードする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws s3 cp main.py s3://aws-glue-scripts-*****/root/main.py
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ジョブとクローラの作成&#34;&gt;ジョブとクローラの作成&lt;/h2&gt;
+
+&lt;p&gt;ジョブを作成する。デフォルトで10DPU使うようになっているので調整する。&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/monitor-continuations.html&#34;&gt;ブックマーク&lt;/a&gt;を有効にすると以前処理したデータは処理しないようにできるが、残念ながらParquetは対応していないため2回実行すると重複して出力されてしまう。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/203-1.png&#34; alt=&#34;ジョブの作成&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;クローラはデータをクローリングしてデータカタログの指定のデータベースにスキーマやパーティションといったメタデータテーブルを作成する。
+以前、LambdaでAthenaのスキーマを管理したりパーティションを切ったりするバッチを作ったが、Glueのデータカタログ上で同じことをやってくれる。
+楽だけど現状DPUの設定項目がないのでデータが多くて時間がかかる場合はどうしようもなさそう。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/145/&#34;&gt;Athenaのmigrationやpartitionするathena-adminを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;ジョブの実行&#34;&gt;ジョブの実行&lt;/h2&gt;
+
+&lt;p&gt;トリガーを設定して定期的に実行することもできるが、今回は手動で実行する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws glue start-job-run --job-name kawase
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;パーティションごとにParquetが出力されている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/203-3.png&#34; alt=&#34;パーティションごとのディレクトリ&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;また、クローラの実行が終わるとデータカタログにテーブルが追加される。&lt;/p&gt;
+
+&lt;h2 id=&#34;athenaで参照&#34;&gt;Athenaで参照&lt;/h2&gt;
+
+&lt;p&gt;AthenaをGlueリリース以前から使っていた場合はデータカタログをGlueのものに&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/athena/latest/ug/glue-upgrade.html&#34;&gt;アップグレード&lt;/a&gt;する必要がある。
+Athenaのところにリンクが出るので押しとけばIAMロールの更新など大体やってくれる。
+これによってDatabaseにGlueのものが出るようになりクエリも実行できるようになる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/203-4.png&#34; alt=&#34;Athenaからの参照&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -41,11 +209,11 @@
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/202-3.png&#34; alt=&#34;行動価値関数Q&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;前もってランダムに行動と結果をサンプリングし学習の際に使う、ER(Experience Replay)というテクニックが使われる。
+&lt;p&gt;前もってランダムに行動と結果をサンプリングしておき学習の際に使う、ER(Experience Replay)というテクニックが使われる。
 これによって実行回数が減るだけではなく、時系列的な相関を減らし効率的に学習させることができる。&lt;/p&gt;
 
 &lt;p&gt;またmain-networkとは別に、同じ形式のtarget-networkを作ってQ(s&amp;rsquo;=s_{t+1}, a)の値を出すのに使う。
-target-networkのパラメータはmain-networkのものを定期的に同期させる以外では更新しない。これによって学習を安定させることができる。
+target-networkのパラメータはmain-networkのものを定期的に同期させる以外では更新しないことで学習を安定させることができる。
 これをFixed Target Q-Networkという。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/202-4.png&#34; alt=&#34;DQN&#34; /&gt;&lt;/p&gt;
@@ -284,6 +452,9 @@ optimizerは&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/contri
     return tf.contrib.tpu.TPUEstimatorSpec(
         mode=mode,
         loss=loss,
+        predictions={
+            &#39;pred&#39;: tf.argmax(logits, axis=1)
+        },
         train_op=optimizer.minimize(loss, tf.train.get_or_create_global_step()))
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -308,6 +479,7 @@ classifier = tf.contrib.tpu.TPUEstimator(
     params={},
     train_batch_size=BATCH_SIZE,
     eval_batch_size=EVAL_BATCH_SIZE,
+    predict_batch_size=BATCH_SIZE,
     use_tpu=FLAGS.use_tpu)
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -339,8 +511,7 @@ import colab_utils.tboard
 
 # set paths
 ROOT = %pwd
-LOG_DIR = os.path.join(ROOT, &#39;model&#39;)
-colab_utils.tboard.launch_tensorboard(bin_dir=ROOT, log_dir=LOG_DIR)
+colab_utils.tboard.launch_tensorboard(bin_dir=ROOT, log_dir=MODEL_DIR)
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;結果&#34;&gt;結果&lt;/h2&gt;
@@ -1378,7 +1549,8 @@ BenchmarkFastJSONParse-4           	 5000000	       373 ns/op
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/133/&#34;&gt;ニューラルネットワークと活性化関数 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;各層の最適なWとbを探すのにロジスティック回帰と同様に勾配降下法を使うことができる。
-誤差関数は分類の場合は交差エントロピーが、回帰の場合は平均二乗誤差(MSE, Mean Squared Error)が使われる。&lt;/p&gt;
+誤差関数は分類の場合は交差エントロピーが、回帰の場合は平均二乗誤差(MSE, Mean Squared Error)
+または外れ値に引っ張られづらくしたHuber損失などが使われる。&lt;/p&gt;
 
 &lt;p&gt;隠れ層の勾配はそれより後ろの層での演算が影響するので、入力から出力への順伝搬に対して
 出力から入力への逆伝播で誤差の情報を前の層に伝播させていく。これを誤差逆伝播法(Backpropagation)という。&lt;/p&gt;
@@ -5683,6 +5855,16 @@ print(df.apply(
 ).values) # [ 1.  4.  9.] (=df.max())
 &lt;/code&gt;&lt;/pre&gt;
 
+&lt;p&gt;groupbyもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;df3 = pd.DataFrame({
+    &#39;A&#39; : [0, 1, 0, 0, 1],
+    &#39;B&#39; : [2, 2, 2, 4, 4],
+	&#39;C&#39; : [2, 4, 6, 8, 10]
+})
+print(df3.groupby([&#39;A&#39;, &#39;B&#39;])[&#39;C&#39;].sum()[0, 2]) # 2 + 6 = 8
+&lt;/code&gt;&lt;/pre&gt;
+
 &lt;h2 id=&#34;加工&#34;&gt;加工&lt;/h2&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/166/&#34;&gt;KaggleのTitanicのチュートリアルをランダムフォレストで解く - sambaiz-net&lt;/a&gt;&lt;/p&gt;
@@ -6817,6 +6999,12 @@ python3 --version
 sudo python get-pip.py
 rm get-pip.py
 pip --version
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;java-scala&#34;&gt;Java &amp;amp; Scala&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;brew cask install java
+brew install scala sbt
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;aws-https-docs-aws-amazon-com-ja-jp-cli-latest-userguide-installing-html&#34;&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/cli/latest/userguide/installing.html&#34;&gt;AWS&lt;/a&gt;&lt;/h2&gt;
@@ -9328,6 +9516,10 @@ await admin.replaceObjects();
 await admin.migrate();
 await admin.partition();
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;追記 (2019-01-01): AWS Glueを使っても同じことができる &lt;a href=&#34;https://www.sambaiz.net/article/203/&#34;&gt;AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
 </description>
         </item>
       
