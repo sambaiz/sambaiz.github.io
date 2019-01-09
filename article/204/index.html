@@ -22,17 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Articles - sambaiz-net</title>
-  <meta name="twitter:title" content="Articles - sambaiz-net">
-  <meta property='og:title' content="Articles - sambaiz-net">
+  <title>AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net</title>
+  <meta name="twitter:title" content="AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net">
+  <meta property='og:title' content="AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="認証情報を置いてGoやServerless Frameworkで参照する">
+  <meta name="twitter:description" content="認証情報を置いてGoやServerless Frameworkで参照する">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/204/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https://www.sambaiz.net/"
+    },
+    "headline": "AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する | sambaiz-net ",
+    "datePublished": "2019-01-07T23:50:00JST",
+    "dateModified": "2019-01-07T23:50:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "認証情報を置いてGoやServerless Frameworkで参照する"
+  }
+</script>
 </head>
 
 <body>
@@ -85,86 +123,115 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">Articles</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する</h1>
+          <p>(2019-01-07)</p>
+          
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/4/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-04</time>
-      </div>
-      <p class="article title">MySQLのUNIX_TIMESTAMPにある程度未来の日付を渡すと0になる</p>
-    </div>
-  </article>
-</a>
+<p>DBのパスワードやAPIトークンといった認証情報をバージョン管理するコードや設定ファイル上に書くとOSS化など公開範囲を広げるときにやや困るし漏れるリスクが高まるのでなるべく避けたい。
+そこでSSMのParameter Storeに値を置き、実行時やデプロイ時に参照する。</p>
+
+<h2 id="ssmのparameter-storeとsecrets-manager">SSMのParameter StoreとSecrets Manager</h2>
+
+<p><a href="https://aws.amazon.com/jp/systems-manager/">Systems Manager (SSM)</a>はAWSのリソースを可視化したり操作を自動化したりするサービス群で、
+設定を持つ<a href="https://aws.amazon.com/jp/systems-manager/features/">Parameter Store</a>はその一つ。値は暗号化して持つこともできる。
+<a href="https://aws.amazon.com/jp/systems-manager/pricing/">料金</a>はかからない。</p>
+
+<p>SSMのParameter Storeと似たような別のAWSのサービスに
+<a href="https://aws.amazon.com/jp/secrets-manager/">Secrets Manager</a>というのがあって、
+こちらはLambdaによって定期的に新しい値を生成しローテーションさせることができる。特にRDSなら自前の関数を用意する必要もない。
+ただし<a href="https://aws.amazon.com/jp/secrets-manager/pricing/">料金</a>がシークレットの件数($0.4/月)とAPIコール($0.05/10000回)でかかる。</p>
+
+<p>今はParamter StoreとSecrets Managerが<a href="https://aws.amazon.com/jp/about-aws/whats-new/2018/07/aws-systems-manager-parameter-store-integrates-with-aws-secrets-manager-and-adds-parameter-version-labeling/">統合されていて</a>、Parameter StoreのAPIでどちらも参照できるようだ。
+今回はローテーションしないので単純に料金がかからないParameter Storeの方に書き込むことにする。
+ただし、Parameter Storeは現状一度に大量のリクエストが飛ぶような使い方をするとRate exceededに<a href="https://forums.aws.amazon.com/thread.jspa?messageID=834134&amp;tstart=0">なってしまう</a>問題がある。</p>
+
+<h2 id="実行時の値取得">実行時の値取得</h2>
+
+<p>実行時に値を取得するのはこんな感じ。</p>
+
+<pre><code>package main
+
+import (
+	&quot;fmt&quot;
+
+	&quot;github.com/aws/aws-sdk-go/aws&quot;
+	&quot;github.com/aws/aws-sdk-go/aws/awserr&quot;
+	&quot;github.com/aws/aws-sdk-go/aws/session&quot;
+	&quot;github.com/aws/aws-sdk-go/service/ssm&quot;
+)
+
+type Parameter struct {
+	ssm *ssm.SSM
+}
+
+func newParameter(sess *session.Session) *Parameter {
+	return &amp;Parameter{
+		ssm: ssm.New(sess),
+	}
+}
+
+func (s *Parameter) Get(name string, decrypt bool) (string, error) {
+	param, err := s.ssm.GetParameter(&amp;ssm.GetParameterInput{
+		Name:           aws.String(name),
+		WithDecryption: aws.Bool(decrypt),
+	})
+	if err != nil {
+		return &quot;&quot;, err
+	}
+	var secret string
+	if param.Parameter.Value != nil {
+		secret = *param.Parameter.Value
+	}
+	return secret, nil
+}
+
+func main() {
+	secret := newParameter(session.New())
+	param, err := secret.Get(&quot;test&quot;, true)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(param) // =&gt; ok
+
+	param, err = secret.Get(&quot;notfound&quot;, true)
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			fmt.Println(awsErr.Code()) // =&gt; ParameterNotFound
+		}
+	}
+}
+</code></pre>
+
+<pre><code>$ AWS_SDK_LOAD_CONFIG=1 AWS_PROFILE=**** go run main.go
+</code></pre>
+
+<h2 id="serverless-framework">Serverless Framework</h2>
+
+<p>Serverless Frameworkの設定ファイルserverless.ymlでもSSMを<a href="https://serverless.com/framework/docs/providers/aws/guide/variables/#reference-variables-using-the-ssm-parameter-store">参照でき</a>、デプロイ時に解決される。</p>
+
+<p><a href="https://www.sambaiz.net/article/155/">Serverless FrameworkでLambdaをデプロイする - sambaiz-net</a></p>
+
+<pre><code>provider:
+  name: aws
+  ...
+  environment:
+    SECRET: ${ssm:test~true}
+</code></pre>
+
+<h2 id="参考">参考</h2>
+
+<p><a href="https://qiita.com/tomoya_oka/items/a3dd44879eea0d1e3ef5">AWSのParameter StoreとSecrets Manager、結局どちらを使えばいいのか？比較 - Qiita</a></p>
 
         </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/3/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-03</time>
-      </div>
-      <p class="article title">TensorFlow チュートリアルまで</p>
+      </article>
     </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/2/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-02</time>
-      </div>
-      <p class="article title">Reactで作ったページにTwitterCardsとOGPのメタデータを埋める</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/1/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-06-29</time>
-      </div>
-      <p class="article title">ブログを作った</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-      </div>
-
-      
-<nav class="paging">
-  
-  <a href="/article/page/2" rel="nofollow" class="prev">PREV</a>
-  
-
-  
-</nav>
-
-
-
-    </div>
-
   </div>
-
 </div>
 
 </div> 
