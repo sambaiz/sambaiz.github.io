@@ -6,8 +6,263 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-01-07 23:50:00 &#43;0900 JST</updated>
+    <updated>2019-01-19 23:35:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>PyTorchでMNISTする</title>
+          <link>https://www.sambaiz.net/article/205/</link>
+          <pubDate>Sat, 19 Jan 2019 23:35:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/205/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://pytorch.org/&#34;&gt;PyTorch&lt;/a&gt;はFacebookによるOSSの機械学習フレームワーク。
+TensorFlow(v1)よりも簡単に使うことができる。
+TensorFlow 2.0ではPyTorchのようにDefine-by-runなeager executionがデフォルトになるのに加え、パッケージも整理されるようなのでいくらか近くなると思われる。&lt;/p&gt;
+
+&lt;h2 id=&#34;使い方&#34;&gt;使い方&lt;/h2&gt;
+
+&lt;h3 id=&#34;インストール&#34;&gt;インストール&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://colab.research.google.com/&#34;&gt;Colab&lt;/a&gt;で動かす。まずpipで&lt;a href=&#34;https://pytorch.org/get-started/locally/&#34;&gt;インストール&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;!pip install torch torchvision
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;autograd-https-pytorch-org-tutorials-beginner-blitz-autograd-tutorial-html-自動微分&#34;&gt;&lt;a href=&#34;https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html&#34;&gt;autograd&lt;/a&gt;(自動微分)&lt;/h3&gt;
+
+&lt;p&gt;Tensorは自身が作成された関数の参照&lt;code&gt;.grad_fn&lt;/code&gt;を持ち、backward()が呼ばれるとbackpropして&lt;code&gt;requires_grad=True&lt;/code&gt;なTensorの勾配を自動で計算し&lt;code&gt;.grad&lt;/code&gt;に入れてくれる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/192/&#34;&gt;MLPと誤差逆伝搬法(Backpropagation) - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import torch
+x = torch.randn(4, 4)
+y = torch.randn(4, 1)
+w = torch.randn(4, 1, requires_grad=True)
+b = torch.randn(1, requires_grad=True)
+y_pred = torch.matmul(x, w) + b
+loss = (y_pred - y).pow(2).sum()
+
+print(x.grad, w.grad) # None None 
+loss.backward()
+print(x.grad, w.grad) # None tensor([...])
+
+with torch.no_grad():
+    y_eval = torch.matmul(x, w) + b
+print(y_eval.requires_grad) # False
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;module&#34;&gt;Module&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://pytorch.org/docs/stable/nn.html&#34;&gt;nn&lt;/a&gt;パッケージにLinearやConv2dといった&lt;a href=&#34;https://pytorch.org/docs/stable/nn.html#torch.nn.Module&#34;&gt;Module&lt;/a&gt;が実装されていて、次のように呼び出すとforward()が
+&lt;a href=&#34;https://github.com/pytorch/pytorch/blob/v1.0.0/torch/nn/modules/module.py#L489&#34;&gt;呼ばれ&lt;/a&gt;順伝播する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;model = nn.Sequential(
+    nn.Conv2d(1,20,5),
+    nn.ReLU(),
+    nn.Conv2d(20,64,5),
+    nn.ReLU()
+)
+y = model(x)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;nn.Moduleを継承すれば自分でModuleを作ることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+       x = F.relu(self.conv1(x))
+       return F.relu(self.conv2(x))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;train()とeval()で学習/推論のモードが切り替わり
+&lt;a href=&#34;https://pytorch.org/docs/stable/nn.html#torch.nn.Dropout&#34;&gt;Dropout&lt;/a&gt;などの挙動に影響する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;model.train() 
+model.eval()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;optimizer&#34;&gt;Optimizer&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://pytorch.org/docs/stable/optim.html&#34;&gt;optim&lt;/a&gt;パッケージにOptimizerが実装されていて、step()で勾配をもとにパラメータが更新される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum=0.9)
+for input, target in dataset:
+    optimizer.zero_grad()
+    output = model(input)
+    loss = loss_fn(output, target)
+    loss.backward()
+    optimizer.step()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;save-load-https-pytorch-org-tutorials-beginner-saving-loading-models-html&#34;&gt;&lt;a href=&#34;https://pytorch.org/tutorials/beginner/saving_loading_models.html&#34;&gt;Save/Load&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;学習したモデルのパラメータをSave/Loadする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;torch.save(model.state_dict(), PATH)
+model.load_state_dict(torch.load(PATH))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;torchvision-https-pytorch-org-docs-stable-torchvision-index-html&#34;&gt;&lt;a href=&#34;https://pytorch.org/docs/stable/torchvision/index.html&#34;&gt;torchvision&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset&#34;&gt;Dataset&lt;/a&gt;やモデルが含まれるパッケージ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import torchvision
+dataset_train = torchvision.datasets.MNIST(&#39;~/mnist&#39;, train=True, download=True)
+!ls ~/mnist/processed # =&amp;gt; test.pt  training.pt
+
+%matplotlib inline
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+plt.imshow(np.asarray(dataset_train[0][0]))
+print(dataset_train[0][1]) # tensor(5)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/205.png&#34; alt=&#34;MNIST Datasetの内容&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Datasetを&lt;a href=&#34;https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader&#34;&gt;DataLoader&lt;/a&gt;
+に渡してやるとシャッフルなどしてイテレーションしてくれるが、MNISTのデータはPIL Imageで入っているのでそのまま渡すと
+&lt;code&gt;TypeError: batch must contain tensors, numbers, dicts or lists; found &amp;lt;class &#39;PIL.Image.Image&#39;&amp;gt;&lt;/code&gt;のエラーになる。
+そこで&lt;a href=&#34;https://pytorch.org/docs/stable/torchvision/transforms.html#torchvision.transforms.ToTensor&#34;&gt;transforms.ToTesnor()&lt;/a&gt;でTensorに変換してやる必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import torch
+import torchvision
+dataset_train = torchvision.datasets.MNIST(&#39;~/mnist&#39;, train=True, download=True, transform=torchvision.transforms.ToTensor())
+dataloader_train = torch.utils.data.DataLoader(dataset_train,
+                                          batch_size=4,
+                                          shuffle=True,
+                                          num_workers=0)
+for x, t in dataloader_train:
+    print(x.shape, t.shape) # torch.Size([4, 1, 28, 28]) torch.Size([4])
+    break
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;gpuを使う&#34;&gt;GPUを使う&lt;/h3&gt;
+
+&lt;p&gt;GPUで計算させるには&lt;a href=&#34;https://pytorch.org/docs/stable/tensors.html#torch.Tensor.to&#34;&gt;to()&lt;/a&gt;でdeviceを明示する必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;device = torch.device(&amp;quot;cuda&amp;quot; if torch.cuda.is_available() else &amp;quot;cpu&amp;quot;)
+model.to(device)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;mnistのモデル作成&#34;&gt;MNISTのモデル作成&lt;/h2&gt;
+
+&lt;p&gt;MNISTのモデルを作りtorchvisionのDatasetで学習させてみる。&lt;/p&gt;
+
+&lt;h3 id=&#34;dataset&#34;&gt;Dataset&lt;/h3&gt;
+
+&lt;p&gt;まずDatasetを準備する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from torchvision import datasets, transforms, models
+from torch import nn, optim, utils, device as device_, cuda
+import torch.nn.functional as F
+import numpy as np
+from sklearn import metrics
+
+dataset_train = datasets.MNIST(
+    &#39;~/mnist&#39;, 
+    train=True, 
+    download=True, 
+    transform=transforms.ToTensor())
+dataset_valid = datasets.MNIST(
+    &#39;~/mnist&#39;, 
+    train=False, 
+    download=True, 
+    transform=transforms.ToTensor())
+
+dataloader_train = utils.data.DataLoader(dataset_train,
+                                          batch_size=1000,
+                                          shuffle=True,
+                                          num_workers=4)
+dataloader_valid = utils.data.DataLoader(dataset_valid,
+                                          batch_size=1000,
+                                          shuffle=True,
+                                          num_workers=4)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;モデル&#34;&gt;モデル&lt;/h3&gt;
+
+&lt;p&gt;モデルとOptimizer、損失関数。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;lr = 0.01
+
+device = device_(&amp;quot;cuda&amp;quot; if cuda.is_available() else &amp;quot;cpu&amp;quot;)
+
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.conv1 = nn.Conv2d(1, 64, 5) # -&amp;gt; 24x24
+        self.pool1 = nn.MaxPool2d(2) # -&amp;gt; 12x12
+        self.conv2 = nn.Conv2d(64, 128, 5) # -&amp;gt; 8x8
+        self.dropout = nn.Dropout(p=0.4)
+        self.dense = nn.Linear(128 * 8 * 8, 10)
+
+    def forward(self, x):
+       x = F.relu(self.conv1(x))
+       x = self.pool1(x)
+       x = F.relu(self.conv2(x))
+       x = self.dropout(x)
+       x = x.view(x.size(0), -1) # Flatten
+       return F.relu(self.dense(x))
+    
+model = Model().to(device)
+optimizer = optim.SGD(model.parameters(), lr=lr)
+criterion = nn.CrossEntropyLoss()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;学習&#34;&gt;学習&lt;/h3&gt;
+
+&lt;p&gt;trainモードにして学習していく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;model.train()
+for i in range(20):
+  print(i)
+  for x, t in dataloader_train:
+      x = x.to(device)
+      t = t.to(device)
+      model.zero_grad()
+      y = model(x)
+      loss = criterion(y, t)
+      loss.backward()
+      optimizer.step()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;評価&#34;&gt;評価&lt;/h3&gt;
+
+&lt;p&gt;evalモードにしてテストする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;model.eval()
+labels = []
+preds = []
+losses = []
+for x, t in dataloader_valid:
+    x = x.to(device)
+    t = t.to(device)
+    labels.extend(t.tolist())
+    y = model(x)
+    loss = criterion(y, t)
+    losses.append(loss.cpu().data)
+    pred = y.argmax(1)
+    preds.extend(pred.tolist())
+print(&#39;Loss: {:.3f}, Accuracy: {:.3f}&#39;.format(
+    np.mean(losses),
+    metrics.accuracy_score(labels, preds, normalize=True)
+))
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -131,10 +386,70 @@ func main() {
 &lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/glue/pricing/&#34;&gt;料金&lt;/a&gt;はジョブがDPU(4vCPU/16GBメモリ)時間あたり$0.44(最低2DPU/10分)かかる。
 また、クローラも同様にDPUで課金される。&lt;/p&gt;
 
-&lt;h2 id=&#34;ジョブのスクリプトのアップロード&#34;&gt;ジョブのスクリプトのアップロード&lt;/h2&gt;
+&lt;h2 id=&#34;開発用エンドポイント&#34;&gt;開発用エンドポイント&lt;/h2&gt;
 
-&lt;p&gt;スクリプトをS3に上げる。
-GlueはSpark標準のDataFrameを扱うこともできるが、独自にスキーマを柔軟に扱える&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html&#34;&gt;DynamicFrame&lt;/a&gt;というのをサポートしている。DataFrameとは相互に変換できるので、SQL文の実行などDataFrameにしかないAPIを使いたい場合は変換する。&lt;/p&gt;
+&lt;p&gt;ジョブの立ち上がりにやや時間がかかるため開発用エンドポイントを立ち上げておくとDPUが確保されて効率よく開発できる。
+立ち上げている間のDPUの料金がかかる。つまりずっとジョブを実行し続けているようなもので結構高くつくので終わったら閉じるようにしたい。&lt;/p&gt;
+
+&lt;p&gt;ローカルやEC2から自分で開発用エンドポイントにsshして&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/dev-endpoint-tutorial-local-notebook.html&#34;&gt;Notebookを立てる&lt;/a&gt;こともできるが、
+コンソールから立ち上げたNotebookは最初からつながっていて鍵の登録も必要なくて楽。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ssh -i private-key-file-path -NTL 9007:169.254.76.1:9007 glue@dev-endpoint-public-dns
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;NotebookのインスタンスのIAMロールを作成するとCloudwatch Logsまわりに加えてGlueのDevEndpointとAssetの取得権限が付与されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;Action&amp;quot;: [
+    &amp;quot;s3:ListBucket&amp;quot;
+  ],
+  &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;,
+  &amp;quot;Resource&amp;quot;: [
+    &amp;quot;arn:aws:s3:::aws-glue-jes-prod-us-east-1-assets&amp;quot;
+  ]
+}
+{
+  &amp;quot;Action&amp;quot;: [
+    &amp;quot;s3:GetObject&amp;quot;
+  ],
+  &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;,
+  &amp;quot;Resource&amp;quot;: [
+    &amp;quot;arn:aws:s3:::aws-glue-jes-prod-us-east-1-assets*&amp;quot;
+  ]
+}
+{
+  &amp;quot;Action&amp;quot;: [
+    &amp;quot;glue:UpdateDevEndpoint&amp;quot;,
+    &amp;quot;glue:GetDevEndpoint&amp;quot;,
+    &amp;quot;glue:GetDevEndpoints&amp;quot;
+  ],
+  &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;,
+  &amp;quot;Resource&amp;quot;: [
+    &amp;quot;arn:aws:glue:us-east-1:*****:devEndpoint/test*&amp;quot;
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;たまに立ち上げに失敗したり次のようなエラーで実行できないことがあったが、立ち上げ直したらうまくいった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;The code failed because of a fatal error:
+	Error sending http request and maximum retry encountered..
+
+Some things to try:
+a) Make sure Spark has enough available resources for Jupyter to create a Spark context.
+b) Contact your Jupyter administrator to make sure the Spark magics library is configured correctly.
+c) Restart the kernel.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;printデバッグが捗る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;...
+print(output_df.toDF().collect()[0].asDict())
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ジョブのスクリプト&#34;&gt;ジョブのスクリプト&lt;/h2&gt;
+
+&lt;p&gt;GlueはSpark標準のDataFrameを扱うこともできるが、独自にスキーマを柔軟に扱える&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html&#34;&gt;DynamicFrame&lt;/a&gt;というのをサポートしている。DataFrameとは相互に変換できるので、SQL文の実行などDataFrameにしかないAPIを使いたい場合は変換する。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;data_frame = dynamc_frame.toDF()
 data_frame.toDF().createOrReplaceTempView(&#39;t1&#39;)
@@ -16013,7 +16328,7 @@ void characteristicChanged(
 &lt;h2 id=&#34;combinelatest-http-reactivex-io-rxjs-class-es6-observable-js-observable-html-static-method-combinelatest&#34;&gt;&lt;a href=&#34;http://reactivex.io/rxjs/class/es6/Observable.js~Observable.html#static-method-combineLatest&#34;&gt;combineLatest&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;stream自体を結合するのではなく値を結合する。
-この例だと、streamでemitされた値がa、stream2で最後のemitされた値がbになる。
+この例だと、stream1でemitされた値がa、stream2で最後にemitされた値がbのとき&lt;code&gt;a+b&lt;/code&gt;をemitする。
 combineする値がない場合はemitされない。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;stream1.combineLatest(stream2, (a, b) =&amp;gt; a + b).subscribe(

@@ -33,11 +33,11 @@ package main import ( &amp;quot;fmt&amp;quot; &amp;quot;github.com/aws/aws-sdk-g
       <guid>https://www.sambaiz.net/article/203/</guid>
       <description>AWS GlueはマネージドなETL(Extract/Transform/Load)サービスで、Sparkを使ってS3などにあるデータを読み込み加工して変換出力したり、AthenaやRedshift Spectrumで参照できるデータカタログを提供する。 今回はS3のCSVを読み込んで加工し、列指向フォーマットParquetに変換しパーティションを切って出力、その後クローラを回してデータカタログにテーブルを作成してAthenaで参照できることを確認する。
 料金はジョブがDPU(4vCPU/16GBメモリ)時間あたり$0.44(最低2DPU/10分)かかる。 また、クローラも同様にDPUで課金される。
-ジョブのスクリプトのアップロード スクリプトをS3に上げる。 GlueはSpark標準のDataFrameを扱うこともできるが、独自にスキーマを柔軟に扱えるDynamicFrameというのをサポートしている。DataFrameとは相互に変換できるので、SQL文の実行などDataFrameにしかないAPIを使いたい場合は変換する。
-data_frame = dynamc_frame.toDF() data_frame.toDF().createOrReplaceTempView(&#39;t1&#39;) data_frame2 = spark.sql(&#39;SELECT * FROM t1&#39;)  入力は為替データのCSV。
-$ less kawase1.csv Date,USD,GBP,EUR,CAD,CHF,SEK,DKK,NOK,AUD,NZD 2002/4/1,133.15,189.79,116.12,83.48,79.28,12.87,15.63,15.08,71.14,58.8 ... $ less kawase2.csv Date,ZAR,BHD,HKD,INR,PHP,SGD,THB,KWD,SAR,AED,MXN,TWD 2002/4/1,11.76,353.65,17.07,2.73,2.61,72.21,3.07,434.14,35.52,36.26,14.81,3.82 ...  やることは次の通り。
- create_dynamic_frame.from_options()でS3のCSVを読んでDynamicFrameを生成 Dateでjoin() apply_mapping()でフィールド名と型をマッピングする map()でDateをyear, month, dateの3フィールドに分割、各値をUSDとの比にする create_dynamic_frame.from_options()でパーティションをyearで切ってフォーマットはParquetで書き込む クローラの実行を開始する  transformation_ctxは後述するジョブのブックマークで使われる一意な識別子。
-import sys import datetime import boto3 from awsglue.utils import getResolvedOptions from pyspark.context import SparkContext from awsglue.context import GlueContext from awsglue.job import Job args = getResolvedOptions(sys.</description>
+開発用エンドポイント ジョブの立ち上がりにやや時間がかかるため開発用エンドポイントを立ち上げておくとDPUが確保されて効率よく開発できる。 立ち上げている間のDPUの料金がかかる。つまりずっとジョブを実行し続けているようなもので結構高くつくので終わったら閉じるようにしたい。
+ローカルやEC2から自分で開発用エンドポイントにsshしてNotebookを立てることもできるが、 コンソールから立ち上げたNotebookは最初からつながっていて鍵の登録も必要なくて楽。
+ssh -i private-key-file-path -NTL 9007:169.254.76.1:9007 glue@dev-endpoint-public-dns  NotebookのインスタンスのIAMロールを作成するとCloudwatch Logsまわりに加えてGlueのDevEndpointとAssetの取得権限が付与されている。
+{ &amp;quot;Action&amp;quot;: [ &amp;quot;s3:ListBucket&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:s3:::aws-glue-jes-prod-us-east-1-assets&amp;quot; ] } { &amp;quot;Action&amp;quot;: [ &amp;quot;s3:GetObject&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:s3:::aws-glue-jes-prod-us-east-1-assets*&amp;quot; ] } { &amp;quot;Action&amp;quot;: [ &amp;quot;glue:UpdateDevEndpoint&amp;quot;, &amp;quot;glue:GetDevEndpoint&amp;quot;, &amp;quot;glue:GetDevEndpoints&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:glue:us-east-1:*****:devEndpoint/test*&amp;quot; ] }  たまに立ち上げに失敗したり次のようなエラーで実行できないことがあったが、立ち上げ直したらうまくいった。
+The code failed because of a fatal error: Error sending http request and maximum retry encountered.</description>
     </item>
     
     <item>

@@ -22,9 +22,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net</title>
-  <meta name="twitter:title" content="AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net">
-  <meta property='og:title' content="AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net">
+  <title>PyTorchでMNISTする - sambaiz-net</title>
+  <meta name="twitter:title" content="PyTorchでMNISTする - sambaiz-net">
+  <meta property='og:title' content="PyTorchでMNISTする - sambaiz-net">
   <meta property="og:type" content="article">
   
   <meta name="description" content="認証情報を置いてGoやServerless Frameworkで参照する">
@@ -32,7 +32,7 @@
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/204/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/205/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する | sambaiz-net ",
-    "datePublished": "2019-01-07T23:50:00JST",
-    "dateModified": "2019-01-07T23:50:00JST",
+    "headline": "PyTorchでMNISTする | sambaiz-net ",
+    "datePublished": "2019-01-19T23:35:00JST",
+    "dateModified": "2019-01-19T23:35:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -129,104 +129,252 @@
 
       <article class="single">
         <div class="single body">
-          <h1>AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する</h1>
-          <p>(2019-01-07)</p>
+          <h1>PyTorchでMNISTする</h1>
+          <p>(2019-01-19)</p>
           
 
-<p>DBのパスワードやAPIトークンといった認証情報をバージョン管理するコードや設定ファイル上に書くとOSS化など公開範囲を広げるときにやや困るし漏れるリスクが高まるのでなるべく避けたい。
-そこでSSMのParameter Storeに値を置き、実行時やデプロイ時に参照する。</p>
+<p><a href="https://pytorch.org/">PyTorch</a>はFacebookによるOSSの機械学習フレームワーク。
+TensorFlow(v1)よりも簡単に使うことができる。
+TensorFlow 2.0ではPyTorchのようにDefine-by-runなeager executionがデフォルトになるのに加え、パッケージも整理されるようなのでいくらか近くなると思われる。</p>
 
-<h2 id="ssmのparameter-storeとsecrets-manager">SSMのParameter StoreとSecrets Manager</h2>
+<h2 id="使い方">使い方</h2>
 
-<p><a href="https://aws.amazon.com/jp/systems-manager/">Systems Manager (SSM)</a>はAWSのリソースを可視化したり操作を自動化したりするサービス群で、
-設定を持つ<a href="https://aws.amazon.com/jp/systems-manager/features/">Parameter Store</a>はその一つ。値は暗号化して持つこともできる。
-<a href="https://aws.amazon.com/jp/systems-manager/pricing/">料金</a>はかからない。</p>
+<h3 id="インストール">インストール</h3>
 
-<p>SSMのParameter Storeと似たような別のAWSのサービスに
-<a href="https://aws.amazon.com/jp/secrets-manager/">Secrets Manager</a>というのがあって、
-こちらはLambdaによって定期的に新しい値を生成しローテーションさせることができる。特にRDSなら自前の関数を用意する必要もない。
-ただし<a href="https://aws.amazon.com/jp/secrets-manager/pricing/">料金</a>がシークレットの件数($0.4/月)とAPIコール($0.05/10000回)でかかる。</p>
+<p><a href="https://colab.research.google.com/">Colab</a>で動かす。まずpipで<a href="https://pytorch.org/get-started/locally/">インストール</a>。</p>
 
-<p>今はParamter StoreとSecrets Managerが<a href="https://aws.amazon.com/jp/about-aws/whats-new/2018/07/aws-systems-manager-parameter-store-integrates-with-aws-secrets-manager-and-adds-parameter-version-labeling/">統合されていて</a>、Parameter StoreのAPIでどちらも参照できるようだ。
-今回はローテーションしないので単純に料金がかからないParameter Storeの方に書き込むことにする。
-ただし、Parameter Storeは現状一度に大量のリクエストが飛ぶような使い方をするとRate exceededに<a href="https://forums.aws.amazon.com/thread.jspa?messageID=834134&amp;tstart=0">なってしまう</a>問題がある。</p>
+<pre><code>!pip install torch torchvision
+</code></pre>
 
-<h2 id="実行時の値取得">実行時の値取得</h2>
+<h3 id="autograd-https-pytorch-org-tutorials-beginner-blitz-autograd-tutorial-html-自動微分"><a href="https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html">autograd</a>(自動微分)</h3>
 
-<p>実行時に値を取得するのはこんな感じ。</p>
+<p>Tensorは自身が作成された関数の参照<code>.grad_fn</code>を持ち、backward()が呼ばれるとbackpropして<code>requires_grad=True</code>なTensorの勾配を自動で計算し<code>.grad</code>に入れてくれる。</p>
 
-<pre><code>package main
+<p><a href="https://www.sambaiz.net/article/192/">MLPと誤差逆伝搬法(Backpropagation) - sambaiz-net</a></p>
 
-import (
-	&quot;fmt&quot;
+<pre><code>import torch
+x = torch.randn(4, 4)
+y = torch.randn(4, 1)
+w = torch.randn(4, 1, requires_grad=True)
+b = torch.randn(1, requires_grad=True)
+y_pred = torch.matmul(x, w) + b
+loss = (y_pred - y).pow(2).sum()
 
-	&quot;github.com/aws/aws-sdk-go/aws&quot;
-	&quot;github.com/aws/aws-sdk-go/aws/awserr&quot;
-	&quot;github.com/aws/aws-sdk-go/aws/session&quot;
-	&quot;github.com/aws/aws-sdk-go/service/ssm&quot;
+print(x.grad, w.grad) # None None 
+loss.backward()
+print(x.grad, w.grad) # None tensor([...])
+
+with torch.no_grad():
+    y_eval = torch.matmul(x, w) + b
+print(y_eval.requires_grad) # False
+</code></pre>
+
+<h3 id="module">Module</h3>
+
+<p><a href="https://pytorch.org/docs/stable/nn.html">nn</a>パッケージにLinearやConv2dといった<a href="https://pytorch.org/docs/stable/nn.html#torch.nn.Module">Module</a>が実装されていて、次のように呼び出すとforward()が
+<a href="https://github.com/pytorch/pytorch/blob/v1.0.0/torch/nn/modules/module.py#L489">呼ばれ</a>順伝播する。</p>
+
+<pre><code>model = nn.Sequential(
+    nn.Conv2d(1,20,5),
+    nn.ReLU(),
+    nn.Conv2d(20,64,5),
+    nn.ReLU()
 )
-
-type Parameter struct {
-	ssm *ssm.SSM
-}
-
-func newParameter(sess *session.Session) *Parameter {
-	return &amp;Parameter{
-		ssm: ssm.New(sess),
-	}
-}
-
-func (s *Parameter) Get(name string, decrypt bool) (string, error) {
-	param, err := s.ssm.GetParameter(&amp;ssm.GetParameterInput{
-		Name:           aws.String(name),
-		WithDecryption: aws.Bool(decrypt),
-	})
-	if err != nil {
-		return &quot;&quot;, err
-	}
-	var secret string
-	if param.Parameter.Value != nil {
-		secret = *param.Parameter.Value
-	}
-	return secret, nil
-}
-
-func main() {
-	secret := newParameter(session.New())
-	param, err := secret.Get(&quot;test&quot;, true)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(param) // =&gt; ok
-
-	param, err = secret.Get(&quot;notfound&quot;, true)
-	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			fmt.Println(awsErr.Code()) // =&gt; ParameterNotFound
-		}
-	}
-}
+y = model(x)
 </code></pre>
 
-<pre><code>$ AWS_SDK_LOAD_CONFIG=1 AWS_PROFILE=**** go run main.go
+<p>nn.Moduleを継承すれば自分でModuleを作ることもできる。</p>
+
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+       x = F.relu(self.conv1(x))
+       return F.relu(self.conv2(x))
 </code></pre>
 
-<h2 id="serverless-framework">Serverless Framework</h2>
+<p>train()とeval()で学習/推論のモードが切り替わり
+<a href="https://pytorch.org/docs/stable/nn.html#torch.nn.Dropout">Dropout</a>などの挙動に影響する。</p>
 
-<p>Serverless Frameworkの設定ファイルserverless.ymlでもSSMを<a href="https://serverless.com/framework/docs/providers/aws/guide/variables/#reference-variables-using-the-ssm-parameter-store">参照でき</a>、デプロイ時に解決される。</p>
-
-<p><a href="https://www.sambaiz.net/article/155/">Serverless FrameworkでLambdaをデプロイする - sambaiz-net</a></p>
-
-<pre><code>provider:
-  name: aws
-  ...
-  environment:
-    SECRET: ${ssm:test~true}
+<pre><code>model.train() 
+model.eval()
 </code></pre>
 
-<h2 id="参考">参考</h2>
+<h3 id="optimizer">Optimizer</h3>
 
-<p><a href="https://qiita.com/tomoya_oka/items/a3dd44879eea0d1e3ef5">AWSのParameter StoreとSecrets Manager、結局どちらを使えばいいのか？比較 - Qiita</a></p>
+<p><a href="https://pytorch.org/docs/stable/optim.html">optim</a>パッケージにOptimizerが実装されていて、step()で勾配をもとにパラメータが更新される。</p>
+
+<pre><code>optimizer = optim.SGD(model.parameters(), lr = 0.01, momentum=0.9)
+for input, target in dataset:
+    optimizer.zero_grad()
+    output = model(input)
+    loss = loss_fn(output, target)
+    loss.backward()
+    optimizer.step()
+</code></pre>
+
+<h3 id="save-load-https-pytorch-org-tutorials-beginner-saving-loading-models-html"><a href="https://pytorch.org/tutorials/beginner/saving_loading_models.html">Save/Load</a></h3>
+
+<p>学習したモデルのパラメータをSave/Loadする。</p>
+
+<pre><code>torch.save(model.state_dict(), PATH)
+model.load_state_dict(torch.load(PATH))
+</code></pre>
+
+<h3 id="torchvision-https-pytorch-org-docs-stable-torchvision-index-html"><a href="https://pytorch.org/docs/stable/torchvision/index.html">torchvision</a></h3>
+
+<p><a href="https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset">Dataset</a>やモデルが含まれるパッケージ。</p>
+
+<pre><code>import torchvision
+dataset_train = torchvision.datasets.MNIST('~/mnist', train=True, download=True)
+!ls ~/mnist/processed # =&gt; test.pt  training.pt
+
+%matplotlib inline
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+plt.imshow(np.asarray(dataset_train[0][0]))
+print(dataset_train[0][1]) # tensor(5)
+</code></pre>
+
+<p><img src="https://www.sambaiz.net/images/205.png" alt="MNIST Datasetの内容" /></p>
+
+<p>Datasetを<a href="https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader">DataLoader</a>
+に渡してやるとシャッフルなどしてイテレーションしてくれるが、MNISTのデータはPIL Imageで入っているのでそのまま渡すと
+<code>TypeError: batch must contain tensors, numbers, dicts or lists; found &lt;class 'PIL.Image.Image'&gt;</code>のエラーになる。
+そこで<a href="https://pytorch.org/docs/stable/torchvision/transforms.html#torchvision.transforms.ToTensor">transforms.ToTesnor()</a>でTensorに変換してやる必要がある。</p>
+
+<pre><code>import torch
+import torchvision
+dataset_train = torchvision.datasets.MNIST('~/mnist', train=True, download=True, transform=torchvision.transforms.ToTensor())
+dataloader_train = torch.utils.data.DataLoader(dataset_train,
+                                          batch_size=4,
+                                          shuffle=True,
+                                          num_workers=0)
+for x, t in dataloader_train:
+    print(x.shape, t.shape) # torch.Size([4, 1, 28, 28]) torch.Size([4])
+    break
+</code></pre>
+
+<h3 id="gpuを使う">GPUを使う</h3>
+
+<p>GPUで計算させるには<a href="https://pytorch.org/docs/stable/tensors.html#torch.Tensor.to">to()</a>でdeviceを明示する必要がある。</p>
+
+<pre><code>device = torch.device(&quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;)
+model.to(device)
+</code></pre>
+
+<h2 id="mnistのモデル作成">MNISTのモデル作成</h2>
+
+<p>MNISTのモデルを作りtorchvisionのDatasetで学習させてみる。</p>
+
+<h3 id="dataset">Dataset</h3>
+
+<p>まずDatasetを準備する。</p>
+
+<pre><code>from torchvision import datasets, transforms, models
+from torch import nn, optim, utils, device as device_, cuda
+import torch.nn.functional as F
+import numpy as np
+from sklearn import metrics
+
+dataset_train = datasets.MNIST(
+    '~/mnist', 
+    train=True, 
+    download=True, 
+    transform=transforms.ToTensor())
+dataset_valid = datasets.MNIST(
+    '~/mnist', 
+    train=False, 
+    download=True, 
+    transform=transforms.ToTensor())
+
+dataloader_train = utils.data.DataLoader(dataset_train,
+                                          batch_size=1000,
+                                          shuffle=True,
+                                          num_workers=4)
+dataloader_valid = utils.data.DataLoader(dataset_valid,
+                                          batch_size=1000,
+                                          shuffle=True,
+                                          num_workers=4)
+</code></pre>
+
+<h3 id="モデル">モデル</h3>
+
+<p>モデルとOptimizer、損失関数。</p>
+
+<pre><code>lr = 0.01
+
+device = device_(&quot;cuda&quot; if cuda.is_available() else &quot;cpu&quot;)
+
+class Model(nn.Module):
+    def __init__(self):
+        super(Model, self).__init__()
+        self.conv1 = nn.Conv2d(1, 64, 5) # -&gt; 24x24
+        self.pool1 = nn.MaxPool2d(2) # -&gt; 12x12
+        self.conv2 = nn.Conv2d(64, 128, 5) # -&gt; 8x8
+        self.dropout = nn.Dropout(p=0.4)
+        self.dense = nn.Linear(128 * 8 * 8, 10)
+
+    def forward(self, x):
+       x = F.relu(self.conv1(x))
+       x = self.pool1(x)
+       x = F.relu(self.conv2(x))
+       x = self.dropout(x)
+       x = x.view(x.size(0), -1) # Flatten
+       return F.relu(self.dense(x))
+    
+model = Model().to(device)
+optimizer = optim.SGD(model.parameters(), lr=lr)
+criterion = nn.CrossEntropyLoss()
+</code></pre>
+
+<h3 id="学習">学習</h3>
+
+<p>trainモードにして学習していく。</p>
+
+<pre><code>model.train()
+for i in range(20):
+  print(i)
+  for x, t in dataloader_train:
+      x = x.to(device)
+      t = t.to(device)
+      model.zero_grad()
+      y = model(x)
+      loss = criterion(y, t)
+      loss.backward()
+      optimizer.step()
+</code></pre>
+
+<h3 id="評価">評価</h3>
+
+<p>evalモードにしてテストする。</p>
+
+<pre><code>model.eval()
+labels = []
+preds = []
+losses = []
+for x, t in dataloader_valid:
+    x = x.to(device)
+    t = t.to(device)
+    labels.extend(t.tolist())
+    y = model(x)
+    loss = criterion(y, t)
+    losses.append(loss.cpu().data)
+    pred = y.argmax(1)
+    preds.extend(pred.tolist())
+print('Loss: {:.3f}, Accuracy: {:.3f}'.format(
+    np.mean(losses),
+    metrics.accuracy_score(labels, preds, normalize=True)
+))
+</code></pre>
 
         </div>
       </article>
