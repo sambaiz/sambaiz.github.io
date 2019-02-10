@@ -6,12 +6,244 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-02-03 17:31:00 &#43;0900 JST</updated>
+    <updated>2019-02-10 16:35:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>Serverless FrameworkでVPCを作成してLambdaをデプロイしAurora Serverlessを使う</title>
+          <title>AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する</title>
+          <link>https://www.sambaiz.net/article/207/</link>
+          <pubDate>Sun, 10 Feb 2019 16:35:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/207/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/serverless-application-model/latest/developerguide/what-is-sam.html&#34;&gt;AWS SAM (Serverless Application Model)&lt;/a&gt;はAWS公式の
+サーバーレスアプリケーションのビルドツール。
+CloudFormationのテンプレートを設定ファイルに書くことでLambda関数と共にイベントトリガーや他のリソースも含めてデプロイでき、
+その点で&lt;a href=&#34;https://serverless.com/&#34;&gt;Serverless Framework&lt;/a&gt;と立ち位置が近いが、向こうがLambda以外のサーバーレス環境にも対応していたり、
+プラグインによって機能拡張できるようになっている一方、こちらは比較的薄いツールになっている。
+ただ、&lt;a href=&#34;https://aws.amazon.com/jp/serverless/serverlessrepo/&#34;&gt;Serverless Application Repository&lt;/a&gt;で公開するにはSAMの形式にする必要があり、
+Serverless FrameworkにもSAMのテンプレートを出力する&lt;a href=&#34;https://github.com/SAPessi/serverless-sam&#34;&gt;プラグイン&lt;/a&gt;がある。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/155/&#34;&gt;Serverless FrameworkでLambdaをデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;sam-cliのインストール&#34;&gt;SAM CLIのインストール&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew tap aws/tap
+$ brew install aws-sam-cli
+$ sam --version
+SAM CLI, version 0.11.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;init&#34;&gt;init&lt;/h2&gt;
+
+&lt;p&gt;initすると次の構成のディレクトリが作られる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sam init --runtime go1.x -n test-sam
+$ cd test-sam/
+$ ls
+Makefile	README.md	hello-world	template.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;template.yaml&lt;/code&gt;の中に関数の設定やCloudFormationのテンプレートを書く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat template.yaml
+AWSTemplateFormatVersion: &#39;2010-09-09&#39;
+Transform: AWS::Serverless-2016-10-31
+Description: &amp;gt;
+    test-sam
+    
+    Sample SAM Template for test-sam
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+    Function:
+    Timeout: 5
+
+Resources:
+    HelloWorldFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+        CodeUri: hello-world/
+        Handler: hello-world
+        Runtime: go1.x
+        Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
+        Events:
+        CatchAll:
+            Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+            Properties:
+            Path: /hello
+            Method: GET
+        Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+            PARAM1: VALUE
+
+Outputs:
+    HelloWorldAPI:
+    Description: &amp;quot;API Gateway endpoint URL for Prod environment for First Function&amp;quot;
+    Value: !Sub &amp;quot;https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/&amp;quot;
+
+    HelloWorldFunction:
+    Description: &amp;quot;First Lambda Function ARN&amp;quot;
+    Value: !GetAtt HelloWorldFunction.Arn
+
+    HelloWorldFunctionIamRole:
+    Description: &amp;quot;Implicit IAM Role created for Hello World function&amp;quot;
+    Value: !GetAtt HelloWorldFunctionRole.Arn
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ローカルで実行&#34;&gt;ローカルで実行&lt;/h2&gt;
+
+&lt;p&gt;コンテナ内で実行される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ make build
+$ sam local start-api
+$ curl localhost:3000/hello
+Fetching lambci/lambda:go1.x Docker container image.....
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;package&#34;&gt;package&lt;/h2&gt;
+
+&lt;p&gt;アプリケーションをS3にアップロードし、そのURIを含むテンプレートを出力する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sam package --output-template-file packaged.yaml --s3-bucket &amp;lt;bucket_name&amp;gt;
+$ cat packaged.yaml 
+AWSTemplateFormatVersion: &#39;2010-09-09&#39;
+Description: &#39;test-sam
+
+    Sample SAM Template for test-sam
+
+    &#39;
+Globals:
+    Function:
+    Timeout: 5
+Outputs:
+    HelloWorldAPI:
+    Description: API Gateway endpoint URL for Prod environment for First Function
+    Value:
+        Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/
+    HelloWorldFunction:
+    Description: First Lambda Function ARN
+    Value:
+        Fn::GetAtt:
+        - HelloWorldFunction
+        - Arn
+    HelloWorldFunctionIamRole:
+    Description: Implicit IAM Role created for Hello World function
+    Value:
+        Fn::GetAtt:
+        - HelloWorldFunctionRole
+        - Arn
+Resources:
+    HelloWorldFunction:
+    Properties:
+        CodeUri: s3://&amp;lt;bucket_name&amp;gt;/c97948866b9a6fb535aeb5fa092a633d
+        Environment:
+        Variables:
+            PARAM1: VALUE
+        Events:
+        CatchAll:
+            Properties:
+            Method: GET
+            Path: /hello
+            Type: Api
+        Handler: hello-world
+        Runtime: go1.x
+        Tracing: Active
+    Type: AWS::Serverless::Function
+Transform: AWS::Serverless-2016-10-31
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;deploy&#34;&gt;deploy&lt;/h2&gt;
+
+&lt;p&gt;CloudFormationのStackを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sam deploy --template-file packaged.yaml --stack-name test-sam-app --capabilities CAPABILITY_IAM --region us-east-1
+Successfully created/updated stack - test-sam-app
+
+$ aws cloudformation describe-stacks --stack-name test-sam-app --query &#39;Stacks[].Outputs&#39;
+[
+    [
+        {
+            &amp;quot;Description&amp;quot;: &amp;quot;Implicit IAM Role created for Hello World function&amp;quot;, 
+            &amp;quot;OutputKey&amp;quot;: &amp;quot;HelloWorldFunctionIamRole&amp;quot;, 
+            &amp;quot;OutputValue&amp;quot;: &amp;quot;arn:aws:iam::*****:role/test-sam-app-HelloWorldFunctionRole-1TEAXP5ELXA9V&amp;quot;
+        }, 
+        {
+            &amp;quot;Description&amp;quot;: &amp;quot;API Gateway endpoint URL for Prod environment for First Function&amp;quot;, 
+            &amp;quot;OutputKey&amp;quot;: &amp;quot;HelloWorldAPI&amp;quot;, 
+            &amp;quot;OutputValue&amp;quot;: &amp;quot;https://gr67rdb1qj.execute-api.us-east-1.amazonaws.com/Prod/hello/&amp;quot;
+        }, 
+        {
+            &amp;quot;Description&amp;quot;: &amp;quot;First Lambda Function ARN&amp;quot;, 
+            &amp;quot;OutputKey&amp;quot;: &amp;quot;HelloWorldFunction&amp;quot;, 
+            &amp;quot;OutputValue&amp;quot;: &amp;quot;arn:aws:lambda:us-east-1:*****:function:test-sam-app-HelloWorldFunction-1QOX2RNRJ7G4L&amp;quot;
+        }
+    ]
+]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws cloudformation delete-stack --stack-name test-sam-app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;serverless-application-repositoryに公開-https-docs-aws-amazon-com-serverlessrepo-latest-devguide-serverless-app-publishing-applications-html&#34;&gt;&lt;a href=&#34;https://docs.aws.amazon.com/serverlessrepo/latest/devguide/serverless-app-publishing-applications.html&#34;&gt;Serverless Application Repositoryに公開&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;template.yaml&lt;/code&gt;にServerless Application Repository用のMetadataを追加して再packageする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: test-sam
+    Description: hello world
+    Author: test
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: s3://&amp;lt;bucket-name&amp;gt;/LICENSE.txt
+    ReadmeUrl: s3://&amp;lt;bucket-name&amp;gt;/README.md
+    Labels: [&#39;tests&#39;]
+    HomePageUrl: https://github.com/test/test
+    SemanticVersion: 0.0.1
+    SourceCodeUrl: https://github.com/test/test
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最初、LicenseUrlとReadmeUrlを単にLICENSE.txt、README.mdとしたところ、次のエラーがでてpublishできなかった。
+一見packageに失敗しているように見えて原因が分からず困ったが、&lt;code&gt;--debug&lt;/code&gt;を付けて実行するとどこで失敗しているかが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Error: Your SAM template contains invalid S3 URIs. Please make sure that you have uploaded application artifacts to S3 by packaging the template: &#39;sam package --template-file &amp;lt;file-path&amp;gt;&#39;.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;バケットポリシーに次のStatementを追加する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;Version&amp;quot;: &amp;quot;2012-10-17&amp;quot;,
+    &amp;quot;Statement&amp;quot;: [
+        {
+            &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;,
+            &amp;quot;Principal&amp;quot;: {
+                &amp;quot;Service&amp;quot;:  &amp;quot;serverlessrepo.amazonaws.com&amp;quot;
+            },
+            &amp;quot;Action&amp;quot;: &amp;quot;s3:GetObject&amp;quot;,
+            &amp;quot;Resource&amp;quot;: &amp;quot;arn:aws:s3:::&amp;lt;your-bucket-name&amp;gt;/*&amp;quot;
+        }
+    ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sam publish -t packaged.yaml
+Publish Succeeded
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;デフォルトではprivateになっていて、AWSアカウントを指定して限定公開することもできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/207.png&#34; alt=&#34;private application&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;デプロイボタンを押すとStackが作成されデプロイされる。&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う</title>
           <link>https://www.sambaiz.net/article/206/</link>
           <pubDate>Sun, 03 Feb 2019 17:31:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -29,8 +261,8 @@ Serverlessと名前には付いているが用途としてはLambdaに限らず�
 むしろコンテナの数が容易に増え得るLambdaは同時接続数が問題になるRDBと一般に相性が良くない。
 現在Betaの、コネクションを張らずにHTTPSでクエリを投げられる&lt;a href=&#34;https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html&#34;&gt;Data API&lt;/a&gt;はこの問題を解消すると思われるが、トランザクションが張れなかったり、レスポンスサイズに制限があるようだ。今回はコンソール上から初期クエリを流すためにData APIを有効にしている。&lt;/p&gt;
 
-&lt;p&gt;他の選択肢として、DynamoDBは現状最有力で最近&lt;a href=&#34;https://aws.amazon.com/jp/blogs/news/new-amazon-dynamodb-transactions/&#34;&gt;トランザクションもサポート&lt;/a&gt;されたがSQLのように柔軟なクエリは投げられない。
-Athenaはクエリは投げられるがそこそこ時間がかかるし、INSERTはできずクエリごとに料金が発生する。&lt;/p&gt;
+&lt;p&gt;他の選択肢として、DynamoDBは現状最有力で最近&lt;a href=&#34;https://aws.amazon.com/jp/blogs/news/new-amazon-dynamodb-transactions/&#34;&gt;トランザクションもサポート&lt;/a&gt;されたがSQLのように複雑なクエリは投げられない。
+Athenaはクエリは投げられるがそこそこ時間がかかるし、INSERT/UPDATEはできずクエリごとに料金が発生する。&lt;/p&gt;
 
 &lt;p&gt;Serverless Frameworkを使ってリソースを作成しデプロイする。リポジトリは&lt;a href=&#34;https://github.com/sambaiz/aurora-serverless-test&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
 
