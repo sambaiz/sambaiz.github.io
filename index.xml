@@ -6,8 +6,69 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-02-10 16:35:00 &#43;0900 JST</updated>
+    <updated>2019-02-13 21:17:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Apache SparkのRDD, DataFrame, DataSetとAction, Transformation</title>
+          <link>https://www.sambaiz.net/article/208/</link>
+          <pubDate>Wed, 13 Feb 2019 21:17:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/208/</guid>
+          <description>
+
+&lt;h2 id=&#34;sparkとは&#34;&gt;Sparkとは&lt;/h2&gt;
+
+&lt;p&gt;ハイパフォーマンスな汎用分散処理システム。
+HDFSやS3といった分散ストレージとHadoop YARNといったクラスタマネージャと共に使われる。
+中間データをメモリに置いておくことでHadoopのMapReduceよりも高速に処理することができる。
+APIはJava, Scala, Python, Rのものがあって、
+Pythonは手軽に書ける一方、パフォーマンスはJVMとのやりとりが発生するため落ちる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/126/&#34;&gt;HDFS(Hadoop Distributed File System)とは - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;rddとdataframeとdataset&#34;&gt;RDDとDataFrameとDataSet&lt;/h2&gt;
+
+&lt;p&gt;RDD(Resilient Distributed Dataset)はSpark Coreの低レベルな
+&lt;a href=&#34;https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/rdd/RDD.scala&#34;&gt;インタフェース&lt;/a&gt;で、
+型を持つイミュータブルな分散コレクション。&lt;/p&gt;
+
+&lt;p&gt;DataFrameはSpark SQLのテーブル状で型を持たないデータ形式で、
+Tungstenというバイトレベルの最適化や
+Catalystというクエリのオプティマイザが効くので自分でRDDのAPIを呼ぶよりパフォーマンスが良い。&lt;/p&gt;
+
+&lt;p&gt;DataSetは型を持つDataFrameで、Spark 2.0からはDataFrameもDataset[Row]のエイリアスになった。&lt;/p&gt;
+
+&lt;h2 id=&#34;actionとtransformation&#34;&gt;ActionとTransformation&lt;/h2&gt;
+
+&lt;p&gt;外部への出力といった副作用を持つActionに対して
+RDDを返すだけの処理をTransformationという。
+Transformationは都度実行されるのではなく
+Actionが実行される際に、依存関係を表すDAG(Directed Acyclic Graph)
+をもとに必要なものが遅延評価される。DAGはWeb UIで可視化できる。
+また、ネットワークやノードの障害によって計算結果が失われても依存関係をたどり、
+並列に計算することで高速に復旧できるようになっている。&lt;/p&gt;
+
+&lt;h2 id=&#34;narrow-dependencyとwide-dependency&#34;&gt;narrow dependencyとwide dependency&lt;/h2&gt;
+
+&lt;p&gt;TransformationはRDDのパーティションに対して各Executorが並列に実行する。
+mapやfilterなどの、見るパーティションが単一か他と被らない依存関係をnarrow dependencyといって、
+そのExecutorだけで処理が完結するためパイプラインでまとめて実行でき速い。
+一方、groupByKeyなどの一つのパーティションが複数のパーティションの処理で必要とされる依存関係をwide dependencyといって、
+そのパーティションをExecutorが持っていない場合、コストが高いシャッフルが発生する。
+シャッフルを必要としない一連の実行単位をstageという。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://shop.oreilly.com/product/0636920046967.do&#34;&gt;High Performance Spark - O&amp;rsquo;Reilly Media&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://databricks.com/blog/2016/07/14/a-tale-of-three-apache-spark-apis-rdds-dataframes-and-datasets.html&#34;&gt;RDD vs DataFrames and Datasets: A Tale of Three Apache Spark APIs&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://jaceklaskowski.gitbooks.io/mastering-apache-spark/spark-DAGScheduler-Stage.html&#34;&gt;Stage — Physical Unit Of Execution · Mastering Apache Spark&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -920,7 +981,18 @@ func main() {
 今回はS3のCSVを読み込んで加工し、列指向フォーマットParquetに変換しパーティションを切って出力、その後クローラを回してデータカタログにテーブルを作成してAthenaで参照できることを確認する。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/glue/pricing/&#34;&gt;料金&lt;/a&gt;はジョブがDPU(4vCPU/16GBメモリ)時間あたり$0.44(最低2DPU/10分)かかる。
-また、クローラも同様にDPUで課金される。&lt;/p&gt;
+また、クローラも同様にDPUで課金される。結構高い。&lt;/p&gt;
+
+&lt;p&gt;なお、Athenaの&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/athena/latest/ug/ctas.html&#34;&gt;CTAS&lt;/a&gt;でもParquetを出力することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;CREATE TABLE *****
+WITH (
+  format = &#39;PARQUET&#39;,
+  external_location = &#39;s3://****&#39;
+) AS (
+	SELECT ~~
+)
+&lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;開発用エンドポイント&#34;&gt;開発用エンドポイント&lt;/h2&gt;
 
@@ -985,11 +1057,18 @@ print(output_df.toDF().collect()[0].asDict())
 
 &lt;h2 id=&#34;ジョブのスクリプト&#34;&gt;ジョブのスクリプト&lt;/h2&gt;
 
-&lt;p&gt;GlueはSpark標準のDataFrameを扱うこともできるが、独自にスキーマを柔軟に扱える&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html&#34;&gt;DynamicFrame&lt;/a&gt;というのをサポートしている。DataFrameとは相互に変換できるので、SQL文の実行などDataFrameにしかないAPIを使いたい場合は変換する。&lt;/p&gt;
+&lt;p&gt;GlueはSpark標準のDataFrameを扱うこともできるが、独自にスキーマを柔軟に扱える&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html&#34;&gt;DynamicFrame&lt;/a&gt;というのをサポートしている。DataFrameとは相互に変換できるので、SQL文の実行などDataFrameにしかないAPIを使いたい場合は変換する。
+ただ、Sparkの設定を&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-programming-etl-glue-arguments.html&#34;&gt;変えられない&lt;/a&gt;分、DynamicFrameがうまくやっているところもある。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;data_frame = dynamc_frame.toDF()
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/208/&#34;&gt;Apache SparkのRDD, DataFrame, DataSetとAction, Transformation - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from pyspark.sql.utils import ParseException
+data_frame = dynamc_frame.toDF()
 data_frame.toDF().createOrReplaceTempView(&#39;t1&#39;)
-data_frame2 = spark.sql(&#39;SELECT * FROM t1&#39;)
+try:
+  data_frame2 = spark.sql(&#39;SELECT * FROM t1&#39;)
+except ParseException as e:
+    print(str(e).replace(&amp;quot;\\n&amp;quot;, &amp;quot;\n&amp;quot;))
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;入力は為替データのCSV。&lt;/p&gt;

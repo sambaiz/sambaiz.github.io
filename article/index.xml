@@ -6,10 +6,27 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sun, 10 Feb 2019 16:35:00 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 13 Feb 2019 21:17:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Apache SparkのRDD, DataFrame, DataSetとAction, Transformation</title>
+      <link>https://www.sambaiz.net/article/208/</link>
+      <pubDate>Wed, 13 Feb 2019 21:17:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/208/</guid>
+      <description>Sparkとは ハイパフォーマンスな汎用分散処理システム。 HDFSやS3といった分散ストレージとHadoop YARNといったクラスタマネージャと共に使われる。 中間データをメモリに置いておくことでHadoopのMapReduceよりも高速に処理することができる。 APIはJava, Scala, Python, Rのものがあって、 Pythonは手軽に書ける一方、パフォーマンスはJVMとのやりとりが発生するため落ちる。
+HDFS(Hadoop Distributed File System)とは - sambaiz-net
+RDDとDataFrameとDataSet RDD(Resilient Distributed Dataset)はSpark Coreの低レベルな インタフェースで、 型を持つイミュータブルな分散コレクション。
+DataFrameはSpark SQLのテーブル状で型を持たないデータ形式で、 Tungstenというバイトレベルの最適化や Catalystというクエリのオプティマイザが効くので自分でRDDのAPIを呼ぶよりパフォーマンスが良い。
+DataSetは型を持つDataFrameで、Spark 2.0からはDataFrameもDataset[Row]のエイリアスになった。
+ActionとTransformation 外部への出力といった副作用を持つActionに対して RDDを返すだけの処理をTransformationという。 Transformationは都度実行されるのではなく Actionが実行される際に、依存関係を表すDAG(Directed Acyclic Graph) をもとに必要なものが遅延評価される。DAGはWeb UIで可視化できる。 また、ネットワークやノードの障害によって計算結果が失われても依存関係をたどり、 並列に計算することで高速に復旧できるようになっている。
+narrow dependencyとwide dependency TransformationはRDDのパーティションに対して各Executorが並列に実行する。 mapやfilterなどの、見るパーティションが単一か他と被らない依存関係をnarrow dependencyといって、 そのExecutorだけで処理が完結するためパイプラインでまとめて実行でき速い。 一方、groupByKeyなどの一つのパーティションが複数のパーティションの処理で必要とされる依存関係をwide dependencyといって、 そのパーティションをExecutorが持っていない場合、コストが高いシャッフルが発生する。 シャッフルを必要としない一連の実行単位をstageという。
+参考 High Performance Spark - O&amp;rsquo;Reilly Media
+RDD vs DataFrames and Datasets: A Tale of Three Apache Spark APIs</description>
+    </item>
     
     <item>
       <title>AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する</title>
@@ -76,12 +93,12 @@ package main import ( &amp;quot;fmt&amp;quot; &amp;quot;github.com/aws/aws-sdk-g
       
       <guid>https://www.sambaiz.net/article/203/</guid>
       <description>AWS GlueはマネージドなETL(Extract/Transform/Load)サービスで、Sparkを使ってS3などにあるデータを読み込み加工して変換出力したり、AthenaやRedshift Spectrumで参照できるデータカタログを提供する。 今回はS3のCSVを読み込んで加工し、列指向フォーマットParquetに変換しパーティションを切って出力、その後クローラを回してデータカタログにテーブルを作成してAthenaで参照できることを確認する。
-料金はジョブがDPU(4vCPU/16GBメモリ)時間あたり$0.44(最低2DPU/10分)かかる。 また、クローラも同様にDPUで課金される。
-開発用エンドポイント ジョブの立ち上がりにやや時間がかかるため開発用エンドポイントを立ち上げておくとDPUが確保されて効率よく開発できる。 立ち上げている間のDPUの料金がかかる。つまりずっとジョブを実行し続けているようなもので結構高くつくので終わったら閉じるようにしたい。
+料金はジョブがDPU(4vCPU/16GBメモリ)時間あたり$0.44(最低2DPU/10分)かかる。 また、クローラも同様にDPUで課金される。結構高い。
+なお、AthenaのCTASでもParquetを出力することができる。
+CREATE TABLE ***** WITH ( format = &#39;PARQUET&#39;, external_location = &#39;s3://****&#39; ) AS ( SELECT ~~ )  開発用エンドポイント ジョブの立ち上がりにやや時間がかかるため開発用エンドポイントを立ち上げておくとDPUが確保されて効率よく開発できる。 立ち上げている間のDPUの料金がかかる。つまりずっとジョブを実行し続けているようなもので結構高くつくので終わったら閉じるようにしたい。
 ローカルやEC2から自分で開発用エンドポイントにsshしてNotebookを立てることもできるが、 コンソールから立ち上げたNotebookは最初からつながっていて鍵の登録も必要なくて楽。
 ssh -i private-key-file-path -NTL 9007:169.254.76.1:9007 glue@dev-endpoint-public-dns  NotebookのインスタンスのIAMロールを作成するとCloudwatch Logsまわりに加えてGlueのDevEndpointとAssetの取得権限が付与されている。
-{ &amp;quot;Action&amp;quot;: [ &amp;quot;s3:ListBucket&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:s3:::aws-glue-jes-prod-us-east-1-assets&amp;quot; ] } { &amp;quot;Action&amp;quot;: [ &amp;quot;s3:GetObject&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:s3:::aws-glue-jes-prod-us-east-1-assets*&amp;quot; ] } { &amp;quot;Action&amp;quot;: [ &amp;quot;glue:UpdateDevEndpoint&amp;quot;, &amp;quot;glue:GetDevEndpoint&amp;quot;, &amp;quot;glue:GetDevEndpoints&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:glue:us-east-1:*****:devEndpoint/test*&amp;quot; ] }  たまに立ち上げに失敗したり次のようなエラーで実行できないことがあったが、立ち上げ直したらうまくいった。
-The code failed because of a fatal error: Error sending http request and maximum retry encountered.</description>
+{ &amp;quot;Action&amp;quot;: [ &amp;quot;s3:ListBucket&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:s3:::aws-glue-jes-prod-us-east-1-assets&amp;quot; ] } { &amp;quot;Action&amp;quot;: [ &amp;quot;s3:GetObject&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:s3:::aws-glue-jes-prod-us-east-1-assets*&amp;quot; ] } { &amp;quot;Action&amp;quot;: [ &amp;quot;glue:UpdateDevEndpoint&amp;quot;, &amp;quot;glue:GetDevEndpoint&amp;quot;, &amp;quot;glue:GetDevEndpoints&amp;quot; ], &amp;quot;Effect&amp;quot;: &amp;quot;Allow&amp;quot;, &amp;quot;Resource&amp;quot;: [ &amp;quot;arn:aws:glue:us-east-1:*****:devEndpoint/test*&amp;quot; ] }  たまに立ち上げに失敗したり次のようなエラーで実行できないことがあったが、立ち上げ直したらうまくいった。</description>
     </item>
     
     <item>
