@@ -1180,7 +1180,8 @@ glue_client.start_crawler(Name=&#39;kawase&#39;)
 
 &lt;h2 id=&#34;ジョブとクローラの作成&#34;&gt;ジョブとクローラの作成&lt;/h2&gt;
 
-&lt;p&gt;ジョブを作成する。デフォルトで10DPU使うようになっているので調整する。&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/monitor-continuations.html&#34;&gt;ブックマーク&lt;/a&gt;を有効にすると以前処理したデータは処理しないようにできるが、残念ながらParquetは対応していないため2回実行すると重複して出力されてしまう。&lt;/p&gt;
+&lt;p&gt;ジョブを作成する。デフォルトで10DPU使うようになっているので調整する。1DPUで2つのExecutorが&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/monitor-debug-capacity.html#monitor-debug-capacity-visualize&#34;&gt;動く&lt;/a&gt;。
+&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/glue/latest/dg/monitor-continuations.html&#34;&gt;ブックマーク&lt;/a&gt;を有効にすると以前処理したデータは処理しないようにできるが、残念ながらParquetは対応していないため2回実行すると重複して出力されてしまう。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/203-1.png&#34; alt=&#34;ジョブの作成&#34; /&gt;&lt;/p&gt;
 
@@ -1283,20 +1284,18 @@ VAEは入力xに対して何らかの分布を仮定し、例えばガウス分�
 Autoencoder(自己符号化器)というのはある入力をエンコードしてデコードしたときに入力と同じものを出力するように学習させたもので、
 これによって次元削減された潜在変数zが得られる。&lt;/p&gt;
 
-&lt;p&gt;推論モデルの確率分布q(z|x)、生成モデルの確率分布p(x|z)および対数尤度に対して&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E3%82%A4%E3%82%A7%E3%83%B3%E3%82%BB%E3%83%B3%E3%81%AE%E4%B8%8D%E7%AD%89%E5%BC%8F&#34;&gt;イェンセンの不等式&lt;/a&gt;より次の式が成り立つ。
-最後の右辺LをEvidence Lower Bound (ELBO)といい、推論モデルと生成モデルのパラメータを交互に最適化してこれを最大化させることで尤度の底を引き上げていく。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/201.png&#34; alt=&#34;VAEの対数尤度のEvidence Lower Bound&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;p(x|z)がベルヌーイ分布に従うとするとLは次のようになる。&lt;/p&gt;
-
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/201-3.png&#34; alt=&#34;Lの式&#34; /&gt;&lt;/p&gt;
-
-&lt;p&gt;また対数尤度とLの差は次のKL情報量となる。&lt;/p&gt;
+&lt;p&gt;推論モデルの確率分布をq、生成モデルの確率分布をpとする。対数尤度log{p}を計算したいが潜在変数zが訓練データにないので周辺化する(1)。
+これを変換していくと(2)のようになり、第二項のKL情報量は0以上の値になるので第一項のLを最大化することが対数尤度の最大化につながる。
+このLをEvidence Lower Bound (ELBO)といい、推論モデルのパラメータφと生成モデルのパラメータθを交互に最適化して
+これを最大化させることで尤度の下界を引き上げていく。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/134/&#34;&gt;自己情報量、エントロピー、KL情報量、交差エントロピーと尤度関数 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/201-2.png&#34; alt=&#34;対数尤度とELBOの差&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/201.png&#34; alt=&#34;対数尤度の周辺化とELBO&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;生成モデルがベルヌーイ分布、p(z|x)が標準正規分布で、log{p}はzに対してモンテカルロサンプリングするとELBOは次のようになる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/201-3.png&#34; alt=&#34;ELBO&#34; /&gt;&lt;/p&gt;
 
 &lt;p&gt;ほかの生成モデルとしてGAN(Generative Adversarial Networks)があって、これはデータの分布を最初に仮定せずより近い分布から良いデータを生成するのを目指す。&lt;/p&gt;
 
