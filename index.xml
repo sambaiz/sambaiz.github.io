@@ -6,8 +6,175 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-02-13 21:17:00 &#43;0900 JST</updated>
+    <updated>2019-02-19 23:52:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Chrome ExtensionsとChrome Apps</title>
+          <link>https://www.sambaiz.net/article/209/</link>
+          <pubDate>Tue, 19 Feb 2019 23:52:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/209/</guid>
+          <description>
+
+&lt;h2 id=&#34;chrome-extrnsions&#34;&gt;Chrome Extrnsions&lt;/h2&gt;
+
+&lt;p&gt;ツールバーに表示され、ChromeのAPIを呼んで色々できる拡張機能で、manifestとhtml, js, cssなどから構成される。
+開発中はディレクトリごとchrome://extensions/から読み込むとインストールでき、ツールバーにアイコンが表示される。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/test-chrome-extension&#34;&gt;test-chrome-extension&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;manifest-json-https-developer-chrome-com-extensions-manifest&#34;&gt;&lt;a href=&#34;https://developer.chrome.com/extensions/manifest&#34;&gt;manifest.json&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;manifest_version, name, versionと、brower_actionかpage_actionのどちらかはRequired。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;manifest_version&amp;quot;: 2,
+    &amp;quot;name&amp;quot;: &amp;quot;test-chrome-extension&amp;quot;,
+    &amp;quot;version&amp;quot;: &amp;quot;1.0&amp;quot;,
+    &amp;quot;icons&amp;quot;: {
+        &amp;quot;128&amp;quot;: &amp;quot;images/icon-128.png&amp;quot;
+    },
+    &amp;quot;page_action&amp;quot;: {
+        &amp;quot;default_icon&amp;quot;: {
+            &amp;quot;32&amp;quot;: &amp;quot;images/icon-32.png&amp;quot;
+        }
+    },
+    &amp;quot;options_page&amp;quot;: &amp;quot;options.html&amp;quot;,
+    &amp;quot;background&amp;quot;: {
+        &amp;quot;scripts&amp;quot;: [
+            &amp;quot;background.js&amp;quot;
+        ],
+        &amp;quot;persistent&amp;quot;: false
+    },
+    &amp;quot;permissions&amp;quot;: [
+        &amp;quot;declarativeContent&amp;quot;,
+        &amp;quot;storage&amp;quot;
+    ],
+    &amp;quot;content_security_policy&amp;quot;: &amp;quot;script-src &#39;self&#39;; object-src &#39;self&#39;&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://developer.chrome.com/extensions/pageAction&#34;&gt;page_action&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;常にツールバーに表示されている&lt;a href=&#34;https://developer.chrome.com/extensions/browserAction&#34;&gt;browser_action&lt;/a&gt;に対して、限られたページでのみ有効なAction。
+有効かどうかは
+&lt;a href=&#34;https://developer.chrome.com/extensions/declarativeContent#event-onPageChanged&#34;&gt;declarativeContent.onPageChanged&lt;/a&gt;の
+conditionsや、&lt;a href=&#34;https://developer.chrome.com/extensions/tabs#event-onUpdated&#34;&gt;tags.onUpdated&lt;/a&gt;のリスナー内で制御する。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://developer.chrome.com/extensions/options&#34;&gt;options_page&lt;/a&gt;: &amp;ldquo;拡張機能のオプション&amp;rdquo;で表示されるページ&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://developer.chrome.com/extensions/background_pages&#34;&gt;background&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;インストール時や更新時など必要なときにロードされるスクリプト。イベントリスナーはここで設定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;chrome.runtime.onInstalled.addListener(() =&amp;gt; {
+    chrome.declarativeContent.onPageChanged.removeRules(undefined, () =&amp;gt; {
+        chrome.declarativeContent.onPageChanged.addRules([
+            {
+                conditions: [
+                    new chrome.declarativeContent.PageStateMatcher({
+                        pageUrl: { hostEquals: &#39;www.google.com&#39;, schemes: [&#39;https&#39;] },
+                    })
+                ],
+                actions: [new chrome.declarativeContent.ShowPageAction()]
+            }
+        ]);
+    });
+});
+
+chrome.pageAction.onClicked.addListener((tab) =&amp;gt; {
+    console.log(&amp;quot;Clicked&amp;quot;);
+});
+
+chrome.runtime.onSuspend.addListener(() =&amp;gt; {
+    alert(&amp;quot;Unloading.&amp;quot;);
+});
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ここで出力したログはchrome://extensions/の&amp;rdquo;バックグラウンドページ&amp;rdquo;から確認でき、
+&lt;a href=&#34;https://www.google.com&#34;&gt;https://www.google.com&lt;/a&gt;を開いてアイコンを押すと&amp;rdquo;Clicked&amp;rdquo;が出力される。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/209.png&#34; alt=&#34;バックグラウンドページ&#34; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://developer.chrome.com/extensions/declare_permissions&#34;&gt;permissions&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.chrome.com/extensions/storage&#34;&gt;storage&lt;/a&gt;などのAPIを使えるようにしたり、
+HTML5の&lt;a href=&#34;https://w3c.github.io/geolocation-api/&#34;&gt;geolocation&lt;/a&gt;をユーザーの許可なしに使えるようにするといった権限。
+permissonが足りないと次のようなエラーが出る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Error in event handler: TypeError: Cannot read property &#39;onPageChanged&#39; of undefined
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://developer.chrome.com/extensions/contentSecurityPolicy&#34;&gt;content_security_policy&lt;/a&gt;: 主にXSS対策のためのリソースのドメイン制限などの記述&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;chrome-apps&#34;&gt;Chrome Apps&lt;/h2&gt;
+
+&lt;p&gt;Extensionと同じようなmanifestとhtml, js, cssなどで構成されるネイティブアプリ。
+かつてはクロスプラットフォームで動かすことができたが、
+Webアプリで事足りるようになったということで、Chrome OS以外でのサポートが&lt;a href=&#34;https://blog.chromium.org/2016/08/from-chrome-apps-to-web.html&#34;&gt;切られて&lt;/a&gt;しまった。
+そのChromeOSでも&lt;a href=&#34;https://blog.google/products/chromebooks/the-google-play-store-coming-to/&#34;&gt;Android&lt;/a&gt;や&lt;a href=&#34;https://support.google.com/chromebook/answer/9145439&#34;&gt;Linux&lt;/a&gt;のアプリがサポートされつつあって、いつまでサポートされるかは分からない。&lt;/p&gt;
+
+&lt;p&gt;ということでChrome OS以外ではストアから入れることはできないが、MacのChrome 72.0.3626.109時点では
+Extensionと同様にchrome://extensions/から読み込むとChromeアプリとして認識された。&lt;/p&gt;
+
+&lt;h3 id=&#34;manifest-json-https-developer-chrome-com-apps-manifest&#34;&gt;&lt;a href=&#34;https://developer.chrome.com/apps/manifest&#34;&gt;manifest.json&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;Extensionのmanifestと比べると、backgroundがappの中に入りRequiredになっていたり、
+socketsやbluetoothといったデバイスに関するものや、
+&lt;a href=&#34;https://developer.chrome.com/apps/manifest/kiosk_enabled&#34;&gt;kioskモード&lt;/a&gt;の項目がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+  &amp;quot;name&amp;quot;: &amp;quot;test-app&amp;quot;,
+  &amp;quot;version&amp;quot;: &amp;quot;1.0&amp;quot;,
+  &amp;quot;icons&amp;quot;: {
+    &amp;quot;128&amp;quot;: &amp;quot;images/icon-128.png&amp;quot;
+  },
+  &amp;quot;app&amp;quot;: {
+    &amp;quot;background&amp;quot;: {
+      &amp;quot;scripts&amp;quot;: [&amp;quot;background.js&amp;quot;]
+    }
+  },
+  &amp;quot;bluetooth&amp;quot;: {
+    &amp;quot;low_energy&amp;quot;: true,
+    &amp;quot;uuids&amp;quot;: [&amp;quot;180a&amp;quot;]
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;制約&#34;&gt;制約&lt;/h3&gt;
+
+&lt;p&gt;Chrome Appsでは&lt;a href=&#34;https://developer.chrome.com/apps/app_architecture#security&#34;&gt;セキュリティモデル&lt;/a&gt;によって、
+外部のコンテンツをiframeで埋め込んだり、インラインスクリプトやeval()を実行することが&lt;a href=&#34;https://developer.chrome.com/apps/app_external&#34;&gt;できない&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Refused to frame &#39;https://*****&#39; because it violates the following Content Security Policy directive: &amp;quot;frame-src &#39;self&#39; blob: filesystem: data: chrome-extension-resource:&amp;quot;.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そのためiframeの代わりに&lt;a href=&#34;https://developer.chrome.com/apps/tags/webview&#34;&gt;webview&lt;/a&gt;を使う必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;webview id=&amp;quot;foo&amp;quot; src=&amp;quot;https://www.google.com/&amp;quot; style=&amp;quot;width:640px; height:480px&amp;quot;&amp;gt;&amp;lt;/webview&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;webviewではプロセスが分離され、permissionもイベントリスナーで許可しないと付与されない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const webview = document.getElementById(&amp;quot;foo&amp;quot;);
+webview.addEventListener(&#39;permissionrequest&#39;, function(e) {
+  if (e.permission === &#39;media&#39;) {
+    e.request.allow();
+  }
+});
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -983,15 +1150,30 @@ func main() {
 &lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/glue/pricing/&#34;&gt;料金&lt;/a&gt;はジョブがDPU(4vCPU/16GBメモリ)時間あたり$0.44(最低2DPU/10分)かかる。
 また、クローラも同様にDPUで課金される。結構高い。&lt;/p&gt;
 
-&lt;p&gt;なお、Athenaの&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/athena/latest/ug/ctas.html&#34;&gt;CTAS&lt;/a&gt;でもParquetを出力することができる。&lt;/p&gt;
+&lt;p&gt;なお、Athenaの&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/athena/latest/ug/ctas.html&#34;&gt;CTAS&lt;/a&gt;でもParquetを出力することができる。
+出力先にファイルがないようにする必要があったり重いクエリは失敗することがあるが手軽で良い。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;CREATE TABLE *****
-WITH (
-  format = &#39;PARQUET&#39;,
-  external_location = &#39;s3://****&#39;
-) AS (
-	SELECT ~~
-)
+&lt;pre&gt;&lt;code&gt;import * as athena from &#39;athena-client&#39;
+const clientConfig: athena.AthenaClientConfig = {
+	bucketUri: &#39;s3://*****/*****&#39;
+  skipFetchResult: true,
+};
+const awsConfig: athena.AwsConfig = {
+	region: &#39;us-east-1&#39;,
+};
+
+const client = athena.createClient(clientConfig, awsConfig);
+
+(async () =&amp;gt; {
+	await client.execute(`
+		CREATE TABLE *****
+    WITH (
+      format = &#39;PARQUET&#39;,
+      external_location = &#39;s3://*****&#39;
+    ) AS (
+      SELECT ~~
+    )
+})();
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;開発用エンドポイント&#34;&gt;開発用エンドポイント&lt;/h2&gt;
