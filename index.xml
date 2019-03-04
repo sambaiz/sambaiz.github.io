@@ -6,8 +6,66 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-02-22 23:38:00 &#43;0900 JST</updated>
+    <updated>2019-03-04 22:00:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>SageMaker NotebookでGitリポジトリにSSHでpush/pullできるようにする</title>
+          <link>https://www.sambaiz.net/article/211/</link>
+          <pubDate>Mon, 04 Mar 2019 22:00:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/211/</guid>
+          <description>&lt;p&gt;Sagemaker NotebookはAWSの機械学習のワークフローを提供する&lt;a href=&#34;https://aws.amazon.com/jp/sagemaker/&#34;&gt;SageMaker&lt;/a&gt;の一部である
+マネージドなJupyter Notebooksで、可視化などはもちろん、ここから複数インタンスでの学習ジョブを実行したりすることができる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/blogs/news/amazon-sagemaker-notebooks-now-support-git-integration-for-increased-persistence-collaboration-and-reproducibility/&#34;&gt;Git統合&lt;/a&gt;
+がリリースされ、ノートブック作成時にGitHubなどのリポジトリを指定すると前もって持ってきてくれるようになったが、
+今のところHTTPSエンドポイントにしか対応していないようで、ユーザー名・パスワードまたはトークンといった個人に紐づく認証情報が必要になる。
+今回はこの機能を使わずに、ライフサイクル設定でssh鍵を置き、これでpush/pullできるようにする。&lt;/p&gt;
+
+&lt;p&gt;パスフレーズなしの鍵を作って公開鍵を対象リポジトリのDeployKeyに登録してread/writeできるようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ mkdir sagemaker-sshkey
+$ cd sagemaker-sshkey
+$ ssh-keygen -t rsa -b 4096 -f id_rsa -N &amp;quot;&amp;quot;
+$ pbcopy &amp;lt; id_rsa.pub
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;秘密鍵はSSMのParameter Storeに登録する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/204/&#34;&gt;AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ aws ssm put-parameter --name &amp;quot;sagemaker-sshkey&amp;quot; --value &amp;quot;`cat id_rsa`&amp;quot; --type String --overwrite
+$ aws ssm get-parameters --names &amp;quot;sagemaker-sshkey&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ライフサイクル設定でノートブック開始時に次のスクリプトが実行されるようにする。
+このスクリプトはrootで実行される。Parameter Storeが読める権限をNotebookのIAMに付けておく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/bash
+
+set -e
+
+su - ec2-user &amp;lt;&amp;lt;EOF
+cd /home/ec2-user
+aws ssm get-parameters --names &amp;quot;sagemaker-sshkey&amp;quot; | jq -r &amp;quot;.Parameters[0].Value&amp;quot; &amp;gt; .ssh/id_rsa
+echo -e &amp;quot;Host github.com\n\tStrictHostKeyChecking no&amp;quot; &amp;gt; .ssh/config
+chmod 600 .ssh/*
+git config --global user.name &amp;quot;Sagemaker&amp;quot;
+cd SageMaker
+if [ ! -e &amp;quot;sagemaker-pytorch-example&amp;quot; ]; then
+  git clone git@github.com:sambaiz/sagemaker-pytorch-example.git
+fi
+EOF
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとはノートブック作成時にこのライフサイクル設定を選べば、GUIからでもpush/pullできる状態になる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/211-git.png&#34; alt=&#34;Git&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -3418,12 +3476,20 @@ print(x.flatten()) # [0 1 2 3]
 
 &lt;p&gt;paddingする。modeで埋まる値が決まる。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;print(np.pad(np.zeros((2, 2)), pad_width=1, mode=&#39;constant&#39;, constant_values=2))
+&lt;pre&gt;&lt;code&gt;from math import ceil
+def padding_to(array, width, height):
+  return np.pad(array, pad_width=(
+        (int((height-array.shape[0])/2), int(ceil((height-array.shape[0])/2))), 
+        (int((width-array.shape[1])/2), int(ceil((width-array.shape[1])/2)))), 
+                mode=&#39;constant&#39;, constant_values=0)
+
+print(padding_to(np.array([[2, 4], [6, 8]]), 8, 5))
 &amp;quot;&amp;quot;&amp;quot;
-[[ 2.  2.  2.  2.] 
- [ 2.  0.  0.  2.]
- [ 2.  0.  0.  2.]
- [ 2.  2.  2.  2.]]
+[[0 0 0 0 0 0 0 0]
+ [0 0 0 2 4 0 0 0]
+ [0 0 0 6 8 0 0 0]
+ [0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0]]
 &amp;quot;&amp;quot;&amp;quot;
 
 print(np.pad(np.arange(9).reshape(3,3), pad_width=1, mode=&#39;edge&#39;))
@@ -31803,7 +31869,7 @@ Server Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;3&amp;
 &lt;p&gt;K8sではコンテナのグループをpodと呼ぶ。pod中のコンテナは共にデプロイされ、起動し、停止する。
 また、グループとして複製される。&lt;/p&gt;
 
-&lt;p&gt;Podの定義は以下のようにyamlで書かれる。&lt;/p&gt;
+&lt;p&gt;Podの定義は次のようにyamlで書かれる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;apiVersion: v1
 kind: Pod
@@ -31821,7 +31887,7 @@ spec:
 例えば、Podが作られたときに、コンテナがその中で動いている状態が望ましい状態だとすると、
 コンテナが動かなくなったときに、Kubernatesは新しいものを再作成することで望ましい状態にする。&lt;/p&gt;
 
-&lt;p&gt;podの作成とリストの取得のコマンドは以下の通り。&lt;/p&gt;
+&lt;p&gt;podの作成とリストの取得のコマンドは次の通り。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ kubectl create -f nginx.yaml
 $ kubectl get pods
@@ -31887,7 +31953,7 @@ nginx     1/1       Running   0          1h
 &lt;p&gt;コンテナのファイルシステムはコンテナが生存しているときに限り有効なので、
 永続化したいデータはコンテナの外に保存する必要がある。&lt;/p&gt;
 
-&lt;p&gt;以下の例のように&lt;code&gt;volumes&lt;/code&gt;でvolumeを定義し、&lt;code&gt;volumeMounts&lt;/code&gt;でどこにマウントするか指定することができる。
+&lt;p&gt;次の例のように&lt;code&gt;volumes&lt;/code&gt;でvolumeを定義し、&lt;code&gt;volumeMounts&lt;/code&gt;でどこにマウントするか指定することができる。
 &lt;code&gt;volumes&lt;/code&gt;には、そのPodがノードで実行されている間存在するディレクトリを作成して使う&lt;code&gt;EmptyDir&lt;/code&gt;か、
 ノードのファイルシステムに既に存在するディレクトリを使う&lt;code&gt;HostPath&lt;/code&gt;を指定する。&lt;/p&gt;
 
@@ -31909,7 +31975,7 @@ spec:
 
 &lt;h2 id=&#34;labels-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-labels&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#labels&#34;&gt;Labels&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;metadataとしてkey-valueのラベルを付けることができる。たくさんのPodをまとめたりするのに便利。&lt;/p&gt;
+&lt;p&gt;metadataとしてkey-valueのラベルを付けることができる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;metadata:
   name: nginx
@@ -31924,7 +31990,7 @@ nginx     1/1       Running   0          2m
 
 &lt;h2 id=&#34;deployments-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-deployments&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#deployments&#34;&gt;Deployments&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;実行しているPodの維持と更新を管理するのが上でも出てきたDeploymentだ。
+&lt;p&gt;実行しているPodの維持と更新を管理するのが上でも出てきたDeployment。
 Deploymentの定義にはPodを作るためのテンプレートと維持するPod数を記述する。
 pod名はDeployment名から生成されるのでtemplateには含めない。&lt;/p&gt;
 
@@ -31958,7 +32024,7 @@ nginx-deployment-1159050644-kdjly   1/1       Running   0          3m
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;&lt;code&gt;kubectl apply&lt;/code&gt;でDeploymentの変更を実行中のPodに適用する。
-以下の例ではnginxのバージョンを上げている。&lt;/p&gt;
+次の例ではnginxのバージョンを上げている。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;apiVersion: extensions/v1beta1
 kind: Deployment
@@ -31999,7 +32065,7 @@ nginx-deployment-1771418926-ygoxl   1/1       Running   0          15s
 &lt;h2 id=&#34;services-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-services&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#services&#34;&gt;Services&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;アプリケーションのレイヤー間(例えばフロントエンドとバックエンド)の接続で使われるのがService。
-以下のServiceは、8080番ポートで待ち、&lt;code&gt;app: nginx&lt;/code&gt;のラベルが付いているPodの80番ポートに向けるロードバランサーとして働く。&lt;/p&gt;
+次のServiceは、8080番ポートで待ち、&lt;code&gt;app: nginx&lt;/code&gt;のラベルが付いているPodの80番ポートに向けるロードバランサーとして働く。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;apiVersion: v1
 kind: Service
@@ -32031,7 +32097,7 @@ $ kubectl run busybox --image=busybox --restart=Never --tty -i --env &amp;quot;S
 &lt;h2 id=&#34;health-checking-http-kubernetes-io-docs-user-guide-walkthrough-k8s201-health-checking&#34;&gt;&lt;a href=&#34;http://kubernetes.io/docs/user-guide/walkthrough/k8s201/#health-checking&#34;&gt;Health Checking&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;&lt;code&gt;livenessProbe&lt;/code&gt;にヘルスチェックの設定を含めることができる。
-以下の例では、初期化のために30秒待った後、&lt;code&gt;/_status/healthz&lt;/code&gt;へのHTTP GETリクエストに対して
+次の例では、初期化のために30秒待った後、&lt;code&gt;/_status/healthz&lt;/code&gt;へのHTTP GETリクエストに対して
 200~399以外のステータスコードが返るか、1秒以上かかった場合、コンテナを再起動する。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;apiVersion: v1
