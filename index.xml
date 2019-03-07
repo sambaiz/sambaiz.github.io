@@ -6,8 +6,170 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-03-04 22:00:00 &#43;0900 JST</updated>
+    <updated>2019-03-07 19:35:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>PyTorchでVAEのモデルを実装してMNISTの画像を生成する</title>
+          <link>https://www.sambaiz.net/article/212/</link>
+          <pubDate>Thu, 07 Mar 2019 19:35:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/212/</guid>
+          <description>
+
+&lt;p&gt;PyTorchでVAEを実装しMNISTの画像を生成する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/201/&#34;&gt;生成モデルVAE(Variational Autoencoder) - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;学習データ&#34;&gt;学習データ&lt;/h2&gt;
+
+&lt;p&gt;datasetsのMNIST画像を使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from torchvision import datasets, transforms
+
+transform = transforms.Compose([
+    transforms.ToTensor(), 
+    transforms.Lambda(lambda x: x.view(-1))])
+
+dataset_train = datasets.MNIST(
+    &#39;~/mnist&#39;, 
+    train=True, 
+    download=True, 
+    transform=transform)
+dataset_valid = datasets.MNIST(
+    &#39;~/mnist&#39;, 
+    train=False, 
+    download=True, 
+    transform=transform)
+
+dataloader_train = utils.data.DataLoader(dataset_train,
+                                          batch_size=1000,
+                                          shuffle=True,
+                                          num_workers=4)
+dataloader_valid = utils.data.DataLoader(dataset_valid,
+                                          batch_size=1000,
+                                          shuffle=True,
+                                          num_workers=4)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;vae&#34;&gt;VAE&lt;/h2&gt;
+
+&lt;p&gt;それぞれ3層のEncoderとDecoder。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+device = &#39;cuda&#39;
+
+class VAE(nn.Module):
+    def __init__(self, z_dim):
+      super(VAE, self).__init__()
+      self.dense_enc1 = nn.Linear(28*28, 200)
+      self.dense_enc2 = nn.Linear(200, 200)
+      self.dense_encmean = nn.Linear(200, z_dim)
+      self.dense_encvar = nn.Linear(200, z_dim)
+      self.dense_dec1 = nn.Linear(z_dim, 200)
+      self.dense_dec2 = nn.Linear(200, 200)
+      self.dense_dec3 = nn.Linear(200, 28*28)
+    
+    def _encoder(self, x):
+      x = F.relu(self.dense_enc1(x))
+      x = F.relu(self.dense_enc2(x))
+      mean = self.dense_encmean(x)
+      var = F.softplus(self.dense_encvar(x))
+      return mean, var
+    
+    def _sample_z(self, mean, var):
+      epsilon = torch.randn(mean.shape).to(device)
+      return mean + torch.sqrt(var) * epsilon
+ 
+    def _decoder(self, z):
+      x = F.relu(self.dense_dec1(z))
+      x = F.relu(self.dense_dec2(x))
+      x = F.sigmoid(self.dense_dec3(x))
+      return x
+
+    def forward(self, x):
+      mean, var = self._encoder(x)
+      z = self._sample_z(mean, var)
+      x = self._decoder(z)
+      return x, z
+    
+    def loss(self, x):
+      mean, var = self._encoder(x)
+      KL = -0.5 * torch.mean(torch.sum(1 + torch.log(var) - mean**2 - var))
+      z = self._sample_z(mean, var)
+      y = self._decoder(z)
+      reconstruction = torch.mean(torch.sum(x * torch.log(y) + (1 - x) * torch.log(1 - y)))
+      lower_bound = [-KL, reconstruction]                                      
+      return -sum(lower_bound)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;学習&#34;&gt;学習&lt;/h2&gt;
+
+&lt;p&gt;潜在変数zの次元は10で学習させる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import numpy as np
+from torch import optim
+
+model = VAE(10).to(device)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+model.train()
+for i in range(20):
+  losses = []
+  for x, t in dataloader_train:
+      x = x.to(device)
+      model.zero_grad()
+      y = model(x)
+      loss = model.loss(x)
+      loss.backward()
+      optimizer.step()
+      losses.append(loss.cpu().detach().numpy())
+  print(&amp;quot;EPOCH: {} loss: {}&amp;quot;.format(i, np.average(losses)))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;生成&#34;&gt;生成&lt;/h2&gt;
+
+&lt;pre&gt;&lt;code&gt;%matplotlib inline
+import matplotlib.pyplot as plt
+import numpy as np
+
+fig = plt.figure(figsize=(10, 3))
+
+model.eval()
+zs = []
+for x, t in dataloader_valid:
+    # original
+    for i, im in enumerate(x.view(-1, 28, 28).detach().numpy()[:10]):
+      ax = fig.add_subplot(3, 10, i+1, xticks=[], yticks=[])
+      ax.imshow(im, &#39;gray&#39;)
+    x = x.to(device)
+    # generate from x
+    y, z = model(x)
+    zs.append(z)
+    y = y.view(-1, 28, 28)
+    for i, im in enumerate(y.cpu().detach().numpy()[:10]):
+      ax = fig.add_subplot(3, 10, i+11, xticks=[], yticks=[])
+      ax.imshow(im, &#39;gray&#39;)
+    # generate from z
+    z1to0 = torch.cat([z[1] * (i * 0.1) + z[0] * ((9 - i) * 0.1) for i in range(10)])
+    y2 = model._decoder(z1to0).view(-1, 28, 28)
+    for i, im in enumerate(y2.cpu().detach().numpy()):
+      ax = fig.add_subplot(3, 10, i+21, xticks=[], yticks=[])
+      ax.imshow(im, &#39;gray&#39;)
+    break
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;1行目が元データの画像で、それをエンコードした潜在変数から生成したのが2行目。
+3行目は左から1番目(3)と2番目(6)の潜在変数を割合を変えなから足したものから生成したもので、
+3と6の特徴を割合で持った画像を生成できている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/212.png&#34; alt=&#34;生成画像&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -20,7 +182,7 @@
 マネージドなJupyter Notebooksで、可視化などはもちろん、ここから複数インタンスでの学習ジョブを実行したりすることができる。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/blogs/news/amazon-sagemaker-notebooks-now-support-git-integration-for-increased-persistence-collaboration-and-reproducibility/&#34;&gt;Git統合&lt;/a&gt;
-がリリースされ、ノートブック作成時にGitHubなどのリポジトリを指定すると前もって持ってきてくれるようになったが、
+によってノートブック作成時にGitHubなどのリポジトリを指定すると前もって持ってきてくれるようになったが、
 今のところHTTPSエンドポイントにしか対応していないようで、ユーザー名・パスワードまたはトークンといった個人に紐づく認証情報が必要になる。
 今回はこの機能を使わずに、ライフサイクル設定でssh鍵を置き、これでpush/pullできるようにする。&lt;/p&gt;
 
@@ -60,7 +222,7 @@ fi
 EOF
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;あとはノートブック作成時にこのライフサイクル設定を選べば、GUIからでもpush/pullできる状態になる。&lt;/p&gt;
+&lt;p&gt;あとはノートブック作成時にこのライフサイクル設定を選べば、最初からリポジトリがpullされ、左のGitタブからpush/pullできる状態で立ち上がる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/211-git.png&#34; alt=&#34;Git&#34; /&gt;&lt;/p&gt;
 </description>
@@ -2642,7 +2804,7 @@ iframeを異なるオリジンにして直接外側に干渉させず、SafeFram
 
 &lt;h2 id=&#34;easyjson-https-github-com-mailru-easyjson&#34;&gt;&lt;a href=&#34;https://github.com/mailru/easyjson&#34;&gt;easyjson&lt;/a&gt;&lt;/h2&gt;
 
-&lt;p&gt;easyjsonは以下のようなstructごとのコードを自動生成してReflectionなしで高速にJSON Marshal/Unmarshalできるようにするライブラリ。&lt;/p&gt;
+&lt;p&gt;easyjsonは次のようなstructごとのコードを自動生成してReflectionなしで高速にJSON Marshal/Unmarshalできるようにするライブラリ。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ go get -u github.com/mailru/easyjson/...
 $ cat struct.go
@@ -2711,7 +2873,7 @@ fmt.Println(string(b)) // {&amp;quot;B&amp;quot;:{&amp;quot;c&amp;quot;:[1,2,3],
 &lt;h2 id=&#34;fastjson-https-github-com-valyala-fastjson&#34;&gt;&lt;a href=&#34;https://github.com/valyala/fastjson&#34;&gt;fastjson&lt;/a&gt;&lt;/h2&gt;
 
 &lt;p&gt;fastjsonはstructを介さず、ParseしてGetIntのような関数で取り出す。
-そのため持ち回すとデータ形式が分からなくなるという問題はあるが、曖昧な型のJSONを扱う際はかえって使いやすいかもしれない。
+そのため持ち回すとデータ形式が分からなくなるが、ピンポイントで値を取りたい場合や曖昧な型のJSONを扱う際は使いやすいかもしれない。
 MarshalToの引数には[]byteを渡せてnilを渡すとallocateされる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;var p fastjson.Parser
