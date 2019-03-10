@@ -6,8 +6,91 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-03-07 19:35:00 &#43;0900 JST</updated>
+    <updated>2019-03-10 19:03:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>VAEでエンコードしたMNISTの潜在空間をt-SNEで可視化する</title>
+          <link>https://www.sambaiz.net/article/213/</link>
+          <pubDate>Sun, 10 Mar 2019 19:03:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/213/</guid>
+          <description>
+
+&lt;p&gt;t-SNEは多次元のデータを2,3次元上にマッピングして可視化できるようにする手法の一つで、
+Stochastic Neighbor Embedding(SNE, 確率的近傍埋め込み)という手法をベースに、t分布を用いるなどして改良したもの。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://lvdmaaten.github.io/publications/papers/JMLR_2008.pdf&#34;&gt;Visualizing Data using t-SNE&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;sne&#34;&gt;SNE&lt;/h2&gt;
+
+&lt;p&gt;まず入力データ間の類似度をユークリッド距離を用いた次の条件付き確率p_{j|i}で表す。
+これはx_iを中心とした正規分布上で、確率密度に基づいて隣り合うデータを選ぶ場合x_jが選ばれる確率となる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/213-p.png&#34; alt=&#34;入力データ間の類似度p_{j|i}&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;同様に出力データでも次の条件付き確率q_{j|i}を計算する。&lt;code&gt;σ=1/sqrt(2)&lt;/code&gt;とする。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/213-q.png&#34; alt=&#34;出力データ間の類似度q_{j|i}&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;この分布間のKL情報量を勾配降下法で最小化していくことで出力を最適化するのがSME。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/213-c.png&#34; alt=&#34;コスト&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/134/&#34;&gt;自己情報量、エントロピー、KL情報量、交差エントロピーと尤度関数 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/191/&#34;&gt;ロジスティック回帰の尤度と交差エントロピーと勾配降下法 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;t-sne&#34;&gt;t-SNE&lt;/h2&gt;
+
+&lt;p&gt;t-SNEでは条件付き確率ではなく同時確率を用いる。また、qを自由度1のt分布で表す。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/213-p2.png&#34; alt=&#34;p_ij&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/213-q2.png&#34; alt=&#34;q_ij&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/213-c2.png&#34; alt=&#34;コスト&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;mnistの潜在空間をt-sneで可視化した結果&#34;&gt;MNISTの潜在空間をt-SNEで可視化した結果&lt;/h2&gt;
+
+&lt;p&gt;以前作ったVAEのMNISTモデルの潜在空間を
+scikit-learnの&lt;a href=&#34;https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html&#34;&gt;TSNE&lt;/a&gt;で可視化する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/212/&#34;&gt;PyTorchでVAEのモデルを実装してMNISTの画像を生成する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;%matplotlib inline
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+from random import random
+
+colors = [&amp;quot;red&amp;quot;, &amp;quot;green&amp;quot;, &amp;quot;blue&amp;quot;, &amp;quot;orange&amp;quot;, &amp;quot;purple&amp;quot;, &amp;quot;brown&amp;quot;, &amp;quot;fuchsia&amp;quot;, &amp;quot;grey&amp;quot;, &amp;quot;olive&amp;quot;, &amp;quot;lightblue&amp;quot;]
+def visualize_zs(zs, labels):
+  plt.figure(figsize=(10,10))
+  points = TSNE(n_components=2, random_state=0).fit_transform(zs)
+  for p, l in zip(points, labels):
+    plt.scatter(p[0], p[1], marker=&amp;quot;${}$&amp;quot;.format(l), c=colors[l])
+  plt.show()
+
+model.eval()
+zs = []
+for x, t in dataloader_valid:
+    x = x.to(device)
+    t = t.to(device)
+    # generate from x
+    y, z = model(x)
+    z = z.cpu()
+    t = t.cpu()
+    visualize_zs(z.detach().numpy(), t.cpu().detach().numpy())
+    break
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;同じ数字や似ている数字の潜在変数が近いところに配置されていて、潜在空間をうまく可視化できているように見える。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/213-z.png&#34; alt=&#34;MNISTの潜在空間をt-SNEで次元削減したもの&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -167,6 +250,8 @@ for x, t in dataloader_valid:
 3と6の特徴を割合で持った画像を生成できている。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/212.png&#34; alt=&#34;生成画像&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/213/&#34;&gt;VAEでエンコードしたMNISTの潜在空間をt-SNEで可視化する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
@@ -12682,7 +12767,7 @@ RSASSA-PKCS1-v1_5では暗号化の前に&lt;code&gt;00 01 ff ff ff .. 00&lt;/co
 &lt;h2 id=&#34;カルバック-ライブラー情報量&#34;&gt;カルバック・ライブラー情報量&lt;/h2&gt;
 
 &lt;p&gt;離散確率分布PのQに対するカルバック・ライブラー情報量は以下の式で定義される。連続確率分布では積分する。
-Qの自己情報量からPの自己情報量を引いて平均を取ったもの。非負の値を取る。&lt;/p&gt;
+Qの自己情報量からPの自己情報量を引いて平均を取ったもので、分布間の距離のように考えることができる。非負の値を取る。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/134-kl.png&#34; alt=&#34;KL情報量の定義&#34; /&gt;&lt;/p&gt;
 
