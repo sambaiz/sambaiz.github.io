@@ -6,8 +6,162 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-03-10 19:03:00 &#43;0900 JST</updated>
+    <updated>2019-03-22 20:22:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>HI-VAE(Heterogeneous-Incomple VAE)の論文を読んで処理を追う</title>
+          <link>https://www.sambaiz.net/article/214/</link>
+          <pubDate>Fri, 22 Mar 2019 20:22:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/214/</guid>
+          <description>
+
+&lt;p&gt;HI-VAE(Heterogeneous-Incomple VAE)は現実のデータセットにありがちな連続値と離散値が混ざっていたり欠損値を含んでいるものを扱えるようにしたVAE。&lt;/p&gt;
+
+&lt;p&gt;論文: &lt;a href=&#34;https://arxiv.org/abs/1807.03653&#34;&gt;Handling Incomplete Heterogeneous Data using VAEs&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/201/&#34;&gt;生成モデルVAE(Variational Autoencoder) - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;GitHubにTensorFlow実装が&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE&#34;&gt;上がっている&lt;/a&gt;ので論文と合わせて追ってみる。&lt;/p&gt;
+
+&lt;h2 id=&#34;入力データ&#34;&gt;入力データ&lt;/h2&gt;
+
+&lt;p&gt;入力データ&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/defaultCredit/data.csv&#34;&gt;data.csv&lt;/a&gt;と、そのスキーマ&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/defaultCredit/data_types.csv&#34;&gt;data_types.csv&lt;/a&gt;が用意されていて、
+様々なtypeのデータが含まれる24次元のデータセットであることが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type,dim,nclass
+pos,1,
+cat,3,3
+cat,7,7
+cat,4,4
+count,1,
+ordinal,11,11
+ordinal,11,11
+ordinal,11,11
+ordinal,11,11
+ordinal,11,11
+ordinal,11,11
+real,1,
+real,1,
+real,1,
+real,1,
+real,1,
+real,1,
+pos,1,
+pos,1,
+pos,1,
+pos,1,
+pos,1,
+pos,1,
+cat,2,2
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これに対して、xx%の確率でランダムな次元を欠損値として扱う際に対象とする行と次元を表す
+&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/defaultCredit/Missing30_1.csv&#34;&gt;Missingxx_y.csv&lt;/a&gt;がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;2,1
+3,1
+...
+29985,24
+29998,24
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;typeごとのデータの扱い&#34;&gt;typeごとのデータの扱い&lt;/h2&gt;
+
+&lt;h3 id=&#34;real-実数値&#34;&gt;real(実数値)&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-real.png&#34; alt=&#34;type=realのdecoder分布&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L55&#34;&gt;標準化して&lt;/a&gt;encoderに入力し、decoderでは正規分布の平均と分散を
+&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L243&#34;&gt;出力し&lt;/a&gt;
+サンプリングしてデータを&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/master/loglik_models_missing_normalize.py#L47&#34;&gt;生成する&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h3 id=&#34;pos-正の実数&#34;&gt;pos(正の実数)&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-pos.png&#34; alt=&#34;type=posのdecoder分布&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L61&#34;&gt;対数を標準化して&lt;/a&gt;encoderに入力し、decoderでは正規分布の平均と分散を
+&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L227&#34;&gt;出力し&lt;/a&gt;
+サンプリングしたデータを&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/master/loglik_models_missing_normalize.py#L80&#34;&gt;exp()で元のレンジに戻す&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h3 id=&#34;count&#34;&gt;count&lt;/h3&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-count.png&#34; alt=&#34;type=countのdecoder分布&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L71&#34;&gt;対数を取って&lt;/a&gt;encoderに入力し、decoderではポアソン分布の平均λを
+&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L236&#34;&gt;出力し&lt;/a&gt;
+サンプリングしてデータを&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/master/loglik_models_missing_normalize.py#L151&#34;&gt;生成する&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h3 id=&#34;cat-カテゴリ&#34;&gt;cat(カテゴリ)&lt;/h3&gt;
+
+&lt;p&gt;読み込み時に&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/read_functions.py#L54&#34;&gt;one hotに変換&lt;/a&gt;し以後はそのまま扱う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;cat 2 -&amp;gt; [0. 0. 1. 0. 0. 0. 0.] # one hot
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-cat.png&#34; alt=&#34;type=catのdecoder分布&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;decoderでは各カテゴリのlogitの配列を&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L243&#34;&gt;出力し&lt;/a&gt;、
+softmax()したカテゴリカル分布からサンプリングしてデータを&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/loglik_models_missing_normalize.py#L100&#34;&gt;生成する&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h3 id=&#34;ordinal-順序&#34;&gt;ordinal(順序)&lt;/h3&gt;
+
+&lt;p&gt;読み込み時に&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/read_functions.py#L66&#34;&gt;thermometerに変換&lt;/a&gt;し以後はそのまま扱う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ordinal 4 -&amp;gt; [1. 1. 1. 1. 1. 0. 0. 0. 0. 0. 0. 0.] # thermometer
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-ordinal.png&#34; alt=&#34;type=ordinalのdecoder分布&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;decoderでは各カテゴリの閾値Θと、znにおける値を&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L251&#34;&gt;出力し&lt;/a&gt;、&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Θ_{n-1} &amp;lt; Θ_n&lt;/code&gt;になるように&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/loglik_models_missing_normalize.py#L117&#34;&gt;softplus()で正数にしたものを累積する&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/loglik_models_missing_normalize.py#L118&#34;&gt;Θと平均値の差をSigmoid関数に入れて&lt;/a&gt;その次元が1になる確率を求める&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/loglik_models_missing_normalize.py#L119&#34;&gt;一つ下の次元との差を取って&lt;/a&gt;znが各カテゴリに属する確率を求める&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;したカテゴリカル分布からサンプリングして&lt;a href=&#34;https://www.tensorflow.org/api_docs/python/tf/sequence_mask&#34;&gt;mask&lt;/a&gt;を
+&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/loglik_models_missing_normalize.py#L130&#34;&gt;生成する&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;欠損値の扱い&#34;&gt;欠損値の扱い&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/main.py#L121&#34;&gt;欠損値は0にする&lt;/a&gt;ことでDropoutさせる。以後登場する添字^oは欠損していないデータを表し、x~nはxnの欠損値を0にしたものを表す。&lt;/p&gt;
+
+&lt;h2 id=&#34;encoder-https-github-com-probabilistic-learning-hi-vae-blob-855b255d15451f80cf337cc648ff6acab5d86402-model-hivae-inputdropout-py-l17&#34;&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/model_HIVAE_inputDropout.py#L17&#34;&gt;encoder&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-encoder.png&#34; alt=&#34;encoder&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-ps-pzs.png&#34; alt=&#34;q(s)とq(z|s)&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通常のVAEでは入力xのみから単純なガウス分布で潜在変数zを作っていたが、HI-VAEではまず
+&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L95&#34;&gt;Gumbel-softmaxでノイズを入れて微分できるようにしたカテゴリカル分布sを作り&lt;/a&gt;
+これとxを&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/VAE_functions.py#L102&#34;&gt;concat()して&lt;/a&gt;GMM(混合ガウスモデル)でzを作る。&lt;/p&gt;
+
+&lt;h2 id=&#34;decoder-https-github-com-probabilistic-learning-hi-vae-blob-855b255d15451f80cf337cc648ff6acab5d86402-model-hivae-inputdropout-py-l32&#34;&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/model_HIVAE_inputDropout.py#L32&#34;&gt;decoder&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-decoder.png&#34; alt=&#34;decoder&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-gen.png&#34; alt=&#34;p(x,z,s)&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;まず&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/master/model_HIVAE_inputDropout.py#L37&#34;&gt;sからz&lt;/a&gt;の分布を作っているが、これはELBOの計算のためで生成では使われない。&lt;/p&gt;
+
+&lt;p&gt;encodeされたzからyを&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/model_HIVAE_inputDropout.py#L40&#34;&gt;作り&lt;/a&gt;、生成するデータごとのγに&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/model_HIVAE_inputDropout.py#L43&#34;&gt;分割して&lt;/a&gt;、これからtypeごとに対応する&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/model_HIVAE_inputDropout.py#L46&#34;&gt;パラメータ&lt;/a&gt;で分布を作りサンプリングして&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/855b255d15451f80cf337cc648ff6acab5d86402/model_HIVAE_inputDropout.py#L49&#34;&gt;生成する&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&#34;cost-https-github-com-probabilistic-learning-hi-vae-blob-cebe6acda50b346a206257d9d5480fc8112178b4-model-hivae-inputdropout-py-l53&#34;&gt;&lt;a href=&#34;https://github.com/probabilistic-learning/HI-VAE/blob/cebe6acda50b346a206257d9d5480fc8112178b4/model_HIVAE_inputDropout.py#L53&#34;&gt;cost&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/214-elbo.png&#34; alt=&#34;ELBO&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;ELBOは欠損値を除いた負の再生成誤差からsとzの正則化項を引いたものになる。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://musyoku.github.io/2016/11/12/Categorical-Reparameterization-with-Gumbel-Softmax/&#34;&gt;Categorical Reparameterization with Gumbel-Softmax [arXiv:1611.01144] – ご注文は機械学習ですか？&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -1821,8 +1975,10 @@ Autoencoder(自己符号化器)というのはある入力をエンコードし�
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/201-3.png&#34; alt=&#34;ELBO&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;第二項によってp(z)とq(z|x)が近づくように学習し正則化され、zの各次元が独立になっていく。
+&lt;p&gt;第一項が再生成誤差。第二項によってp(z)とq(z|x)が近づくように学習し正則化され、zの各次元が独立になっていく。
 これにβ&amp;gt;1を掛けるとさらに独立性が増し、次元ごとに、人であれば性別や年齢のような、disentangle(もつれを解く)された特徴を持つことができる。これをβ-VAEという。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/212/&#34;&gt;PyTorchでVAEのモデルを実装してMNISTの画像を生成する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;VAEは分布を仮定して尤度によって学習するため、真の分布にはないところの生成データが良くない問題がある。
 VAE以外の生成モデルとしてGAN(Generative Adversarial Networks)があって、これはデータの分布を仮定せずより近い分布から良いデータを生成するのを目指す。&lt;/p&gt;
