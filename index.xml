@@ -6,8 +6,158 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-03-22 20:22:00 &#43;0900 JST</updated>
+    <updated>2019-03-28 17:52:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>React, Material-UI, Unstated, RechartsでTODOを作った</title>
+          <link>https://www.sambaiz.net/article/215/</link>
+          <pubDate>Thu, 28 Mar 2019 17:52:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/215/</guid>
+          <description>
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/215.gif&#34; alt=&#34;動作&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/react-unstated-materialui-recharts&#34;&gt;コード&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;create-react-app-https-github-com-facebook-create-react-app&#34;&gt;&lt;a href=&#34;https://github.com/facebook/create-react-app&#34;&gt;create-react-app&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;create-react-appでアプリを作成した。
+TypeScriptを&lt;a href=&#34;https://facebook.github.io/create-react-app/docs/adding-typescript&#34;&gt;有効にしている&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npx create-react-app react-todo-unstated --typescript
+$ cd react-todo-unstated
+$ tree src/
+src/
+├── App.css
+├── App.test.tsx
+├── App.tsx
+├── index.css
+├── index.tsx
+├── logo.svg
+├── react-app-env.d.ts
+└── serviceWorker.ts
+
+$ npm start
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;material-ui-https-material-ui-com&#34;&gt;&lt;a href=&#34;https://material-ui.com/&#34;&gt;Material-UI&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;UIはMaterial-UIでUIで作った。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install --save @material-ui/core @material-ui/icons
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;public/index.html&lt;/code&gt;に&lt;a href=&#34;https://fonts.google.com/specimen/Roboto&#34;&gt;Roboto&lt;/a&gt;フォントを入れた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;link rel=&amp;quot;stylesheet&amp;quot; href=&amp;quot;https://fonts.googleapis.com/css?family=Roboto:300,400,500&amp;quot;&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;unstated-https-github-com-jamiebuilds-unstated&#34;&gt;&lt;a href=&#34;https://github.com/jamiebuilds/unstated&#34;&gt;Unstated&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;UnstatedはReact v16からの&lt;a href=&#34;https://reactjs.org/docs/context.html&#34;&gt;Context API&lt;/a&gt;を使ったStateを管理するための薄いライブラリ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install --save unstated
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Stateを持つContainerを作る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class TodoContainer extends Container&amp;lt;TodoState&amp;gt; {
+  state: TodoState = {
+    newTodo: &amp;quot;&amp;quot;,
+    todos: [],
+    isCreating: false
+  };
+
+  changeNewTodo(newTodo: string) {
+    this.setState({ newTodo: newTodo });
+  }
+
+  async createTodo() {
+    if (!this.canCreateTodo()) {
+      return
+    }
+    this.setState({ isCreating: true });
+    const newTodo = { title: this.state.newTodo, isDone: false }
+    await axios.post&amp;lt;Todo[]&amp;gt;(&amp;quot;http://localhost:3001/todo&amp;quot;, newTodo)
+    await this.loadTodo()
+    this.setState({ newTodo: &amp;quot;&amp;quot;, isCreating: false })
+  }
+
+  canCreateTodo() {
+    return this.state.newTodo.length !== 0 &amp;amp;&amp;amp; !this.state.isCreating
+  }
+
+  async setIsDone(id: number, status: boolean) {
+    const target = this.state.todos.find((t) =&amp;gt; t.id === id)
+    if (target) {
+      target.isDone = status
+      await axios.put&amp;lt;Todo[]&amp;gt;(`http://localhost:3001/todo/${id}`, target)
+      await this.loadTodo()
+    }
+  }
+
+  async deleteTodo(id: number) {
+    await axios.delete(`http://localhost:3001/todo/${id}`)
+    await this.loadTodo()
+  }
+
+  async loadTodo() {
+    const resp = await axios.get&amp;lt;Todo[]&amp;gt;(&amp;quot;http://localhost:3001/todo&amp;quot;)
+    this.setState({ todos: resp.data })
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;&amp;lt;Provider&amp;gt;&lt;/code&gt;の中で&lt;code&gt;&amp;lt;Subscript to={[Container]}&amp;gt;&lt;/code&gt;するとContainerが渡ってくるので、
+このstateにアクセスしたりメソッドを呼んでstateを更新でき、変更があったら再レンダリングされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;Provider&amp;gt;
+    ...
+    &amp;lt;div className=&amp;quot;App&amp;quot;&amp;gt;
+        &amp;lt;div className=&amp;quot;Form&amp;quot;&amp;gt;&amp;lt;TodoForm&amp;gt;&amp;lt;/TodoForm&amp;gt;&amp;lt;/div&amp;gt;
+        &amp;lt;div className=&amp;quot;Chart&amp;quot;&amp;gt;&amp;lt;DoneChart&amp;gt;&amp;lt;/DoneChart&amp;gt;&amp;lt;/div&amp;gt;
+        &amp;lt;TodoList&amp;gt;&amp;lt;/TodoList&amp;gt;
+    &amp;lt;/div&amp;gt;
+&amp;lt;/Provider&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;# &amp;lt;DoneChart&amp;gt;
+&amp;lt;Subscribe to={[TodoContainer]}&amp;gt;
+    {(container: TodoContainer) =&amp;gt;
+        &amp;lt;PieChart width={200} height={200}&amp;gt;
+            &amp;lt;Pie data={this.data(container).data} dataKey=&amp;quot;value&amp;quot; innerRadius={60} outerRadius={80}&amp;gt;
+                {
+                    this.data(container).data.map(d =&amp;gt; &amp;lt;Cell fill={d.color} /&amp;gt;)
+                }
+            &amp;lt;/Pie&amp;gt;
+            &amp;lt;text x={100} y={105} textAnchor=&amp;quot;middle&amp;quot;&amp;gt;{this.data(container).ratio}&amp;lt;/text&amp;gt;
+        &amp;lt;/PieChart&amp;gt;
+    }
+&amp;lt;/Subscribe&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;recharts-http-recharts-org-en-us&#34;&gt;&lt;a href=&#34;http://recharts.org/en-US/&#34;&gt;Recharts&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Rechartsでグラフを描いた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm install --save recharts @types/recharts
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;PieChart width={200} height={200}&amp;gt;
+    &amp;lt;Pie data={this.data(container).data} dataKey=&amp;quot;value&amp;quot; innerRadius={60} outerRadius={80}&amp;gt;
+        {
+            this.data(container).data.map(d =&amp;gt; &amp;lt;Cell fill={d.color} /&amp;gt;)
+        }
+    &amp;lt;/Pie&amp;gt;
+    &amp;lt;text x={100} y={105} textAnchor=&amp;quot;middle&amp;quot;&amp;gt;{this.data(container).ratio}&amp;lt;/text&amp;gt;
+&amp;lt;/PieChart&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
