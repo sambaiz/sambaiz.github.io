@@ -6,8 +6,138 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-03-28 17:52:00 &#43;0900 JST</updated>
+    <updated>2019-04-08 21:01:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ</title>
+          <link>https://www.sambaiz.net/article/216/</link>
+          <pubDate>Mon, 08 Apr 2019 21:01:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/216/</guid>
+          <description>
+
+&lt;p&gt;Kaggleの家の売値を予測するCompetitionのKernelからデータの探り方を学ぶ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.kaggle.com/pmarcelino/comprehensive-data-exploration-with-python&#34;&gt;Comprehensive data exploration with Python&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;正規化&#34;&gt;正規化&lt;/h2&gt;
+
+&lt;p&gt;予測する値であるSalePriceの分布を出すと、やや左に寄った非対称の分布をしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import pandas as pd
+import seaborn as sns
+df = pd.read_csv(&#39;train.csv&#39;)
+df[&#39;SalePrice&#39;].describe()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;count      1460.000000
+mean     180921.195890
+std       79442.502883
+min       34900.000000
+25%      129975.000000
+50%      163000.000000
+75%      214000.000000
+max      755000.000000
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/216-1.png&#34; alt=&#34;SalePriceの分布&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.probplot.html&#34;&gt;scipy.stats.probplot()&lt;/a&gt;で
+プロットしても直線で表されている正規分布から外れていることが分かるが、正規分布であることが望ましい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from scipy import stats
+import matplotlib.pyplot as plt
+res = stats.probplot(df[&#39;SalePrice&#39;], dist=&#39;norm&#39;, plot=plt)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/216-4.png&#34; alt=&#34;SalePriceの分布と正規分布のprobplot()&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;そこで対数をとって正規分布に近づけてやる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import numpy as np
+res = stats.probplot(np.log(df[&#39;SalePrice&#39;]), dist=&#39;norm&#39;, plot=plt)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/216-5.png&#34; alt=&#34;SalePriceの分布と正規分布のprobplot()&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;欠損値&#34;&gt;欠損値&lt;/h2&gt;
+
+&lt;h3 id=&#34;欠損率&#34;&gt;欠損率&lt;/h3&gt;
+
+&lt;p&gt;特徴量の欠損(NA)率を多い順にならべてみると次のようにいくつかはほとんど欠損していることが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;total = df.isnull().sum().sort_values(ascending=False)
+percent = (df.isnull().sum()/df.isnull().count()).sort_values(ascending=False)
+missing_data = pd.concat([total, percent], axis=1, keys=[&#39;Total&#39;, &#39;Percent&#39;])
+print(missing_data.head(10))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;        Total   Percent
+PoolQC         1453  0.995205
+MiscFeature    1406  0.963014
+Alley          1369  0.937671
+Fence          1179  0.807534
+FireplaceQu     690  0.472603
+LotFrontage     259  0.177397
+GarageCond       81  0.055479
+GarageType       81  0.055479
+GarageYrBlt      81  0.055479
+GarageFinish     81  0.055479
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;パラメータ間の相関&#34;&gt;パラメータ間の相関&lt;/h3&gt;
+
+&lt;p&gt;まず各パラメータ間の相関を見てみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sns.heatmap(df.corr(), square=True);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/216-3.png&#34; alt=&#34;各パラメータの相関&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;色が濃くなっているところが強い相関がある組み合わせで、例えばSalePriceの行を見てみると
+OverallQual(品質)やGrLivArea(延べ床面積?)の正の相関が比較的強く、
+実際OverallQualとSalePriceの相関係数を出すと0.79とかなり高い。箱ひげ図で見ても分かりやすい。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import matplotlib.pyplot as plt
+data = pd.concat([df[&#39;SalePrice&#39;], df[&#39;OverallQual&#39;]], axis=1)
+f, ax = plt.subplots(figsize=(8, 6))
+fig = sns.boxplot(x=&#39;OverallQual&#39;, y=&amp;quot;SalePrice&amp;quot;, data=data)
+fig.axis(ymin=0, ymax=800000);
+print(df[&#39;SalePrice&#39;].corr(df[&#39;OverallQual&#39;])) # =&amp;gt; 0.7909816005838044
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/216-2.png&#34; alt=&#34;OverallQualとSalePriceの箱ひげ図&#34; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;欠損値の扱い&#34;&gt;欠損値の扱い&lt;/h3&gt;
+
+&lt;p&gt;欠損率があまりに多かったり、他に相関が強く代替できるものがあれば、
+取り除いてやったり、ほとんど欠損してない場合は欠損しているレコードだけ取り除くこともできるが、取り除き過ぎると精度が上がらない。
+そこでなるべく自然な、連続値であれば中央値や0といった値を埋めて使いたい。ドメイン知識が必要になることもある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;df[&amp;quot;PoolQC&amp;quot;].fillna(&amp;quot;None&amp;quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;外れ値&#34;&gt;外れ値&lt;/h2&gt;
+
+&lt;p&gt;X軸をGrLivArea、Y軸をSalePriceとしてPlotすると右下2点が外れ値になっていることが分かる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;data = pd.concat([df[&#39;SalePrice&#39;], df[&#39;GrLivArea&#39;]], axis=1)
+data.plot.scatter(x=&#39;GrLivArea&#39;, y=&#39;SalePrice&#39;, ylim=(0,800000));
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/216-6.png&#34; alt=&#34;X軸をGrLivArea、Y軸をSalePriceとしてPlotしたもの&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;これらに引っ張られないように除去してやる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;df = df.drop(df.sort_values(by = &#39;GrLivArea&#39;, ascending = False)[:2][&#39;Id&#39;].index)
+data = pd.concat([df[&#39;SalePrice&#39;], df[&#39;GrLivArea&#39;]], axis=1)
+data.plot.scatter(x=&#39;GrLivArea&#39;, y=&#39;SalePrice&#39;, ylim=(0,800000));
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
