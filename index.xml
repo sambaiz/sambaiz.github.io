@@ -6,8 +6,107 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-04-08 21:01:00 &#43;0900 JST</updated>
+    <updated>2019-04-13 23:13:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる</title>
+          <link>https://www.sambaiz.net/article/217/</link>
+          <pubDate>Sat, 13 Apr 2019 23:13:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/217/</guid>
+          <description>&lt;p&gt;Circle CI 2.1から&lt;a href=&#34;https://circleci.com/docs/2.0/orb-intro/&#34;&gt;Orb&lt;/a&gt;というjobをパッケージ化したものが使えるようになり、
+自分でjobを書かずとも様々な処理を実行させることができるようになった。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/183/&#34;&gt;CircleCI 2.0でDocker imageをbuildしてタグを付けてContainer Registryに上げる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;今回は&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://circleci.com/orbs/registry/orb/circleci/aws-ecr&#34;&gt;aws-ecr&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://circleci.com/orbs/registry/orb/circleci/slack&#34;&gt;slack&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;を使ってdocker buildしてECRにpushし、バージョンタグが付いている場合はSlackに通知させる。&lt;/p&gt;
+
+&lt;p&gt;AWS_ACCESS_KEY_IDとAWS_SECRET_ACCESS_KEYを環境変数に入れて、ECRのリポジトリを作成し、
+SlackのwebhookのURLを&lt;a href=&#34;https://slack.com/services/new/incoming-webhook&#34;&gt;発行&lt;/a&gt;しておく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;version: 2.1
+orbs:
+  aws-ecr: circleci/aws-ecr@3.1.0
+  slack: circleci/slack@2.3.0
+
+executors:
+  default:
+    machine: true
+    environment:
+      ECR_REPO: &#39;test-ecr-push&#39;
+      AWS_ECR_ACCOUNT_URL: &#39;&amp;lt;account_id&amp;gt;.dkr.ecr.&amp;lt;region&amp;gt;.amazonaws.com&#39;
+      AWS_REGION: &#39;&amp;lt;region&amp;gt;&#39;
+      CLUSTER_NAME: &#39;test&#39;
+
+jobs:
+  notify_slack:
+    executor: default
+    steps:
+      - slack/status:
+          success_message: &#39;${ECR_REPO}:${CIRCLE_TAG} was released&#39;
+          webhook: &#39;https://hooks.slack.com/services/******&#39;
+
+workflows:
+  build-push:
+    jobs:
+      - aws-ecr/build_and_push_image:
+          name: &amp;amp;build_version &#39;build-version&#39;
+          executor: default
+          repo: &#39;${ECR_REPO}&#39;
+          tag: &#39;${CIRCLE_TAG}&#39;
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+      - aws-ecr/build_and_push_image:
+          name: &#39;build-latest&#39;
+          executor: default
+          repo: &#39;${ECR_REPO}&#39;
+          tag: latest
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+      - aws-ecr/build_and_push_image:
+          name: &#39;build-hash&#39;
+          executor: default
+          repo: &#39;${ECR_REPO}&#39;
+          tag: &#39;${CIRCLE_SHA1}&#39;
+      - notify_slack:
+          requires:
+            - *build_version
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これだけでAWS CLIのインストールやDockerのセットアップから一通りやってくれる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/217.png&#34; alt=&#34;aws-ecr/build_and_push_imageの内容&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Slackへも通知される。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/217-2.png&#34; alt=&#34;Slack通知&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;同じjobを複数走らせる場合にrequiresで指定するにはnameが必須になる。
+そうでなくてもworkflowで見やすくなるので付けておいた方が良い。
+環境変数の記述をjob間で共有するのに、これも2.1から追加された&lt;a href=&#34;https://circleci.com/docs/2.0/configuration-reference/#executors-requires-version-21&#34;&gt;executor&lt;/a&gt;を使っている。&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -5397,6 +5496,10 @@ $ disown -h %1
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/183/</guid>
           <description>
+
+&lt;blockquote&gt;
+&lt;p&gt;(追記: 2019-04-13) 2.1からのOrbを使うと自分でjobを書かなくてもよい &lt;a href=&#34;https://www.sambaiz.net/article/217/&#34;&gt;CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
 
 &lt;p&gt;masterにpushしたときと、リリースタグを切ったときにビルドされるようにする。&lt;/p&gt;
 
