@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net</title>
-  <meta name="twitter:title" content="KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net">
-  <meta property='og:title' content="KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net">
+  <title>Box-Cox transformationで非正規分布のデータを正規分布に近づける - sambaiz-net</title>
+  <meta name="twitter:title" content="Box-Cox transformationで非正規分布のデータを正規分布に近づける - sambaiz-net">
+  <meta property='og:title' content="Box-Cox transformationで非正規分布のデータを正規分布に近づける - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="正規化と欠損値/外れ値">
-  <meta name="twitter:description" content="正規化と欠損値/外れ値">
+  <meta name="description" content="Box-Cox transformation">
+  <meta name="twitter:description" content="Box-Cox transformation">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/216/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/218/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ | sambaiz-net ",
-    "datePublished": "2019-04-08T21:01:00JST",
-    "dateModified": "2019-04-08T21:01:00JST",
+    "headline": "Box-Cox transformationで非正規分布のデータを正規分布に近づける | sambaiz-net ",
+    "datePublished": "2019-04-30T17:35:00JST",
+    "dateModified": "2019-04-30T17:35:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "正規化と欠損値/外れ値"
+    "description": "Box-Cox transformation"
   }
 </script>
 </head>
@@ -170,131 +170,110 @@
 
       <article class="single">
         <div class="single body">
-          <h1>KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ</h1>
-          <p>(2019-04-08)</p>
+          <h1>Box-Cox transformationで非正規分布のデータを正規分布に近づける</h1>
+          <p>(2019-04-30)</p>
           
 
-<p>Kaggleの家の売値を予測するCompetitionのKernelからデータの探り方を学ぶ。</p>
+<p>Box-Cox Transormationは次の式による変換。λ=0のときはlog(x)。</p>
 
-<p><a href="https://www.kaggle.com/pmarcelino/comprehensive-data-exploration-with-python">Comprehensive data exploration with Python</a></p>
+<p><img src="https://www.sambaiz.net/images/218-1.png" alt="式" /></p>
 
-<h2 id="正規化">正規化</h2>
+<p>λが1より大きい場合は小さな値の間隔が圧縮され、小さい場合は大きな値の間隔が圧縮されるように変換される。</p>
 
-<p>予測する値であるSalePriceの分布を出すと、やや左に寄った非対称の分布をしている。</p>
+<pre><code>import numpy as np
+from scipy.special import boxcox1p
+import matplotlib.pyplot as plt
+from bokeh.plotting import figure
+from bokeh.io import output_notebook, show
+output_notebook()
+
+p = figure(
+    title=&quot;Box-Cox Transformations&quot;,
+    x_axis_label='x', 
+    y_axis_label='λ',
+)
+
+for lam in [-1, 0, 1, 2]:
+  v = np.array([boxcox1p(i, lam) for i in range(10)])
+  v = v / v.max()
+  p.line(v, lam)
+  p.circle(v, lam, size=8)
+
+show(p)
+</code></pre>
+
+<p><img src="https://www.sambaiz.net/images/218-2.png" alt="λごとの変換後の間隔" /></p>
+
+<p>これによって左右非対称な分布を対称(skew=0)な正規分布に近づけることができる。
+以前正規分布に近づけるのに対数を取ったが、これはBox-Cox transformationの1ケースだといえる。</p>
+
+<p><a href="https://www.sambaiz.net/article/216/">KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net</a></p>
+
+<p>試しに適当な左右非対称な分布のデータを変換してみる。</p>
 
 <pre><code>import pandas as pd
 import seaborn as sns
-df = pd.read_csv('train.csv')
-df['SalePrice'].describe()
+
+p = np.array([500, 2000, 3000, 2500, 1000, 500, 125, 125, 0.0125, 0.0125])
+p = p / p.sum()
+data = np.random.choice([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], size=1000, p=p) * np.random.rand(1000)
+df = pd.DataFrame({
+    'x': data
+})
+print('skew={:.3}'.format(df['x'].skew())) # skew=1.08
+sns.distplot(df['x'], hist=False, label=('data'))
+sns.distplot(np.random.normal(df['x'].mean(), np.sqrt(df['x'].var()), len(data)), hist=False, label=('normal distribution'))
 </code></pre>
 
-<pre><code>count      1460.000000
-mean     180921.195890
-std       79442.502883
-min       34900.000000
-25%      129975.000000
-50%      163000.000000
-75%      214000.000000
-max      755000.000000
-</code></pre>
+<p><img src="https://www.sambaiz.net/images/218-3.png" alt="データの分布と正規分布" /></p>
 
-<p><img src="https://www.sambaiz.net/images/216-1.png" alt="SalePriceの分布" /></p>
+<p>評価値としてソートしたデータと正規分布のCDF(cumulative distribution function; 累積分布関数)の逆関数の相関係数を用いる。
+逆関数はppf()で、(0,1)の定義域で(-∞,∞)の値を取る。</p>
 
-<p><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.probplot.html">scipy.stats.probplot()</a>で
-プロットしても直線で表されている正規分布から外れていることが分かるが、正規分布であることが望ましい。</p>
-
-<pre><code>from scipy import stats
+<pre><code>from scipy.stats import norm
 import matplotlib.pyplot as plt
-res = stats.probplot(df['SalePrice'], dist='norm', plot=plt)
+
+x = [x * 0.001 for x in range(0, 1001)]
+y = norm.ppf(x) # inverse CDF
+plt.plot(x, y)
 </code></pre>
 
-<p><img src="https://www.sambaiz.net/images/216-4.png" alt="SalePriceの分布と正規分布のprobplot()" /></p>
+<p><img src="https://www.sambaiz.net/images/218-6.png" alt="正規分布のCDFの逆関数" /></p>
 
-<p>そこで対数をとって正規分布に近づけてやる。</p>
+<p>-2~2まで0.1刻みでλを動かして相関係数をプロットする。</p>
 
-<pre><code>import numpy as np
-res = stats.probplot(np.log(df['SalePrice']), dist='norm', plot=plt)
+<pre><code>from scipy.special import boxcox1p
+
+lams = [ i * 0.1 for i in range(-20, 20) ]
+data.sort()
+xs = [norm.ppf(((i+1) - 0.5) / len(data)) for  i in range(len(data))]
+yss = [np.array([boxcox1p(d, lam) for d in data]) for lam in lams] # boxcox1p(x) = ((x + 1) ** lam - 1) / lam
+cors = [np.corrcoef(xs, ys)[0, 1] for ys in yss]
+best_cor = -1.0
+for i, cor in enumerate(cors):
+  if best_cor &lt; cor:
+    best_cor = cor
+    best_lam = lams[i]
+    best_ys = yss[i]
+plt.plot(lams, cors)
 </code></pre>
 
-<p><img src="https://www.sambaiz.net/images/216-5.png" alt="SalePriceの分布と正規分布のprobplot()" /></p>
+<p><img src="https://www.sambaiz.net/images/218-4.png" alt="λごとの相関係数" /></p>
 
-<p>なお、この変換はBox-Cox transformationのλ=0のときにあたる。</p>
+<p>最良のλで変換したところskewが大きく減少し正規分布に近づいた。</p>
 
-<p><a href="https://www.sambaiz.net/article/218/">Box-Cox transformationで非正規分布のデータを正規分布に近づける - sambaiz-net</a></p>
+<pre><code>from scipy.stats import skew
 
-<h2 id="欠損値">欠損値</h2>
-
-<h3 id="欠損率">欠損率</h3>
-
-<p>特徴量の欠損(NA)率を多い順にならべてみると次のようにいくつかはほとんど欠損していることが分かる。</p>
-
-<pre><code>total = df.isnull().sum().sort_values(ascending=False)
-percent = (df.isnull().sum()/df.isnull().count()).sort_values(ascending=False)
-missing_data = pd.concat([total, percent], axis=1, keys=['Total', 'Percent'])
-print(missing_data.head(10))
+print('lambda={} skew={:.3}'.format(best_lam, skew(best_ys))) # lambda=-0.1 skew=0.11
+sns.distplot(best_ys, hist=False, label=('transformed data'))
+sns.distplot(np.random.normal(best_ys.mean(), np.sqrt(best_ys.var()), len(best_ys)), hist=False, label=('normal distribution'))
 </code></pre>
 
-<pre><code>        Total   Percent
-PoolQC         1453  0.995205
-MiscFeature    1406  0.963014
-Alley          1369  0.937671
-Fence          1179  0.807534
-FireplaceQu     690  0.472603
-LotFrontage     259  0.177397
-GarageCond       81  0.055479
-GarageType       81  0.055479
-GarageYrBlt      81  0.055479
-GarageFinish     81  0.055479
-</code></pre>
+<p><img src="https://www.sambaiz.net/images/218-5.png" alt="変換したデータの分布と正規分布" /></p>
 
-<h3 id="パラメータ間の相関">パラメータ間の相関</h3>
+<h2 id="参考">参考</h2>
 
-<p>まず各パラメータ間の相関を見てみる。</p>
-
-<pre><code>sns.heatmap(df.corr(), square=True);
-</code></pre>
-
-<p><img src="https://www.sambaiz.net/images/216-3.png" alt="各パラメータの相関" /></p>
-
-<p>色が濃くなっているところが強い相関がある組み合わせで、例えばSalePriceの行を見てみると
-OverallQual(品質)やGrLivArea(延べ床面積?)の正の相関が比較的強く、
-実際OverallQualとSalePriceの相関係数を出すと0.79とかなり高い。箱ひげ図で見ても分かりやすい。</p>
-
-<pre><code>import matplotlib.pyplot as plt
-data = pd.concat([df['SalePrice'], df['OverallQual']], axis=1)
-f, ax = plt.subplots(figsize=(8, 6))
-fig = sns.boxplot(x='OverallQual', y=&quot;SalePrice&quot;, data=data)
-fig.axis(ymin=0, ymax=800000);
-print(df['SalePrice'].corr(df['OverallQual'])) # =&gt; 0.7909816005838044
-</code></pre>
-
-<p><img src="https://www.sambaiz.net/images/216-2.png" alt="OverallQualとSalePriceの箱ひげ図" /></p>
-
-<h3 id="欠損値の扱い">欠損値の扱い</h3>
-
-<p>欠損率があまりに多かったり、他に相関が強く代替できるものがあれば、
-取り除いてやったり、ほとんど欠損してない場合は欠損しているレコードだけ取り除くこともできるが、取り除き過ぎると精度が上がらない。
-そこでなるべく自然な、連続値であれば中央値や0といった値を埋めて使いたい。ドメイン知識が必要になることもある。</p>
-
-<pre><code>df[&quot;PoolQC&quot;].fillna(&quot;None&quot;)
-</code></pre>
-
-<h2 id="外れ値">外れ値</h2>
-
-<p>X軸をGrLivArea、Y軸をSalePriceとしてPlotすると右下2点が外れ値になっていることが分かる。</p>
-
-<pre><code>data = pd.concat([df['SalePrice'], df['GrLivArea']], axis=1)
-data.plot.scatter(x='GrLivArea', y='SalePrice', ylim=(0,800000));
-</code></pre>
-
-<p><img src="https://www.sambaiz.net/images/216-6.png" alt="X軸をGrLivArea、Y軸をSalePriceとしてPlotしたもの" /></p>
-
-<p>これらに引っ張られないように除去してやる。</p>
-
-<pre><code>df = df.drop(df.sort_values(by = 'GrLivArea', ascending = False)[:2]['Id'].index)
-data = pd.concat([df['SalePrice'], df['GrLivArea']], axis=1)
-data.plot.scatter(x='GrLivArea', y='SalePrice', ylim=(0,800000));
-</code></pre>
+<p><a href="http://onlinestatbook.com/2/transformations/box-cox.html">Box-Cox Transformations</a></p>
 
         </div>
       </article>

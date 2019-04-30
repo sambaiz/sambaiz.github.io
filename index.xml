@@ -6,8 +6,121 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-04-13 23:13:00 &#43;0900 JST</updated>
+    <updated>2019-04-30 17:35:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Box-Cox transformationで非正規分布のデータを正規分布に近づける</title>
+          <link>https://www.sambaiz.net/article/218/</link>
+          <pubDate>Tue, 30 Apr 2019 17:35:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/218/</guid>
+          <description>
+
+&lt;p&gt;Box-Cox Transormationは次の式による変換。λ=0のときはlog(x)。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/218-1.png&#34; alt=&#34;式&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;λが1より大きい場合は小さな値の間隔が圧縮され、小さい場合は大きな値の間隔が圧縮されるように変換される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import numpy as np
+from scipy.special import boxcox1p
+import matplotlib.pyplot as plt
+from bokeh.plotting import figure
+from bokeh.io import output_notebook, show
+output_notebook()
+
+p = figure(
+    title=&amp;quot;Box-Cox Transformations&amp;quot;,
+    x_axis_label=&#39;x&#39;, 
+    y_axis_label=&#39;λ&#39;,
+)
+
+for lam in [-1, 0, 1, 2]:
+  v = np.array([boxcox1p(i, lam) for i in range(10)])
+  v = v / v.max()
+  p.line(v, lam)
+  p.circle(v, lam, size=8)
+
+show(p)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/218-2.png&#34; alt=&#34;λごとの変換後の間隔&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;これによって左右非対称な分布を対称(skew=0)な正規分布に近づけることができる。
+以前正規分布に近づけるのに対数を取ったが、これはBox-Cox transformationの1ケースだといえる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/216/&#34;&gt;KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;試しに適当な左右非対称な分布のデータを変換してみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import pandas as pd
+import seaborn as sns
+
+p = np.array([500, 2000, 3000, 2500, 1000, 500, 125, 125, 0.0125, 0.0125])
+p = p / p.sum()
+data = np.random.choice([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], size=1000, p=p) * np.random.rand(1000)
+df = pd.DataFrame({
+    &#39;x&#39;: data
+})
+print(&#39;skew={:.3}&#39;.format(df[&#39;x&#39;].skew())) # skew=1.08
+sns.distplot(df[&#39;x&#39;], hist=False, label=(&#39;data&#39;))
+sns.distplot(np.random.normal(df[&#39;x&#39;].mean(), np.sqrt(df[&#39;x&#39;].var()), len(data)), hist=False, label=(&#39;normal distribution&#39;))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/218-3.png&#34; alt=&#34;データの分布と正規分布&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;評価値としてソートしたデータと正規分布のCDF(cumulative distribution function; 累積分布関数)の逆関数の相関係数を用いる。
+逆関数はppf()で、(0,1)の定義域で(-∞,∞)の値を取る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from scipy.stats import norm
+import matplotlib.pyplot as plt
+
+x = [x * 0.001 for x in range(0, 1001)]
+y = norm.ppf(x) # inverse CDF
+plt.plot(x, y)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/218-6.png&#34; alt=&#34;正規分布のCDFの逆関数&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;-2~2まで0.1刻みでλを動かして相関係数をプロットする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from scipy.special import boxcox1p
+
+lams = [ i * 0.1 for i in range(-20, 20) ]
+data.sort()
+xs = [norm.ppf(((i+1) - 0.5) / len(data)) for  i in range(len(data))]
+yss = [np.array([boxcox1p(d, lam) for d in data]) for lam in lams] # boxcox1p(x) = ((x + 1) ** lam - 1) / lam
+cors = [np.corrcoef(xs, ys)[0, 1] for ys in yss]
+best_cor = -1.0
+for i, cor in enumerate(cors):
+  if best_cor &amp;lt; cor:
+    best_cor = cor
+    best_lam = lams[i]
+    best_ys = yss[i]
+plt.plot(lams, cors)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/218-4.png&#34; alt=&#34;λごとの相関係数&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;最良のλで変換したところskewが大きく減少し正規分布に近づいた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from scipy.stats import skew
+
+print(&#39;lambda={} skew={:.3}&#39;.format(best_lam, skew(best_ys))) # lambda=-0.1 skew=0.11
+sns.distplot(best_ys, hist=False, label=(&#39;transformed data&#39;))
+sns.distplot(np.random.normal(best_ys.mean(), np.sqrt(best_ys.var()), len(best_ys)), hist=False, label=(&#39;normal distribution&#39;))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/218-5.png&#34; alt=&#34;変換したデータの分布と正規分布&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://onlinestatbook.com/2/transformations/box-cox.html&#34;&gt;Box-Cox Transformations&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -16,7 +129,7 @@
           <pubDate>Sat, 13 Apr 2019 23:13:00 &#43;0900</pubDate>
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/217/</guid>
-          <description>&lt;p&gt;Circle CI 2.1から&lt;a href=&#34;https://circleci.com/docs/2.0/orb-intro/&#34;&gt;Orb&lt;/a&gt;というjobをパッケージ化したものが使えるようになり、
+          <description>&lt;p&gt;CircleCI 2.1から&lt;a href=&#34;https://circleci.com/docs/2.0/orb-intro/&#34;&gt;Orb&lt;/a&gt;というjobをパッケージ化したものが使えるようになり、
 自分でjobを書かずとも様々な処理を実行させることができるようになった。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/183/&#34;&gt;CircleCI 2.0でDocker imageをbuildしてタグを付けてContainer Registryに上げる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
@@ -160,6 +273,10 @@ res = stats.probplot(np.log(df[&#39;SalePrice&#39;]), dist=&#39;norm&#39;, plot=
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/216-5.png&#34; alt=&#34;SalePriceの分布と正規分布のprobplot()&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;なお、この変換はBox-Cox transformationのλ=0のときにあたる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/218/&#34;&gt;Box-Cox transformationで非正規分布のデータを正規分布に近づける - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;h2 id=&#34;欠損値&#34;&gt;欠損値&lt;/h2&gt;
 
@@ -5498,7 +5615,7 @@ $ disown -h %1
           <description>
 
 &lt;blockquote&gt;
-&lt;p&gt;(追記: 2019-04-13) 2.1からのOrbを使うと自分でjobを書かなくてもよい &lt;a href=&#34;https://www.sambaiz.net/article/217/&#34;&gt;CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;(追記: 2019-04-13) 2.1からのOrbを使うと自分でjobを書かなくてもよくなる &lt;a href=&#34;https://www.sambaiz.net/article/217/&#34;&gt;CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 &lt;/blockquote&gt;
 
 &lt;p&gt;masterにpushしたときと、リリースタグを切ったときにビルドされるようにする。&lt;/p&gt;
@@ -9515,7 +9632,7 @@ subjects:
           <guid>https://www.sambaiz.net/article/159/</guid>
           <description>
 
-&lt;p&gt;Logging AgentをNodeレベルの&lt;a href=&#34;https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/&#34;&gt;DaemonSet&lt;/a&gt;として動かすのではなく、Podの中に&lt;a href=&#34;https://kubernetes.io/docs/concepts/cluster-administration/logging/#using-a-sidecar-container-with-the-logging-agent&#34;&gt;Sidecar Container&lt;/a&gt;として動かす。その分リソースは食うけど、独自の設定で動かせる。&lt;/p&gt;
+&lt;p&gt;Logging AgentをNodeレベルの&lt;a href=&#34;https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/&#34;&gt;DaemonSet&lt;/a&gt;として動かすのではなく、Podの中に&lt;a href=&#34;https://kubernetes.io/docs/concepts/cluster-administration/logging/#using-a-sidecar-container-with-the-logging-agent&#34;&gt;Sidecar Container&lt;/a&gt;として動かす。その分リソースは食うけど、独立した設定で動かせる。&lt;/p&gt;
 
 &lt;h2 id=&#34;アプリケーション&#34;&gt;アプリケーション&lt;/h2&gt;
 
@@ -9528,7 +9645,7 @@ subjects:
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/104/&#34;&gt;Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://docs.docker.com/develop/develop-images/multistage-build/#name-your-build-stages&#34;&gt;multistage-build&lt;/a&gt;でビルドして、GKEで動かすのでContainer Registryに上げる。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://docs.docker.com/develop/develop-images/multistage-build/#name-your-build-stages&#34;&gt;multistage-build&lt;/a&gt;して、GKEで動かすのでContainer Registryに上げる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ docker build -t go-logging-sample .
 $ docker tag go-logging-sample gcr.io/&amp;lt;project_id&amp;gt;/go-logging-sample:v1 
