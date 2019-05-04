@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>ニューラルネットワークと活性化関数 - sambaiz-net</title>
-  <meta name="twitter:title" content="ニューラルネットワークと活性化関数 - sambaiz-net">
-  <meta property='og:title' content="ニューラルネットワークと活性化関数 - sambaiz-net">
+  <title>DatadogのAWS integrationとAlertの設定をTerraformで行う - sambaiz-net</title>
+  <meta name="twitter:title" content="DatadogのAWS integrationとAlertの設定をTerraformで行う - sambaiz-net">
+  <meta property='og:title' content="DatadogのAWS integrationとAlertの設定をTerraformで行う - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="sigmoid, tanh, softsign, softplus, ReLU, ELU">
-  <meta name="twitter:description" content="sigmoid, tanh, softsign, softplus, ReLU, ELU">
+  <meta name="description" content="IAM Roleの発行からMetric/Log Alertの作成まで">
+  <meta name="twitter:description" content="IAM Roleの発行からMetric/Log Alertの作成まで">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/133/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/219/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "ニューラルネットワークと活性化関数 | sambaiz-net ",
-    "datePublished": "2017-09-18T23:50:00JST",
-    "dateModified": "2017-09-18T23:50:00JST",
+    "headline": "DatadogのAWS integrationとAlertの設定をTerraformで行う | sambaiz-net ",
+    "datePublished": "2019-05-04T19:25:00JST",
+    "dateModified": "2019-05-04T19:25:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "sigmoid, tanh, softsign, softplus, ReLU, ELU"
+    "description": "IAM Roleの発行からMetric/Log Alertの作成まで"
   }
 </script>
 </head>
@@ -170,88 +170,106 @@
 
       <article class="single">
         <div class="single body">
-          <h1>ニューラルネットワークと活性化関数</h1>
-          <p>(2017-09-18)</p>
+          <h1>DatadogのAWS integrationとAlertの設定をTerraformで行う</h1>
+          <p>(2019-05-04)</p>
           
 
-<p>活性化関数というのは各層での重み掛けバイアス足しのあとに適用する非線形の関数。
-これはカーネル法のように空間を変換して線形分離できないデータを線形分離できるようにするはたらきをする。
-線形な関数を使うと層を重ねても結局線形のままで、空間もそのまま伸縮するだけなので目的を果たさない。</p>
+<p>DatadogのAWS integrationとAlertの設定をTerraformで行い、バージョン管理やレビューできるようにする。
+全体のコードは<a href="https://github.com/sambaiz/datadog-terraform-sample">GitHub</a>に置いてある。</p>
 
-<p>バックプロバゲーション(誤差逆伝播法)するために微分できる必要がある。</p>
+<h2 id="aws-integration">AWS Integration</h2>
 
-<p><a href="https://www.sambaiz.net/article/192/">MLPと誤差逆伝搬法(Backpropagation) - sambaiz-net</a></p>
+<p>まず<a href="https://www.terraform.io/docs/providers/datadog/r/integration_aws.html">datadog_integration_aws</a>でAWS integrationの設定を作成してExternalIDを取得し、Policy/Roleを作成する。</p>
 
-<p>Tensorflowでは以下の活性化関数が<a href="https://www.tensorflow.org/api_guides/python/nn#Activation_Functions">用意されている</a>。</p>
+<pre><code>resource &quot;datadog_integration_aws&quot; &quot;test&quot; {
+  account_id  = &quot;${var.aws_account_id}&quot;
+  role_name   = &quot;${var.aws_integration_role_name}&quot;
+  filter_tags = [&quot;datadog:1&quot;]
+}
 
-<h3 id="sigmoid-https-www-tensorflow-org-api-docs-python-tf-sigmoid"><a href="https://www.tensorflow.org/api_docs/python/tf/sigmoid">sigmoid</a></h3>
+data &quot;aws_iam_policy_document&quot; &quot;datadog_aws_integration_assume_role&quot; {
+  statement {
+    actions = [&quot;sts:AssumeRole&quot;]
 
-<p><img src="https://www.sambaiz.net/images/133-sigmoid.png" alt="シグモイド関数" /></p>
+    principals {
+      type        = &quot;AWS&quot;
+      identifiers = [&quot;arn:aws:iam::464622532012:root&quot;]
+    }
 
-<p><img src="https://www.sambaiz.net/images/133-sigmoid-f.png" alt="シグモイド関数の式と微分" /></p>
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;sts:ExternalId&quot;
 
-<p>値域は(0,1)で<a href="https://ja.wikipedia.org/wiki/%E3%82%B7%E3%82%B0%E3%83%A2%E3%82%A4%E3%83%89">シグマの語末系ςに似たS字を描く</a>。
-微分係数がそれほど大きくないので何層もこの関数を適用すると、バックプロバゲーションで微分係数を掛けていった結果、勾配が消失する問題がありあまり使われない。値域が(-1,1)で似たグラフを描く<a href="https://www.tensorflow.org/api_docs/python/tf/tanh">tanh</a>(Hyperbolic tangent)もある。</p>
-
-<h3 id="softsign-https-www-tensorflow-org-api-docs-python-tf-nn-softsign"><a href="https://www.tensorflow.org/api_docs/python/tf/nn/softsign">softsign</a></h3>
-
-<p><img src="https://www.sambaiz.net/images/133-softsign.png" alt="softsign" /></p>
-
-<p><img src="https://www.sambaiz.net/images/133-softsign-f.png" alt="softsign関数の式と微分" /></p>
-
-<p>tanhと比べて漸近線に近づく速度が遅くなっている。
-それほど性能は変わらないが、初期化においてロバストになるはたらきがあるようだ。</p>
-
-<h3 id="softplus-https-www-tensorflow-org-api-docs-python-tf-nn-softplus"><a href="https://www.tensorflow.org/api_docs/python/tf/nn/softplus">softplus</a></h3>
-
-<p><img src="https://www.sambaiz.net/images/133-softplus.png" alt="softplus" /></p>
-
-<p><img src="https://www.sambaiz.net/images/133-softplus-f.png" alt="softplus関数の式と微分" /></p>
-
-<p>ReLUに続く。</p>
-
-<h3 id="relu-https-www-tensorflow-org-api-docs-python-tf-nn-relu-rectified-linear-unit"><a href="https://www.tensorflow.org/api_docs/python/tf/nn/relu">ReLU</a>(Rectified Linear Unit)</h3>
-
-<p><img src="https://www.sambaiz.net/images/133-relu.png" alt="ReLU" /></p>
-
-<p><img src="https://www.sambaiz.net/images/133-relu-f.png" alt="ReLU関数の式と微分" /></p>
-
-<p>単純だけど最有力。勾配消失も起きにくい。x=0で微分できないが0か1として扱われる。</p>
-
-<pre><code>def deriv_relu(x):
-    return np.where(x &gt; 0, 1, 0)
+      values = [
+        &quot;${datadog_integration_aws.test.external_id}&quot;,
+      ]
+    }
+  }
+}
 </code></pre>
 
-<p>softplusと比べてexpやlogを含まない分高速に計算できるので、
-膨大で複雑なデータセットに対して多くの層を用いることができる。</p>
+<p>Datadog providerにはないSlackなどその他のintegrationは手動で設定する必要がある。
+また、Logも集める場合Serverless Application Repositoryから公式の<a href="https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:464622532012:applications~Datadog-Log-Forwarder">Datadog-Log-Forwarder</a>を入れて
+AWS IntegrationのところにLambdaのARNを入れるのも手動。</p>
 
-<p>0以下は等しく0になるため、学習中に落ちてしまうとニューロンが死んでしまう。
-これを避けるため0以下のとき<code>y = exp(x) - 1</code>にする<a href="https://www.tensorflow.org/api_docs/python/tf/nn/elu">ELU</a>(Exponential Linear Unit)
-というのもある。</p>
+<h2 id="alert">Alert</h2>
 
-<p><img src="https://www.sambaiz.net/images/133-elu.png" alt="ELU" /></p>
+<p><a href="https://www.terraform.io/docs/providers/datadog/r/monitor.html">datadog_monitor</a>でAlertを作成する。
+今回はLambdaの実行が失敗したときと、WARNという文字列が含まれるログが一定数出力されたときにAlertを飛ばすようにしてみた。
+初めに作るときは一度画面で意図通りアラートが飛ぶものを作成し、クエリなどをコピーするのが確実。</p>
 
-<p>比較的起きにくいとはいえ、層を深くすると勾配消失する可能性は高まる。
-活性化関数ごとに異なる重みの初期値によってこれを緩和でき、ReLUでは入力次元数によるHe Initializationというのが提案されている。</p>
+<pre><code>resource &quot;datadog_monitor&quot; &quot;lambda-error-alert&quot; {
+  name    = &quot;lambda-error-alert&quot;
+  type    = &quot;metric alert&quot;
+  message = &quot;Error occurred. @slack-alert&quot;
 
-<pre><code>rng = np.random.RandomState(1234)
-n_in = 10 # 入力次元数
-rng.uniform(
-    low=-np.sqrt(6/n_in),
-    high=+np.sqrt(6/n_in),
-    size=5
-) # He Initialization
+  # Note: We highly recommend a delay of at least 900s for AWS metrics.
+  evaluation_delay = 900
+
+  query = &quot;sum(last_1m):avg:aws.lambda.errors{*} by {functionname}.as_count() &gt;= 3&quot;
+
+  thresholds {
+    ok                = 0
+    critical          = 3
+    critical_recovery = 2
+  }
+
+  renotify_interval = 10
+}
+
+resource &quot;datadog_monitor&quot; &quot;lambda-warn-log-alert&quot; {
+  name    = &quot;lambda-warn-log-alert&quot;
+  type    = &quot;log alert&quot;
+  message = &quot;Many warn logs are being outputted. @slack-alert&quot;
+
+  query = &quot;logs(\&quot;service:lambda WARN\&quot;).index(\&quot;main\&quot;).rollup(\&quot;count\&quot;).by(\&quot;functionname\&quot;).last(\&quot;5m\&quot;) &gt; 4&quot;
+
+  thresholds {
+    ok       = 0
+    warning  = 2
+    critical = 4
+  }
+
+  renotify_interval = 10
+}
 </code></pre>
 
-<h2 id="参考">参考</h2>
+<p>一定確率でログやエラーを出すLambdaを動かしてAlertが飛ぶことを確認した。</p>
 
-<p><a href="https://medium.com/towards-data-science/activation-functions-and-its-types-which-is-better-a9a5310cc8f">Activation functions and it’s types-Which is better?</a></p>
+<pre><code>func Handler(ctx context.Context) (string, error) {
+	if rand.Intn(10) &lt; 7 {
+		fmt.Println(&quot;[WARN] some problem&quot;)
+	}
 
-<p><a href="http://www.orsj.or.jp/archive2/or60-4/or60_4_191.pdf">最適化から見たディープラーニングの考え方</a></p>
+	if rand.Intn(100) &gt; 10 {
+		return &quot;&quot;, errors.New(&quot;error&quot;)
+	}
 
-<p><a href="http://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf">Understanding the difficulty of training deep feedforward neural networks</a></p>
+	return &quot;done&quot;, nil
+}
+</code></pre>
 
-<p><a href="https://en.wikipedia.org/wiki/Rectifier_(neural_networks)">Rectifier (neural networks) - Wikipedia</a></p>
+<p><img src="https://www.sambaiz.net/images/219.png" alt="Slackに流れるAlert" /></p>
 
         </div>
       </article>

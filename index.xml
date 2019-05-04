@@ -6,8 +6,117 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-04-30 17:35:00 &#43;0900 JST</updated>
+    <updated>2019-05-04 19:25:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>DatadogのAWS integrationとAlertの設定をTerraformで行う</title>
+          <link>https://www.sambaiz.net/article/219/</link>
+          <pubDate>Sat, 04 May 2019 19:25:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/219/</guid>
+          <description>
+
+&lt;p&gt;DatadogのAWS integrationとAlertの設定をTerraformで行い、バージョン管理やレビューできるようにする。
+全体のコードは&lt;a href=&#34;https://github.com/sambaiz/datadog-terraform-sample&#34;&gt;GitHub&lt;/a&gt;に置いてある。&lt;/p&gt;
+
+&lt;h2 id=&#34;aws-integration&#34;&gt;AWS Integration&lt;/h2&gt;
+
+&lt;p&gt;まず&lt;a href=&#34;https://www.terraform.io/docs/providers/datadog/r/integration_aws.html&#34;&gt;datadog_integration_aws&lt;/a&gt;でAWS integrationの設定を作成してExternalIDを取得し、Policy/Roleを作成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;resource &amp;quot;datadog_integration_aws&amp;quot; &amp;quot;test&amp;quot; {
+  account_id  = &amp;quot;${var.aws_account_id}&amp;quot;
+  role_name   = &amp;quot;${var.aws_integration_role_name}&amp;quot;
+  filter_tags = [&amp;quot;datadog:1&amp;quot;]
+}
+
+data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;datadog_aws_integration_assume_role&amp;quot; {
+  statement {
+    actions = [&amp;quot;sts:AssumeRole&amp;quot;]
+
+    principals {
+      type        = &amp;quot;AWS&amp;quot;
+      identifiers = [&amp;quot;arn:aws:iam::464622532012:root&amp;quot;]
+    }
+
+    condition {
+      test     = &amp;quot;StringEquals&amp;quot;
+      variable = &amp;quot;sts:ExternalId&amp;quot;
+
+      values = [
+        &amp;quot;${datadog_integration_aws.test.external_id}&amp;quot;,
+      ]
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Datadog providerにはないSlackなどその他のintegrationは手動で設定する必要がある。
+また、Logも集める場合Serverless Application Repositoryから公式の&lt;a href=&#34;https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:464622532012:applications~Datadog-Log-Forwarder&#34;&gt;Datadog-Log-Forwarder&lt;/a&gt;を入れて
+AWS IntegrationのところにLambdaのARNを入れるのも手動。&lt;/p&gt;
+
+&lt;h2 id=&#34;alert&#34;&gt;Alert&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.terraform.io/docs/providers/datadog/r/monitor.html&#34;&gt;datadog_monitor&lt;/a&gt;でAlertを作成する。
+今回はLambdaの実行が失敗したときと、WARNという文字列が含まれるログが一定数出力されたときにAlertを飛ばすようにしてみた。
+初めに作るときは一度画面で意図通りアラートが飛ぶものを作成し、クエリなどをコピーするのが確実。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;resource &amp;quot;datadog_monitor&amp;quot; &amp;quot;lambda-error-alert&amp;quot; {
+  name    = &amp;quot;lambda-error-alert&amp;quot;
+  type    = &amp;quot;metric alert&amp;quot;
+  message = &amp;quot;Error occurred. @slack-alert&amp;quot;
+
+  # Note: We highly recommend a delay of at least 900s for AWS metrics.
+  evaluation_delay = 900
+
+  query = &amp;quot;sum(last_1m):avg:aws.lambda.errors{*} by {functionname}.as_count() &amp;gt;= 3&amp;quot;
+
+  thresholds {
+    ok                = 0
+    critical          = 3
+    critical_recovery = 2
+  }
+
+  renotify_interval = 10
+}
+
+resource &amp;quot;datadog_monitor&amp;quot; &amp;quot;lambda-warn-log-alert&amp;quot; {
+  name    = &amp;quot;lambda-warn-log-alert&amp;quot;
+  type    = &amp;quot;log alert&amp;quot;
+  message = &amp;quot;Many warn logs are being outputted. @slack-alert&amp;quot;
+
+  query = &amp;quot;logs(\&amp;quot;service:lambda WARN\&amp;quot;).index(\&amp;quot;main\&amp;quot;).rollup(\&amp;quot;count\&amp;quot;).by(\&amp;quot;functionname\&amp;quot;).last(\&amp;quot;5m\&amp;quot;) &amp;gt; 4&amp;quot;
+
+  thresholds {
+    ok       = 0
+    warning  = 2
+    critical = 4
+  }
+
+  renotify_interval = 10
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一定確率でログやエラーを出すLambdaを動かしてAlertが飛ぶことを確認した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func Handler(ctx context.Context) (string, error) {
+	if rand.Intn(10) &amp;lt; 7 {
+		fmt.Println(&amp;quot;[WARN] some problem&amp;quot;)
+	}
+
+	if rand.Intn(100) &amp;gt; 10 {
+		return &amp;quot;&amp;quot;, errors.New(&amp;quot;error&amp;quot;)
+	}
+
+	return &amp;quot;done&amp;quot;, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/219.png&#34; alt=&#34;Slackに流れるAlert&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
