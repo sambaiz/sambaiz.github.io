@@ -22,17 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Vr - sambaiz-net</title>
-  <meta name="twitter:title" content="Vr - sambaiz-net">
-  <meta property='og:title' content="Vr - sambaiz-net">
+  <title>ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net</title>
+  <meta name="twitter:title" content="ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net">
+  <meta property='og:title' content="ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="ECS FargateのTaskのサイドカーFluentdでログを送る">
+  <meta name="twitter:description" content="ECS FargateのTaskのサイドカーFluentdでログを送る">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/tags/vr/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/221/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https://www.sambaiz.net/"
+    },
+    "headline": "ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する | sambaiz-net ",
+    "datePublished": "2019-05-09T23:54:00JST",
+    "dateModified": "2019-05-09T23:54:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "ECS FargateのTaskのサイドカーFluentdでログを送る"
+  }
+</script>
 </head>
 
 <body>
@@ -126,50 +164,239 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">Vr</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する</h1>
+          <p>(2019-05-09)</p>
+          
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/36/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-11-16</time>
-      </div>
-      <p class="article title">WebVRを動かす</p>
-    </div>
-  </article>
-</a>
+<p>FargateのECSでサイドカーとしてFluentdのコンテナを動かしてアプリケーションのログをS3に送る。
+全体のコードは<a href="https://github.com/sambaiz/ecs-fargate-fluentd-sidecar">GitHub</a>にある。</p>
+
+<p><a href="https://www.sambaiz.net/article/196/">FargateでECSを使う - sambaiz-net</a></p>
+
+<p>なおFargateなのでDAEMONとして動かすことはできない。</p>
+
+<p><a href="https://www.sambaiz.net/article/159/">Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る - sambaiz-net</a></p>
+
+<h2 id="fluentd">Fluentd</h2>
+
+<p>必要なプラグインと設定ファイルを入れたイメージを作る。</p>
+
+<pre><code>FROM fluent/fluentd:v1.4-1
+
+USER root
+
+COPY ./fluent.conf /fluentd/etc/
+
+# install plugin
+RUN apk add --update --virtual .build-deps \
+    sudo build-base ruby-dev \
+    &amp;&amp; sudo gem install fluent-plugin-s3 -v 1.0.0 --no-document \
+    &amp;&amp; sudo gem install uuidtools \
+    &amp;&amp; sudo gem sources --clear-all \
+    &amp;&amp; apk del .build-deps \
+    &amp;&amp; rm -rf /var/cache/apk/* \
+    /home/fluent/.gem/ruby/*/cache/*.gem
+</code></pre>
+
+<p>fluent.confはこんな感じ。</p>
+
+<pre><code>&lt;source&gt;
+    @type tail
+    format json
+    path /var/log/test.log
+    pos_file /var/log/test.log.pos
+    tag test
+    &lt;parse&gt;
+      @type json
+      time_type string
+      time_format '%Y-%m-%dT%H:%M:%S%:z'
+      keep_time_key true
+    &lt;/parse&gt;
+&lt;/source&gt;
+
+&lt;match test&gt;
+  @type s3
+
+  s3_bucket my-test-logs-bbbbbb
+  s3_region ap-northeast-1
+  path test-log/
+  time_slice_format ymd=%Y-%m-%d/hour=%-H/
+  s3_object_key_format %{path}%{time_slice}%{uuid_flush}.json.%{file_extension}
+
+  &lt;buffer tag,time&gt;
+    @type file
+    path /var/log/fluent/test
+    timekey 60
+    timekey_wait 60
+    chunk_limit_size 30m
+  &lt;/buffer&gt;
+  &lt;format&gt;
+    @type json
+  &lt;/format&gt;
+&lt;/match&gt;
+</code></pre>
+
+<p>pushするとCircleCIでビルドしECRにpushされるようにした。</p>
+
+<p><a href="https://www.sambaiz.net/article/217/">CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる - sambaiz-net</a></p>
+
+<pre><code>workflows:
+  build-push:
+    jobs:
+      - aws-ecr/build_and_push_image:
+          name: 'build-latest'
+          executor: default
+          repo: '${ECR_REPO}'
+          tag: latest
+</code></pre>
+
+<h2 id="role-https-docs-aws-amazon-com-ja-jp-awscloudformation-latest-userguide-aws-resource-iam-role-html"><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html">Role</a></h2>
+
+<p>ECRからPullできるExecutionRoleとS3にPutできるTaskRoleを作る。</p>
+
+<pre><code>ExecutionRole:
+  Type: 'AWS::IAM::Role'
+  Properties:
+    RoleName: 'test-execution-role'
+    AssumeRolePolicyDocument: 
+      Version: '2012-10-17'
+      Statement: 
+        - Effect: 'Allow'
+          Principal:
+            Service: 'ecs-tasks.amazonaws.com'
+          Action: 
+            - 'sts:AssumeRole'
+    Policies: 
+      - PolicyName: 'test-execution-role'
+        PolicyDocument: 
+          Version: '2012-10-17'
+          Statement: 
+            - Effect: 'Allow'
+              Action:
+                - ecr:GetAuthorizationToken
+                - ecr:BatchCheckLayerAvailability
+                - ecr:GetDownloadUrlForLayer
+                - ecr:BatchGetImage
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+TaskRole:
+  Type: 'AWS::IAM::Role'
+  Properties:
+    RoleName: 'test-task-role'
+    AssumeRolePolicyDocument: 
+      Version: '2012-10-17'
+      Statement: 
+        - Effect: 'Allow'
+          Principal:
+            Service: 'ecs-tasks.amazonaws.com'
+          Action: 
+            - 'sts:AssumeRole'
+    Policies: 
+      - PolicyName: 'test-task-role'
+        PolicyDocument: 
+          Version: '2012-10-17'
+          Statement: 
+            - Effect: 'Allow'
+              Action: 's3:ListBucket'
+              Resource: !GetAtt Bucket.Arn
+            - Effect: 'Allow'
+              Action: 
+                - 's3:GetObject'
+                - 's3:PutObject'
+              Resource: !Join [ '/', [ !GetAtt Bucket.Arn, '*' ] ]
+</code></pre>
+
+<h2 id="taskdefinition-https-docs-aws-amazon-com-ja-jp-awscloudformation-latest-userguide-aws-resource-ecs-taskdefinition-html"><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html">TaskDefinition</a></h2>
+
+<p>Fargateで動かすのでNetworkModeはawsvpcになる。K8sのときと同様にvolumeをmountしてファイルを共有する。</p>
+
+<pre><code>TaskDefinition:
+  Type: AWS::ECS::TaskDefinition
+  Properties: 
+    RequiresCompatibilities:
+      - 'EC2'
+      - 'FARGATE'
+    NetworkMode: 'awsvpc'
+    ExecutionRoleArn: !Ref ExecutionRole
+    TaskRoleArn : !Ref TaskRole
+    Cpu: '256'
+    Memory: '512'
+    ContainerDefinitions: 
+      - Name: 'app'
+        Image: 'busybox'
+        EntryPoint: 
+          - 'sh'
+          - '-c'
+        Command: 
+          - 'while true; do echo &quot;{\&quot;foo\&quot;:1000,\&quot;time\&quot;:\&quot;2019-05-09T20:00:00+09:00\&quot;}&quot; &gt;&gt; /var/log/test.log; sleep 1; done'
+        Essential: 'true'
+        LogConfiguration:
+          LogDriver: 'awslogs'
+          Options:
+            awslogs-group: !Ref LogGroup
+            awslogs-region: 'ap-northeast-1'
+            awslogs-stream-prefix: 'app'
+        Environment:
+          - Name: 'TZ'
+            Value: 'Asia/Tokyo'
+        MountPoints: 
+          - SourceVolume: &quot;varlog&quot;
+            ContainerPath: &quot;/var/log&quot;
+      - Name: 'fluentd'
+        Image: !Join [ '/', [ '&lt;your_account_id&gt;.dkr.ecr.ap-northeast-1.amazonaws.com', !Ref Repository ] ]
+        Essential: 'true'
+        LogConfiguration:
+          LogDriver: 'awslogs'
+          Options:
+            awslogs-group: !Ref LogGroup
+            awslogs-region: 'ap-northeast-1'
+            awslogs-stream-prefix: 'fluentd'
+        MountPoints: 
+          - SourceVolume: &quot;varlog&quot;
+            ContainerPath: &quot;/var/log&quot;
+    Volumes: 
+      - Name: 'varlog'
+</code></pre>
+
+<h2 id="service-https-docs-aws-amazon-com-ja-jp-awscloudformation-latest-userguide-aws-resource-ecs-service-html"><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-service.html">Service</a></h2>
+
+<p>VPCやサブネットはこのスタックでは作らない。</p>
+
+<p><a href="https://www.sambaiz.net/article/206/">CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net</a></p>
+
+<pre><code>Service:
+  Type: AWS::ECS::Service
+  Properties:
+    Cluster: !Ref Cluster
+    LaunchType: FARGATE
+    DesiredCount: 1
+    TaskDefinition: !Ref TaskDefinition
+    NetworkConfiguration:
+      AwsvpcConfiguration:
+        # If private subnet is placed, set 'DISABLED' to pull images
+        AssignPublicIp: 'ENABLED'
+        Subnets: !Ref Subnets
+    ServiceName: 'test-service'
+</code></pre>
+
+<h2 id="確認">確認</h2>
+
+<p>スタックを上げるとServiceからTaskが動き、S3の正しいパスにログが保存される。
+ログが送られないときはfluent.confとログを、<code>ymd=1970-01-01</code>のようになってしまった場合はtime_formatの内容や場所を確認する。</p>
+
+<p><img src="https://www.sambaiz.net/images/221.png" alt="S3に保存されているログ" /></p>
 
         </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/29/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-10-30</time>
-      </div>
-      <p class="article title">剣を振るVRゲームを作った</p>
+      </article>
     </div>
-  </article>
-</a>
-
-        </div>
-        
-      </div>
-
-      
-
-
-    </div>
-
   </div>
-
 </div>
 
 </div> 

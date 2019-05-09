@@ -6,8 +6,239 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-05-06 15:59:00 &#43;0900 JST</updated>
+    <updated>2019-05-09 23:54:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する</title>
+          <link>https://www.sambaiz.net/article/221/</link>
+          <pubDate>Thu, 09 May 2019 23:54:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/221/</guid>
+          <description>
+
+&lt;p&gt;FargateのECSでサイドカーとしてFluentdのコンテナを動かしてアプリケーションのログをS3に送る。
+全体のコードは&lt;a href=&#34;https://github.com/sambaiz/ecs-fargate-fluentd-sidecar&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/196/&#34;&gt;FargateでECSを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;なおFargateなのでDAEMONとして動かすことはできない。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/159/&#34;&gt;Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;fluentd&#34;&gt;Fluentd&lt;/h2&gt;
+
+&lt;p&gt;必要なプラグインと設定ファイルを入れたイメージを作る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM fluent/fluentd:v1.4-1
+
+USER root
+
+COPY ./fluent.conf /fluentd/etc/
+
+# install plugin
+RUN apk add --update --virtual .build-deps \
+    sudo build-base ruby-dev \
+    &amp;amp;&amp;amp; sudo gem install fluent-plugin-s3 -v 1.0.0 --no-document \
+    &amp;amp;&amp;amp; sudo gem install uuidtools \
+    &amp;amp;&amp;amp; sudo gem sources --clear-all \
+    &amp;amp;&amp;amp; apk del .build-deps \
+    &amp;amp;&amp;amp; rm -rf /var/cache/apk/* \
+    /home/fluent/.gem/ruby/*/cache/*.gem
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fluent.confはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;lt;source&amp;gt;
+    @type tail
+    format json
+    path /var/log/test.log
+    pos_file /var/log/test.log.pos
+    tag test
+    &amp;lt;parse&amp;gt;
+      @type json
+      time_type string
+      time_format &#39;%Y-%m-%dT%H:%M:%S%:z&#39;
+      keep_time_key true
+    &amp;lt;/parse&amp;gt;
+&amp;lt;/source&amp;gt;
+
+&amp;lt;match test&amp;gt;
+  @type s3
+
+  s3_bucket my-test-logs-bbbbbb
+  s3_region ap-northeast-1
+  path test-log/
+  time_slice_format ymd=%Y-%m-%d/hour=%-H/
+  s3_object_key_format %{path}%{time_slice}%{uuid_flush}.json.%{file_extension}
+
+  &amp;lt;buffer tag,time&amp;gt;
+    @type file
+    path /var/log/fluent/test
+    timekey 60
+    timekey_wait 60
+    chunk_limit_size 30m
+  &amp;lt;/buffer&amp;gt;
+  &amp;lt;format&amp;gt;
+    @type json
+  &amp;lt;/format&amp;gt;
+&amp;lt;/match&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pushするとCircleCIでビルドしECRにpushされるようにした。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/217/&#34;&gt;CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;workflows:
+  build-push:
+    jobs:
+      - aws-ecr/build_and_push_image:
+          name: &#39;build-latest&#39;
+          executor: default
+          repo: &#39;${ECR_REPO}&#39;
+          tag: latest
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;role-https-docs-aws-amazon-com-ja-jp-awscloudformation-latest-userguide-aws-resource-iam-role-html&#34;&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-iam-role.html&#34;&gt;Role&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;ECRからPullできるExecutionRoleとS3にPutできるTaskRoleを作る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ExecutionRole:
+  Type: &#39;AWS::IAM::Role&#39;
+  Properties:
+    RoleName: &#39;test-execution-role&#39;
+    AssumeRolePolicyDocument: 
+      Version: &#39;2012-10-17&#39;
+      Statement: 
+        - Effect: &#39;Allow&#39;
+          Principal:
+            Service: &#39;ecs-tasks.amazonaws.com&#39;
+          Action: 
+            - &#39;sts:AssumeRole&#39;
+    Policies: 
+      - PolicyName: &#39;test-execution-role&#39;
+        PolicyDocument: 
+          Version: &#39;2012-10-17&#39;
+          Statement: 
+            - Effect: &#39;Allow&#39;
+              Action:
+                - ecr:GetAuthorizationToken
+                - ecr:BatchCheckLayerAvailability
+                - ecr:GetDownloadUrlForLayer
+                - ecr:BatchGetImage
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: &#39;*&#39;
+TaskRole:
+  Type: &#39;AWS::IAM::Role&#39;
+  Properties:
+    RoleName: &#39;test-task-role&#39;
+    AssumeRolePolicyDocument: 
+      Version: &#39;2012-10-17&#39;
+      Statement: 
+        - Effect: &#39;Allow&#39;
+          Principal:
+            Service: &#39;ecs-tasks.amazonaws.com&#39;
+          Action: 
+            - &#39;sts:AssumeRole&#39;
+    Policies: 
+      - PolicyName: &#39;test-task-role&#39;
+        PolicyDocument: 
+          Version: &#39;2012-10-17&#39;
+          Statement: 
+            - Effect: &#39;Allow&#39;
+              Action: &#39;s3:ListBucket&#39;
+              Resource: !GetAtt Bucket.Arn
+            - Effect: &#39;Allow&#39;
+              Action: 
+                - &#39;s3:GetObject&#39;
+                - &#39;s3:PutObject&#39;
+              Resource: !Join [ &#39;/&#39;, [ !GetAtt Bucket.Arn, &#39;*&#39; ] ]
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;taskdefinition-https-docs-aws-amazon-com-ja-jp-awscloudformation-latest-userguide-aws-resource-ecs-taskdefinition-html&#34;&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-taskdefinition.html&#34;&gt;TaskDefinition&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;Fargateで動かすのでNetworkModeはawsvpcになる。K8sのときと同様にvolumeをmountしてファイルを共有する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;TaskDefinition:
+  Type: AWS::ECS::TaskDefinition
+  Properties: 
+    RequiresCompatibilities:
+      - &#39;EC2&#39;
+      - &#39;FARGATE&#39;
+    NetworkMode: &#39;awsvpc&#39;
+    ExecutionRoleArn: !Ref ExecutionRole
+    TaskRoleArn : !Ref TaskRole
+    Cpu: &#39;256&#39;
+    Memory: &#39;512&#39;
+    ContainerDefinitions: 
+      - Name: &#39;app&#39;
+        Image: &#39;busybox&#39;
+        EntryPoint: 
+          - &#39;sh&#39;
+          - &#39;-c&#39;
+        Command: 
+          - &#39;while true; do echo &amp;quot;{\&amp;quot;foo\&amp;quot;:1000,\&amp;quot;time\&amp;quot;:\&amp;quot;2019-05-09T20:00:00+09:00\&amp;quot;}&amp;quot; &amp;gt;&amp;gt; /var/log/test.log; sleep 1; done&#39;
+        Essential: &#39;true&#39;
+        LogConfiguration:
+          LogDriver: &#39;awslogs&#39;
+          Options:
+            awslogs-group: !Ref LogGroup
+            awslogs-region: &#39;ap-northeast-1&#39;
+            awslogs-stream-prefix: &#39;app&#39;
+        Environment:
+          - Name: &#39;TZ&#39;
+            Value: &#39;Asia/Tokyo&#39;
+        MountPoints: 
+          - SourceVolume: &amp;quot;varlog&amp;quot;
+            ContainerPath: &amp;quot;/var/log&amp;quot;
+      - Name: &#39;fluentd&#39;
+        Image: !Join [ &#39;/&#39;, [ &#39;&amp;lt;your_account_id&amp;gt;.dkr.ecr.ap-northeast-1.amazonaws.com&#39;, !Ref Repository ] ]
+        Essential: &#39;true&#39;
+        LogConfiguration:
+          LogDriver: &#39;awslogs&#39;
+          Options:
+            awslogs-group: !Ref LogGroup
+            awslogs-region: &#39;ap-northeast-1&#39;
+            awslogs-stream-prefix: &#39;fluentd&#39;
+        MountPoints: 
+          - SourceVolume: &amp;quot;varlog&amp;quot;
+            ContainerPath: &amp;quot;/var/log&amp;quot;
+    Volumes: 
+      - Name: &#39;varlog&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;service-https-docs-aws-amazon-com-ja-jp-awscloudformation-latest-userguide-aws-resource-ecs-service-html&#34;&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-ecs-service.html&#34;&gt;Service&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;VPCやサブネットはこのスタックでは作らない。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/206/&#34;&gt;CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Service:
+  Type: AWS::ECS::Service
+  Properties:
+    Cluster: !Ref Cluster
+    LaunchType: FARGATE
+    DesiredCount: 1
+    TaskDefinition: !Ref TaskDefinition
+    NetworkConfiguration:
+      AwsvpcConfiguration:
+        # If private subnet is placed, set &#39;DISABLED&#39; to pull images
+        AssignPublicIp: &#39;ENABLED&#39;
+        Subnets: !Ref Subnets
+    ServiceName: &#39;test-service&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;確認&#34;&gt;確認&lt;/h2&gt;
+
+&lt;p&gt;スタックを上げるとServiceからTaskが動き、S3の正しいパスにログが保存される。
+ログが送られないときはfluent.confとログを、&lt;code&gt;ymd=1970-01-01&lt;/code&gt;のようになってしまった場合はtime_formatの内容や場所を確認する。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/221.png&#34; alt=&#34;S3に保存されているログ&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -3385,6 +3616,8 @@ $ aws ecs list-services --cluster test
     ]
 }
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/221/&#34;&gt;ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 </description>
         </item>
       
