@@ -18,12 +18,11 @@
           <guid>https://www.sambaiz.net/article/221/</guid>
           <description>
 
-&lt;p&gt;FargateのECSでサイドカーとしてFluentdのコンテナを動かしてアプリケーションのログをS3に送る。
+&lt;p&gt;DAEMONを動かすことは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/ecs_services.html#service_scheduler&#34;&gt;できず&lt;/a&gt;、logdriverでfluentdを指定することも&lt;a href=&#34;https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_LogConfiguration.html&#34;&gt;できない&lt;/a&gt;Fargateで、
+サイドカーとしてFluentdのコンテナを動かしてアプリケーションのログをS3に送る。
 全体のコードは&lt;a href=&#34;https://github.com/sambaiz/ecs-fargate-fluentd-sidecar&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/196/&#34;&gt;FargateでECSを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;p&gt;なおFargateなのでDAEMONとして動かすことはできない。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/159/&#34;&gt;Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
@@ -38,14 +37,19 @@ USER root
 COPY ./fluent.conf /fluentd/etc/
 
 # install plugin
-RUN apk add --update --virtual .build-deps \
-    sudo build-base ruby-dev \
-    &amp;amp;&amp;amp; sudo gem install fluent-plugin-s3 -v 1.0.0 --no-document \
-    &amp;amp;&amp;amp; sudo gem install uuidtools \
-    &amp;amp;&amp;amp; sudo gem sources --clear-all \
+RUN apk add --update-cache --virtual .build-deps sudo build-base ruby-dev \
+    &amp;amp;&amp;amp; gem install fluent-plugin-s3 -v 1.0.0 --no-document \
+    &amp;amp;&amp;amp; gem install uuidtools \
+    &amp;amp;&amp;amp; gem sources --clear-all \
     &amp;amp;&amp;amp; apk del .build-deps \
     &amp;amp;&amp;amp; rm -rf /var/cache/apk/* \
     /home/fluent/.gem/ruby/*/cache/*.gem
+
+# set timezone (Alpine)
+RUN apk --update-cache add tzdata &amp;amp;&amp;amp; \
+    cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime &amp;amp;&amp;amp; \
+    apk del tzdata &amp;amp;&amp;amp; \
+    rm -rf /var/cache/apk/*
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;fluent.confはこんな感じ。&lt;/p&gt;
@@ -233,7 +237,8 @@ TaskRole:
 &lt;h2 id=&#34;確認&#34;&gt;確認&lt;/h2&gt;
 
 &lt;p&gt;スタックを上げるとServiceからTaskが動き、S3の正しいパスにログが保存される。
-ログが送られないときはfluent.confとログを、&lt;code&gt;ymd=1970-01-01&lt;/code&gt;のようになってしまった場合はtime_formatの内容や場所を確認する。&lt;/p&gt;
+保存されないときはfluent.confとCloudWatchにあるFluentdのログを、&lt;code&gt;ymd=1970-01-01&lt;/code&gt;になってしまった場合はtime_formatの内容や場所を、
+時間がずれている場合はFluentdコンテナのタイムゾーンが正しいか確認する。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/221.png&#34; alt=&#34;S3に保存されているログ&#34; /&gt;&lt;/p&gt;
 </description>

@@ -27,8 +27,8 @@
   <meta property='og:title' content="ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="ECS FargateのTaskのサイドカーFluentdでログを送る">
-  <meta name="twitter:description" content="ECS FargateのTaskのサイドカーFluentdでログを送る">
+  <meta name="description" content="Daemonやlogdriverに制約のあるECS FargateでサイドカーとしてFluentdを動かしログを送る">
+  <meta name="twitter:description" content="Daemonやlogdriverに制約のあるECS FargateでサイドカーとしてFluentdを動かしログを送る">
   
   
 
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "ECS FargateのTaskのサイドカーFluentdでログを送る"
+    "description": "Daemonやlogdriverに制約のあるECS FargateでサイドカーとしてFluentdを動かしログを送る"
   }
 </script>
 </head>
@@ -174,12 +174,11 @@
           <p>(2019-05-09)</p>
           
 
-<p>FargateのECSでサイドカーとしてFluentdのコンテナを動かしてアプリケーションのログをS3に送る。
+<p>DAEMONを動かすことは<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/ecs_services.html#service_scheduler">できず</a>、logdriverでfluentdを指定することも<a href="https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_LogConfiguration.html">できない</a>Fargateで、
+サイドカーとしてFluentdのコンテナを動かしてアプリケーションのログをS3に送る。
 全体のコードは<a href="https://github.com/sambaiz/ecs-fargate-fluentd-sidecar">GitHub</a>にある。</p>
 
 <p><a href="https://www.sambaiz.net/article/196/">FargateでECSを使う - sambaiz-net</a></p>
-
-<p>なおFargateなのでDAEMONとして動かすことはできない。</p>
 
 <p><a href="https://www.sambaiz.net/article/159/">Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る - sambaiz-net</a></p>
 
@@ -194,14 +193,19 @@ USER root
 COPY ./fluent.conf /fluentd/etc/
 
 # install plugin
-RUN apk add --update --virtual .build-deps \
-    sudo build-base ruby-dev \
-    &amp;&amp; sudo gem install fluent-plugin-s3 -v 1.0.0 --no-document \
-    &amp;&amp; sudo gem install uuidtools \
-    &amp;&amp; sudo gem sources --clear-all \
+RUN apk add --update-cache --virtual .build-deps sudo build-base ruby-dev \
+    &amp;&amp; gem install fluent-plugin-s3 -v 1.0.0 --no-document \
+    &amp;&amp; gem install uuidtools \
+    &amp;&amp; gem sources --clear-all \
     &amp;&amp; apk del .build-deps \
     &amp;&amp; rm -rf /var/cache/apk/* \
     /home/fluent/.gem/ruby/*/cache/*.gem
+
+# set timezone (Alpine)
+RUN apk --update-cache add tzdata &amp;&amp; \
+    cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime &amp;&amp; \
+    apk del tzdata &amp;&amp; \
+    rm -rf /var/cache/apk/*
 </code></pre>
 
 <p>fluent.confはこんな感じ。</p>
@@ -389,7 +393,8 @@ TaskRole:
 <h2 id="確認">確認</h2>
 
 <p>スタックを上げるとServiceからTaskが動き、S3の正しいパスにログが保存される。
-ログが送られないときはfluent.confとログを、<code>ymd=1970-01-01</code>のようになってしまった場合はtime_formatの内容や場所を確認する。</p>
+保存されないときはfluent.confとCloudWatchにあるFluentdのログを、<code>ymd=1970-01-01</code>になってしまった場合はtime_formatの内容や場所を、
+時間がずれている場合はFluentdコンテナのタイムゾーンが正しいか確認する。</p>
 
 <p><img src="https://www.sambaiz.net/images/221.png" alt="S3に保存されているログ" /></p>
 
