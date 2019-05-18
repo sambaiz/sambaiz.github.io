@@ -18,7 +18,8 @@
           <guid>https://www.sambaiz.net/article/221/</guid>
           <description>
 
-&lt;p&gt;DAEMONを動かすことは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/ecs_services.html#service_scheduler&#34;&gt;できず&lt;/a&gt;、logdriverでfluentdを指定することも&lt;a href=&#34;https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_LogConfiguration.html&#34;&gt;できない&lt;/a&gt;Fargateで、
+&lt;p&gt;DAEMONを動かすことは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/ecs_services.html#service_scheduler&#34;&gt;できず&lt;/a&gt;、
+fluentd logdriverも&lt;a href=&#34;https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_LogConfiguration.html&#34;&gt;サポートされていない&lt;/a&gt;Fargateで、
 サイドカーとしてFluentdのコンテナを動かしてアプリケーションのログをS3に送る。
 全体のコードは&lt;a href=&#34;https://github.com/sambaiz/ecs-fargate-fluentd-sidecar&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
 
@@ -523,6 +524,12 @@ sns.distplot(np.random.normal(best_ys.mean(), np.sqrt(best_ys.var()), len(best_y
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/218-5.png&#34; alt=&#34;変換したデータの分布と正規分布&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.scipy.org/doc/scipy/reference/generated/scipy.special.inv_boxcox1p.html&#34;&gt;inv_boxcox1p&lt;/a&gt;で元に戻せる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;from scipy.special import inv_boxcox1p
+inv_ys = inv_boxcox1p(best_ys, best_lam)
+&lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
 
@@ -1938,7 +1945,7 @@ TestPrivateSubnet1:
   Type: AWS::EC2::Subnet
   Properties:
     VpcId: !Ref TestVPC
-    CidrBlock: 172.32.0.129/26
+    CidrBlock: 172.32.0.128/26
     AvailabilityZone: us-east-1a
     Tags:
       - Key: Name
@@ -1947,7 +1954,7 @@ TestPrivateSubnet2:
   Type: AWS::EC2::Subnet
   Properties:
     VpcId: !Ref TestVPC
-    CidrBlock: 172.32.0.193/26
+    CidrBlock: 172.32.0.192/26
     AvailabilityZone: us-east-1b
     Tags:
       - Key: Name
@@ -2056,12 +2063,31 @@ TestSecurityGroupIngress:
 &lt;h2 id=&#34;aurora-serverlessの作成&#34;&gt;Aurora Serverlessの作成&lt;/h2&gt;
 
 &lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-secretsmanager-secret.html&#34;&gt;Secret&lt;/a&gt;&lt;/li&gt;
 &lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-rds-dbcluster.html&#34;&gt;DBCluster&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;
 
+&lt;p&gt;認証情報はSecretsManagerに置いてパスワードも自動生成させる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/204/&#34;&gt;AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
 &lt;p&gt;ACUが0の状態で確認しやすくするためSecondsUntilAutoPauseを最短の300にしている。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;TestSubnetGroup:
+&lt;pre&gt;&lt;code&gt;AuroraSecret:
+  Type: AWS::SecretsManager::Secret
+  Properties:
+    GenerateSecretString:
+      SecretStringTemplate: &#39;{&amp;quot;username&amp;quot;: &amp;quot;test&amp;quot;}&#39;
+      GenerateStringKey: &#39;password&#39;
+      PasswordLength: 16
+      ExcludeCharacters: &#39;&amp;quot;@/\&#39;
+ SecretRDSInstanceAttachment:
+  Type: AWS::SecretsManager::SecretTargetAttachment
+  Properties:
+    SecretId: !Ref AuroraSecret
+    TargetId: !Ref AuroraServerless
+    TargetType: AWS::RDS::DBCluster
+TestSubnetGroup:
   Type: &amp;quot;AWS::RDS::DBSubnetGroup&amp;quot;
   Properties: 
     DBSubnetGroupDescription: test subnet group
@@ -2079,8 +2105,8 @@ AuroraServerless:
     DeletionProtection: true
     Port: 3306
     DatabaseName: test
-    MasterUsername: test
-    MasterUserPassword: testtest
+    MasterUsername: !Join [&#39;&#39;, [&#39;{{resolve:secretsmanager:&#39;, !Ref AuroraSecret, &#39;:SecretString:username}}&#39; ]]
+    MasterUserPassword: !Join [&#39;&#39;, [&#39;{{resolve:secretsmanager:&#39;, !Ref AuroraSecret, &#39;:SecretString:password}}&#39; ]]
     DBSubnetGroupName: !Ref TestSubnetGroup
     VpcSecurityGroupIds:
       - !Ref TestSecurityGroup
@@ -2090,16 +2116,12 @@ AuroraServerless:
       SecondsUntilAutoPause: 300
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;環境変数とVPCまわりの設定はこんな感じ。&lt;/p&gt;
+&lt;p&gt;環境変数とVPCまわりの設定はこんな感じ。
+ServerlessFrameworkではデプロイ時にSecretを解決することもできるが、ローテーションすることも考えて実行時に取りに行っている。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;environment:
   TZ: Asia/Tokyo
-  DB_USER: ${self:resources.Resources.AuroraServerless.Properties.MasterUsername}
-  DB_PASSWORD: ${self:resources.Resources.AuroraServerless.Properties.MasterUserPassword}
-  DB_ENDPOINT_ADDRESS: 
-    Fn::GetAtt: [ AuroraServerless, Endpoint.Address ]
-  DB_ENDPOINT_PORT: ${self:resources.Resources.AuroraServerless.Properties.Port}
-  DB_DATABASE: ${self:resources.Resources.AuroraServerless.Properties.DatabaseName}
+  DB_SECRET: !Ref AuroraSecret
 vpc:
   securityGroupIds:
     - !Ref TestSecurityGroup
@@ -2117,6 +2139,37 @@ iamRoleStatements:
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;アプリケーション&#34;&gt;アプリケーション&lt;/h2&gt;
+
+&lt;p&gt;Secretsにはusernameやpasswordだけではなくhostやport、dbNameまで含まれているのでこれだけで接続情報が作れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;type dbConfig struct {
+  Password string `json:&amp;quot;password&amp;quot;`
+  DbName   string `json:&amp;quot;dbname&amp;quot;`
+  Engine   string `json:&amp;quot;engine&amp;quot;`
+  Port     int    `json:&amp;quot;port&amp;quot;`
+  Host     string `json:&amp;quot;host&amp;quot;`
+  UserName string `json:&amp;quot;username&amp;quot;`
+}
+
+func dbSrc() (string, error) {
+  secret, err := secret.GetSecretString(os.Getenv(&amp;quot;DB_SECRET&amp;quot;))
+  if err != nil {
+    return &amp;quot;&amp;quot;, err
+  }
+  var config dbConfig
+  if err := json.Unmarshal([]byte(secret), &amp;amp;config); err != nil {
+    return &amp;quot;&amp;quot;, err
+  }
+  return fmt.Sprintf(
+    &amp;quot;%s:%s@tcp(%s:%d)/%s?parseTime=true&amp;quot;,
+    config.UserName,
+    config.Password,
+    config.Host,
+    config.Port,
+    config.DbName,
+  ), nil
+}
+&lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;トランザクションを張ってINSERTしSELECTする。&lt;/p&gt;
 
@@ -2448,9 +2501,10 @@ print(&#39;Loss: {:.3f}, Accuracy: {:.3f}&#39;.format(
 &lt;a href=&#34;https://aws.amazon.com/jp/systems-manager/pricing/&#34;&gt;料金&lt;/a&gt;はかからない。&lt;/p&gt;
 
 &lt;p&gt;SSMのParameter Storeと似たような別のAWSのサービスに
-&lt;a href=&#34;https://aws.amazon.com/jp/secrets-manager/&#34;&gt;Secrets Manager&lt;/a&gt;というのがあって、
-こちらはLambdaによって定期的に新しい値を生成しローテーションさせることができる。特にRDSなら自前の関数を用意する必要もない。
+&lt;a href=&#34;https://aws.amazon.com/jp/secrets-manager/&#34;&gt;Secrets Manager&lt;/a&gt;というのがあって、RDSなどと連携してLambdaによって定期的に新しい値を生成しローテーションさせることができる。
 ただし&lt;a href=&#34;https://aws.amazon.com/jp/secrets-manager/pricing/&#34;&gt;料金&lt;/a&gt;がシークレットの件数($0.4/月)とAPIコール($0.05/10000回)でかかる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/206/&#34;&gt;CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;今はParamter StoreとSecrets Managerが&lt;a href=&#34;https://aws.amazon.com/jp/about-aws/whats-new/2018/07/aws-systems-manager-parameter-store-integrates-with-aws-secrets-manager-and-adds-parameter-version-labeling/&#34;&gt;統合されていて&lt;/a&gt;、Parameter StoreのAPIでどちらも参照できるようだ。
 今回はローテーションしないので単純に料金がかからないParameter Storeの方に書き込むことにする。

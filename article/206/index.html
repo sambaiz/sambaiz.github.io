@@ -233,7 +233,7 @@ TestPrivateSubnet1:
   Type: AWS::EC2::Subnet
   Properties:
     VpcId: !Ref TestVPC
-    CidrBlock: 172.32.0.129/26
+    CidrBlock: 172.32.0.128/26
     AvailabilityZone: us-east-1a
     Tags:
       - Key: Name
@@ -242,7 +242,7 @@ TestPrivateSubnet2:
   Type: AWS::EC2::Subnet
   Properties:
     VpcId: !Ref TestVPC
-    CidrBlock: 172.32.0.193/26
+    CidrBlock: 172.32.0.192/26
     AvailabilityZone: us-east-1b
     Tags:
       - Key: Name
@@ -351,12 +351,31 @@ TestSecurityGroupIngress:
 <h2 id="aurora-serverlessの作成">Aurora Serverlessの作成</h2>
 
 <ul>
+<li><a href="https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-secretsmanager-secret.html">Secret</a></li>
 <li><a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-rds-dbcluster.html">DBCluster</a></li>
 </ul>
 
+<p>認証情報はSecretsManagerに置いてパスワードも自動生成させる。</p>
+
+<p><a href="https://www.sambaiz.net/article/204/">AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net</a></p>
+
 <p>ACUが0の状態で確認しやすくするためSecondsUntilAutoPauseを最短の300にしている。</p>
 
-<pre><code>TestSubnetGroup:
+<pre><code>AuroraSecret:
+  Type: AWS::SecretsManager::Secret
+  Properties:
+    GenerateSecretString:
+      SecretStringTemplate: '{&quot;username&quot;: &quot;test&quot;}'
+      GenerateStringKey: 'password'
+      PasswordLength: 16
+      ExcludeCharacters: '&quot;@/\'
+ SecretRDSInstanceAttachment:
+  Type: AWS::SecretsManager::SecretTargetAttachment
+  Properties:
+    SecretId: !Ref AuroraSecret
+    TargetId: !Ref AuroraServerless
+    TargetType: AWS::RDS::DBCluster
+TestSubnetGroup:
   Type: &quot;AWS::RDS::DBSubnetGroup&quot;
   Properties: 
     DBSubnetGroupDescription: test subnet group
@@ -374,8 +393,8 @@ AuroraServerless:
     DeletionProtection: true
     Port: 3306
     DatabaseName: test
-    MasterUsername: test
-    MasterUserPassword: testtest
+    MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref AuroraSecret, ':SecretString:username}}' ]]
+    MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref AuroraSecret, ':SecretString:password}}' ]]
     DBSubnetGroupName: !Ref TestSubnetGroup
     VpcSecurityGroupIds:
       - !Ref TestSecurityGroup
@@ -385,16 +404,12 @@ AuroraServerless:
       SecondsUntilAutoPause: 300
 </code></pre>
 
-<p>環境変数とVPCまわりの設定はこんな感じ。</p>
+<p>環境変数とVPCまわりの設定はこんな感じ。
+ServerlessFrameworkではデプロイ時にSecretを解決することもできるが、ローテーションすることも考えて実行時に取りに行っている。</p>
 
 <pre><code>environment:
   TZ: Asia/Tokyo
-  DB_USER: ${self:resources.Resources.AuroraServerless.Properties.MasterUsername}
-  DB_PASSWORD: ${self:resources.Resources.AuroraServerless.Properties.MasterUserPassword}
-  DB_ENDPOINT_ADDRESS: 
-    Fn::GetAtt: [ AuroraServerless, Endpoint.Address ]
-  DB_ENDPOINT_PORT: ${self:resources.Resources.AuroraServerless.Properties.Port}
-  DB_DATABASE: ${self:resources.Resources.AuroraServerless.Properties.DatabaseName}
+  DB_SECRET: !Ref AuroraSecret
 vpc:
   securityGroupIds:
     - !Ref TestSecurityGroup
@@ -412,6 +427,37 @@ iamRoleStatements:
 </code></pre>
 
 <h2 id="アプリケーション">アプリケーション</h2>
+
+<p>Secretsにはusernameやpasswordだけではなくhostやport、dbNameまで含まれているのでこれだけで接続情報が作れる。</p>
+
+<pre><code>type dbConfig struct {
+  Password string `json:&quot;password&quot;`
+  DbName   string `json:&quot;dbname&quot;`
+  Engine   string `json:&quot;engine&quot;`
+  Port     int    `json:&quot;port&quot;`
+  Host     string `json:&quot;host&quot;`
+  UserName string `json:&quot;username&quot;`
+}
+
+func dbSrc() (string, error) {
+  secret, err := secret.GetSecretString(os.Getenv(&quot;DB_SECRET&quot;))
+  if err != nil {
+    return &quot;&quot;, err
+  }
+  var config dbConfig
+  if err := json.Unmarshal([]byte(secret), &amp;config); err != nil {
+    return &quot;&quot;, err
+  }
+  return fmt.Sprintf(
+    &quot;%s:%s@tcp(%s:%d)/%s?parseTime=true&quot;,
+    config.UserName,
+    config.Password,
+    config.Host,
+    config.Port,
+    config.DbName,
+  ), nil
+}
+</code></pre>
 
 <p>トランザクションを張ってINSERTしSELECTする。</p>
 
