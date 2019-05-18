@@ -6,8 +6,100 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-05-09 23:54:00 &#43;0900 JST</updated>
+    <updated>2019-05-19 01:43:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする</title>
+          <link>https://www.sambaiz.net/article/222/</link>
+          <pubDate>Sun, 19 May 2019 01:43:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/222/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/&#34;&gt;AWS CDK&lt;/a&gt;(Cloud Development Kit)はTypeScriptやJavaなどのコードで
+CloudFormationのテンプレートを生成できるツール。まだdeveloper previewなので今後も破壊的な変更はありそう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm i -g aws-cdk
+$ cdk --version
+0.31.0 (build 7a70c08)
+
+$ mkdir cdk-vpc
+$ cd cdk-vpc
+$ cdk init app --language=typescript
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CloudFormationのリソースタイプと1対1対応している低レベルなAPIもあるが、
+VPCからPublic/Private Subnet、NATGatewayまでまとめて作ってくれる
+&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.VpcNetwork.html&#34;&gt;ec2.VpcNetwork&lt;/a&gt;といった高レベルなものも用意されている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/206/&#34;&gt;CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;補完が効くので通常のyamlと比べて書きやすいし、ループしたりすることもできる。Refする際も変数のプロパティを渡せばよい。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/222.png&#34; alt=&#34;補完&#34; /&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat lib/cdk-vpc-stack.ts 
+import cdk = require(&#39;@aws-cdk/cdk&#39;);
+import ec2 = require(&#39;@aws-cdk/aws-ec2&#39;)
+
+export class CdkVpcStack extends cdk.Stack {
+  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+    new ec2.VpcNetwork(this, &#39;test-vpc&#39;, {
+      cidr: &#39;172.32.0.0/24&#39;,
+      maxAZs: 2,
+      subnetConfiguration: [
+        {
+          cidrMask: 26,
+          subnetType: ec2.SubnetType.Public,
+          name: &#39;test-public&#39;
+        },
+        {
+          cidrMask: 26,
+          subnetType: ec2.SubnetType.Private,
+          name: &#39;test-private&#39;
+        }
+      ]
+    });
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;cdk synth&lt;/code&gt;でテンプレートを生成し、意図しない構成になっていないか確認することができる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm run build
+$ cdk synth -o ./outputs
+./outputs/CdkVpcStack.template.yaml
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;cdk diff&lt;/code&gt;で作成/削除されるリソースを見て、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cdk diff
+Stack CdkVpcStack
+Resources
+[+] AWS::EC2::VPC test-vpc testvpc8985080E 
+[+] AWS::EC2::Subnet test-vpc/test-publicSubnet1/Subnet testvpctestpublicSubnet1SubnetF24995A1 
+[+] AWS::EC2::RouteTable test-vpc/test-publicSubnet1/RouteTable testvpctestpublicSubnet1RouteTableF3DE8760 
+[+] AWS::EC2::SubnetRouteTableAssociation test-vpc/test-publicSubnet1/RouteTableAssociation testvpctestpublicSubnet1RouteTableAssociation13140377 
+[+] AWS::EC2::Route test-vpc/test-publicSubnet1/DefaultRoute testvpctestpublicSubnet1DefaultRoute06B168C8 
+[+] AWS::EC2::EIP test-vpc/test-publicSubnet1/EIP testvpctestpublicSubnet1EIP5E036D64 
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;cdk deploy&lt;/code&gt;でデプロイできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cdk deploy 
+CdkVpcStack: deploying...
+CdkVpcStack: creating CloudFormation changeset...
+  0/25 | 20:59:21 | CREATE_IN_PROGRESS   | AWS::EC2::EIP                         | test-vpc/test-publicSubnet2/EIP (testvpctestpublicSubnet2EIPCB02013C) 
+  0/25 | 20:59:21 | CREATE_IN_PROGRESS   | AWS::CDK::Metadata                    | CDKMetadata 
+  0/25 | 20:59:22 | CREATE_IN_PROGRESS   | AWS::EC2::InternetGateway             | test-vpc/IGW (testvpcIGW2C2BA83F) 
+  0/25 | 20:59:22 | CREATE_IN_PROGRESS   | AWS::EC2::EIP                         | test-vpc/test-publicSubnet1/EIP (testvpctestpublicSubnet1EIP5E036D64) 
+...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -30554,13 +30646,9 @@ $ packer -v
 &lt;code&gt;builders&lt;/code&gt;に作るイメージの情報を書いて、&lt;code&gt;provisioners&lt;/code&gt;で環境を作る。&lt;/p&gt;
 
 &lt;p&gt;&lt;code&gt;provisioners&lt;/code&gt;にはchefやansibleなども指定できるが、
-継ぎ足し継ぎ足しで秘伝のタレ化したAMIも最初は、&lt;/p&gt;
-
-&lt;p&gt;「コマンドいくつか実行するだけなのでとりあえず手作業で作った、後でなんとかする」&lt;/p&gt;
-
-&lt;p&gt;なんてものもあったりして、
+継ぎ足し継ぎ足しで秘伝のタレ化したAMIも最初は、コマンドいくつか実行するだけなのでとりあえず手作業で作った、後でなんとかするなんてものもあったりして、
 そういうものは無理にchefなどで始めず、手軽にshellでpacker buildするといいと思う。
-手作業よりも楽だし、ソースが別にあるので使われていないAMIを消すのも簡単だ。&lt;/p&gt;
+手作業よりも楽だしソースが別にあるので使われていないAMIを消すのも簡単。&lt;/p&gt;
 
 &lt;p&gt;fileではpermissionがないところに置くことができないので、一旦置いてshellで移動する。&lt;/p&gt;
 
