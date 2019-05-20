@@ -6,8 +6,159 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-05-19 01:43:00 &#43;0900 JST</updated>
+    <updated>2019-05-20 09:23:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>CDK/CircleCI/GitHubでAWSリソース管理リポジトリを作る</title>
+          <link>https://www.sambaiz.net/article/223/</link>
+          <pubDate>Mon, 20 May 2019 09:23:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/223/</guid>
+          <description>&lt;p&gt;AWS CDKでリソースを記述し、PullRequestに対して自動で&lt;code&gt;cdk diff&lt;/code&gt;で変更があるものを表示して、mergeしたときに&lt;code&gt;cdk deploy&lt;/code&gt;する。
+全体のコードは&lt;a href=&#34;https://github.com/sambaiz/aws-cdk-circleci-sample&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/222/&#34;&gt;AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;まずCI用のUserを作成する。AssumeRoleしかできないCIUserからCIAssumeRoleをassumeして使う。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/72/&#34;&gt;AWSのAssumeRole - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;export class IAMCIStack extends cdk.Stack {
+  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+    const ciGroup = new iam.Group(this, &#39;CIGroup&#39;, {
+      groupName: &#39;CI&#39;,
+    })
+    const ciAssumeRole = new iam.Role(this, &#39;CIAssumeRole&#39;, {
+      roleName: &#39;CIAssumeRole&#39;,
+      assumedBy: new iam.AccountPrincipal(cdk.Aws.accountId),
+      managedPolicyArns: [&#39;arn:aws:iam::aws:policy/AdministratorAccess&#39;]
+    })
+    const ciUserRole = new iam.Role(this, &#39;CIUserRole&#39;, {
+      roleName: &#39;CIUserRole&#39;,
+      assumedBy: new iam.AccountPrincipal(cdk.Aws.accountId)
+    })
+    const ciUserPolicy = new iam.Policy(this, &#39;CIPolicy&#39;, {
+      groups: [ciGroup],
+      policyName: &#39;CIUserPolicy&#39;,
+      statements: [
+        new iam.PolicyStatement(iam.PolicyStatementEffect.Allow)
+          .addAction(&#39;sts:AssumeRole&#39;).addResource(ciAssumeRole.roleArn)
+      ]
+    })
+    ciUserPolicy.attachToRole(ciUserRole)
+    const ciUser = new iam.User(this, &#39;CircleCIUser&#39;, {
+      userName: &#39;CircleCI&#39;,
+      groups: [ciGroup]
+    })
+    const ciAccessKey = new iam.CfnAccessKey(this, &#39;CircleCIUserAccessKey&#39;, {
+      userName: ciUser.userName
+    })
+    new cdk.CfnOutput(this, &#39;CircleCIUserAccessKeyId&#39;, { value: ciAccessKey.accessKeyId });
+    new cdk.CfnOutput(this, &#39;CircleCIUserSecretAccessKey&#39;, { value: ciAccessKey.accessKeySecretAccessKey });
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;deployするとAccessKeyがOutputされる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cdk deploy
+...
+Outputs:
+IAMCIStack.CircleCIUserAccessKeyId = *****
+IAMCIStack.CircleCIUserSecretAccessKey = *****
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;AccessKeyに加え、SlackのWebhook URLとGitHubの&lt;a href=&#34;https://github.com/settings/tokens&#34;&gt;Token&lt;/a&gt;を作成しCircleCIのEnvironment Variablesに追加する。また、PR作成時にビルドが走るようにビルド設定のOnly build pull requestsをオンにする。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/223-1.png&#34; alt=&#34;Environment Variables&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;.circleci/config.yml&lt;/code&gt;はこんな感じ。PRにあるうちは&lt;code&gt;cdk diff&lt;/code&gt;を、masterでは&lt;code&gt;cdk deploy&lt;/code&gt;を実行し、Slackに通知する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/217/&#34;&gt;CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;version: 2.1
+orbs:
+  slack: circleci/slack@2.5.0
+executors:
+  default:
+    docker:
+      - image: &#39;circleci/node:12.2.0&#39;
+    environment:
+      AWS_REGION: &#39;ap-northeast-1&#39;
+jobs:
+  build:
+    executor: &#39;default&#39;
+    steps:
+      - run:
+          name: &#39;assume_role&#39;
+          command: |
+            sudo apt-get install awscli
+            unset AWS_SESSION_TOKEN
+            temp_role=$(aws sts assume-role \
+                                --role-arn $ASSUME_ROLE_ARN \
+                                --role-session-name $CIRCLE_PROJECT_REPONAME)
+            echo &amp;quot;export AWS_ACCESS_KEY_ID=$(echo $temp_role | jq .Credentials.AccessKeyId | xargs)&amp;quot; &amp;gt;&amp;gt; $BASH_ENV
+            echo &amp;quot;export AWS_SECRET_ACCESS_KEY=$(echo $temp_role | jq .Credentials.SecretAccessKey | xargs)&amp;quot; &amp;gt;&amp;gt; $BASH_ENV
+            echo &amp;quot;export AWS_SESSION_TOKEN=$(echo $temp_role | jq .Credentials.SessionToken | xargs)&amp;quot; &amp;gt;&amp;gt; $BASH_ENV
+      - checkout
+      - run:
+          name: &#39;build&#39;
+          command: |
+            npm install
+            npm run build
+      - run:
+          name: &#39;cdk_diff&#39;
+          command: |
+            if [ -n &amp;quot;$CIRCLE_PULL_REQUEST&amp;quot; ]; then
+              pr_number=${CIRCLE_PULL_REQUEST##*/}
+              block=&#39;```&#39;
+              diff=$(echo -e &amp;quot;cdk diff\n${block}\n$(npm run --silent ci_diff)\n${block}&amp;quot;)
+              data=$(jq -n --arg body &amp;quot;$diff&amp;quot; &#39;{ body: $body }&#39;) # escape
+              curl -X POST -H &#39;Content-Type:application/json&#39; \
+                -H &#39;Accept: application/vnd.github.v3+json&#39; \
+                -H &amp;quot;Authorization: token ${GITHUB_TOKEN}&amp;quot; \
+                -d &amp;quot;$data&amp;quot; \
+                &amp;quot;https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/issues/${pr_number}/comments&amp;quot;
+            fi
+      - run:
+          name: &#39;cdk_deploy&#39;
+          command: |
+            if [ &amp;quot;${CIRCLE_BRANCH}&amp;quot; == &amp;quot;master&amp;quot; ]; then
+              npm run ci_deploy
+            fi
+      - slack/status:
+          success_message: &amp;quot;cdk build/deploy (${CIRCLE_BRANCH}) has succeeded :tada:&amp;quot;
+          failure_message: &amp;quot;cdk build/deploy (${CIRCLE_BRANCH}) has failed :crying_cat_face:&amp;quot;
+          webhook: $SLACK_WEBHOOK
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Assumeしたkeyは&lt;code&gt;$BASH_ENV&lt;/code&gt;でexportされるようにして以後のstepでも&lt;a href=&#34;https://circleci.com/docs/2.0/env-vars/#using-bash_env-to-set-environment-variables&#34;&gt;自動で読み込まれる&lt;/a&gt;ようにする。
+GitHubの&lt;a href=&#34;https://developer.github.com/v3/issues/comments/#create-a-comment&#34;&gt;コメント作成API&lt;/a&gt;を呼ぶのにPR番号が必要で&lt;code&gt;$CIRCLE_PR_NUMBER&lt;/code&gt;を使おうとしたが、folkされたPRでしか&lt;a href=&#34;https://circleci.com/docs/2.0/env-vars/#built-in-environment-variables&#34;&gt;入らない&lt;/a&gt;ので&lt;code&gt;$CIRCLE_PULL_REQUEST&lt;/code&gt;のURLから/末尾を取り出して使っている。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;cdk diff&lt;/code&gt;は差分があるとstderrに出力し終了ステータスを1で&lt;a href=&#34;https://github.com/awslabs/aws-cdk/issues/2111&#34;&gt;返してしまい&lt;/a&gt;、ビルドが中断してしまうのでstderrをstdoutに向けて&lt;code&gt;||true&lt;/code&gt;で強制的に成功させている。sedでは色を付けるためのescape sequenceを取り除いている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat package.json | jq &amp;quot;.scripts&amp;quot;
+{
+  &amp;quot;build&amp;quot;: &amp;quot;tsc&amp;quot;,
+  &amp;quot;watch&amp;quot;: &amp;quot;tsc -w&amp;quot;,
+  &amp;quot;ci_diff&amp;quot;: &amp;quot;cdk diff 2&amp;gt;&amp;amp;1 | sed -r &#39;s/\\x1B\\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g&#39; || true&amp;quot;,
+  &amp;quot;ci_deploy&amp;quot;: &amp;quot;cdk deploy&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;PRを作成すると&lt;code&gt;cdk diff&lt;/code&gt;の結果が表示される。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/223-2.png&#34; alt=&#34;PRに投げられたcdk diffの結果&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;mergeすると&lt;code&gt;cdk deploy&lt;/code&gt;が走り、完了するとSlackに通知が飛ぶ。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/223-3.png&#34; alt=&#34;Slackの通知&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -16,8 +167,9 @@
           <pubDate>Sun, 19 May 2019 01:43:00 &#43;0900</pubDate>
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/222/</guid>
-          <description>&lt;p&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/&#34;&gt;AWS CDK&lt;/a&gt;(Cloud Development Kit)はTypeScriptやJavaなどのコードで
-CloudFormationのテンプレートを生成できるツール。まだdeveloper previewなので今後も破壊的な変更はありそう。&lt;/p&gt;
+          <description>&lt;p&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/&#34;&gt;AWS CDK&lt;/a&gt;(Cloud Development Kit)はTypeScriptやJavaなどのコードから
+CloudFormationのテンプレートを生成して差分を確認しデプロイできるツール。
+まだdeveloper previewなので今後も破壊的な変更はありそう。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm i -g aws-cdk
 $ cdk --version
@@ -28,13 +180,13 @@ $ cd cdk-vpc
 $ cdk init app --language=typescript
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;CloudFormationのリソースタイプと1対1対応している低レベルなAPIもあるが、
+&lt;p&gt;CloudFormationのリソースタイプと対応している&lt;code&gt;Cfn*&lt;/code&gt;系のAPIだけではなく、
 VPCからPublic/Private Subnet、NATGatewayまでまとめて作ってくれる
 &lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.VpcNetwork.html&#34;&gt;ec2.VpcNetwork&lt;/a&gt;といった高レベルなものも用意されている。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/206/&#34;&gt;CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;補完が効くので通常のyamlと比べて書きやすいし、ループしたりすることもできる。Refする際も変数のプロパティを渡せばよい。&lt;/p&gt;
+&lt;p&gt;型があり補完が効くので通常のyamlと比べて書きやすいし、ループしたりすることもできる。Refする際も変数のプロパティを渡せばよい。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/222.png&#34; alt=&#34;補完&#34; /&gt;&lt;/p&gt;
 
@@ -65,7 +217,7 @@ export class CdkVpcStack extends cdk.Stack {
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;code&gt;cdk synth&lt;/code&gt;でテンプレートを生成し、意図しない構成になっていないか確認することができる。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;cdk synth&lt;/code&gt;でテンプレートを出力し、意図しない構成になっていないか確認することができる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm run build
 $ cdk synth -o ./outputs
