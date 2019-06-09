@@ -19,9 +19,10 @@
       <guid>https://www.sambaiz.net/article/223/</guid>
       <description>AWS CDKでリソースを記述し、PullRequestに対して自動でcdk diffで変更があるものを表示して、mergeしたときにcdk deployする。 全体のコードはGitHubにある。
 AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする - sambaiz-net
-まずCI用のUserを作成する。AssumeRoleしかできないCIUserからCIAssumeRoleをassumeして使う。
+CI Userの作成 まずcdkコマンドを実行するためのCI Userを作成する。これはCDK管理外のスタックで、AWSコンソール上から手動で上げる。
 AWSのAssumeRole - sambaiz-net
-export class IAMCIStack extends cdk.Stack { constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) { super(scope, id, props); const ciGroup = new iam.Group(this, &#39;CIGroup&#39;, { groupName: &#39;CI&#39;, }) const ciAssumeRole = new iam.Role(this, &#39;CIAssumeRole&#39;, { roleName: &#39;CIAssumeRole&#39;, assumedBy: new iam.AccountPrincipal(cdk.Aws.accountId), managedPolicyArns: [&#39;arn:aws:iam::aws:policy/AdministratorAccess&#39;] }) const ciUserRole = new iam.Role(this, &#39;CIUserRole&#39;, { roleName: &#39;CIUserRole&#39;, assumedBy: new iam.AccountPrincipal(cdk.Aws.accountId) }) const ciUserPolicy = new iam.</description>
+AssumeRoleしかできないCIUserからCIAssumeRoleをassumeすることにした。
+AWSTemplateFormatVersion: &#39;2010-09-09&#39; Resources: CIAssumeRole: Type: &#39;AWS::IAM::Role&#39; Properties: RoleName: &#39;CIAssumeRole&#39; ManagedPolicyArns: - &#39;arn:aws:iam::aws:policy/AdministratorAccess&#39; AssumeRolePolicyDocument: Version: &#39;2012-10-17&#39; Statement: - Effect: &#39;Allow&#39; Principal: AWS: - !Ref AWS::AccountId Action: - &#39;sts:AssumeRole&#39; CIGroup: Type: &#39;AWS::IAM::Group&#39; Properties: GroupName: &#39;CI&#39; CIPolicies: Type: &#39;AWS::IAM::Policy&#39; Properties: PolicyName: &#39;CI&#39; PolicyDocument: Statement: - Effect: Allow Action: &#39;sts:AssumeRole&#39; Resource: !GetAtt CIAssumeRole.Arn Groups: - !Ref CIGroup CIUser: Type: &#39;AWS::IAM::User&#39; Properties: UserName: &#39;CI&#39; Groups: - !</description>
     </item>
     
     <item>
@@ -30,11 +31,11 @@ export class IAMCIStack extends cdk.Stack { constructor(scope: cdk.Construct, id
       <pubDate>Sun, 19 May 2019 01:43:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/222/</guid>
-      <description>AWS CDK(Cloud Development Kit)はTypeScriptやJavaなどのコードから CloudFormationのテンプレートを生成して差分を確認しデプロイできるツール。 まだdeveloper previewなので今後も破壊的な変更はありそう。
-$ npm i -g aws-cdk $ cdk --version 0.31.0 (build 7a70c08) $ mkdir cdk-vpc $ cd cdk-vpc $ cdk init app --language=typescript  CloudFormationのリソースタイプと対応しているCfn*系のAPIだけではなく、 VPCからPublic/Private Subnet、NATGatewayまでまとめて作ってくれる ec2.VpcNetworkといった高レベルなものも用意されている。
+      <description>AWS CDK(Cloud Development Kit)はTypeScriptやJavaなどのコードから CloudFormationのテンプレートを生成して差分を確認しデプロイできるツール。developer preview。
+$ npm i -g aws-cdk $ cdk --version 0.33.0 (build 50d71bf) $ mkdir cdk-vpc $ cd cdk-vpc $ cdk init app --language=typescript  CloudFormationのリソースと対応するCfnFooや、それを内部で作成する高レベル(L2)のResource ClassFooが実装されている。 ただし、現状CfnFooに対応するResource Classが存在しないものや、複数のリソースを内部で作成するResource Classが存在する。 例えば、ec2.VpcはCfnVPCだけではなく、Public/Private Subnet、NATGatewayまでまとめて作る。これを使うと少ない記述量で一般的な構成を作ることができるが、まだ不安定で破壊的変更がある。
 CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net
 型があり補完が効くので通常のyamlと比べて書きやすいし、ループしたりすることもできる。Refする際も変数のプロパティを渡せばよい。
-$ cat lib/cdk-vpc-stack.ts import cdk = require(&#39;@aws-cdk/cdk&#39;); import ec2 = require(&#39;@aws-cdk/aws-ec2&#39;) export class CdkVpcStack extends cdk.Stack { constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) { super(scope, id, props); new ec2.VpcNetwork(this, &#39;test-vpc&#39;, { cidr: &#39;172.</description>
+$ cat lib/cdk-vpc-stack.ts import cdk = require(&#39;@aws-cdk/cdk&#39;); import ec2 = require(&#39;@aws-cdk/aws-ec2&#39;) export class CdkVpcStack extends cdk.Stack { constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) { super(scope, id, props); new ec2.Vpc(this, &#39;test-vpc&#39;, { cidr: &#39;172.</description>
     </item>
     
     <item>
@@ -59,7 +60,8 @@ FROM fluent/fluentd:v1.4-1 USER root COPY ./fluent.conf /fluentd/etc/ # install 
       <description>DatadogのAWS integrationとAlertの設定をTerraformで行い、バージョン管理やレビューできるようにする。 全体のコードはGitHubに置いてある。
 AWS Integration まずdatadog_integration_awsでAWS integrationの設定を作成してExternalIDを取得し、Policy/Roleを作成する。必要な権限はドキュメントを参照。
 resource &amp;quot;datadog_integration_aws&amp;quot; &amp;quot;test&amp;quot; { account_id = &amp;quot;${var.aws_account_id}&amp;quot; role_name = &amp;quot;${var.aws_integration_role_name}&amp;quot; filter_tags = [&amp;quot;datadog:1&amp;quot;] } data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;datadog_aws_integration_assume_role&amp;quot; { statement { actions = [&amp;quot;sts:AssumeRole&amp;quot;] principals { type = &amp;quot;AWS&amp;quot; identifiers = [&amp;quot;arn:aws:iam::464622532012:root&amp;quot;] } condition { test = &amp;quot;StringEquals&amp;quot; variable = &amp;quot;sts:ExternalId&amp;quot; values = [ &amp;quot;${datadog_integration_aws.test.external_id}&amp;quot;, ] } } }  Datadog providerにはないSlackなどその他のintegrationは手動で設定する必要がある。 また、Logも集める場合Serverless Application Repositoryから公式のDatadog-Log-Forwarderを入れて AWS IntegrationのところにLambdaのARNを入れるのも手動。
-Alert datadog_monitorでAlertを作成する。 今回はLambdaの実行が失敗したときと、WARNという文字列が含まれるログが一定数出力されたときにAlertを飛ばすようにしてみた。 初めに作るときは一度画面で意図通りアラートが飛ぶものを作成し、クエリなどをコピーするのが確実。
+Alert datadog_monitorでAlertを作成する。 今回はLambdaの実行が失敗したときと、WARNという文字列が含まれるログが一定数出力されたときにAlertを飛ばすようにしてみた。 なおinfoやwarnといったログレベルはjsonのlevelフィールドに入れればデフォルトのpipelineでマップされるので通常は文字列比較などする必要はない。
+初めに作るときは一度画面で意図通りアラートが飛ぶものを作成し、クエリなどをコピーするのが確実。
 resource &amp;quot;datadog_monitor&amp;quot; &amp;quot;lambda-error-alert&amp;quot; { name = &amp;quot;lambda-error-alert&amp;quot; type = &amp;quot;metric alert&amp;quot; message = &amp;quot;Error occurred.</description>
     </item>
     

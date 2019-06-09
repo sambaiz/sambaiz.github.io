@@ -19,9 +19,10 @@
       <guid>https://www.sambaiz.net/article/223/</guid>
       <description>AWS CDKでリソースを記述し、PullRequestに対して自動でcdk diffで変更があるものを表示して、mergeしたときにcdk deployする。 全体のコードはGitHubにある。
 AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする - sambaiz-net
-まずCI用のUserを作成する。AssumeRoleしかできないCIUserからCIAssumeRoleをassumeして使う。
+CI Userの作成 まずcdkコマンドを実行するためのCI Userを作成する。これはCDK管理外のスタックで、AWSコンソール上から手動で上げる。
 AWSのAssumeRole - sambaiz-net
-export class IAMCIStack extends cdk.Stack { constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) { super(scope, id, props); const ciGroup = new iam.Group(this, &#39;CIGroup&#39;, { groupName: &#39;CI&#39;, }) const ciAssumeRole = new iam.Role(this, &#39;CIAssumeRole&#39;, { roleName: &#39;CIAssumeRole&#39;, assumedBy: new iam.AccountPrincipal(cdk.Aws.accountId), managedPolicyArns: [&#39;arn:aws:iam::aws:policy/AdministratorAccess&#39;] }) const ciUserRole = new iam.Role(this, &#39;CIUserRole&#39;, { roleName: &#39;CIUserRole&#39;, assumedBy: new iam.AccountPrincipal(cdk.Aws.accountId) }) const ciUserPolicy = new iam.</description>
+AssumeRoleしかできないCIUserからCIAssumeRoleをassumeすることにした。
+AWSTemplateFormatVersion: &#39;2010-09-09&#39; Resources: CIAssumeRole: Type: &#39;AWS::IAM::Role&#39; Properties: RoleName: &#39;CIAssumeRole&#39; ManagedPolicyArns: - &#39;arn:aws:iam::aws:policy/AdministratorAccess&#39; AssumeRolePolicyDocument: Version: &#39;2012-10-17&#39; Statement: - Effect: &#39;Allow&#39; Principal: AWS: - !Ref AWS::AccountId Action: - &#39;sts:AssumeRole&#39; CIGroup: Type: &#39;AWS::IAM::Group&#39; Properties: GroupName: &#39;CI&#39; CIPolicies: Type: &#39;AWS::IAM::Policy&#39; Properties: PolicyName: &#39;CI&#39; PolicyDocument: Statement: - Effect: Allow Action: &#39;sts:AssumeRole&#39; Resource: !GetAtt CIAssumeRole.Arn Groups: - !Ref CIGroup CIUser: Type: &#39;AWS::IAM::User&#39; Properties: UserName: &#39;CI&#39; Groups: - !</description>
     </item>
     
     <item>

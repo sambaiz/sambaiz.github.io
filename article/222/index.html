@@ -173,21 +173,20 @@
           <h1>AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする</h1>
           <p>(2019-05-19)</p>
           <p><a href="https://docs.aws.amazon.com/cdk/api/latest/">AWS CDK</a>(Cloud Development Kit)はTypeScriptやJavaなどのコードから
-CloudFormationのテンプレートを生成して差分を確認しデプロイできるツール。
-まだdeveloper previewなので今後も破壊的な変更はありそう。</p>
+CloudFormationのテンプレートを生成して差分を確認しデプロイできるツール。developer preview。</p>
 
 <pre><code>$ npm i -g aws-cdk
 $ cdk --version
-0.31.0 (build 7a70c08)
+0.33.0 (build 50d71bf)
 
 $ mkdir cdk-vpc
 $ cd cdk-vpc
 $ cdk init app --language=typescript
 </code></pre>
 
-<p>CloudFormationのリソースタイプと対応している<code>Cfn*</code>系のAPIだけではなく、
-VPCからPublic/Private Subnet、NATGatewayまでまとめて作ってくれる
-<a href="https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.VpcNetwork.html">ec2.VpcNetwork</a>といった高レベルなものも用意されている。</p>
+<p>CloudFormationのリソースと対応する<code>CfnFoo</code>や、それを内部で作成する高レベル(L2)の<a href="https://github.com/awslabs/aws-cdk/blob/master/design/aws-guidelines.md#resource-class">Resource Class</a><code>Foo</code>が実装されている。
+ただし、現状<code>CfnFoo</code>に対応するResource Classが存在しないものや、複数のリソースを内部で作成するResource Classが存在する。
+例えば、<a href="https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.Vpc.html">ec2.Vpc</a>は<a href="https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.CfnVPC.html">CfnVPC</a>だけではなく、Public/Private Subnet、NATGatewayまでまとめて作る。これを使うと少ない記述量で一般的な構成を作ることができるが、まだ不安定で破壊的変更がある。</p>
 
 <p><a href="https://www.sambaiz.net/article/206/">CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net</a></p>
 
@@ -202,7 +201,7 @@ import ec2 = require('@aws-cdk/aws-ec2')
 export class CdkVpcStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
-    new ec2.VpcNetwork(this, 'test-vpc', {
+    new ec2.Vpc(this, 'test-vpc', {
       cidr: '172.32.0.0/24',
       maxAZs: 2,
       subnetConfiguration: [
@@ -254,6 +253,8 @@ CdkVpcStack: creating CloudFormation changeset...
   0/25 | 20:59:22 | CREATE_IN_PROGRESS   | AWS::EC2::EIP                         | test-vpc/test-publicSubnet1/EIP (testvpctestpublicSubnet1EIP5E036D64) 
 ...
 </code></pre>
+
+<p><a href="https://www.sambaiz.net/article/223/">CDK/CircleCI/GitHubでAWSリソース管理リポジトリを作る - sambaiz-net</a></p>
 
         </div>
       </article>
