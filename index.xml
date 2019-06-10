@@ -6,8 +6,123 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-05-20 09:23:00 &#43;0900 JST</updated>
+    <updated>2019-06-10 23:06:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>AWS DeepRacerを始める</title>
+          <link>https://www.sambaiz.net/article/224/</link>
+          <pubDate>Mon, 10 Jun 2019 23:06:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/224/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/deepracer/&#34;&gt;AWS DeepRacer&lt;/a&gt;は自走する1/18スケールのレーシングカーで、
+SageMakerやRoboMaker&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/deepracer/latest/developerguide/deepracer-dependent-aws-services.html&#34;&gt;など&lt;/a&gt;を使って強化学習し、実機を走らせたりバーチャルのDeepRacerリーグで競うことができる。
+カメラの画像の処理や、強化学習のアルゴリズムの実装の必要はなく、報酬関数だけで動いてくれるので敷居が低い。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/202/&#34;&gt;強化学習とDQN(Deep Q-network) - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;設定項目&#34;&gt;設定項目&lt;/h2&gt;
+
+&lt;h3 id=&#34;action-space&#34;&gt;Action space&lt;/h3&gt;
+
+&lt;p&gt;取りうるアクションである速度とステアリングの組み合わせのリスト。次の項目から生成される。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Maximum steering angle (1 - 30)&lt;/li&gt;
+&lt;li&gt;Steering angle granularity (3, 5, 7)&lt;/li&gt;
+&lt;li&gt;Maximum speed (0.8 - 8)&lt;/li&gt;
+&lt;li&gt;Speed granularity (1, 2, 3)&lt;/li&gt;
+&lt;li&gt;Loss type (Mean square error, Huber)&lt;/li&gt;
+&lt;li&gt;Number of experience episodes between each policy-updating iteration (5 - 100)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/224.png&#34; alt=&#34;Action space&#34; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;reward-function&#34;&gt;Reward function&lt;/h3&gt;
+
+&lt;p&gt;強化学習の報酬関数。次の&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/deepracer/latest/developerguide/deepracer-reward-function-input.html&#34;&gt;入力パラメータ&lt;/a&gt;を用いて実装する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;{
+    &amp;quot;all_wheels_on_track&amp;quot;: Boolean,    # flag to indicate if the vehicle is on the track
+    &amp;quot;x&amp;quot;: float,                        # vehicle&#39;s x-coordinate in meters
+    &amp;quot;y&amp;quot;: float,                        # vehicle&#39;s y-coordinate in meters
+    &amp;quot;distance_from_center&amp;quot;: float,     # distance in meters from the track center 
+    &amp;quot;is_left_of_center&amp;quot;: Boolean,      # Flag to indicate if the vehicle is on the left side to the track center or not. 
+    &amp;quot;heading&amp;quot;: float,                  # vehicle&#39;s yaw in degrees
+    &amp;quot;progress&amp;quot;: float,                 # percentage of track completed
+    &amp;quot;steps&amp;quot;: int,                      # number steps completed
+    &amp;quot;speed&amp;quot;: float,                    # vehicle&#39;s speed in meters per second (m/s)
+    &amp;quot;steering_angle&amp;quot;: float,          # vehicle&#39;s steering angle in degrees
+    &amp;quot;track_width&amp;quot;: float,              # width of the track
+    &amp;quot;waypoints&amp;quot;: [[float, float], … ], # list of [x,y] as milestones along the track center
+    &amp;quot;closest_waypoints&amp;quot;: [int, int]    # indices of the two nearest waypoints.
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;hyperparameters&#34;&gt;Hyperparameters&lt;/h3&gt;
+
+&lt;p&gt;学習アルゴリズムとして&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/deepracer/latest/developerguide/create-deepracer-project.html&#34;&gt;サポートされている&lt;/a&gt;のは&lt;a href=&#34;https://openai.com/blog/openai-baselines-ppo/&#34;&gt;PPO(Proximal Policy Optimization)&lt;/a&gt;のみで、次のハイパーパラメータが設定できる。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Gradient descent batch size (32, 64, 128, 256, 512)&lt;/li&gt;
+&lt;li&gt;Number of epochs (3 - 10)&lt;/li&gt;
+&lt;li&gt;Learning rate (1e-8 - 1e-3)&lt;/li&gt;
+&lt;li&gt;Entropy (0 - 1)&lt;/li&gt;
+&lt;li&gt;Discount factor (0 - 1)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;stop-conditions-5-480-mins&#34;&gt;Stop conditions (5 - 480 mins)&lt;/h3&gt;
+
+&lt;p&gt;最大学習時間。学習に$3/hourくらいかかるようなのであまり長く走らせ過ぎると大変。&lt;/p&gt;
+
+&lt;h2 id=&#34;サンプルモデルの提出&#34;&gt;サンプルモデルの提出&lt;/h2&gt;
+
+&lt;p&gt;サンプルモデルSample-Follow-center-lineで現在開催されているKumo Torakkuレースに参加してみる。
+その名の通り中央線に近いほど高い報酬を与える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;def reward_function(params):
+    &#39;&#39;&#39;
+    Example of rewarding the agent to follow center line
+    &#39;&#39;&#39;
+    
+    # Read input parameters
+    track_width = params[&#39;track_width&#39;]
+    distance_from_center = params[&#39;distance_from_center&#39;]
+    
+    # Calculate 3 markers that are at varying distances away from the center line
+    marker_1 = 0.1 * track_width
+    marker_2 = 0.25 * track_width
+    marker_3 = 0.5 * track_width
+    
+    # Give higher reward if the car is closer to center line and vice versa
+    if distance_from_center &amp;lt;= marker_1:
+        reward = 1.0
+    elif distance_from_center &amp;lt;= marker_2:
+        reward = 0.5
+    elif distance_from_center &amp;lt;= marker_3:
+        reward = 0.1
+    else:
+        reward = 1e-3  # likely crashed/ close to off track
+    
+    return float(reward)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Submitしたところ1分ちょっとで完走した。ランキングの上の方は10秒台なのでまだまだだ。&lt;/p&gt;
+
+&lt;h2 id=&#34;モデルの作成&#34;&gt;モデルの作成&lt;/h2&gt;
+
+&lt;p&gt;とりあえず同じReward functionでAction spaceのMaximum speedを最大の8にして学習させてみる。
+学習中にもTotal rewardと併せてシミュレーション映像が流れるので徐々にうまく走れるようになっていくのが見られる&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/224-2.png&#34; alt=&#34;学習中&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;はずだったんだが、最後までうまく走れずに時間切れ。Submitしたが当然完走できずに終わり。残念だ。&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -197,7 +312,7 @@ $ cat .huskyrc.json
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/222/</guid>
           <description>&lt;p&gt;&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/&#34;&gt;AWS CDK&lt;/a&gt;(Cloud Development Kit)はTypeScriptやJavaなどのコードから
-CloudFormationのテンプレートを生成して差分を確認しデプロイできるツール。developer preview。&lt;/p&gt;
+CloudFormationのテンプレートを生成して差分を確認しデプロイできるツール。まだdeveloper preview。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm i -g aws-cdk
 $ cdk --version
@@ -210,42 +325,72 @@ $ cdk init app --language=typescript
 
 &lt;p&gt;CloudFormationのリソースと対応する&lt;code&gt;CfnFoo&lt;/code&gt;や、それを内部で作成する高レベル(L2)の&lt;a href=&#34;https://github.com/awslabs/aws-cdk/blob/master/design/aws-guidelines.md#resource-class&#34;&gt;Resource Class&lt;/a&gt;&lt;code&gt;Foo&lt;/code&gt;が実装されている。
 ただし、現状&lt;code&gt;CfnFoo&lt;/code&gt;に対応するResource Classが存在しないものや、複数のリソースを内部で作成するResource Classが存在する。
-例えば、&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.Vpc.html&#34;&gt;ec2.Vpc&lt;/a&gt;は&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.CfnVPC.html&#34;&gt;CfnVPC&lt;/a&gt;だけではなく、Public/Private Subnet、NATGatewayまでまとめて作る。これを使うと少ない記述量で一般的な構成を作ることができるが、まだ不安定で破壊的変更がある。&lt;/p&gt;
+例えば、&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.Vpc.html&#34;&gt;ec2.Vpc&lt;/a&gt;は&lt;a href=&#34;https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ec2.CfnVPC.html&#34;&gt;CfnVPC&lt;/a&gt;だけではなく、Public/Private Subnet、NATGatewayまでまとめて一般的な構成で作る。Resource Classはまだ破壊的変更がよくある。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/206/&#34;&gt;CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;型があり補完が効くので通常のyamlと比べて書きやすいし、ループしたりすることもできる。Refする際も変数のプロパティを渡せばよい。&lt;/p&gt;
+&lt;p&gt;型があり補完が効くので通常のテンプレートと比べて書きやすいし、ループしたりすることもできる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/222.png&#34; alt=&#34;補完&#34; /&gt;&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;$ cat lib/cdk-vpc-stack.ts 
-import cdk = require(&#39;@aws-cdk/cdk&#39;);
-import ec2 = require(&#39;@aws-cdk/aws-ec2&#39;)
+&lt;pre&gt;&lt;code&gt;import * as cdk from &#39;@aws-cdk/cdk&#39;
+import * as ec2 from &#39;@aws-cdk/aws-ec2&#39;
 
-export class CdkVpcStack extends cdk.Stack {
+interface Export {
+  vpc: ec2.Vpc
+}
+
+export class VPCStack extends cdk.Stack {
+  protected deployEnv: string
+  export: Export
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
-    new ec2.Vpc(this, &#39;test-vpc&#39;, {
-      cidr: &#39;172.32.0.0/24&#39;,
+    super(scope, id, props)
+    this.deployEnv = this.node.getContext(&#39;env&#39;)
+    const vpc = this.vpc()
+
+    this.export = {
+      vpc: vpc
+    }
+  }
+
+  private vpc() {
+    let cidr: string | null
+    if (this.deployEnv === &#39;stg&#39;) {
+      cidr = &#39;172.32.1.0/24&#39;
+    } else if (this.deployEnv === &#39;prd&#39;) {
+      cidr = &#39;172.32.2.0/24&#39;
+    } else {
+      throw new Error(`unknown env ${this.deployEnv}`)
+    }
+    return new ec2.Vpc(this, `${this.deployEnv}-vpc`, {
+      cidr: cidr,
       maxAZs: 2,
       subnetConfiguration: [
         {
           cidrMask: 26,
           subnetType: ec2.SubnetType.Public,
-          name: &#39;test-public&#39;
+          name: `${this.deployEnv}-vpc-public`
         },
         {
           cidrMask: 26,
           subnetType: ec2.SubnetType.Private,
-          name: &#39;test-private&#39;
+          name: `${this.deployEnv}-vpc-private`
         }
       ]
-    });
+    })
   }
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;code&gt;cdk synth&lt;/code&gt;でテンプレートを出力し、意図しない構成になっていないか確認することができる。&lt;/p&gt;
+&lt;p&gt;プロパティを渡せばRefやGetAttになる。Stack間のExportやImportValueも同様で、さらに依存関係を考慮した順序でStackを更新してくれる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const vpcStackExport = new VPCStack(app, `${deployEnv}VPCStack`).export
+new SomeAppStack(app, `${deployEnv}SomeAppStack`, {
+    dbSubnetIds: vpcStackExport.vpc.privateSubnets.map(v =&amp;gt; v.subnetId)
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;cdk synth&lt;/code&gt;でテンプレートを出力して確認できる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ npm run build
 $ cdk synth -o ./outputs
