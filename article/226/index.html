@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.38.2" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
+    crossorigin="anonymous">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+  <link rel="stylesheet" href="/css/slidebars.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+
+  <meta name="theme-color" content="#41a248">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="@sambaiz">
+  
+  <title>API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net</title>
+  <meta name="twitter:title" content="API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net">
+  <meta property='og:title' content="API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net">
+  <meta property="og:type" content="article">
+  
+  <meta name="description" content="ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる">
+  <meta name="twitter:description" content="ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる">
+  
+  
+
+  <meta property="og:url" content="https://www.sambaiz.net/article/226/">
+  <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
+  <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
+  <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https://www.sambaiz.net/"
+    },
+    "headline": "API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く | sambaiz-net ",
+    "datePublished": "2019-07-03T20:15:00JST",
+    "dateModified": "2019-07-03T20:15:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="https://www.sambaiz.net/tags/aws">aws</a></li><li><a href="https://www.sambaiz.net/tags/golang">golang</a></li><li><a href="https://www.sambaiz.net/tags/machinelearning">machinelearning</a></li><li><a href="https://www.sambaiz.net/tags/log">log</a></li><li><a href="https://www.sambaiz.net/tags/kubernetes">kubernetes</a></li><li><a href="https://www.sambaiz.net/tags/python">python</a></li><li><a href="https://www.sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="https://www.sambaiz.net/tags/unity">unity</a></li><li><a href="https://www.sambaiz.net/tags/fluentd">fluentd</a></li><li><a href="https://www.sambaiz.net/tags/gcp">gcp</a></li><li><a href="https://www.sambaiz.net/tags/infra">infra</a></li><li><a href="https://www.sambaiz.net/tags/node.js">node.js</a></li><li><a href="https://www.sambaiz.net/tags/web">web</a></li><li><a href="https://www.sambaiz.net/tags/lambda">lambda</a></li><li><a href="https://www.sambaiz.net/tags/docker">docker</a></li><li><a href="https://www.sambaiz.net/tags/javascript">javascript</a></li><li><a href="https://www.sambaiz.net/tags/mysql">mysql</a></li><li><a href="https://www.sambaiz.net/tags/elasticsearch">elasticsearch</a></li><li><a href="https://www.sambaiz.net/tags/hololens">hololens</a></li><li><a href="https://www.sambaiz.net/tags/linux">linux</a></li><li><a href="https://www.sambaiz.net/tags/react">react</a></li><li><a href="https://www.sambaiz.net/tags/typescript">typescript</a></li><li><a href="https://www.sambaiz.net/tags/auth">auth</a></li><li><a href="https://www.sambaiz.net/tags/ble">ble</a></li><li><a href="https://www.sambaiz.net/tags/circleci">circleci</a></li><li><a href="https://www.sambaiz.net/tags/product">product</a></li><li><a href="https://www.sambaiz.net/tags/android">android</a></li><li><a href="https://www.sambaiz.net/tags/angular">angular</a></li><li><a href="https://www.sambaiz.net/tags/cron">cron</a></li><li><a href="https://www.sambaiz.net/tags/istio">istio</a></li><li><a href="https://www.sambaiz.net/tags/terraform">terraform</a></li><li><a href="https://www.sambaiz.net/tags/uwp">uwp</a></li><li><a href="https://www.sambaiz.net/tags/.net">.net</a></li><li><a href="https://www.sambaiz.net/tags/css">css</a></li><li><a href="https://www.sambaiz.net/tags/datadog">datadog</a></li><li><a href="https://www.sambaiz.net/tags/event">event</a></li><li><a href="https://www.sambaiz.net/tags/firebase">firebase</a></li><li><a href="https://www.sambaiz.net/tags/grpc">grpc</a></li><li><a href="https://www.sambaiz.net/tags/hadoop">hadoop</a></li><li><a href="https://www.sambaiz.net/tags/norikra">norikra</a></li><li><a href="https://www.sambaiz.net/tags/rx">rx</a></li><li><a href="https://www.sambaiz.net/tags/vr">vr</a></li><li><a href="https://www.sambaiz.net/tags/api">api</a></li><li><a href="https://www.sambaiz.net/tags/cdn">cdn</a></li><li><a href="https://www.sambaiz.net/tags/compress">compress</a></li><li><a href="https://www.sambaiz.net/tags/crypto">crypto</a></li><li><a href="https://www.sambaiz.net/tags/csharp">csharp</a></li><li><a href="https://www.sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="https://www.sambaiz.net/tags/github">github</a></li><li><a href="https://www.sambaiz.net/tags/hugo">hugo</a></li><li><a href="https://www.sambaiz.net/tags/ios">ios</a></li><li><a href="https://www.sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="https://www.sambaiz.net/tags/jvm">jvm</a></li><li><a href="https://www.sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="https://www.sambaiz.net/tags/math">math</a></li><li><a href="https://www.sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="https://www.sambaiz.net/tags/pytorch">pytorch</a></li><li><a href="https://www.sambaiz.net/tags/read_paper">read_paper</a></li><li><a href="https://www.sambaiz.net/tags/scikit-learn">scikit-learn</a></li><li><a href="https://www.sambaiz.net/tags/serialize">serialize</a></li><li><a href="https://www.sambaiz.net/tags/server">server</a></li><li><a href="https://www.sambaiz.net/tags/sonnet">sonnet</a></li><li><a href="https://www.sambaiz.net/tags/spark">spark</a></li><li><a href="https://www.sambaiz.net/tags/spec">spec</a></li><li><a href="https://www.sambaiz.net/tags/statistics">statistics</a></li><li><a href="https://www.sambaiz.net/tags/video">video</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="https://www.sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="https://www.sambaiz.net/">sambaiz-net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+        <style>
+          .strava-badge-base {
+            display: inline-block;
+            height: 29px;
+            width: 29px;
+          }
+
+          .strava-badge {
+            display: inline-block;
+            height: 24px;
+            width: 24px;
+            background: url(/image/strava.png) no-repeat;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .filmarks-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .filmarks {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            background: url(/image/filmarks.svg) no-repeat;
+            background-size: 450%;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .studyplus-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .studyplus {
+            display: inline-block;
+            height: 24px;
+            width: 24px;
+            background: url(/image/studyplus.png) no-repeat;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+        </style>
+        <div class="strava-badge-base">
+          <a href="https://strava.com/athletes/36758958/badge" class="strava-badge"></a>
+        </div>
+        <div class="filmarks-base">
+          <a href="https://filmarks.com/users/sambaiz" class="filmarks"></a>
+        </div>
+        <div class="studyplus-base">
+          <a href="https://www.studyplus.jp/users/0842722cd7a6483baa7979f9d3f7c2e6/studylog/logs" class="studyplus"></a>
+        </div>
+      </div>
+    </header>
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く</h1>
+          <p>(2019-07-03)</p>
+          
+
+<p>ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる。
+API GatewayでCognitoの認証をかける場合、AuthorizerでUserPoolを指定するのが最も簡単なパターンだが、
+これだとHeaderにTokenを付けてアクセスする必要があり認証に失敗するとUnauthorizedが返る。</p>
+
+<p><a href="https://www.sambaiz.net/article/157/">Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる - sambaiz-net</a></p>
+
+<p>なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。
+どうしても若干の時間課金とLambdaをVPCの中で動かすのが嫌でなければ柔軟なルーティングができるALBを使うと良いと思う。</p>
+
+<h2 id="準備">準備</h2>
+
+<p>UserPoolとClientを作成する。
+CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseなのに注意。変えると作り直される。</p>
+
+<pre><code>Resources:
+  Userpool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      Schema:
+        - Mutable: true
+          Name: email
+          Required: true
+        - Mutable: true
+          Name: name
+          Required: true
+      UsernameAttributes:
+        - email
+      UserPoolName: testpool
+  UserpoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId:
+        Ref: Userpool
+      ClientName: testclient
+      GenerateSecret: true
+</code></pre>
+
+<p>今回はフェデレーションでGoogleアカウントでログインできるようにする。
+ややこしい用語であるがID Poolの<a href="https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/cognito-identity.html">フェデレーティッドアイデンティティ</a>とは異なる。</p>
+
+<p>UserPoolのドメインや、<a href="https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/cognito-user-pools-social-idp.html">GoogleのOAuth Client ID</a>の発行とAttributes Mapping、Clientの設定はCloudFormationでできないので手でやる。
+Attributes Mappingで変えられるがusernameは<a href="https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/user-pool-settings-attributes.html#user-pool-settings-usernames">変更不可な値</a>なのでsubのままにしておく。</p>
+
+<p>設定が終わったら <code>https://&lt;user-pool-domain&gt;/login?client_id=&lt;client-id&gt;&amp;redirect_uri=&lt;redirect-uri&gt;&amp;response_type=code</code>
+にアクセスし、<code>&lt;redirect-uri&gt;?code=&lt;code&gt;</code> までリダイレクトされることを確認する。
+invalid_requestとだけ出てしまった場合はClientのAuthorization code grantにチェックが入っているか確認する。</p>
+
+<h2 id="実装">実装</h2>
+
+<p>TokenをCookieで受け渡すほかは通常のAuthorization Flowを実装する。</p>
+
+<p><a href="https://www.sambaiz.net/article/48/">OAuth2.0のメモ - sambaiz-net</a></p>
+
+<p>Tokenを検証し、失敗した場合はログイン画面にリダイレクトさせる。
+identity_providerを指定するかClientに一つしか紐づいていなければそのプロバイダのログイン画面に飛び、そうでなければ選択する画面が表示される。
+ログインしてクエリパラメータとして渡ってきたcodeとstateもこの関数で受け取り、検証してTokenを発行し一旦返してCookieに焼く。</p>
+
+<p><a href="https://www.sambaiz.net/article/136/">OpenID ConnectのIDトークンの内容と検証 - sambaiz-net</a></p>
+
+<p>通常stateはサーバーに保持されるがステートレスに済ませるためにCookieに焼いている。
+stateはCSRF対策のためのものなのでCookieが攻撃者に読み書きされなければ意味を為すと思っているが、このフローで問題がある場合は教えてほしい。
+State、Token共にCookieに焼いているためCORSのAccess-Control-Allow-Originを*などにしてしまうと穴が開く。</p>
+
+<pre><code>package auth
+
+import (
+	&quot;encoding/base64&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;io/ioutil&quot;
+	&quot;net/http&quot;
+	&quot;net/url&quot;
+	&quot;strings&quot;
+	&quot;time&quot;
+
+	&quot;github.com/gofrs/uuid&quot;
+
+	&quot;github.com/aws/aws-lambda-go/events&quot;
+	jwt &quot;github.com/dgrijalva/jwt-go&quot;
+	&quot;github.com/lestrrat/go-jwx/jwk&quot;
+)
+
+const (
+	stateCookieName = &quot;st&quot;
+	tokenCookieName = &quot;ck&quot;
+)
+
+type TokenResponse struct {
+	AccessToken  string  `json:&quot;access_token&quot;`
+	RefreshToken string  `json:&quot;refresh_token&quot;`
+	IdToken      string  `json:&quot;id_token&quot;`
+	TokenType    string  `json:&quot;token_type&quot;`
+	ExpiresIn    int     `json:&quot;expires_in&quot;`
+	Error        *string `json:&quot;error&quot;`
+}
+
+func AuthOrLogin(
+	request events.APIGatewayProxyRequest,
+	userPoolClientID string,
+	userPoolClientSecret string,
+	userPoolURL string,
+	userPoolID string,
+	region string) *events.APIGatewayProxyResponse {
+	myselfURL := fmt.Sprintf(&quot;https://%s/%s%s&quot;, request.Headers[&quot;Host&quot;], request.RequestContext.Stage, request.Path)
+
+	if code := getCodeFromParams(request.QueryStringParameters); code != nil {
+		if err := checkState(request); err != nil {
+			fmt.Printf(err.Error())
+			return newErrorResponse()
+		}
+		tokenResp, err := requestTokenByCode(*code, userPoolClientID, userPoolClientSecret, myselfURL, userPoolURL)
+		if err != nil {
+			fmt.Println(err.Error())
+			return newErrorResponse()
+		}
+		resp := newRedirectResponse(myselfURL)
+		resp.MultiValueHeaders = map[string][]string{
+			&quot;Set-Cookie&quot;: []string{
+				fmt.Sprintf(&quot;%s=%s; Secure; HttpOnly&quot;, tokenCookieName, tokenResp.AccessToken),
+				// delete state
+				fmt.Sprintf(&quot;%s=; Expires=Thu, 1-Jan-1990 00:00:00 GMT; Secure; HttpOnly&quot;, stateCookieName),
+			},
+		}
+		return resp
+	}
+
+	if token := getTokenFromCookie(request.Headers); token != nil {
+		claims, err := parseToken(*token, userPoolClientID, userPoolID, region)
+		if err == nil {
+			fmt.Println(claims)
+			return nil // ok
+		} else {
+			fmt.Println(err.Error()) // re-login
+		}
+	}
+
+	loginURL, state, err := makeLoginURL(userPoolURL, userPoolClientID, myselfURL)
+	if err != nil {
+		fmt.Println(err.Error())
+		return newErrorResponse()
+
+	}
+	resp := newRedirectResponse(loginURL)
+	resp.MultiValueHeaders = map[string][]string{
+		&quot;Set-Cookie&quot;: []string{
+			// delete old token
+			fmt.Sprintf(&quot;%s=; Expires=Thu, 1-Jan-1990 00:00:00 GMT; Secure; HttpOnly&quot;, tokenCookieName),
+			fmt.Sprintf(&quot;%s=%s; Secure; HttpOnly&quot;, stateCookieName, state),
+		},
+	}
+	return resp
+}
+
+func getCodeFromParams(params map[string]string) *string {
+	if code, ok := params[&quot;code&quot;]; ok {
+		return &amp;code
+	}
+	return nil
+}
+
+func getStateFromCookie(headers map[string]string) *string {
+	if cookie, ok := headers[&quot;Cookie&quot;]; ok {
+		header := http.Header{}
+		header.Add(&quot;Cookie&quot;, cookie)
+		request := http.Request{Header: header}
+		c, err := request.Cookie(stateCookieName)
+		if err != nil {
+			return nil
+		}
+		return &amp;c.Value
+	}
+	return nil
+}
+
+func getTokenFromCookie(headers map[string]string) *string {
+	if cookie, ok := headers[&quot;Cookie&quot;]; ok {
+		header := http.Header{}
+		header.Add(&quot;Cookie&quot;, cookie)
+		request := http.Request{Header: header}
+		c, err := request.Cookie(tokenCookieName)
+		if err != nil {
+			return nil
+		}
+		return &amp;c.Value
+	}
+	return nil
+}
+
+func newRedirectResponse(location string) *events.APIGatewayProxyResponse {
+	return &amp;events.APIGatewayProxyResponse{
+		StatusCode: http.StatusFound,
+		Headers: map[string]string{
+			&quot;Location&quot;: location,
+		},
+	}
+}
+
+func newErrorResponse() *events.APIGatewayProxyResponse {
+	return &amp;events.APIGatewayProxyResponse{
+		StatusCode: http.StatusInternalServerError,
+	}
+}
+
+func makeState() (string, error) {
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return &quot;&quot;, err
+	}
+	return uuid.String(), nil
+}
+
+func checkState(request events.APIGatewayProxyRequest) error {
+	if state, ok := request.QueryStringParameters[&quot;state&quot;]; ok {
+		if hasState := getStateFromCookie(request.Headers); hasState != nil {
+			if state == *hasState {
+				return nil
+			}
+		}
+	}
+	return errors.New(&quot;state is invalid&quot;)
+}
+
+func requestTokenByCode(code string, userPoolClientID string, userPoolClientSecret string, myselfURL string, userPoolURL string) (*TokenResponse, error) {
+	// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/token-endpoint.html
+	form := url.Values{}
+	form.Add(&quot;grant_type&quot;, &quot;authorization_code&quot;)
+	form.Add(&quot;code&quot;, code)
+	form.Add(&quot;redirect_uri&quot;, myselfURL)
+	body := strings.NewReader(form.Encode())
+	req, err := http.NewRequest(&quot;POST&quot;, fmt.Sprintf(&quot;%s/oauth2/token&quot;, userPoolURL), body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add(&quot;Authorization&quot;,
+		fmt.Sprintf(&quot;Basic %s&quot;,
+			base64.StdEncoding.EncodeToString(
+				[]byte(fmt.Sprintf(&quot;%s:%s&quot;, userPoolClientID, userPoolClientSecret)))))
+	req.Header.Add(&quot;Content-Type&quot;, &quot;application/x-www-form-urlencoded&quot;)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	var tokenResp TokenResponse
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err := json.Unmarshal(bytes, &amp;tokenResp); err != nil {
+		return nil, err
+	}
+	if tokenResp.Error != nil {
+		return nil, errors.New(*tokenResp.Error)
+	}
+	return &amp;tokenResp, nil
+}
+
+func makeLoginURL(userPoolURL string, userPoolClientID string, myselfURL string) (string, string, error) {
+	// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/authorization-endpoint.html
+	u, err := url.Parse(fmt.Sprintf(&quot;%s/oauth2/authorize&quot;, userPoolURL))
+	if err != nil {
+		return &quot;&quot;, &quot;&quot;, errors.New(&quot;failed to parse&quot;)
+	}
+	q := u.Query()
+	q.Set(&quot;response_type&quot;, &quot;code&quot;)
+	q.Set(&quot;client_id&quot;, userPoolClientID)
+	q.Set(&quot;redirect_uri&quot;, myselfURL)
+	q.Set(&quot;identity_provider&quot;, &quot;Google&quot;)
+	state, err := makeState()
+	if err != nil {
+		return &quot;&quot;, &quot;&quot;, errors.New(&quot;failed to make state&quot;)
+	}
+	q.Set(&quot;state&quot;, state)
+	u.RawQuery = q.Encode()
+	return u.String(), state, nil
+}
+
+func parseToken(tokenString string, userPoolClientID string, userPoolID string, region string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if token.Header[&quot;alg&quot;] != &quot;RS256&quot; {
+			return nil, fmt.Errorf(&quot;Unexpected signing method: %v&quot;, token.Header[&quot;alg&quot;])
+		}
+		return getKey(token, userPoolID, region)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok &amp;&amp; token.Valid {
+		// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html
+		if v, ok := claims[&quot;exp&quot;].(float64); ok {
+			if int64(v) &lt; time.Now().Unix() {
+				return nil, errors.New(&quot;token is expired&quot;)
+			}
+		} else {
+			return nil, errors.New(&quot;failed to get claims[exp]&quot;)
+		}
+		// instead of aud
+		if v, ok := claims[&quot;client_id&quot;].(string); ok {
+			if v != userPoolClientID {
+				return nil, errors.New(&quot;token has invalid audience&quot;)
+			}
+		} else {
+			return nil, errors.New(&quot;failed to get claims[client_id]&quot;)
+		}
+		if v, ok := claims[&quot;iss&quot;].(string); ok {
+			if v != fmt.Sprintf(&quot;https://cognito-idp.%s.amazonaws.com/%s&quot;, region, userPoolID) {
+				return nil, errors.New(&quot;token has invalid issuer&quot;)
+			}
+		} else {
+			return nil, errors.New(&quot;failed to get claims[iss]&quot;)
+		}
+
+		return claims, nil
+	}
+	return nil, errors.New(&quot;token is invalid&quot;)
+}
+
+func getKey(token *jwt.Token, userPoolID string, region string) (interface{}, error) {
+	set, err := jwk.FetchHTTP(
+		fmt.Sprintf(&quot;https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json&quot;, region, userPoolID),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	keyID, ok := token.Header[&quot;kid&quot;].(string)
+	if !ok {
+		return nil, errors.New(&quot;expecting JWT header to have string kid&quot;)
+	}
+
+	if key := set.LookupKeyID(keyID); len(key) == 1 {
+		return key[0].Materialize()
+	}
+
+	return nil, errors.New(&quot;unable to find key&quot;)
+}
+</code></pre>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

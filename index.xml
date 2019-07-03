@@ -6,8 +6,358 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-06-20 19:23:00 &#43;0900 JST</updated>
+    <updated>2019-07-03 20:15:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く</title>
+          <link>https://www.sambaiz.net/article/226/</link>
+          <pubDate>Wed, 03 Jul 2019 20:15:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/226/</guid>
+          <description>
+
+&lt;p&gt;ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる。
+API GatewayでCognitoの認証をかける場合、AuthorizerでUserPoolを指定するのが最も簡単なパターンだが、
+これだとHeaderにTokenを付けてアクセスする必要があり認証に失敗するとUnauthorizedが返る。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/157/&#34;&gt;Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。
+どうしても若干の時間課金とLambdaをVPCの中で動かすのが嫌でなければ柔軟なルーティングができるALBを使うと良いと思う。&lt;/p&gt;
+
+&lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
+
+&lt;p&gt;UserPoolとClientを作成する。
+CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseなのに注意。変えると作り直される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Resources:
+  Userpool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      Schema:
+        - Mutable: true
+          Name: email
+          Required: true
+        - Mutable: true
+          Name: name
+          Required: true
+      UsernameAttributes:
+        - email
+      UserPoolName: testpool
+  UserpoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId:
+        Ref: Userpool
+      ClientName: testclient
+      GenerateSecret: true
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;今回はフェデレーションでGoogleアカウントでログインできるようにする。
+ややこしい用語であるがID Poolの&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/cognito-identity.html&#34;&gt;フェデレーティッドアイデンティティ&lt;/a&gt;とは異なる。&lt;/p&gt;
+
+&lt;p&gt;UserPoolのドメインや、&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/cognito-user-pools-social-idp.html&#34;&gt;GoogleのOAuth Client ID&lt;/a&gt;の発行とAttributes Mapping、Clientの設定はCloudFormationでできないので手でやる。
+Attributes Mappingで変えられるがusernameは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/user-pool-settings-attributes.html#user-pool-settings-usernames&#34;&gt;変更不可な値&lt;/a&gt;なのでsubのままにしておく。&lt;/p&gt;
+
+&lt;p&gt;設定が終わったら &lt;code&gt;https://&amp;lt;user-pool-domain&amp;gt;/login?client_id=&amp;lt;client-id&amp;gt;&amp;amp;redirect_uri=&amp;lt;redirect-uri&amp;gt;&amp;amp;response_type=code&lt;/code&gt;
+にアクセスし、&lt;code&gt;&amp;lt;redirect-uri&amp;gt;?code=&amp;lt;code&amp;gt;&lt;/code&gt; までリダイレクトされることを確認する。
+invalid_requestとだけ出てしまった場合はClientのAuthorization code grantにチェックが入っているか確認する。&lt;/p&gt;
+
+&lt;h2 id=&#34;実装&#34;&gt;実装&lt;/h2&gt;
+
+&lt;p&gt;TokenをCookieで受け渡すほかは通常のAuthorization Flowを実装する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/48/&#34;&gt;OAuth2.0のメモ - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;Tokenを検証し、失敗した場合はログイン画面にリダイレクトさせる。
+identity_providerを指定するかClientに一つしか紐づいていなければそのプロバイダのログイン画面に飛び、そうでなければ選択する画面が表示される。
+ログインしてクエリパラメータとして渡ってきたcodeとstateもこの関数で受け取り、検証してTokenを発行し一旦返してCookieに焼く。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;通常stateはサーバーに保持されるがステートレスに済ませるためにCookieに焼いている。
+stateはCSRF対策のためのものなのでCookieが攻撃者に読み書きされなければ意味を為すと思っているが、このフローで問題がある場合は教えてほしい。
+State、Token共にCookieに焼いているためCORSのAccess-Control-Allow-Originを*などにしてしまうと穴が開く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package auth
+
+import (
+	&amp;quot;encoding/base64&amp;quot;
+	&amp;quot;encoding/json&amp;quot;
+	&amp;quot;errors&amp;quot;
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;io/ioutil&amp;quot;
+	&amp;quot;net/http&amp;quot;
+	&amp;quot;net/url&amp;quot;
+	&amp;quot;strings&amp;quot;
+	&amp;quot;time&amp;quot;
+
+	&amp;quot;github.com/gofrs/uuid&amp;quot;
+
+	&amp;quot;github.com/aws/aws-lambda-go/events&amp;quot;
+	jwt &amp;quot;github.com/dgrijalva/jwt-go&amp;quot;
+	&amp;quot;github.com/lestrrat/go-jwx/jwk&amp;quot;
+)
+
+const (
+	stateCookieName = &amp;quot;st&amp;quot;
+	tokenCookieName = &amp;quot;ck&amp;quot;
+)
+
+type TokenResponse struct {
+	AccessToken  string  `json:&amp;quot;access_token&amp;quot;`
+	RefreshToken string  `json:&amp;quot;refresh_token&amp;quot;`
+	IdToken      string  `json:&amp;quot;id_token&amp;quot;`
+	TokenType    string  `json:&amp;quot;token_type&amp;quot;`
+	ExpiresIn    int     `json:&amp;quot;expires_in&amp;quot;`
+	Error        *string `json:&amp;quot;error&amp;quot;`
+}
+
+func AuthOrLogin(
+	request events.APIGatewayProxyRequest,
+	userPoolClientID string,
+	userPoolClientSecret string,
+	userPoolURL string,
+	userPoolID string,
+	region string) *events.APIGatewayProxyResponse {
+	myselfURL := fmt.Sprintf(&amp;quot;https://%s/%s%s&amp;quot;, request.Headers[&amp;quot;Host&amp;quot;], request.RequestContext.Stage, request.Path)
+
+	if code := getCodeFromParams(request.QueryStringParameters); code != nil {
+		if err := checkState(request); err != nil {
+			fmt.Printf(err.Error())
+			return newErrorResponse()
+		}
+		tokenResp, err := requestTokenByCode(*code, userPoolClientID, userPoolClientSecret, myselfURL, userPoolURL)
+		if err != nil {
+			fmt.Println(err.Error())
+			return newErrorResponse()
+		}
+		resp := newRedirectResponse(myselfURL)
+		resp.MultiValueHeaders = map[string][]string{
+			&amp;quot;Set-Cookie&amp;quot;: []string{
+				fmt.Sprintf(&amp;quot;%s=%s; Secure; HttpOnly&amp;quot;, tokenCookieName, tokenResp.AccessToken),
+				// delete state
+				fmt.Sprintf(&amp;quot;%s=; Expires=Thu, 1-Jan-1990 00:00:00 GMT; Secure; HttpOnly&amp;quot;, stateCookieName),
+			},
+		}
+		return resp
+	}
+
+	if token := getTokenFromCookie(request.Headers); token != nil {
+		claims, err := parseToken(*token, userPoolClientID, userPoolID, region)
+		if err == nil {
+			fmt.Println(claims)
+			return nil // ok
+		} else {
+			fmt.Println(err.Error()) // re-login
+		}
+	}
+
+	loginURL, state, err := makeLoginURL(userPoolURL, userPoolClientID, myselfURL)
+	if err != nil {
+		fmt.Println(err.Error())
+		return newErrorResponse()
+
+	}
+	resp := newRedirectResponse(loginURL)
+	resp.MultiValueHeaders = map[string][]string{
+		&amp;quot;Set-Cookie&amp;quot;: []string{
+			// delete old token
+			fmt.Sprintf(&amp;quot;%s=; Expires=Thu, 1-Jan-1990 00:00:00 GMT; Secure; HttpOnly&amp;quot;, tokenCookieName),
+			fmt.Sprintf(&amp;quot;%s=%s; Secure; HttpOnly&amp;quot;, stateCookieName, state),
+		},
+	}
+	return resp
+}
+
+func getCodeFromParams(params map[string]string) *string {
+	if code, ok := params[&amp;quot;code&amp;quot;]; ok {
+		return &amp;amp;code
+	}
+	return nil
+}
+
+func getStateFromCookie(headers map[string]string) *string {
+	if cookie, ok := headers[&amp;quot;Cookie&amp;quot;]; ok {
+		header := http.Header{}
+		header.Add(&amp;quot;Cookie&amp;quot;, cookie)
+		request := http.Request{Header: header}
+		c, err := request.Cookie(stateCookieName)
+		if err != nil {
+			return nil
+		}
+		return &amp;amp;c.Value
+	}
+	return nil
+}
+
+func getTokenFromCookie(headers map[string]string) *string {
+	if cookie, ok := headers[&amp;quot;Cookie&amp;quot;]; ok {
+		header := http.Header{}
+		header.Add(&amp;quot;Cookie&amp;quot;, cookie)
+		request := http.Request{Header: header}
+		c, err := request.Cookie(tokenCookieName)
+		if err != nil {
+			return nil
+		}
+		return &amp;amp;c.Value
+	}
+	return nil
+}
+
+func newRedirectResponse(location string) *events.APIGatewayProxyResponse {
+	return &amp;amp;events.APIGatewayProxyResponse{
+		StatusCode: http.StatusFound,
+		Headers: map[string]string{
+			&amp;quot;Location&amp;quot;: location,
+		},
+	}
+}
+
+func newErrorResponse() *events.APIGatewayProxyResponse {
+	return &amp;amp;events.APIGatewayProxyResponse{
+		StatusCode: http.StatusInternalServerError,
+	}
+}
+
+func makeState() (string, error) {
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		return &amp;quot;&amp;quot;, err
+	}
+	return uuid.String(), nil
+}
+
+func checkState(request events.APIGatewayProxyRequest) error {
+	if state, ok := request.QueryStringParameters[&amp;quot;state&amp;quot;]; ok {
+		if hasState := getStateFromCookie(request.Headers); hasState != nil {
+			if state == *hasState {
+				return nil
+			}
+		}
+	}
+	return errors.New(&amp;quot;state is invalid&amp;quot;)
+}
+
+func requestTokenByCode(code string, userPoolClientID string, userPoolClientSecret string, myselfURL string, userPoolURL string) (*TokenResponse, error) {
+	// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/token-endpoint.html
+	form := url.Values{}
+	form.Add(&amp;quot;grant_type&amp;quot;, &amp;quot;authorization_code&amp;quot;)
+	form.Add(&amp;quot;code&amp;quot;, code)
+	form.Add(&amp;quot;redirect_uri&amp;quot;, myselfURL)
+	body := strings.NewReader(form.Encode())
+	req, err := http.NewRequest(&amp;quot;POST&amp;quot;, fmt.Sprintf(&amp;quot;%s/oauth2/token&amp;quot;, userPoolURL), body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add(&amp;quot;Authorization&amp;quot;,
+		fmt.Sprintf(&amp;quot;Basic %s&amp;quot;,
+			base64.StdEncoding.EncodeToString(
+				[]byte(fmt.Sprintf(&amp;quot;%s:%s&amp;quot;, userPoolClientID, userPoolClientSecret)))))
+	req.Header.Add(&amp;quot;Content-Type&amp;quot;, &amp;quot;application/x-www-form-urlencoded&amp;quot;)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	var tokenResp TokenResponse
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err := json.Unmarshal(bytes, &amp;amp;tokenResp); err != nil {
+		return nil, err
+	}
+	if tokenResp.Error != nil {
+		return nil, errors.New(*tokenResp.Error)
+	}
+	return &amp;amp;tokenResp, nil
+}
+
+func makeLoginURL(userPoolURL string, userPoolClientID string, myselfURL string) (string, string, error) {
+	// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/authorization-endpoint.html
+	u, err := url.Parse(fmt.Sprintf(&amp;quot;%s/oauth2/authorize&amp;quot;, userPoolURL))
+	if err != nil {
+		return &amp;quot;&amp;quot;, &amp;quot;&amp;quot;, errors.New(&amp;quot;failed to parse&amp;quot;)
+	}
+	q := u.Query()
+	q.Set(&amp;quot;response_type&amp;quot;, &amp;quot;code&amp;quot;)
+	q.Set(&amp;quot;client_id&amp;quot;, userPoolClientID)
+	q.Set(&amp;quot;redirect_uri&amp;quot;, myselfURL)
+	q.Set(&amp;quot;identity_provider&amp;quot;, &amp;quot;Google&amp;quot;)
+	state, err := makeState()
+	if err != nil {
+		return &amp;quot;&amp;quot;, &amp;quot;&amp;quot;, errors.New(&amp;quot;failed to make state&amp;quot;)
+	}
+	q.Set(&amp;quot;state&amp;quot;, state)
+	u.RawQuery = q.Encode()
+	return u.String(), state, nil
+}
+
+func parseToken(tokenString string, userPoolClientID string, userPoolID string, region string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if token.Header[&amp;quot;alg&amp;quot;] != &amp;quot;RS256&amp;quot; {
+			return nil, fmt.Errorf(&amp;quot;Unexpected signing method: %v&amp;quot;, token.Header[&amp;quot;alg&amp;quot;])
+		}
+		return getKey(token, userPoolID, region)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok &amp;amp;&amp;amp; token.Valid {
+		// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html
+		if v, ok := claims[&amp;quot;exp&amp;quot;].(float64); ok {
+			if int64(v) &amp;lt; time.Now().Unix() {
+				return nil, errors.New(&amp;quot;token is expired&amp;quot;)
+			}
+		} else {
+			return nil, errors.New(&amp;quot;failed to get claims[exp]&amp;quot;)
+		}
+		// instead of aud
+		if v, ok := claims[&amp;quot;client_id&amp;quot;].(string); ok {
+			if v != userPoolClientID {
+				return nil, errors.New(&amp;quot;token has invalid audience&amp;quot;)
+			}
+		} else {
+			return nil, errors.New(&amp;quot;failed to get claims[client_id]&amp;quot;)
+		}
+		if v, ok := claims[&amp;quot;iss&amp;quot;].(string); ok {
+			if v != fmt.Sprintf(&amp;quot;https://cognito-idp.%s.amazonaws.com/%s&amp;quot;, region, userPoolID) {
+				return nil, errors.New(&amp;quot;token has invalid issuer&amp;quot;)
+			}
+		} else {
+			return nil, errors.New(&amp;quot;failed to get claims[iss]&amp;quot;)
+		}
+
+		return claims, nil
+	}
+	return nil, errors.New(&amp;quot;token is invalid&amp;quot;)
+}
+
+func getKey(token *jwt.Token, userPoolID string, region string) (interface{}, error) {
+	set, err := jwk.FetchHTTP(
+		fmt.Sprintf(&amp;quot;https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json&amp;quot;, region, userPoolID),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	keyID, ok := token.Header[&amp;quot;kid&amp;quot;].(string)
+	if !ok {
+		return nil, errors.New(&amp;quot;expecting JWT header to have string kid&amp;quot;)
+	}
+
+	if key := set.LookupKeyID(keyID); len(key) == 1 {
+		return key[0].Materialize()
+	}
+
+	return nil, errors.New(&amp;quot;unable to find key&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
