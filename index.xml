@@ -6,8 +6,181 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-07-03 20:15:00 &#43;0900 JST</updated>
+    <updated>2019-07-03 23:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる</title>
+          <link>https://www.sambaiz.net/article/227/</link>
+          <pubDate>Wed, 03 Jul 2019 23:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/227/</guid>
+          <description>
+
+&lt;p&gt;ALBのTargetとしてLambdaが&lt;a href=&#34;https://aws.amazon.com/jp/blogs/news/lambda-functions-as-targets-for-application-load-balancers/&#34;&gt;選択できるようになり&lt;/a&gt;、
+若干の時間課金が発生する代わりに柔軟にルーティングできるAPI Gatewayのように使えるようになった。
+ActionとしてCognito認証を入れて認証に失敗したらログイン画面を表示させる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/226/&#34;&gt;API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;acmで証明書を発行する&#34;&gt;ACMで証明書を発行する&lt;/h2&gt;
+
+&lt;p&gt;HTTPSでListenするため証明書が必要。
+&lt;a href=&#34;https://aws.amazon.com/jp/certificate-manager/&#34;&gt;AWS Certificate Manager (ACM)&lt;/a&gt;でAWSで使える証明書を無料で発行でき参照できる。
+外部で取ったドメインでもよい。
+検証方法はDNSとメールとで選ぶことができて、DNSで行う場合Route53ならワンクリックで検証用のCNAMEレコードを作成できる。
+検証までやや時間がかかるのでちゃんと通ってるかnslookupで確認しといた方がよい。&lt;/p&gt;
+
+&lt;h2 id=&#34;application-load-balancer-alb-https-docs-aws-amazon-com-ja-jp-elasticloadbalancing-latest-application-introduction-html&#34;&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/introduction.html&#34;&gt;Application Load Balancer (ALB)&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;次の要素から構成されるL7のロードバランサー。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/load-balancer-listeners.html&#34;&gt;Listener&lt;/a&gt;: 指定したプロトコルとポートでリクエストを受ける。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-update-rules.html&#34;&gt;ListenerRule&lt;/a&gt;: パスやHeaderなどの値を条件にどのTargetGroupにルーティングするかのルール。&lt;br /&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/load-balancer-target-groups.html&#34;&gt;TargetGroup&lt;/a&gt;: ルーティングする1つ以上のTarget。Instance, IP, Lambdaが選べる。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&#34;serverless-yaml&#34;&gt;Serverless.yaml&lt;/h2&gt;
+
+&lt;p&gt;ALBの&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/events/alb/&#34;&gt;enent&lt;/a&gt;を付ければLambdaに向くRuleが作成されるが、
+そこにはCognitoを追加できなさそうなのでResourceの方で記述することにした。UserPoolとClientはあらかじめ作っておく。
+コールバックURLには&lt;code&gt;https://&amp;lt;domain&amp;gt;/oauth2/idpresponse&lt;/code&gt;を追加する。&lt;/p&gt;
+
+&lt;p&gt;API Gatewayだとタイムアウトの上限が&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/limits.html&#34;&gt;30秒&lt;/a&gt;なのに対してALBはLambdaの上限まで待てる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;service: alb-cognito-auth-example
+frameworkVersion: &amp;quot;&amp;gt;=1.28.0 &amp;lt;2.0.0&amp;quot;
+
+provider:
+  name: aws
+  runtime: go1.x
+  region: ap-northeast-1
+
+package:
+ exclude:
+   - ./**
+ include:
+   - ./bin/**
+
+functions:
+  privateapi:
+    handler: bin/privateapi
+    timeout: 30
+
+resources:
+  Resources:
+    ALBTargetGroup:
+      DependsOn: InvokeLambdaPermissionForALB
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        Name: &amp;quot;private-lambda-target-group&amp;quot;
+        TargetType: &amp;quot;lambda&amp;quot;
+        Targets:
+          - Id: !GetAtt PrivateapiLambdaFunction.Arn # Reference functions.privateapi
+    InvokeLambdaPermissionForALB:
+      Type: AWS::Lambda::Permission
+      Properties: 
+        Action: &amp;quot;lambda:InvokeFunction&amp;quot;
+        FunctionName: !Ref PrivateapiLambdaFunction
+        Principal: &amp;quot;elasticloadbalancing.amazonaws.com&amp;quot;
+    ALB: 
+      Type: &amp;quot;AWS::ElasticLoadBalancingV2::LoadBalancer&amp;quot;
+      Properties: 
+        Name: &amp;quot;serverless-auth-example-alb&amp;quot;
+        Scheme: &amp;quot;internet-facing&amp;quot;
+        LoadBalancerAttributes: 
+          - Key: &amp;quot;idle_timeout.timeout_seconds&amp;quot;
+            Value: 30
+        SecurityGroups:
+          - &amp;quot;sg-*****&amp;quot;
+        Subnets:
+          - &amp;quot;subnet-*****&amp;quot;
+          - &amp;quot;subnet-*****&amp;quot;
+    ALBListener: 
+      Type: &amp;quot;AWS::ElasticLoadBalancingV2::Listener&amp;quot;
+      Properties: 
+        DefaultActions: 
+          - Type: authenticate-cognito
+            Order: 1
+            AuthenticateCognitoConfig: 
+              OnUnauthenticatedRequest: authenticate
+              UserPoolArn: &amp;quot;arn:aws:cognito-idp:ap-northeast-1:*****&amp;quot;
+              UserPoolClientId: &amp;quot;*****&amp;quot;
+              UserPoolDomain: &amp;quot;*****.auth.ap-northeast-1.amazoncognito.com&amp;quot;
+          - Type: forward
+            Order: 2
+            TargetGroupArn: !Ref ALBTargetGroup
+        LoadBalancerArn: !Ref ALB
+        Port: 443
+        Protocol: HTTPS
+        Certificates: 
+          - CertificateArn: &amp;quot;arn:aws:acm:ap-northeast-1:*****:certificate/*****&amp;quot;
+    RecordSet:
+      Type: AWS::Route53::RecordSet
+      Properties: 
+        Type: &amp;quot;A&amp;quot; # or AAAA (IPv6)
+        HostedZoneName: &amp;quot;foo.example.com.&amp;quot;
+        Name: &amp;quot;auth-example.foo.example.com.&amp;quot;
+        AliasTarget: 
+          HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+          DNSName: !GetAtt ALB.DNSName
+        Comment: &amp;quot;Added by servereless-alb-cognito-auth-example&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-authenticate-users.html#user-claims-encoding&#34;&gt;x-amzn-oidc-data&lt;/a&gt; HeaderにALBが署名したJWTトークンが入っているので、
+それがALBから来ているものかを検証しclaimを参照できる。リクエストはAPI Gatewayと同じような形式。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func ParseToken(tokenString string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// ES256
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, fmt.Errorf(&amp;quot;unexpected signing method: %v&amp;quot;, token.Header[&amp;quot;alg&amp;quot;])
+		}
+		url := fmt.Sprintf(&amp;quot;https://public-keys.auth.elb.ap-northeast-1.amazonaws.com/%s&amp;quot;, token.Header[&amp;quot;kid&amp;quot;])
+		resp, err := http.Get(url)
+		if err != nil {
+			return nil, err
+		}
+		body, err := ioutil.ReadAll(resp.Body)
+		return jwt.ParseECPublicKeyFromPEM(body)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok &amp;amp;&amp;amp; token.Valid {
+		return claims, nil
+	} else {
+		return nil, errors.New(&amp;quot;token is invalid&amp;quot;)
+	}
+}
+
+type Response events.APIGatewayProxyResponse
+
+func Handler(request events.APIGatewayProxyRequest) (Response, error) {
+	var buf bytes.Buffer
+
+	_, err := ParseToken(request.Headers[&amp;quot;x-amzn-oidc-data&amp;quot;])
+	if err != nil {
+		return Response{StatusCode: http.StatusUnauthorizeds}, err
+	}
+
+	resp := Response{
+		StatusCode:      http.StatusOK,
+		Body:            &amp;quot;ok&amp;quot;,
+	}
+
+	return resp, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://tech.gunosy.io/entry/alb-login&#34;&gt;まだログイン認証で消耗してるの？ ~ALBで簡単認証機構~ - Gunosy Tech Blog&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -25,7 +198,9 @@ API GatewayでCognitoの認証をかける場合、AuthorizerでUserPoolを指�
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/157/&#34;&gt;Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。
-どうしても若干の時間課金とLambdaをVPCの中で動かすのが嫌でなければ柔軟なルーティングができるALBを使うと良いと思う。&lt;/p&gt;
+どうしても若干の時間課金が発生するのが嫌でなければ柔軟なルーティングができるALBを使った方が良いと思う。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/227/&#34;&gt;Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
 
@@ -69,7 +244,7 @@ invalid_requestとだけ出てしまった場合はClientのAuthorization code g
 
 &lt;h2 id=&#34;実装&#34;&gt;実装&lt;/h2&gt;
 
-&lt;p&gt;TokenをCookieで受け渡すほかは通常のAuthorization Flowを実装する。&lt;/p&gt;
+&lt;p&gt;TokenをCookieで受け渡すほかは通常のAuthorization Flowを行う。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/48/&#34;&gt;OAuth2.0のメモ - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
@@ -80,7 +255,7 @@ identity_providerを指定するかClientに一つしか紐づいていなけれ
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;p&gt;通常stateはサーバーに保持されるがステートレスに済ませるためにCookieに焼いている。
-stateはCSRF対策のためのものなのでCookieが攻撃者に読み書きされなければ意味を為すと思っているが、このフローで問題がある場合は教えてほしい。
+CSRF対策のためのものなのでCookieが攻撃者に読み書きされなければ意味を為すと思っているが、このフローで問題がある場合は教えてほしい。
 State、Token共にCookieに焼いているためCORSのAccess-Control-Allow-Originを*などにしてしまうと穴が開く。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;package auth
@@ -297,8 +472,9 @@ func makeLoginURL(userPoolURL string, userPoolClientID string, myselfURL string)
 
 func parseToken(tokenString string, userPoolClientID string, userPoolID string, region string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if token.Header[&amp;quot;alg&amp;quot;] != &amp;quot;RS256&amp;quot; {
-			return nil, fmt.Errorf(&amp;quot;Unexpected signing method: %v&amp;quot;, token.Header[&amp;quot;alg&amp;quot;])
+		// RS256
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf(&amp;quot;unexpected signing method: %v&amp;quot;, token.Header[&amp;quot;alg&amp;quot;])
 		}
 		return getKey(token, userPoolID, region)
 	})

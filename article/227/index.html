@@ -22,17 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Hugo - sambaiz-net</title>
-  <meta name="twitter:title" content="Hugo - sambaiz-net">
-  <meta property='og:title' content="Hugo - sambaiz-net">
+  <title>Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる - sambaiz-net</title>
+  <meta name="twitter:title" content="Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる - sambaiz-net">
+  <meta property='og:title' content="Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="ALB-&gt;Cognito認証-&gt;Lambda">
+  <meta name="twitter:description" content="ALB-&gt;Cognito認証-&gt;Lambda">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/tags/hugo/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/227/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https://www.sambaiz.net/"
+    },
+    "headline": "Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる | sambaiz-net ",
+    "datePublished": "2019-07-03T23:55:00JST",
+    "dateModified": "2019-07-03T23:55:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "ALB-&gt;Cognito認証-&gt;Lambda"
+  }
+</script>
 </head>
 
 <body>
@@ -126,36 +164,181 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">Hugo</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる</h1>
+          <p>(2019-07-03)</p>
+          
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/22/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-10-04</time>
-      </div>
-      <p class="article title">静的ウェブサイトエンジンHugoに乗り換えた</p>
-    </div>
-  </article>
-</a>
+<p>ALBのTargetとしてLambdaが<a href="https://aws.amazon.com/jp/blogs/news/lambda-functions-as-targets-for-application-load-balancers/">選択できるようになり</a>、
+若干の時間課金が発生する代わりに柔軟にルーティングできるAPI Gatewayのように使えるようになった。
+ActionとしてCognito認証を入れて認証に失敗したらログイン画面を表示させる。</p>
+
+<p><a href="https://www.sambaiz.net/article/226/">API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net</a></p>
+
+<h2 id="acmで証明書を発行する">ACMで証明書を発行する</h2>
+
+<p>HTTPSでListenするため証明書が必要。
+<a href="https://aws.amazon.com/jp/certificate-manager/">AWS Certificate Manager (ACM)</a>でAWSで使える証明書を無料で発行でき参照できる。
+外部で取ったドメインでもよい。
+検証方法はDNSとメールとで選ぶことができて、DNSで行う場合Route53ならワンクリックで検証用のCNAMEレコードを作成できる。
+検証までやや時間がかかるのでちゃんと通ってるかnslookupで確認しといた方がよい。</p>
+
+<h2 id="application-load-balancer-alb-https-docs-aws-amazon-com-ja-jp-elasticloadbalancing-latest-application-introduction-html"><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/introduction.html">Application Load Balancer (ALB)</a></h2>
+
+<p>次の要素から構成されるL7のロードバランサー。</p>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/load-balancer-listeners.html">Listener</a>: 指定したプロトコルとポートでリクエストを受ける。</li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-update-rules.html">ListenerRule</a>: パスやHeaderなどの値を条件にどのTargetGroupにルーティングするかのルール。<br /></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/load-balancer-target-groups.html">TargetGroup</a>: ルーティングする1つ以上のTarget。Instance, IP, Lambdaが選べる。</li>
+</ul>
+
+<h2 id="serverless-yaml">Serverless.yaml</h2>
+
+<p>ALBの<a href="https://serverless.com/framework/docs/providers/aws/events/alb/">enent</a>を付ければLambdaに向くRuleが作成されるが、
+そこにはCognitoを追加できなさそうなのでResourceの方で記述することにした。UserPoolとClientはあらかじめ作っておく。
+コールバックURLには<code>https://&lt;domain&gt;/oauth2/idpresponse</code>を追加する。</p>
+
+<p>API Gatewayだとタイムアウトの上限が<a href="https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/limits.html">30秒</a>なのに対してALBはLambdaの上限まで待てる。</p>
+
+<pre><code>service: alb-cognito-auth-example
+frameworkVersion: &quot;&gt;=1.28.0 &lt;2.0.0&quot;
+
+provider:
+  name: aws
+  runtime: go1.x
+  region: ap-northeast-1
+
+package:
+ exclude:
+   - ./**
+ include:
+   - ./bin/**
+
+functions:
+  privateapi:
+    handler: bin/privateapi
+    timeout: 30
+
+resources:
+  Resources:
+    ALBTargetGroup:
+      DependsOn: InvokeLambdaPermissionForALB
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        Name: &quot;private-lambda-target-group&quot;
+        TargetType: &quot;lambda&quot;
+        Targets:
+          - Id: !GetAtt PrivateapiLambdaFunction.Arn # Reference functions.privateapi
+    InvokeLambdaPermissionForALB:
+      Type: AWS::Lambda::Permission
+      Properties: 
+        Action: &quot;lambda:InvokeFunction&quot;
+        FunctionName: !Ref PrivateapiLambdaFunction
+        Principal: &quot;elasticloadbalancing.amazonaws.com&quot;
+    ALB: 
+      Type: &quot;AWS::ElasticLoadBalancingV2::LoadBalancer&quot;
+      Properties: 
+        Name: &quot;serverless-auth-example-alb&quot;
+        Scheme: &quot;internet-facing&quot;
+        LoadBalancerAttributes: 
+          - Key: &quot;idle_timeout.timeout_seconds&quot;
+            Value: 30
+        SecurityGroups:
+          - &quot;sg-*****&quot;
+        Subnets:
+          - &quot;subnet-*****&quot;
+          - &quot;subnet-*****&quot;
+    ALBListener: 
+      Type: &quot;AWS::ElasticLoadBalancingV2::Listener&quot;
+      Properties: 
+        DefaultActions: 
+          - Type: authenticate-cognito
+            Order: 1
+            AuthenticateCognitoConfig: 
+              OnUnauthenticatedRequest: authenticate
+              UserPoolArn: &quot;arn:aws:cognito-idp:ap-northeast-1:*****&quot;
+              UserPoolClientId: &quot;*****&quot;
+              UserPoolDomain: &quot;*****.auth.ap-northeast-1.amazoncognito.com&quot;
+          - Type: forward
+            Order: 2
+            TargetGroupArn: !Ref ALBTargetGroup
+        LoadBalancerArn: !Ref ALB
+        Port: 443
+        Protocol: HTTPS
+        Certificates: 
+          - CertificateArn: &quot;arn:aws:acm:ap-northeast-1:*****:certificate/*****&quot;
+    RecordSet:
+      Type: AWS::Route53::RecordSet
+      Properties: 
+        Type: &quot;A&quot; # or AAAA (IPv6)
+        HostedZoneName: &quot;foo.example.com.&quot;
+        Name: &quot;auth-example.foo.example.com.&quot;
+        AliasTarget: 
+          HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+          DNSName: !GetAtt ALB.DNSName
+        Comment: &quot;Added by servereless-alb-cognito-auth-example&quot;
+</code></pre>
+
+<p><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-authenticate-users.html#user-claims-encoding">x-amzn-oidc-data</a> HeaderにALBが署名したJWTトークンが入っているので、
+それがALBから来ているものかを検証しclaimを参照できる。リクエストはAPI Gatewayと同じような形式。</p>
+
+<pre><code>func ParseToken(tokenString string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// ES256
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, fmt.Errorf(&quot;unexpected signing method: %v&quot;, token.Header[&quot;alg&quot;])
+		}
+		url := fmt.Sprintf(&quot;https://public-keys.auth.elb.ap-northeast-1.amazonaws.com/%s&quot;, token.Header[&quot;kid&quot;])
+		resp, err := http.Get(url)
+		if err != nil {
+			return nil, err
+		}
+		body, err := ioutil.ReadAll(resp.Body)
+		return jwt.ParseECPublicKeyFromPEM(body)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok &amp;&amp; token.Valid {
+		return claims, nil
+	} else {
+		return nil, errors.New(&quot;token is invalid&quot;)
+	}
+}
+
+type Response events.APIGatewayProxyResponse
+
+func Handler(request events.APIGatewayProxyRequest) (Response, error) {
+	var buf bytes.Buffer
+
+	_, err := ParseToken(request.Headers[&quot;x-amzn-oidc-data&quot;])
+	if err != nil {
+		return Response{StatusCode: http.StatusUnauthorizeds}, err
+	}
+
+	resp := Response{
+		StatusCode:      http.StatusOK,
+		Body:            &quot;ok&quot;,
+	}
+
+	return resp, nil
+}
+</code></pre>
+
+<h2 id="参考">参考</h2>
+
+<p><a href="https://tech.gunosy.io/entry/alb-login">まだログイン認証で消耗してるの？ ~ALBで簡単認証機構~ - Gunosy Tech Blog</a></p>
 
         </div>
-        
-      </div>
-
-      
-
-
+      </article>
     </div>
-
   </div>
-
 </div>
 
 </div> 

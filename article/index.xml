@@ -6,10 +6,26 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Wed, 03 Jul 2019 20:15:00 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 03 Jul 2019 23:55:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる</title>
+      <link>https://www.sambaiz.net/article/227/</link>
+      <pubDate>Wed, 03 Jul 2019 23:55:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/227/</guid>
+      <description>ALBのTargetとしてLambdaが選択できるようになり、 若干の時間課金が発生する代わりに柔軟にルーティングできるAPI Gatewayのように使えるようになった。 ActionとしてCognito認証を入れて認証に失敗したらログイン画面を表示させる。
+API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net
+ACMで証明書を発行する HTTPSでListenするため証明書が必要。 AWS Certificate Manager (ACM)でAWSで使える証明書を無料で発行でき参照できる。 外部で取ったドメインでもよい。 検証方法はDNSとメールとで選ぶことができて、DNSで行う場合Route53ならワンクリックで検証用のCNAMEレコードを作成できる。 検証までやや時間がかかるのでちゃんと通ってるかnslookupで確認しといた方がよい。
+Application Load Balancer (ALB) 次の要素から構成されるL7のロードバランサー。
+ Listener: 指定したプロトコルとポートでリクエストを受ける。 ListenerRule: パスやHeaderなどの値を条件にどのTargetGroupにルーティングするかのルール。
+ TargetGroup: ルーティングする1つ以上のTarget。Instance, IP, Lambdaが選べる。  Serverless.yaml ALBのenentを付ければLambdaに向くRuleが作成されるが、 そこにはCognitoを追加できなさそうなのでResourceの方で記述することにした。UserPoolとClientはあらかじめ作っておく。 コールバックURLにはhttps://&amp;lt;domain&amp;gt;/oauth2/idpresponseを追加する。
+API Gatewayだとタイムアウトの上限が30秒なのに対してALBはLambdaの上限まで待てる。
+service: alb-cognito-auth-example frameworkVersion: &amp;quot;&amp;gt;=1.28.0 &amp;lt;2.0.0&amp;quot; provider: name: aws runtime: go1.x region: ap-northeast-1 package: exclude: - ./** include: - ./bin/** functions: privateapi: handler: bin/privateapi timeout: 30 resources: Resources: ALBTargetGroup: DependsOn: InvokeLambdaPermissionForALB Type: AWS::ElasticLoadBalancingV2::TargetGroup Properties: Name: &amp;quot;private-lambda-target-group&amp;quot; TargetType: &amp;quot;lambda&amp;quot; Targets: - Id: !</description>
+    </item>
     
     <item>
       <title>API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く</title>
@@ -19,11 +35,11 @@
       <guid>https://www.sambaiz.net/article/226/</guid>
       <description>ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる。 API GatewayでCognitoの認証をかける場合、AuthorizerでUserPoolを指定するのが最も簡単なパターンだが、 これだとHeaderにTokenを付けてアクセスする必要があり認証に失敗するとUnauthorizedが返る。
 Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる - sambaiz-net
-なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。 どうしても若干の時間課金とLambdaをVPCの中で動かすのが嫌でなければ柔軟なルーティングができるALBを使うと良いと思う。
+なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。 どうしても若干の時間課金が発生するのが嫌でなければ柔軟なルーティングができるALBを使った方が良いと思う。
+Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる - sambaiz-net
 準備 UserPoolとClientを作成する。 CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseなのに注意。変えると作り直される。
 Resources: Userpool: Type: AWS::Cognito::UserPool Properties: AdminCreateUserConfig: AllowAdminCreateUserOnly: false Schema: - Mutable: true Name: email Required: true - Mutable: true Name: name Required: true UsernameAttributes: - email UserPoolName: testpool UserpoolClient: Type: AWS::Cognito::UserPoolClient Properties: UserPoolId: Ref: Userpool ClientName: testclient GenerateSecret: true  今回はフェデレーションでGoogleアカウントでログインできるようにする。 ややこしい用語であるがID Poolのフェデレーティッドアイデンティティとは異なる。
-UserPoolのドメインや、GoogleのOAuth Client IDの発行とAttributes Mapping、Clientの設定はCloudFormationでできないので手でやる。 Attributes Mappingで変えられるがusernameは変更不可な値なのでsubのままにしておく。
-設定が終わったら https://&amp;lt;user-pool-domain&amp;gt;/login?client_id=&amp;lt;client-id&amp;gt;&amp;amp;redirect_uri=&amp;lt;redirect-uri&amp;gt;&amp;amp;response_type=code にアクセスし、&amp;lt;redirect-uri&amp;gt;?code=&amp;lt;code&amp;gt; までリダイレクトされることを確認する。 invalid_requestとだけ出てしまった場合はClientのAuthorization code grantにチェックが入っているか確認する。</description>
+UserPoolのドメインや、GoogleのOAuth Client IDの発行とAttributes Mapping、Clientの設定はCloudFormationでできないので手でやる。 Attributes Mappingで変えられるがusernameは変更不可な値なのでsubのままにしておく。</description>
     </item>
     
     <item>
