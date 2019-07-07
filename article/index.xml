@@ -6,13 +6,25 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Wed, 03 Jul 2019 23:55:00 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 07 Jul 2019 17:10:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
-      <title>Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる</title>
+      <title>Cognito UserPoolのPreSignUpで呼ばれるLambdaで登録ユーザーを制限する</title>
+      <link>https://www.sambaiz.net/article/228/</link>
+      <pubDate>Sun, 07 Jul 2019 17:10:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/228/</guid>
+      <description>サードパーティのIdPからCognitoにSignUpできるようにする場合、特定のドメインのメールアドレスといったような制限をかけたいことがある。 これをPreSignUp時にチェックすることでUserPoolに入らないようにすることができる。
+Lambda CognitoEventUserPoolsPreSignupを受け取って返す。
+package main import ( &amp;quot;errors&amp;quot; &amp;quot;fmt&amp;quot; &amp;quot;github.com/aws/aws-lambda-go/events&amp;quot; &amp;quot;github.com/aws/aws-lambda-go/lambda&amp;quot; ) func handler(event events.CognitoEventUserPoolsPreSignup) (events.CognitoEventUserPoolsPreSignup, error) { fmt.Printf(&amp;quot;PreSignup of user: %s\n&amp;quot;, event.UserName) if event.Request.UserAttributes[&amp;quot;email&amp;quot;] != &amp;quot;godgourd@gmail.com&amp;quot; { return event, errors.New(&amp;quot;Forbidden&amp;quot;) } return event, nil } func main() { lambda.Start(handler) }  リソース UserPoolのLambdaConfigでトリガーを設定できる。 CognitoからLambdaを呼べるPermissionが必要。
+UserPool: Type: AWS::Cognito::UserPool Properties: ... LambdaConfig: PreSignUp: !GetAtt PresignupLambdaFunction.Arn UserPoolLambdaInvokePermission: Type: AWS::Lambda::Permission Properties: Action: lambda:invokeFunction Principal: cognito-idp.amazonaws.com FunctionName: !GetAtt PresignupLambdaFunction.Arn SourceArn: arn:aws:cognito-idp:&amp;lt;region&amp;gt;:&amp;lt;account_id&amp;gt;:userpool/*  なおALBのActionでCognito認証を入れると登録失敗時に500エラーになってしまう。これを回避するには自前でやるしかないのかもしれない。</description>
+    </item>
+    
+    <item>
+      <title>LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす</title>
       <link>https://www.sambaiz.net/article/227/</link>
       <pubDate>Wed, 03 Jul 2019 23:55:00 +0900</pubDate>
       
@@ -22,9 +34,9 @@ API GatewayでCognitoの認証をかけて必要ならログイン画面に飛�
 ACMで証明書を発行する HTTPSでListenするため証明書が必要。 AWS Certificate Manager (ACM)でAWSで使える証明書を無料で発行でき参照できる。 外部で取ったドメインでもよい。 検証方法はDNSとメールとで選ぶことができて、DNSで行う場合Route53ならワンクリックで検証用のCNAMEレコードを作成できる。 検証までやや時間がかかるのでちゃんと通ってるかnslookupで確認しといた方がよい。
 Application Load Balancer (ALB) 次の要素から構成されるL7のロードバランサー。
  Listener: 指定したプロトコルとポートでリクエストを受ける。 ListenerRule: パスやHeaderなどの値を条件にどのTargetGroupにルーティングするかのルール。
- TargetGroup: ルーティングする1つ以上のTarget。Instance, IP, Lambdaが選べる。  Serverless.yaml ALBのenentを付ければLambdaに向くRuleが作成されるが、 そこにはCognitoを追加できなさそうなのでResourceの方で記述することにした。UserPoolとClientはあらかじめ作っておく。 コールバックURLにはhttps://&amp;lt;domain&amp;gt;/oauth2/idpresponseを追加する。
+ TargetGroup: ルーティングする1つ以上のTarget。Instance, IP, Lambdaが選べる。  Ruleの作成 Serverless FrameworkではALBのenentを付けるだけでLambdaに向くRuleが作成されるが、そこにはCognitoを追加できなさそうなので使っていない。OnUnauthenticatedRequestで認証失敗時の挙動を選択できる。UserPoolとSecretありのClientはあらかじめ作っておく。コールバックURLにはhttps://&amp;lt;domain&amp;gt;/oauth2/idpresponseを追加する。
 API Gatewayだとタイムアウトの上限が30秒なのに対してALBはLambdaの上限まで待てる。
-service: alb-cognito-auth-example frameworkVersion: &amp;quot;&amp;gt;=1.28.0 &amp;lt;2.0.0&amp;quot; provider: name: aws runtime: go1.x region: ap-northeast-1 package: exclude: - ./** include: - ./bin/** functions: privateapi: handler: bin/privateapi timeout: 30 resources: Resources: ALBTargetGroup: DependsOn: InvokeLambdaPermissionForALB Type: AWS::ElasticLoadBalancingV2::TargetGroup Properties: Name: &amp;quot;private-lambda-target-group&amp;quot; TargetType: &amp;quot;lambda&amp;quot; Targets: - Id: !</description>
+$ cat serverless.yml service: alb-cognito-auth-example frameworkVersion: &amp;quot;&amp;gt;=1.28.0 &amp;lt;2.0.0&amp;quot; provider: name: aws runtime: go1.x region: ap-northeast-1 package: exclude: - ./** include: - ./bin/** functions: privateapi: handler: bin/privateapi timeout: 30 resources: Resources: ALBTargetGroup: DependsOn: InvokeLambdaPermissionForALB Type: AWS::ElasticLoadBalancingV2::TargetGroup Properties: Name: &amp;quot;private-lambda-target-group&amp;quot; TargetType: &amp;quot;lambda&amp;quot; Targets: - Id: !</description>
     </item>
     
     <item>
@@ -35,11 +47,12 @@ service: alb-cognito-auth-example frameworkVersion: &amp;quot;&amp;gt;=1.28.0 &a
       <guid>https://www.sambaiz.net/article/226/</guid>
       <description>ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる。 API GatewayでCognitoの認証をかける場合、AuthorizerでUserPoolを指定するのが最も簡単なパターンだが、 これだとHeaderにTokenを付けてアクセスする必要があり認証に失敗するとUnauthorizedが返る。
 Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる - sambaiz-net
-なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。 どうしても若干の時間課金が発生するのが嫌でなければ柔軟なルーティングができるALBを使った方が良いと思う。
-Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる - sambaiz-net
+なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。
+LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす - sambaiz-net
 準備 UserPoolとClientを作成する。 CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseなのに注意。変えると作り直される。
 Resources: Userpool: Type: AWS::Cognito::UserPool Properties: AdminCreateUserConfig: AllowAdminCreateUserOnly: false Schema: - Mutable: true Name: email Required: true - Mutable: true Name: name Required: true UsernameAttributes: - email UserPoolName: testpool UserpoolClient: Type: AWS::Cognito::UserPoolClient Properties: UserPoolId: Ref: Userpool ClientName: testclient GenerateSecret: true  今回はフェデレーションでGoogleアカウントでログインできるようにする。 ややこしい用語であるがID Poolのフェデレーティッドアイデンティティとは異なる。
-UserPoolのドメインや、GoogleのOAuth Client IDの発行とAttributes Mapping、Clientの設定はCloudFormationでできないので手でやる。 Attributes Mappingで変えられるがusernameは変更不可な値なのでsubのままにしておく。</description>
+UserPoolのドメインや、GoogleのOAuth Client IDの発行とAttributes Mapping、Clientの設定はCloudFormationでできないので手でやる。 Attributes Mappingで変えられるがusernameは変更不可な値なのでsubのままにしておく。
+設定が終わったら https://&amp;lt;user-pool-domain&amp;gt;/login?client_id=&amp;lt;client-id&amp;gt;&amp;amp;redirect_uri=&amp;lt;redirect-uri&amp;gt;&amp;amp;response_type=code にアクセスし、&amp;lt;redirect-uri&amp;gt;?</description>
     </item>
     
     <item>

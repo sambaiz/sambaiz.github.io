@@ -6,12 +6,80 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-07-03 23:55:00 &#43;0900 JST</updated>
+    <updated>2019-07-07 17:10:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる</title>
+          <title>Cognito UserPoolのPreSignUpで呼ばれるLambdaで登録ユーザーを制限する</title>
+          <link>https://www.sambaiz.net/article/228/</link>
+          <pubDate>Sun, 07 Jul 2019 17:10:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/228/</guid>
+          <description>
+
+&lt;p&gt;サードパーティのIdPからCognitoにSignUpできるようにする場合、特定のドメインのメールアドレスといったような制限をかけたいことがある。
+これをPreSignUp時にチェックすることでUserPoolに入らないようにすることができる。&lt;/p&gt;
+
+&lt;h2 id=&#34;lambda&#34;&gt;Lambda&lt;/h2&gt;
+
+&lt;p&gt;CognitoEventUserPoolsPreSignupを&lt;a href=&#34;https://github.com/aws/aws-lambda-go/blob/master/events/README_Cognito_UserPools_PreSignup.md&#34;&gt;受け取って返す&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;errors&amp;quot;
+	&amp;quot;fmt&amp;quot;
+
+	&amp;quot;github.com/aws/aws-lambda-go/events&amp;quot;
+	&amp;quot;github.com/aws/aws-lambda-go/lambda&amp;quot;
+)
+
+func handler(event events.CognitoEventUserPoolsPreSignup) (events.CognitoEventUserPoolsPreSignup, error) {
+	fmt.Printf(&amp;quot;PreSignup of user: %s\n&amp;quot;, event.UserName)
+	if event.Request.UserAttributes[&amp;quot;email&amp;quot;] != &amp;quot;godgourd@gmail.com&amp;quot; {
+		return event, errors.New(&amp;quot;Forbidden&amp;quot;)
+	}
+	return event, nil
+}
+
+func main() {
+	lambda.Start(handler)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;リソース&#34;&gt;リソース&lt;/h2&gt;
+
+&lt;p&gt;UserPoolの&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-properties-cognito-userpool-lambdaconfig.html&#34;&gt;LambdaConfig&lt;/a&gt;でトリガーを設定できる。
+CognitoからLambdaを呼べるPermissionが必要。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;UserPool:
+  Type: AWS::Cognito::UserPool
+  Properties:
+    ...
+    LambdaConfig:
+      PreSignUp: !GetAtt PresignupLambdaFunction.Arn
+UserPoolLambdaInvokePermission:
+  Type: AWS::Lambda::Permission
+  Properties:
+    Action: lambda:invokeFunction
+    Principal: cognito-idp.amazonaws.com
+    FunctionName: !GetAtt PresignupLambdaFunction.Arn
+    SourceArn: arn:aws:cognito-idp:&amp;lt;region&amp;gt;:&amp;lt;account_id&amp;gt;:userpool/*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なおALBのActionでCognito認証を入れると登録失敗時に500エラーになってしまう。これを回避するには自前でやるしかないのかもしれない。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/227/&#34;&gt;LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/226/&#34;&gt;API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす</title>
           <link>https://www.sambaiz.net/article/227/</link>
           <pubDate>Wed, 03 Jul 2019 23:55:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -42,15 +110,14 @@ ActionとしてCognito認証を入れて認証に失敗したらログイン画�
 &lt;li&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/load-balancer-target-groups.html&#34;&gt;TargetGroup&lt;/a&gt;: ルーティングする1つ以上のTarget。Instance, IP, Lambdaが選べる。&lt;/li&gt;
 &lt;/ul&gt;
 
-&lt;h2 id=&#34;serverless-yaml&#34;&gt;Serverless.yaml&lt;/h2&gt;
+&lt;h2 id=&#34;ruleの作成&#34;&gt;Ruleの作成&lt;/h2&gt;
 
-&lt;p&gt;ALBの&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/events/alb/&#34;&gt;enent&lt;/a&gt;を付ければLambdaに向くRuleが作成されるが、
-そこにはCognitoを追加できなさそうなのでResourceの方で記述することにした。UserPoolとClientはあらかじめ作っておく。
-コールバックURLには&lt;code&gt;https://&amp;lt;domain&amp;gt;/oauth2/idpresponse&lt;/code&gt;を追加する。&lt;/p&gt;
+&lt;p&gt;Serverless FrameworkではALBの&lt;a href=&#34;https://serverless.com/framework/docs/providers/aws/events/alb/&#34;&gt;enent&lt;/a&gt;を付けるだけでLambdaに向くRuleが作成されるが、そこにはCognitoを追加できなさそうなので使っていない。OnUnauthenticatedRequestで認証失敗時の挙動を選択できる。UserPoolとSecretありのClientはあらかじめ作っておく。コールバックURLには&lt;code&gt;https://&amp;lt;domain&amp;gt;/oauth2/idpresponse&lt;/code&gt;を追加する。&lt;/p&gt;
 
 &lt;p&gt;API Gatewayだとタイムアウトの上限が&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/limits.html&#34;&gt;30秒&lt;/a&gt;なのに対してALBはLambdaの上限まで待てる。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;service: alb-cognito-auth-example
+&lt;pre&gt;&lt;code&gt;$ cat serverless.yml
+service: alb-cognito-auth-example
 frameworkVersion: &amp;quot;&amp;gt;=1.28.0 &amp;lt;2.0.0&amp;quot;
 
 provider:
@@ -197,10 +264,9 @@ API GatewayでCognitoの認証をかける場合、AuthorizerでUserPoolを指�
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/157/&#34;&gt;Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。
-どうしても若干の時間課金が発生するのが嫌でなければ柔軟なルーティングができるALBを使った方が良いと思う。&lt;/p&gt;
+&lt;p&gt;なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/227/&#34;&gt;Serverless FrameworkでALBによるCognito認証をかけたAPIを立てる - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/227/&#34;&gt;LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;h2 id=&#34;準備&#34;&gt;準備&lt;/h2&gt;
 
@@ -244,17 +310,17 @@ invalid_requestとだけ出てしまった場合はClientのAuthorization code g
 
 &lt;h2 id=&#34;実装&#34;&gt;実装&lt;/h2&gt;
 
-&lt;p&gt;TokenをCookieで受け渡すほかは通常のAuthorization Flowを行う。&lt;/p&gt;
+&lt;p&gt;Authorization Flowを行う。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/48/&#34;&gt;OAuth2.0のメモ - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;Tokenを検証し、失敗した場合はログイン画面にリダイレクトさせる。
+&lt;p&gt;Cookieで渡ってきたTokenを検証し、失敗した場合はログイン画面にリダイレクトさせる。
 identity_providerを指定するかClientに一つしか紐づいていなければそのプロバイダのログイン画面に飛び、そうでなければ選択する画面が表示される。
 ログインしてクエリパラメータとして渡ってきたcodeとstateもこの関数で受け取り、検証してTokenを発行し一旦返してCookieに焼く。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/136/&#34;&gt;OpenID ConnectのIDトークンの内容と検証 - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
-&lt;p&gt;通常stateはサーバーに保持されるがステートレスに済ませるためにCookieに焼いている。
+&lt;p&gt;通常stateはサーバーに保持されるがDBを持たなくていいようにCookieに焼いている。
 CSRF対策のためのものなのでCookieが攻撃者に読み書きされなければ意味を為すと思っているが、このフローで問題がある場合は教えてほしい。
 State、Token共にCookieに焼いているためCORSのAccess-Control-Allow-Originを*などにしてしまうと穴が開く。&lt;/p&gt;
 

@@ -22,17 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Crypto - sambaiz-net</title>
-  <meta name="twitter:title" content="Crypto - sambaiz-net">
-  <meta property='og:title' content="Crypto - sambaiz-net">
+  <title>Cognito UserPoolのPreSignUpで呼ばれるLambdaで登録ユーザーを制限する - sambaiz-net</title>
+  <meta name="twitter:title" content="Cognito UserPoolのPreSignUpで呼ばれるLambdaで登録ユーザーを制限する - sambaiz-net">
+  <meta property='og:title' content="Cognito UserPoolのPreSignUpで呼ばれるLambdaで登録ユーザーを制限する - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="登録前にチェックしてUserPoolに入るユーザーを制限する">
+  <meta name="twitter:description" content="登録前にチェックしてUserPoolに入るユーザーを制限する">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/tags/crypto/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/228/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https://www.sambaiz.net/"
+    },
+    "headline": "Cognito UserPoolのPreSignUpで呼ばれるLambdaで登録ユーザーを制限する | sambaiz-net ",
+    "datePublished": "2019-07-07T17:10:00JST",
+    "dateModified": "2019-07-07T17:10:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "登録前にチェックしてUserPoolに入るユーザーを制限する"
+  }
+</script>
 </head>
 
 <body>
@@ -126,36 +164,76 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">Crypto</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>Cognito UserPoolのPreSignUpで呼ばれるLambdaで登録ユーザーを制限する</h1>
+          <p>(2019-07-07)</p>
+          
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/135/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-10-01</time>
-      </div>
-      <p class="article title">RSA暗号とPEM/DERの構造</p>
-    </div>
-  </article>
-</a>
+<p>サードパーティのIdPからCognitoにSignUpできるようにする場合、特定のドメインのメールアドレスといったような制限をかけたいことがある。
+これをPreSignUp時にチェックすることでUserPoolに入らないようにすることができる。</p>
+
+<h2 id="lambda">Lambda</h2>
+
+<p>CognitoEventUserPoolsPreSignupを<a href="https://github.com/aws/aws-lambda-go/blob/master/events/README_Cognito_UserPools_PreSignup.md">受け取って返す</a>。</p>
+
+<pre><code>package main
+
+import (
+	&quot;errors&quot;
+	&quot;fmt&quot;
+
+	&quot;github.com/aws/aws-lambda-go/events&quot;
+	&quot;github.com/aws/aws-lambda-go/lambda&quot;
+)
+
+func handler(event events.CognitoEventUserPoolsPreSignup) (events.CognitoEventUserPoolsPreSignup, error) {
+	fmt.Printf(&quot;PreSignup of user: %s\n&quot;, event.UserName)
+	if event.Request.UserAttributes[&quot;email&quot;] != &quot;godgourd@gmail.com&quot; {
+		return event, errors.New(&quot;Forbidden&quot;)
+	}
+	return event, nil
+}
+
+func main() {
+	lambda.Start(handler)
+}
+</code></pre>
+
+<h2 id="リソース">リソース</h2>
+
+<p>UserPoolの<a href="https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-properties-cognito-userpool-lambdaconfig.html">LambdaConfig</a>でトリガーを設定できる。
+CognitoからLambdaを呼べるPermissionが必要。</p>
+
+<pre><code>UserPool:
+  Type: AWS::Cognito::UserPool
+  Properties:
+    ...
+    LambdaConfig:
+      PreSignUp: !GetAtt PresignupLambdaFunction.Arn
+UserPoolLambdaInvokePermission:
+  Type: AWS::Lambda::Permission
+  Properties:
+    Action: lambda:invokeFunction
+    Principal: cognito-idp.amazonaws.com
+    FunctionName: !GetAtt PresignupLambdaFunction.Arn
+    SourceArn: arn:aws:cognito-idp:&lt;region&gt;:&lt;account_id&gt;:userpool/*
+</code></pre>
+
+<p>なおALBのActionでCognito認証を入れると登録失敗時に500エラーになってしまう。これを回避するには自前でやるしかないのかもしれない。</p>
+
+<p><a href="https://www.sambaiz.net/article/227/">LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす - sambaiz-net</a></p>
+
+<p><a href="https://www.sambaiz.net/article/226/">API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net</a></p>
 
         </div>
-        
-      </div>
-
-      
-
-
+      </article>
     </div>
-
   </div>
-
 </div>
 
 </div> 
