@@ -6,8 +6,105 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-07-19 21:21:00 &#43;0900 JST</updated>
+    <updated>2019-07-22 21:09:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Lambda Layerでバイナリやライブラリを切り出す</title>
+          <link>https://www.sambaiz.net/article/232/</link>
+          <pubDate>Mon, 22 Jul 2019 21:09:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/232/</guid>
+          <description>&lt;p&gt;Lambdaで実行したい外部コマンドがある場合、通常バイナリをパッケージに含めることになりデプロイに時間がかかってしまう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;os/exec&amp;quot;
+
+	&amp;quot;github.com/aws/aws-lambda-go/events&amp;quot;
+	&amp;quot;github.com/aws/aws-lambda-go/lambda&amp;quot;
+)
+
+func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	cmd := exec.Command(&amp;quot;git&amp;quot;, &amp;quot;clone&amp;quot;, &amp;quot;https://github.com/sambaiz/foobar.git&amp;quot;, &amp;quot;/tmp/repo&amp;quot;)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf(&amp;quot;%s %s&amp;quot;, string(output), err.Error()),
+			StatusCode: 500,
+		}, nil
+	}
+	return events.APIGatewayProxyResponse{
+		Body:       string(output),
+		StatusCode: 200,
+	}, nil
+}
+
+func main() {
+	lambda.Start(handler)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;exec: &amp;quot;git&amp;quot;: executable file not found in $PATH
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/configuration-layers.html&#34;&gt;Lambda Layer&lt;/a&gt;を使うと
+ライブラリやバイナリを切り出すことができ、複数Functionで共有することもできる。
+ディレクトリをzipにしてLayerに指定すると中身が&lt;code&gt;/opt&lt;/code&gt;に展開され、&lt;code&gt;/opt/bin&lt;/code&gt;にはPATHが、&lt;code&gt;/opt/lib&lt;/code&gt;にはLD_LIBRARY_PATHが通るほか、
+言語ごとのパッケージ置き場がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ tree layer/
+layer/
+└── bin
+    └── some-command
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;zipはS3に上げておくこともできるが、
+SAMでは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/serverless-application-model/latest/developerguide/serverless-sam-template.html#serverless-sam-template-layerversion&#34;&gt;AWS::Lambda::LayerVersion&lt;/a&gt;のContentUriでローカルのパスを指定することもでき、
+&lt;code&gt;sam local&lt;/code&gt; でも適用される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat template.yaml 
+...
+Resources:
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: hello-world/
+      Handler: hello-world
+      Runtime: go1.x
+      Layers:
+        - !Ref ExampleLayer
+      Events:
+        CatchAll:
+          Type: Api
+          Properties:
+            Path: /hello
+            Method: GET
+  ExampleLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: SomeCommandLayer
+      Description: some-command binary is included
+      ContentUri: &#39;./layer&#39;
+      CompatibleRuntimes:
+        - go1.x
+      RetentionPolicy: Delete
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;というこどで&lt;a href=&#34;https://github.com/lambci/git-lambda-layer&#34;&gt;lambci/git-lambda-layer&lt;/a&gt;を入れてgitを使えるようにしようと思ったが、
+調べているうちに&lt;a href=&#34;https://github.com/src-d/go-git&#34;&gt;src-d/go-git&lt;/a&gt;を見つけたのでこちらを使うことにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;_, err := git.PlainClone(&amp;quot;/tmp/repo&amp;quot;, false, &amp;amp;git.CloneOptions{
+	URL:      &amp;quot;https://github.com/sambaiz/foobar.git&amp;quot;,
+	Progress: os.Stdout,
+})
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>

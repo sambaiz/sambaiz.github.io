@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Athenaのmigrationやpartitionするathena-adminを作った - sambaiz-net</title>
-  <meta name="twitter:title" content="Athenaのmigrationやpartitionするathena-adminを作った - sambaiz-net">
-  <meta property='og:title' content="Athenaのmigrationやpartitionするathena-adminを作った - sambaiz-net">
+  <title>Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net</title>
+  <meta name="twitter:title" content="Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net">
+  <meta property='og:title' content="Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="athena-admin">
-  <meta name="twitter:description" content="athena-admin">
+  <meta name="description" content="SAMでLambda Layerを使う">
+  <meta name="twitter:description" content="SAMでLambda Layerを使う">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/145/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/232/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "Athenaのmigrationやpartitionするathena-adminを作った | sambaiz-net ",
-    "datePublished": "2017-12-24T23:31:00JST",
-    "dateModified": "2017-12-24T23:31:00JST",
+    "headline": "Lambda Layerでバイナリやライブラリを切り出す | sambaiz-net ",
+    "datePublished": "2019-07-22T21:09:00JST",
+    "dateModified": "2019-07-22T21:09:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "athena-admin"
+    "description": "SAMでLambda Layerを使う"
   }
 </script>
 </head>
@@ -170,72 +170,94 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Athenaのmigrationやpartitionするathena-adminを作った</h1>
-          <p>(2017-12-24)</p>
-          <p><a href="https://github.com/sambaiz/athena-admin">https://github.com/sambaiz/athena-admin</a></p>
+          <h1>Lambda Layerでバイナリやライブラリを切り出す</h1>
+          <p>(2019-07-22)</p>
+          <p>Lambdaで実行したい外部コマンドがある場合、通常バイナリをパッケージに含めることになりデプロイに時間がかかってしまう。</p>
 
-<p>AthenaはS3をデータソースとするマネージドなデータ分析基盤。Prestoベースで標準SQLを実行できる。</p>
+<pre><code>package main
 
-<p><a href="https://aws.amazon.com/jp/athena/pricing/">料金</a>はスキャンしたデータ量にかかり、$5/TB。1MB切り上げで、10MB以下のクエリは10MBになる。
-データ量に対してかなり安く使えるものの、フルスキャンしてしまうとBigQueryと同様にお金が溶けてしまうので、大抵はパーティションを切ることになるのだけど都度locationを指定して<code>ADD PARTITION</code>を実行するのは大変。さらにスキーマを変更するのにも<code>ALTER TABLE ADD COLUMNS</code>などはないのでテーブルを作り直すことになるが、当然パーティションも全部作り直すことになる。</p>
+import (
+	&quot;fmt&quot;
+	&quot;os/exec&quot;
 
-<p>ではどうしようもないかというと<code>MSCK REPAIR TABLE</code>というのがあって、
-これはS3のObjectの<code>dt=YYYY-MM-DD</code>のようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだけど、勝手に<code>YYYY/MM/DD/HH</code>のprefixを付けてしまうFirehoseのようなのもある。</p>
+	&quot;github.com/aws/aws-lambda-go/events&quot;
+	&quot;github.com/aws/aws-lambda-go/lambda&quot;
+)
 
-<p>今回作った<a href="https://github.com/sambaiz/athena-admin">athena-admin</a>は以下のような定義ファイルから、
-パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationする。
-このファイルを書き換えるだけで基本的にどうにかなるし、バージョン管理すればテーブル定義の変更を追うことができる。</p>
+func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	cmd := exec.Command(&quot;git&quot;, &quot;clone&quot;, &quot;https://github.com/sambaiz/foobar.git&quot;, &quot;/tmp/repo&quot;)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf(&quot;%s %s&quot;, string(output), err.Error()),
+			StatusCode: 500,
+		}, nil
+	}
+	return events.APIGatewayProxyResponse{
+		Body:       string(output),
+		StatusCode: 200,
+	}, nil
+}
 
-<pre><code>{
-  &quot;general&quot;: {
-    &quot;athenaRegion&quot;: &quot;ap-northeast-1&quot;,
-    &quot;databaseName&quot;: &quot;aaaa&quot;,
-    &quot;saveDefinitionLocation&quot;: &quot;s3://saveDefinitionBucket/aaaa.json&quot;
-  },
-  &quot;tables&quot;: {
-    &quot;sample_data&quot;: {
-      &quot;columns&quot;: {
-        &quot;user_id&quot;: &quot;int&quot;,
-        &quot;value&quot;: {
-          &quot;score&quot;: &quot;int&quot;,
-          &quot;category&quot;: &quot;string&quot;
-        } /* &quot;struct&lt;score:int,category:string&gt;&quot; のように書くこともできる */
-      },
-      &quot;srcLocation&quot;: &quot;s3://src/location/&quot;,
-      &quot;partition&quot;: {
-        &quot;prePartitionLocation&quot;: &quot;s3://pre/partition/&quot;, /* optional */
-        &quot;regexp&quot;: &quot;(\\d{4})/(\\d{2})/(\\d{2})/&quot;, /* optional */
-        &quot;keys&quot;: [
-          {
-            &quot;name&quot;: &quot;dt&quot;,
-            &quot;type&quot;: &quot;string&quot;,
-            &quot;format&quot;: &quot;{1}-{2}-{3}&quot;, /* optional */
-          }
-        ]
-      }
-    }
-  }
+func main() {
+	lambda.Start(handler)
 }
 </code></pre>
 
-<p>使い方はこんな感じ。使い方によっては<code>migrate()</code>だけ呼ぶこともあると思う。
-<code>replaceObjects()</code>にはmatchedHandlerというのを渡すこともできて、
-UTCからJSTに変換するといったこともできる。</p>
-
-<pre><code>$ npm install athena-admin
+<pre><code>exec: &quot;git&quot;: executable file not found in $PATH
 </code></pre>
 
-<pre><code>const AthenaAdmin = require('athena-admin').AthenaAdmin;
-const dbDef = require('./sampledatabase.json');
-const admin = new AthenaAdmin(dbDef);
-await admin.replaceObjects();
-await admin.migrate();
-await admin.partition();
+<p><a href="https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/configuration-layers.html">Lambda Layer</a>を使うと
+ライブラリやバイナリを切り出すことができ、複数Functionで共有することもできる。
+ディレクトリをzipにしてLayerに指定すると中身が<code>/opt</code>に展開され、<code>/opt/bin</code>にはPATHが、<code>/opt/lib</code>にはLD_LIBRARY_PATHが通るほか、
+言語ごとのパッケージ置き場がある。</p>
+
+<pre><code>$ tree layer/
+layer/
+└── bin
+    └── some-command
 </code></pre>
 
-<blockquote>
-<p>追記 (2019-01-01): AWS Glueを使っても同じことができる <a href="https://www.sambaiz.net/article/203/">AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net</a></p>
-</blockquote>
+<p>zipはS3に上げておくこともできるが、
+SAMでは<a href="https://docs.aws.amazon.com/ja_jp/serverless-application-model/latest/developerguide/serverless-sam-template.html#serverless-sam-template-layerversion">AWS::Lambda::LayerVersion</a>のContentUriでローカルのパスを指定することもでき、
+<code>sam local</code> でも適用される。</p>
+
+<pre><code>$ cat template.yaml 
+...
+Resources:
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: hello-world/
+      Handler: hello-world
+      Runtime: go1.x
+      Layers:
+        - !Ref ExampleLayer
+      Events:
+        CatchAll:
+          Type: Api
+          Properties:
+            Path: /hello
+            Method: GET
+  ExampleLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: SomeCommandLayer
+      Description: some-command binary is included
+      ContentUri: './layer'
+      CompatibleRuntimes:
+        - go1.x
+      RetentionPolicy: Delete
+</code></pre>
+
+<p>というこどで<a href="https://github.com/lambci/git-lambda-layer">lambci/git-lambda-layer</a>を入れてgitを使えるようにしようと思ったが、
+調べているうちに<a href="https://github.com/src-d/go-git">src-d/go-git</a>を見つけたのでこちらを使うことにした。</p>
+
+<pre><code>_, err := git.PlainClone(&quot;/tmp/repo&quot;, false, &amp;git.CloneOptions{
+	URL:      &quot;https://github.com/sambaiz/foobar.git&quot;,
+	Progress: os.Stdout,
+})
+</code></pre>
 
         </div>
       </article>
