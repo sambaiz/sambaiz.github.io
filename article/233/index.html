@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>logrotateでログをローテーションする - sambaiz-net</title>
-  <meta name="twitter:title" content="logrotateでログをローテーションする - sambaiz-net">
-  <meta property='og:title' content="logrotateでログをローテーションする - sambaiz-net">
+  <title>Lambda上でnpm installする - sambaiz-net</title>
+  <meta name="twitter:title" content="Lambda上でnpm installする - sambaiz-net">
+  <meta property='og:title' content="Lambda上でnpm installする - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="logrotate">
-  <meta name="twitter:description" content="logrotate">
+  <meta name="description" content="npm入りのLambda Layerを作った">
+  <meta name="twitter:description" content="npm入りのLambda Layerを作った">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/33/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/233/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "logrotateでログをローテーションする | sambaiz-net ",
-    "datePublished": "2016-11-09T22:15:00JST",
-    "dateModified": "2016-11-09T22:15:00JST",
+    "headline": "Lambda上でnpm installする | sambaiz-net ",
+    "datePublished": "2019-07-23T23:44:00JST",
+    "dateModified": "2019-07-23T23:44:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "logrotate"
+    "description": "npm入りのLambda Layerを作った"
   }
 </script>
 </head>
@@ -170,55 +170,136 @@
 
       <article class="single">
         <div class="single body">
-          <h1>logrotateでログをローテーションする</h1>
-          <p>(2016-11-09)</p>
-          <p><a href="https://github.com/Sirupsen/logrus">logrus</a>がローテーションする仕組みを持っていなかったので、
-READMEに書いてあったlogrotateを使う。/etc/logrotate.dの中に設定ファイルを入れて、cronで回して使う。</p>
+          <h1>Lambda上でnpm installする</h1>
+          <p>(2019-07-23)</p>
+          <p>Lambda上でnpm installできるようにnpmとnode, .npmrc入りのLambda Layerを作った。
+全体のコードは<a href="https://github.com/sambaiz/lambda-npm-layer">GitHub</a>にある。</p>
 
-<pre><code>FROM ubuntu:14.04
+<p><a href="https://www.sambaiz.net/article/232/">Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net</a></p>
 
-ADD logrotate /etc/logrotate.d/app
-RUN echo &quot;/usr/sbin/logrotate /etc/logrotate.conf&quot; &gt; /etc/cron.daily/logrotate
+<p>まずは<code>/usr/bin/npm</code>をそのまま入れて実行してみる。</p>
+
+<pre><code>FROM lambci/lambda-base:build
+
+WORKDIR /opt
+
+RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
+    yum install -y nodejs &amp;&amp; \
+    mkdir bin &amp;&amp; \
+    cp /usr/bin/node bin/node &amp;&amp; \
+    cp /usr/bin/npm bin/ &amp;&amp; \
+    zip -yr /tmp/npm-layer.zip ./*
 </code></pre>
 
-<p>設定ファイル(logrotate)はこんな感じ。</p>
+<pre><code>$ docker build -t npmbin .
+$ docker run npmbin cat /tmp/npm-layer.zip &gt; npm-layer.zip &amp;&amp; unzip npm-layer.zip -d layer
+</code></pre>
 
-<pre><code>/var/log/app.log {
-  daily
-  rotate 4
-  missingok
-  delaycompress
-  dateext
+<p>相対パスでの参照に失敗したようだが対象のパスが見当たらない。</p>
+
+<pre><code>internal/modules/cjs/loader.js:628
+    throw err;
+    ^
+
+Error: Cannot find module '../lib/utils/unsupported.js'
+Require stack:
+- /opt/bin/npm
+    at Function.Module._resolveFilename (internal/modules/cjs/loader.js:625:15)
+    at Function.Module._load (internal/modules/cjs/loader.js:527:27)
+    at Module.require (internal/modules/cjs/loader.js:683:19)
+    at require (internal/modules/cjs/helpers.js:16:16)
+    at /opt/bin/npm:19:21
+    at Object.&lt;anonymous&gt; (/opt/bin/npm:152:3)
+    at Module._compile (internal/modules/cjs/loader.js:776:30)
+    at Object.Module._extensions..js (internal/modules/cjs/loader.js:787:10)
+    at Module.load (internal/modules/cjs/loader.js:643:32)
+    at Function.Module._load (internal/modules/cjs/loader.js:556:12) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/opt/bin/npm' ]
+}
+ exit status 1
+</code></pre>
+
+<p>というのもnpmはシンボリックリンクで、その参照先に対象のパスがあった。</p>
+
+<pre><code>$ ls -l /usr/bin/npm 
+lrwxrwxrwx 1 root root 38 Jul 23 09:34 /usr/bin/npm -&gt; ../lib/node_modules/npm/bin/npm-cli.js
+</code></pre>
+
+<p>これごとLayerに含めることにした。</p>
+
+<pre><code>FROM lambci/lambda-base:build
+
+WORKDIR /opt
+
+RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
+    yum install -y nodejs &amp;&amp; \
+    mkdir bin nodejs &amp;&amp; \
+    cp /usr/bin/node bin/node &amp;&amp; \
+    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;&amp; \
+    ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;&amp; \
+    zip -yr /tmp/npm-layer.zip ./*
+</code></pre>
+
+<p>すると次のエラーに変わった。Lambdaは<code>/tmp</code>にしかwriteできないのに$HOMEに書こうとしているようだ。</p>
+
+<pre><code>Unhandled rejection Error: EACCES: permission denied, mkdir '/home/sbx_user1051'
+npm ERR! cb() never called!
+
+npm ERR! This is an error with npm itself. Please report this error at:
+npm ERR!     &lt;https://npm.community&gt;
+exit status 1
+</code></pre>
+
+<p>npm configのデフォルト値をみてみたところ、いくつか$HOMEを参照している。</p>
+
+<pre><code>$ npm config ls -l | grep $HOME
+cache = &quot;/root/.npm&quot;
+init-module = &quot;/root/.npm-init.js&quot;
+userconfig = &quot;/root/.npmrc&quot;
+</code></pre>
+
+<p>そこでこれらの値を書き換えた.npmrcを含めた。</p>
+
+<pre><code>FROM lambci/lambda-base:build
+
+WORKDIR /opt
+
+ENV NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
+
+RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
+    yum install -y nodejs &amp;&amp; \
+    mkdir bin nodejs &amp;&amp; \
+    cp /usr/bin/node bin/node &amp;&amp; \
+    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;&amp; \
+    npm config set cache /tmp/.npm &amp;&amp; \
+    npm config set init-module /tmp/.npm-init.js &amp;&amp; \ 
+    npm config set update-notifier false &amp;&amp; \
+    ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;&amp; \
+
+    zip -yr /tmp/npm-layer.zip ./*
+</code></pre>
+
+<pre><code>func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	if err := os.Setenv(&quot;NPM_CONFIG_USERCONFIG&quot;, &quot;/opt/nodejs/.npmrc&quot;); err != nil {
+		return events.APIGatewayProxyResponse{
+			Body:       err.Error(),
+			StatusCode: 500,
+		}, nil
+	}
+	...
 }
 </code></pre>
 
-<p><code>daily</code>で1日に1回、<code>rotate 4</code>で過去4日分残し、
-<code>missingok</code>でファイルがなくてもエラーにせず、<code>delaycompress</code>で圧縮するのをローテーションした次の回にして、
-<code>dateext</code>でローテーションしたファイルの末尾を数字ではなく日付にする。</p>
+<p>結果うまくいった。</p>
 
-<p>実際に動かして確かめる。</p>
+<pre><code>npm notice created a lockfile as package-lock.json. You should commit this file.
+npm WARN tmp@1.0.0 No description
+npm WARN tmp@1.0.0 No repository field.
 
-<p><code>logrotate</code>を実行すると、<code>/var/lib/logrotate/status</code>に過去に見た時間が入る。</p>
-
-<pre><code>$ echo &quot;aaaaa&quot; &gt; /var/log/app.log
-$ logrotate /etc/logrotate.conf
-$ cat /var/lib/logrotate/status
-logrotate state -- version 2
-...
-&quot;/var/log/app.log&quot; 2016-11-9-11:0:0
-...
-</code></pre>
-
-<p>強制的にローテーションさせてみる。</p>
-
-<pre><code>$ echo &quot;aaaa&quot; &gt; /var/log/app.log
-$ logrotate -f /etc/logrotate.conf
-$ ls /var/log | grep app
-app.log
-app.log-20161109
-
-$ cat /var/log/app.log-20161109
-aaaaa
++ express@4.17.1
+added 50 packages from 37 contributors and audited 126 packages in 2.319s
+found 0 vulnerabilities
 </code></pre>
 
         </div>

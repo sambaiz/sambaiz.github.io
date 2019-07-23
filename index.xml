@@ -6,8 +6,148 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-07-22 21:09:00 &#43;0900 JST</updated>
+    <updated>2019-07-23 23:44:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Lambda上でnpm installする</title>
+          <link>https://www.sambaiz.net/article/233/</link>
+          <pubDate>Tue, 23 Jul 2019 23:44:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/233/</guid>
+          <description>&lt;p&gt;Lambda上でnpm installできるようにnpmとnode, .npmrc入りのLambda Layerを作った。
+全体のコードは&lt;a href=&#34;https://github.com/sambaiz/lambda-npm-layer&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/232/&#34;&gt;Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;まずは&lt;code&gt;/usr/bin/npm&lt;/code&gt;をそのまま入れて実行してみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM lambci/lambda-base:build
+
+WORKDIR /opt
+
+RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \
+    yum install -y nodejs &amp;amp;&amp;amp; \
+    mkdir bin &amp;amp;&amp;amp; \
+    cp /usr/bin/node bin/node &amp;amp;&amp;amp; \
+    cp /usr/bin/npm bin/ &amp;amp;&amp;amp; \
+    zip -yr /tmp/npm-layer.zip ./*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ docker build -t npmbin .
+$ docker run npmbin cat /tmp/npm-layer.zip &amp;gt; npm-layer.zip &amp;amp;&amp;amp; unzip npm-layer.zip -d layer
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;相対パスでの参照に失敗したようだが対象のパスが見当たらない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;internal/modules/cjs/loader.js:628
+    throw err;
+    ^
+
+Error: Cannot find module &#39;../lib/utils/unsupported.js&#39;
+Require stack:
+- /opt/bin/npm
+    at Function.Module._resolveFilename (internal/modules/cjs/loader.js:625:15)
+    at Function.Module._load (internal/modules/cjs/loader.js:527:27)
+    at Module.require (internal/modules/cjs/loader.js:683:19)
+    at require (internal/modules/cjs/helpers.js:16:16)
+    at /opt/bin/npm:19:21
+    at Object.&amp;lt;anonymous&amp;gt; (/opt/bin/npm:152:3)
+    at Module._compile (internal/modules/cjs/loader.js:776:30)
+    at Object.Module._extensions..js (internal/modules/cjs/loader.js:787:10)
+    at Module.load (internal/modules/cjs/loader.js:643:32)
+    at Function.Module._load (internal/modules/cjs/loader.js:556:12) {
+  code: &#39;MODULE_NOT_FOUND&#39;,
+  requireStack: [ &#39;/opt/bin/npm&#39; ]
+}
+ exit status 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;というのもnpmはシンボリックリンクで、その参照先に対象のパスがあった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls -l /usr/bin/npm 
+lrwxrwxrwx 1 root root 38 Jul 23 09:34 /usr/bin/npm -&amp;gt; ../lib/node_modules/npm/bin/npm-cli.js
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これごとLayerに含めることにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM lambci/lambda-base:build
+
+WORKDIR /opt
+
+RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \
+    yum install -y nodejs &amp;amp;&amp;amp; \
+    mkdir bin nodejs &amp;amp;&amp;amp; \
+    cp /usr/bin/node bin/node &amp;amp;&amp;amp; \
+    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;amp;&amp;amp; \
+    ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;amp;&amp;amp; \
+    zip -yr /tmp/npm-layer.zip ./*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;すると次のエラーに変わった。Lambdaは&lt;code&gt;/tmp&lt;/code&gt;にしかwriteできないのに$HOMEに書こうとしているようだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Unhandled rejection Error: EACCES: permission denied, mkdir &#39;/home/sbx_user1051&#39;
+npm ERR! cb() never called!
+
+npm ERR! This is an error with npm itself. Please report this error at:
+npm ERR!     &amp;lt;https://npm.community&amp;gt;
+exit status 1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;npm configのデフォルト値をみてみたところ、いくつか$HOMEを参照している。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm config ls -l | grep $HOME
+cache = &amp;quot;/root/.npm&amp;quot;
+init-module = &amp;quot;/root/.npm-init.js&amp;quot;
+userconfig = &amp;quot;/root/.npmrc&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;そこでこれらの値を書き換えた.npmrcを含めた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM lambci/lambda-base:build
+
+WORKDIR /opt
+
+ENV NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
+
+RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \
+    yum install -y nodejs &amp;amp;&amp;amp; \
+    mkdir bin nodejs &amp;amp;&amp;amp; \
+    cp /usr/bin/node bin/node &amp;amp;&amp;amp; \
+    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;amp;&amp;amp; \
+    npm config set cache /tmp/.npm &amp;amp;&amp;amp; \
+    npm config set init-module /tmp/.npm-init.js &amp;amp;&amp;amp; \ 
+    npm config set update-notifier false &amp;amp;&amp;amp; \
+    ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;amp;&amp;amp; \
+
+    zip -yr /tmp/npm-layer.zip ./*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	if err := os.Setenv(&amp;quot;NPM_CONFIG_USERCONFIG&amp;quot;, &amp;quot;/opt/nodejs/.npmrc&amp;quot;); err != nil {
+		return events.APIGatewayProxyResponse{
+			Body:       err.Error(),
+			StatusCode: 500,
+		}, nil
+	}
+	...
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果うまくいった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;npm notice created a lockfile as package-lock.json. You should commit this file.
+npm WARN tmp@1.0.0 No description
+npm WARN tmp@1.0.0 No repository field.
+
++ express@4.17.1
+added 50 packages from 37 contributors and audited 126 packages in 2.319s
+found 0 vulnerabilities
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -65,6 +205,8 @@ layer/
 &lt;p&gt;zipはS3に上げておくこともできるが、
 SAMでは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/serverless-application-model/latest/developerguide/serverless-sam-template.html#serverless-sam-template-layerversion&#34;&gt;AWS::Lambda::LayerVersion&lt;/a&gt;のContentUriでローカルのパスを指定することもでき、
 &lt;code&gt;sam local&lt;/code&gt; でも適用される。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/207/&#34;&gt;AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ cat template.yaml 
 ...
