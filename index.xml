@@ -105,22 +105,12 @@ userconfig = &amp;quot;/root/.npmrc&amp;quot;
 
 &lt;p&gt;そこでこれらの値を書き換えたnpmrcを含めた。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;FROM lambci/lambda-base:build
-
-WORKDIR /opt
-
-ENV NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
-
-RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \
-    yum install -y nodejs &amp;amp;&amp;amp; \
-    mkdir bin nodejs &amp;amp;&amp;amp; \
-    cp /usr/bin/node bin/node &amp;amp;&amp;amp; \
-    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;amp;&amp;amp; \
+&lt;pre&gt;&lt;code&gt;RUN ...
     npm config set cache /tmp/.npm &amp;amp;&amp;amp; \
     npm config set init-module /tmp/.npm-init.js &amp;amp;&amp;amp; \ 
     npm config set update-notifier false &amp;amp;&amp;amp; \
+    chmod a+r $NPM_CONFIG_USERCONFIG &amp;amp;&amp;amp; \
     ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;amp;&amp;amp; \
-
     zip -yr /tmp/npm-layer.zip ./*
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -135,14 +125,44 @@ RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;結果うまくいった。&lt;/p&gt;
+&lt;p&gt;これでlocalでうまくいくことが確認できたのでデプロイしてみたところ、
+&lt;code&gt;Error: Cannot find module &#39;../lib/utils/unsupported.js&#39;&lt;/code&gt; が再発してしまった。
+原因はシンボリックリンクがコピーになっているためで、&lt;a href=&#34;https://github.com/awslabs/aws-sam-cli/pull/1140&#34;&gt;PR&lt;/a&gt;が上がっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;out, err = exec.Command(&amp;quot;ls&amp;quot;, &amp;quot;-l&amp;quot;, &amp;quot;/opt/bin/npm&amp;quot;).CombinedOutput()
+// =&amp;gt; ls: -rwxr-xr-x 1 root root 4566 Jul 24 2019 /opt/bin/npm
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;代わりにshellを置くことにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;FROM lambci/lambda-base:build
+
+WORKDIR /opt
+
+ENV NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
+
+RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \
+    yum install -y nodejs &amp;amp;&amp;amp; \
+    mkdir bin nodejs &amp;amp;&amp;amp; \
+    cp /usr/bin/node bin/node &amp;amp;&amp;amp; \
+    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;amp;&amp;amp; \
+    npm config set cache /tmp/.npm &amp;amp;&amp;amp; \
+    npm config set init-module /tmp/.npm-init.js &amp;amp;&amp;amp; \ 
+    npm config set update-notifier false &amp;amp;&amp;amp; \
+    chmod a+r $NPM_CONFIG_USERCONFIG &amp;amp;&amp;amp; \
+    echo -e &amp;quot;#!/bin/sh\n/opt/nodejs/node_modules/npm/bin/npm-cli.js \$@&amp;quot; &amp;gt; ./bin/npm &amp;amp;&amp;amp; \
+    chmod a+x ./bin/npm &amp;amp;&amp;amp; \
+    zip -yr /tmp/npm-layer.zip ./*
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとはタイムアウト対策のためMemorySizeを1024まで増やしてようやく返ってくるようになった。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;npm notice created a lockfile as package-lock.json. You should commit this file.
 npm WARN tmp@1.0.0 No description
 npm WARN tmp@1.0.0 No repository field.
 
 + express@4.17.1
-added 50 packages from 37 contributors and audited 126 packages in 2.319s
+added 50 packages from 37 contributors and audited 126 packages in 3.455s
 found 0 vulnerabilities
 &lt;/code&gt;&lt;/pre&gt;
 </description>
@@ -204,7 +224,9 @@ layer/
 
 &lt;p&gt;zipはS3に上げておくこともできるが、
 SAMでは&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/serverless-application-model/latest/developerguide/serverless-sam-template.html#serverless-sam-template-layerversion&#34;&gt;AWS::Lambda::LayerVersion&lt;/a&gt;のContentUriでローカルのパスを指定することもでき、
-&lt;code&gt;sam local&lt;/code&gt; でも適用される。&lt;/p&gt;
+&lt;code&gt;sam local&lt;/code&gt; でも適用される。
+そうする場合packageするのにAWS CLIのバージョンが1.16.67以降である
+&lt;a href=&#34;https://github.com/awslabs/aws-sam-cli/issues/831#issuecomment-444513671&#34;&gt;必要がある&lt;/a&gt;。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/207/&#34;&gt;AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 

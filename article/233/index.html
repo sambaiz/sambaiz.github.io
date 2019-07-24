@@ -261,22 +261,12 @@ userconfig = &quot;/root/.npmrc&quot;
 
 <p>そこでこれらの値を書き換えたnpmrcを含めた。</p>
 
-<pre><code>FROM lambci/lambda-base:build
-
-WORKDIR /opt
-
-ENV NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
-
-RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
-    yum install -y nodejs &amp;&amp; \
-    mkdir bin nodejs &amp;&amp; \
-    cp /usr/bin/node bin/node &amp;&amp; \
-    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;&amp; \
+<pre><code>RUN ...
     npm config set cache /tmp/.npm &amp;&amp; \
     npm config set init-module /tmp/.npm-init.js &amp;&amp; \ 
     npm config set update-notifier false &amp;&amp; \
+    chmod a+r $NPM_CONFIG_USERCONFIG &amp;&amp; \
     ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;&amp; \
-
     zip -yr /tmp/npm-layer.zip ./*
 </code></pre>
 
@@ -291,14 +281,44 @@ RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
 }
 </code></pre>
 
-<p>結果うまくいった。</p>
+<p>これでlocalでうまくいくことが確認できたのでデプロイしてみたところ、
+<code>Error: Cannot find module '../lib/utils/unsupported.js'</code> が再発してしまった。
+原因はシンボリックリンクがコピーになっているためで、<a href="https://github.com/awslabs/aws-sam-cli/pull/1140">PR</a>が上がっている。</p>
+
+<pre><code>out, err = exec.Command(&quot;ls&quot;, &quot;-l&quot;, &quot;/opt/bin/npm&quot;).CombinedOutput()
+// =&gt; ls: -rwxr-xr-x 1 root root 4566 Jul 24 2019 /opt/bin/npm
+</code></pre>
+
+<p>代わりにshellを置くことにした。</p>
+
+<pre><code>FROM lambci/lambda-base:build
+
+WORKDIR /opt
+
+ENV NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
+
+RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
+    yum install -y nodejs &amp;&amp; \
+    mkdir bin nodejs &amp;&amp; \
+    cp /usr/bin/node bin/node &amp;&amp; \
+    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;&amp; \
+    npm config set cache /tmp/.npm &amp;&amp; \
+    npm config set init-module /tmp/.npm-init.js &amp;&amp; \ 
+    npm config set update-notifier false &amp;&amp; \
+    chmod a+r $NPM_CONFIG_USERCONFIG &amp;&amp; \
+    echo -e &quot;#!/bin/sh\n/opt/nodejs/node_modules/npm/bin/npm-cli.js \$@&quot; &gt; ./bin/npm &amp;&amp; \
+    chmod a+x ./bin/npm &amp;&amp; \
+    zip -yr /tmp/npm-layer.zip ./*
+</code></pre>
+
+<p>あとはタイムアウト対策のためMemorySizeを1024まで増やしてようやく返ってくるようになった。</p>
 
 <pre><code>npm notice created a lockfile as package-lock.json. You should commit this file.
 npm WARN tmp@1.0.0 No description
 npm WARN tmp@1.0.0 No repository field.
 
 + express@4.17.1
-added 50 packages from 37 contributors and audited 126 packages in 2.319s
+added 50 packages from 37 contributors and audited 126 packages in 3.455s
 found 0 vulnerabilities
 </code></pre>
 
