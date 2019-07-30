@@ -6,18 +6,238 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-07-23 23:44:00 &#43;0900 JST</updated>
+    <updated>2019-07-31 03:22:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>Lambda内でnpm installできるLayerを作った</title>
+          <title>CDKでECS&#43;Fargate上にDigdagを立てる</title>
+          <link>https://www.sambaiz.net/article/234/</link>
+          <pubDate>Wed, 31 Jul 2019 03:22:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/234/</guid>
+          <description>
+
+&lt;p&gt;AWSでワークフローエンジンDigdagを立てるにあたりスケールを見越してECS+Fargateで動かす。
+全体のコードは&lt;a href=&#34;https://github.com/sambaiz/digdag-cdk-ecs-fargate&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/196/&#34;&gt;FargateでECSを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;リソースはCDKで作る。最近GAになったので高レベルのクラスを積極的に使っている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/222/&#34;&gt;AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ npm run cdk -- --version
+1.2.0 (build 6b763b7)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;vpc&#34;&gt;VPC&lt;/h2&gt;
+
+&lt;p&gt;FargateなのでVPCが必要。
+テンプレートを書くとSubnetやRouteTable、NATGatewayなど記述量が多くなるところだが、CDKだとこれだけで済む。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/206/&#34;&gt;CloudFormationでVPCを作成してLambdaをデプロイしAurora Serverlessを使う - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const vpc = new ec2.Vpc(this, &#39;VPC&#39;, {
+  cidr: props.vpcCidr,
+  natGateways: 1,
+  maxAzs: 2,
+  subnetConfiguration: [
+    {
+      name: &#39;digdag-public&#39;,
+      subnetType: ec2.SubnetType.PUBLIC,
+    },
+    {
+      name: &#39;digdag-private&#39;,
+      subnetType: ec2.SubnetType.PRIVATE,
+    },
+    {
+      name: &#39;digdag-db&#39;,
+      subnetType: ec2.SubnetType.ISOLATED,
+    }
+  ]
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;db&#34;&gt;DB&lt;/h2&gt;
+
+&lt;p&gt;DigdagはPostgreSQLを使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const db = new rds.DatabaseCluster(this, &#39;DBCluster&#39;, {
+  engine: rds.DatabaseClusterEngine.AURORA_POSTGRESQL,
+  engineVersion: &#39;10.7&#39;,
+  instances: 1,
+  masterUser: {
+    username: &#39;digdag&#39;,
+  },
+  defaultDatabaseName: databaseName,
+  port: dbPort,
+  instanceProps: {
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.R5, ec2.InstanceSize.LARGE),
+    vpc: vpc,
+    vpcSubnets: {
+      subnetType: ec2.SubnetType.ISOLATED
+    }
+  },
+  parameterGroup: new rds.ClusterParameterGroup(this, &#39;DBClusterPArameterGroup&#39;, {
+    family: &#39;aurora-postgresql10&#39;,
+    parameters: {
+      application_name: &#39;digdag&#39;,
+    }
+  }),
+  removalPolicy: cdk.RemovalPolicy.DESTROY // for test
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ecs&#34;&gt;ECS&lt;/h2&gt;
+
+&lt;p&gt;ECS Cluster, Service, TaskやRole, Route53のRecordを作る。
+&lt;code&gt;ecsPatterns.LoadBalancedFargateService&lt;/code&gt; で記述量を減らすことはできたが、
+パラメータやフィールドの理解が足りず、問題の解決にやや時間がかかってしまった。&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;ecs.ContainerImage.fromAsset&lt;/code&gt; によってStackをデプロイする前にDocker buildが走って &lt;code&gt;cdk bootstrap&lt;/code&gt; で作られたBucketに上がるようになっている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const cluster = new ecs.Cluster(this, &#39;ECSCluster&#39;, {
+  clusterName: &#39;digdag&#39;,
+  vpc: vpc
+})
+const executionRole = new iam.Role(this, &#39;ExecutionRole&#39;, {
+  assumedBy: new iam.ServicePrincipal(&#39;ecs-tasks.amazonaws.com&#39;),
+  managedPolicies: [
+    iam.ManagedPolicy.fromAwsManagedPolicyName(&#39;service-role/AmazonECSTaskExecutionRolePolicy&#39;)
+  ]
+})
+const taskRole = new iam.Role(this, &#39;TaskRole&#39;, {
+  assumedBy: new iam.ServicePrincipal(&#39;ecs-tasks.amazonaws.com&#39;),
+  managedPolicies: [
+    iam.ManagedPolicy.fromAwsManagedPolicyName(&#39;AdministratorAccess&#39;)
+  ]
+})
+const domainZone = route53.HostedZone.fromHostedZoneAttributes(this, &#39;HostedZone&#39;, {
+  hostedZoneId: props.route53ZoneId,
+  zoneName: props.route53ZoneName
+})
+const service = new ecsPatterns.LoadBalancedFargateService(this, &#39;Service&#39;, {
+  cluster,
+  image: ecs.ContainerImage.fromAsset(&#39;./docker&#39;),
+  loadBalancerType: ecsPatterns.LoadBalancerType.APPLICATION,
+  certificate: certificatemanager.Certificate.fromCertificateArn(this, &#39;Certificate&#39;, props.acmArn),
+  domainName: `${props.route53RecordName}.${props.route53ZoneName}.`,
+  domainZone,
+  cpu: 256,
+  memoryLimitMiB: 512,
+  environment: {
+    DB_USERNAME: db.secret!.secretValueFromJson(&#39;username&#39;).toString(),
+    DB_PASSWORD: db.secret!.secretValueFromJson(&#39;password&#39;).toString(),
+    DB_HOST: db.secret!.secretValueFromJson(&#39;host&#39;).toString(),
+    DB_PORT: db.secret!.secretValueFromJson(&#39;port&#39;).toString(),
+    DB_DATABASE: databaseName,
+    S3_LOG_BUCKET: props.logBucket
+  },
+  executionRole,
+  taskRole
+})
+const dbSG = ec2.SecurityGroup.fromSecurityGroupId(this, &#39;DBSG&#39;, db.securityGroupId)
+const serviceSG = ec2.SecurityGroup.fromSecurityGroupId(this, &#39;ServiceSG&#39;, service.service.connections.securityGroups[0].securityGroupId)
+dbSG.addIngressRule(serviceSG, ec2.Port.tcp(dbPort))
+dbSG.addIngressRule(serviceSG, ec2.Port.tcp(dbPort))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;alb認証&#34;&gt;ALB認証&lt;/h2&gt;
+
+&lt;p&gt;ECSに飛ばす前にCognito認証を挟む。デフォルトでALBのSGのEgressがServiceへの80番ポートしか開いていないため、HTTPS通信できず認証前に500エラーになってしまう。
+そのためSGのIDを取ってルールを追加することになるのだが、
+&lt;code&gt;string[]&lt;/code&gt; である &lt;code&gt;service.loadBalancer.loadBalancerSecurityGroups&lt;/code&gt; から &lt;code&gt;loadBalancerSecurityGroups[0]&lt;/code&gt; のように取ろうとすると
+Tokenが解決されず &lt;code&gt;#{TOKEN[Foo.1234]}&lt;/code&gt; のような文字列になってしまうため
+Fn::Selectを使う&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/cdk/latest/guide/tokens.html#tokens_list&#34;&gt;必要がある。&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/227/&#34;&gt;LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const lbSG = ec2.SecurityGroup.fromSecurityGroupId(this, &#39;LBSG&#39;,
+  cdk.Fn.select(0, service.loadBalancer.loadBalancerSecurityGroups))
+lbSG.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443))
+lbSG.addEgressRule(ec2.Peer.anyIpv6(), ec2.Port.tcp(443))
+new loadbalancer.CfnListenerRule(this, &#39;AuthListenerRule&#39;, {
+  conditions: [{
+    field: &#39;path-pattern&#39;,
+    values: [&#39;/*&#39;]
+  }],
+  listenerArn: service.listener.listenerArn,
+  priority: 10,
+  actions: [{
+    type: &#39;authenticate-cognito&#39;,
+    order: 1,
+    authenticateCognitoConfig: {
+      onUnauthenticatedRequest: &#39;authenticate&#39;,
+      userPoolArn: props.userPoolArn,
+      userPoolClientId: props.userPoolClientId,
+      userPoolDomain: props.userPoolDomain
+    }
+  }, {
+    type: &#39;forward&#39;,
+    order: 2,
+    targetGroupArn: service.targetGroup.targetGroupArn
+  }]
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;digdag-properties-https-docs-digdag-io-command-reference-html&#34;&gt;&lt;a href=&#34;https://docs.digdag.io/command_reference.html&#34;&gt;digdag.properties&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;複数台で動くのでログがS3に書かれるようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;server.bind = 0.0.0.0
+server.port = 80
+database.type = postgresql
+database.user = &amp;lt;DB_USERNAME&amp;gt;
+database.password = &amp;lt;DB_PASSWORD&amp;gt;
+database.host = &amp;lt;DB_HOST&amp;gt;
+database.port = &amp;lt;DB_PORT&amp;gt;
+database.database = &amp;lt;DB_DATABASE&amp;gt;
+log-server.type=s3
+log-server.s3.bucket=&amp;lt;S3_LOG_BUCKET&amp;gt;
+log-server.s3.path=logs/
+log-server.s3.direct_download=false
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;実行時に環境変数の値に書き換えている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;#!/bin/sh 
+sed -i -e &amp;quot;s/&amp;lt;DB_USERNAME&amp;gt;/${DB_USERNAME}/&amp;quot; \
+    -e &amp;quot;s/&amp;lt;DB_PASSWORD&amp;gt;/${DB_PASSWORD}/&amp;quot; \
+    -e &amp;quot;s/&amp;lt;DB_HOST&amp;gt;/${DB_HOST}/&amp;quot; \
+    -e &amp;quot;s/&amp;lt;DB_PORT&amp;gt;/${DB_PORT}/&amp;quot; \
+    -e &amp;quot;s/&amp;lt;DB_DATABASE&amp;gt;/${DB_DATABASE}/&amp;quot; \
+    -e &amp;quot;s/&amp;lt;S3_LOG_BUCKET&amp;gt;/${S3_LOG_BUCKET}/&amp;quot; digdag.properties
+
+/usr/local/bin/digdag server --config digdag.properties
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ワークフローの実行&#34;&gt;ワークフローの実行&lt;/h2&gt;
+
+&lt;p&gt;認証後WebUIに飛び、適当なdigファイルを作りRunボタンを押してログが出たら成功。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;+hello:
+    echo&amp;gt;: &amp;quot;Hello Digdag&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/234.png&#34; alt=&#34;実行結果&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://techblog.zozo.com/entry/digdag_ha&#34;&gt;DigdagをHA構成にしてみた - ZOZO Technologies TECH BLOG&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Lambda上でnpm installできるLayerを作った</title>
           <link>https://www.sambaiz.net/article/233/</link>
           <pubDate>Tue, 23 Jul 2019 23:44:00 &#43;0900</pubDate>
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/233/</guid>
-          <description>&lt;p&gt;Lambda内でnpm installするためにnpmとnode, npmrc入りのLambda Layerを作った。
-&lt;a href=&#34;https://github.com/sambaiz/lambda-npm-layer&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
+          <description>&lt;p&gt;Lambda上でnpm installするためにnpmとnode, npmrc入りのLambda Layerを作った。
+&lt;a href=&#34;https://github.com/sambaiz/npm-lambda-layer&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/232/&#34;&gt;Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
@@ -105,7 +325,9 @@ userconfig = &amp;quot;/root/.npmrc&amp;quot;
 
 &lt;p&gt;そこでこれらの値を書き換えたnpmrcを含めた。&lt;/p&gt;
 
-&lt;pre&gt;&lt;code&gt;RUN ...
+&lt;pre&gt;&lt;code&gt;ENV NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
+
+RUN ...
     npm config set cache /tmp/.npm &amp;amp;&amp;amp; \
     npm config set init-module /tmp/.npm-init.js &amp;amp;&amp;amp; \ 
     npm config set update-notifier false &amp;amp;&amp;amp; \
@@ -133,7 +355,7 @@ userconfig = &amp;quot;/root/.npmrc&amp;quot;
 // =&amp;gt; ls: -rwxr-xr-x 1 root root 4566 Jul 24 2019 /opt/bin/npm
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;代わりにshellを置くことにした。&lt;/p&gt;
+&lt;p&gt;代わりにshell scriptを置くことにした。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;FROM lambci/lambda-base:build
 
@@ -155,7 +377,7 @@ RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \
     zip -yr /tmp/npm-layer.zip ./*
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;あとはタイムアウト対策のためMemorySizeを1024まで増やしてようやく返ってくるようになった。&lt;/p&gt;
+&lt;p&gt;あとはタイムアウト対策のためMemorySizeを1024に増やしてようやく返ってくるようになった。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;npm notice created a lockfile as package-lock.json. You should commit this file.
 npm WARN tmp@1.0.0 No description
