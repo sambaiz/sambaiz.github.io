@@ -6,12 +6,88 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-07-31 03:22:00 &#43;0900 JST</updated>
+    <updated>2019-08-29 22:53:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>CDKでECS&#43;Fargate上にDigdagを立てる</title>
+          <title>PR上でCDKのレビューやデプロイを行うツールcdkbotを作った</title>
+          <link>https://www.sambaiz.net/article/235/</link>
+          <pubDate>Thu, 29 Aug 2019 22:53:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/235/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/cdkbot&#34;&gt;sambaiz/cdkbot&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;PRのコメントで&lt;code&gt;/diff&lt;/code&gt;や&lt;code&gt;/deploy&lt;/code&gt;と打つと&lt;code&gt;cdk diff&lt;/code&gt;や&lt;code&gt;cdk deploy&lt;/code&gt;が走る。
+diffを見てレビューし、良ければ&lt;code&gt;/deploy&lt;/code&gt;でデプロイし完了するとmergeされる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/235.png&#34; alt=&#34;diff &amp;amp; deploy&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;以前CircleCIでmerge時にdeployされる仕組みを作った。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/223/&#34;&gt;CDK/CircleCI/GitHubでAWSリソース管理リポジトリを作る - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;ただ、この仕組みだと
+CFnの実行時エラーのためにデプロイできない状態のものがmasterブランチにmergeされてしまい、その修正のために何回も試行錯誤のPRを出すことになったり、
+Stack間の依存がある場合リソースを削除すると&lt;code&gt;cdk deploy&lt;/code&gt;によって依存解決された順序だと失敗してしまうという問題があった。
+cdkbotでは必要ならデプロイするStackを選べて、完了してからmergeすることでこれらの問題を解決した。
+また、AWS外のCIにとても強い権限を与えていたがそれも必要なくなった。&lt;/p&gt;
+
+&lt;p&gt;単純にブランチの状態でデプロイしてしまうと古い状態に巻き戻ってしまう可能性があるので、内部でbaseブランチをmergeしていたり、
+ラベルによってそのPRがデプロイ可能かどうかを制御していたりする。
+最低限デプロイできるようになってから、この辺りの仕組みを整えるまでに存外に時間がかかった。&lt;/p&gt;
+
+&lt;p&gt;Serverless Application Repositoryに公開してあるので簡単にインストールできる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/207/&#34;&gt;AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;外部コマンド&#34;&gt;外部コマンド&lt;/h3&gt;
+
+&lt;p&gt;gitやnpmといった外部コマンドを実行する必要があるが、標準では入っていないのでLambda Layerで入れている。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/233&#34;&gt;Lambda上でnpm installできるLayerを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;go-moduleのキャッシュ&#34;&gt;Go moduleのキャッシュ&lt;/h3&gt;
+
+&lt;p&gt;Dockerコンテナ内でテストを実行しているが、毎回go moduleの解決が走ることで時間はかかるし、テザリングの容量に大打撃を受けたので、
+ローカルのキャッシュをコピーするようにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;test:
+	docker build -t cdkbot-npmbin ./npm-lambda-layer
+	docker build -t cdkbot-test -f ./test/Dockerfile .
+	docker rm -f cdkbot-test || true
+	docker run -itd --name cdkbot-test cdkbot-test /bin/sh
+	docker cp . cdkbot-test:/root/cdkbot
+	go mod download
+	docker cp `go env GOPATH`/pkg/mod/cache cdkbot-test:/go/pkg/mod/cache
+	docker exec cdkbot-test make _test
+	docker rm -f cdkbot-test
+
+_test:
+	go test ./...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;CircleCIではキャッシュをキャッシュしている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;- restore_cache:
+  keys:
+    - gomod-cache-v1-{{ checksum &amp;quot;go.sum&amp;quot; }}
+    - gomod-cache-v1-
+...
+- save_cache:
+  key: gomod-cache-v1-{{ checksum &amp;quot;go.sum&amp;quot; }}
+  paths:
+    - /go/pkg/mod/cache
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>CDKでECS&#43;Fargate上にDigdagを立ててCognito認証を挟む</title>
           <link>https://www.sambaiz.net/article/234/</link>
           <pubDate>Wed, 31 Jul 2019 03:22:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -143,7 +219,7 @@ dbSG.addIngressRule(serviceSG, ec2.Port.tcp(dbPort))
 dbSG.addIngressRule(serviceSG, ec2.Port.tcp(dbPort))
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h2 id=&#34;alb認証&#34;&gt;ALB認証&lt;/h2&gt;
+&lt;h2 id=&#34;認証&#34;&gt;認証&lt;/h2&gt;
 
 &lt;p&gt;ECSに飛ばす前にCognito認証を挟む。デフォルトでALBのSGのEgressがServiceへの80番ポートしか開いていないため、HTTPS通信できず認証前に500エラーになってしまう。
 そのためSGのIDを取ってルールを追加することになるのだが、
@@ -1820,6 +1896,11 @@ SageMakerやRoboMaker&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/deepracer
 全体のコードは&lt;a href=&#34;https://github.com/sambaiz/aws-cdk-circleci-sample&#34;&gt;GitHub&lt;/a&gt;にある。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/222/&#34;&gt;AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;追記 (2019-08-29): このフローにおけるいくつかの問題を解決した新しいツールを作った。
+&lt;a href=&#34;https://www.sambaiz.net/article/235/&#34;&gt;PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
 
 &lt;h2 id=&#34;ci-userの作成&#34;&gt;CI Userの作成&lt;/h2&gt;
 

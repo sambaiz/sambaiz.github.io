@@ -6,13 +6,33 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Wed, 31 Jul 2019 03:22:00 +0900</lastBuildDate>
+    <lastBuildDate>Thu, 29 Aug 2019 22:53:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
-      <title>CDKでECS&#43;Fargate上にDigdagを立てる</title>
+      <title>PR上でCDKのレビューやデプロイを行うツールcdkbotを作った</title>
+      <link>https://www.sambaiz.net/article/235/</link>
+      <pubDate>Thu, 29 Aug 2019 22:53:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/235/</guid>
+      <description>sambaiz/cdkbot
+PRのコメントで/diffや/deployと打つとcdk diffやcdk deployが走る。 diffを見てレビューし、良ければ/deployでデプロイし完了するとmergeされる。
+以前CircleCIでmerge時にdeployされる仕組みを作った。
+CDK/CircleCI/GitHubでAWSリソース管理リポジトリを作る - sambaiz-net
+ただ、この仕組みだと CFnの実行時エラーのためにデプロイできない状態のものがmasterブランチにmergeされてしまい、その修正のために何回も試行錯誤のPRを出すことになったり、 Stack間の依存がある場合リソースを削除するとcdk deployによって依存解決された順序だと失敗してしまうという問題があった。 cdkbotでは必要ならデプロイするStackを選べて、完了してからmergeすることでこれらの問題を解決した。 また、AWS外のCIにとても強い権限を与えていたがそれも必要なくなった。
+単純にブランチの状態でデプロイしてしまうと古い状態に巻き戻ってしまう可能性があるので、内部でbaseブランチをmergeしていたり、 ラベルによってそのPRがデプロイ可能かどうかを制御していたりする。 最低限デプロイできるようになってから、この辺りの仕組みを整えるまでに存外に時間がかかった。
+Serverless Application Repositoryに公開してあるので簡単にインストールできる。
+AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net
+外部コマンド gitやnpmといった外部コマンドを実行する必要があるが、標準では入っていないのでLambda Layerで入れている。
+Lambda上でnpm installできるLayerを作った - sambaiz-net
+Go moduleのキャッシュ Dockerコンテナ内でテストを実行しているが、毎回go moduleの解決が走ることで時間はかかるし、テザリングの容量に大打撃を受けたので、 ローカルのキャッシュをコピーするようにした。
+test: docker build -t cdkbot-npmbin ./npm-lambda-layer docker build -t cdkbot-test -f ./test/Dockerfile . docker rm -f cdkbot-test || true docker run -itd --name cdkbot-test cdkbot-test /bin/sh docker cp . cdkbot-test:/root/cdkbot go mod download docker cp `go env GOPATH`/pkg/mod/cache cdkbot-test:/go/pkg/mod/cache docker exec cdkbot-test make _test docker rm -f cdkbot-test _test: go test .</description>
+    </item>
+    
+    <item>
+      <title>CDKでECS&#43;Fargate上にDigdagを立ててCognito認証を挟む</title>
       <link>https://www.sambaiz.net/article/234/</link>
       <pubDate>Wed, 31 Jul 2019 03:22:00 +0900</pubDate>
       
@@ -170,10 +190,11 @@ const App: React.FC = () =&amp;gt; { return ( &amp;lt;div className=&amp;quot;Ap
       <guid>https://www.sambaiz.net/article/223/</guid>
       <description>AWS CDKでリソースを記述し、PullRequestに対して自動でcdk diffで変更があるものを表示して、mergeしたときにcdk deployする。 全体のコードはGitHubにある。
 AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする - sambaiz-net
-CI Userの作成 まずcdkコマンドを実行するためのCI Userを作成する。これはCDK管理外のスタックで、AWSコンソール上から手動で上げる。
+ 追記 (2019-08-29): このフローにおけるいくつかの問題を解決した新しいツールを作った。 PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net
+ CI Userの作成 まずcdkコマンドを実行するためのCI Userを作成する。これはCDK管理外のスタックで、AWSコンソール上から手動で上げる。
 AWSのAssumeRole - sambaiz-net
 AssumeRoleしかできないCIUserからCIAssumeRoleをassumeすることにした。
-AWSTemplateFormatVersion: &#39;2010-09-09&#39; Resources: CIAssumeRole: Type: &#39;AWS::IAM::Role&#39; Properties: RoleName: &#39;CIAssumeRole&#39; ManagedPolicyArns: - &#39;arn:aws:iam::aws:policy/AdministratorAccess&#39; AssumeRolePolicyDocument: Version: &#39;2012-10-17&#39; Statement: - Effect: &#39;Allow&#39; Principal: AWS: - !Ref AWS::AccountId Action: - &#39;sts:AssumeRole&#39; CIGroup: Type: &#39;AWS::IAM::Group&#39; Properties: GroupName: &#39;CI&#39; CIPolicies: Type: &#39;AWS::IAM::Policy&#39; Properties: PolicyName: &#39;CI&#39; PolicyDocument: Statement: - Effect: Allow Action: &#39;sts:AssumeRole&#39; Resource: !GetAtt CIAssumeRole.Arn Groups: - !Ref CIGroup CIUser: Type: &#39;AWS::IAM::User&#39; Properties: UserName: &#39;CI&#39; Groups: - !</description>
+AWSTemplateFormatVersion: &#39;2010-09-09&#39; Resources: CIAssumeRole: Type: &#39;AWS::IAM::Role&#39; Properties: RoleName: &#39;CIAssumeRole&#39; ManagedPolicyArns: - &#39;arn:aws:iam::aws:policy/AdministratorAccess&#39; AssumeRolePolicyDocument: Version: &#39;2012-10-17&#39; Statement: - Effect: &#39;Allow&#39; Principal: AWS: - !Ref AWS::AccountId Action: - &#39;sts:AssumeRole&#39; CIGroup: Type: &#39;AWS::IAM::Group&#39; Properties: GroupName: &#39;CI&#39; CIPolicies: Type: &#39;AWS::IAM::Policy&#39; Properties: PolicyName: &#39;CI&#39; PolicyDocument: Statement: - Effect: Allow Action: &#39;sts:AssumeRole&#39; Resource: !</description>
     </item>
     
     <item>
