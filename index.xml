@@ -6,8 +6,132 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-08-29 22:53:00 &#43;0900 JST</updated>
+    <updated>2019-08-30 00:16:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>SystemdのService</title>
+          <link>https://www.sambaiz.net/article/236/</link>
+          <pubDate>Fri, 30 Aug 2019 00:16:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/236/</guid>
+          <description>
+
+&lt;p&gt;SystemdはLinuxで動くServiceの管理などを行うデーモン。initの後継でchkconfig/servicceの代わりにsystemctlコマンドを使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ systemctl start name.service
+$ systemctl stop name.service
+$ systemctl status name.service
+$ systemctl enable name.service
+$ systemctl disable name.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Serviceの一覧を見る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ systemctl list-units --type service --all
+UNIT                               LOAD   ACTIVE SUB     DESCRIPTION
+accounts-daemon.service            loaded active running Accounts Service
+acpid.service                      loaded active running ACPI event daemon
+apparmor.service                   loaded active exited  LSB: AppArmor initialization
+apport.service                     loaded active exited  LSB: automatic crash report generation
+
+$ systemctl list-unit-files --type service
+UNIT FILE                                  STATE   
+accounts-daemon.service                    enabled 
+acpid.service                              disabled
+apport-forward@.service                    static   # WantedByがない
+apt-daily-upgrade.service                  static
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Serviceは次のようなファイルで定義される。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ systemctl cat ssh
+# /lib/systemd/system/ssh.service
+[Unit]
+Description=OpenBSD Secure Shell server
+After=network.target auditd.service # 対象Unitがactiveになった後に開始する
+# Wants= # 対象Unitを開始しactiveかどうかにかかわらずその後に開始する
+# 対象ファイルが存在している(!がついていたらいない)場合開始する
+ConditionPathExists=!/etc/ssh/sshd_not_to_be_run
+
+[Service]
+EnvironmentFile=-/etc/default/ssh # 環境変数の設定。ただしファイル内で環境変数は使えない。
+ExecStartPre=/usr/sbin/sshd -t # 起動する前に実行するコマンド
+ExecStart=/usr/sbin/sshd -D $SSHD_OPTS # 起動するとき
+ExecReload=/usr/sbin/sshd -t # リロードするとき
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartPreventExitStatus=255
+Type=notify
+
+[Install]
+WantedBy=multi-user.target # enableにしたとき対象UnitのWantsにこのUnitが加わって自動起動するようになる
+Alias=sshd.service
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;簡単なServiceを動かしてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat /lib/systemd/system/my-test.service 
+[Unit]
+Description=My test service
+
+[Service]
+ExecStart=/usr/bin/yes
+KillMode=process
+Restart=on-failure
+Type=simple
+
+[Install]
+WantedBy=multi-user.target
+
+$ systemctl start my-test.service
+$ systemctl status my-test.service -l
+● my-test.service - My test service
+   Loaded: loaded (/lib/systemd/system/my-test.service; disabled; vendor preset: enabled)
+   Active: active (running) since Wed 2019-08-30 22:20:46 JST; 58s ago
+ Main PID: 26063 (yes)
+    Tasks: 1
+   Memory: 88.0K
+      CPU: 13ms
+   CGroup: /system.slice/my-test.service
+           └─26063 /usr/bin/yes
+
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y          
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;systemd-journald.serviceがsystemdのログを書いていて、journalctlで見ることもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ journalctl -u my-test.service -f
+-- Logs begin at Wed 2019-08-30 23:40:16 JST. --
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://access.redhat.com/documentation/ja-jp/red_hat_enterprise_linux/7/html/system_administrators_guide/sect-managing_services_with_systemd-targets&#34;&gt;10.3. systemd ターゲットでの作業 Red Hat Enterprise Linux 7 | Red Hat Customer Portal&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>

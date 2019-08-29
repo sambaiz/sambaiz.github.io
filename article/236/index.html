@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った - sambaiz-net</title>
-  <meta name="twitter:title" content="Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った - sambaiz-net">
-  <meta property='og:title' content="Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った - sambaiz-net">
+  <title>SystemdのService - sambaiz-net</title>
+  <meta name="twitter:title" content="SystemdのService - sambaiz-net">
+  <meta property='og:title' content="SystemdのService - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="LambdaでPuppeteer/Headless Chrome">
-  <meta name="twitter:description" content="LambdaでPuppeteer/Headless Chrome">
+  <meta name="description" content="service unit">
+  <meta name="twitter:description" content="service unit">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/132/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/236/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った | sambaiz-net ",
-    "datePublished": "2017-09-10T23:45:00JST",
-    "dateModified": "2017-09-10T23:45:00JST",
+    "headline": "SystemdのService | sambaiz-net ",
+    "datePublished": "2019-08-30T00:16:00JST",
+    "dateModified": "2019-08-30T00:16:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "LambdaでPuppeteer/Headless Chrome"
+    "description": "service unit"
   }
 </script>
 </head>
@@ -170,117 +170,121 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</h1>
-          <p>(2017-09-10)</p>
+          <h1>SystemdのService</h1>
+          <p>(2019-08-30)</p>
           
 
-<p><a href="https://github.com/GoogleChrome/puppeteer">Puppeteer</a>でHeadless Chromeを動かすコードを
-Lambda上で動かすStarter Kitを作った。</p>
+<p>SystemdはLinuxで動くServiceの管理などを行うデーモン。initの後継でchkconfig/servicceの代わりにsystemctlコマンドを使う。</p>
 
-<p><a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit">puppeteer-lambda-starter-kit</a></p>
-
-<h2 id="chromeの準備">Chromeの準備</h2>
-
-<p>Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても
-Lambdaにないshared libraryに依存しているため失敗する。</p>
-
-<pre><code>error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory
+<pre><code>$ systemctl start name.service
+$ systemctl stop name.service
+$ systemctl status name.service
+$ systemctl enable name.service
+$ systemctl disable name.service
 </code></pre>
 
-<p>Lambda上でHeadless Chromeを動かす例がないか調べたら<a href="https://github.com/adieuadieu/serverless-chrome">serverless-chrome</a>というのがあって、
-Headless用の設定でChromeをビルドしていた。
-ほかには<a href="https://github.com/graphcool/chromeless">chromeless</a>というのもあるけど
-これはserverless-chromeに
-<a href="https://github.com/graphcool/chromeless/blob/master/serverless/serverless.yml#L46">依存している</a>。
-最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。</p>
+<p>Serviceの一覧を見る。</p>
 
-<p>serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。
-基本的には<a href="https://github.com/adieuadieu/serverless-chrome/tree/master/chrome">書いてある</a>
-通りやればうまくいく。他のプロセスとのshared memoryとして/dev/shmを使っているのを、/tmpに<a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/master/chrome/buildChrome.sh#L20">置き換える</a>
-ようにしないと、実行時の<code>page.goto()</code>で<code>Failed Provisional Load: ***, error_code: -12</code>になる。</p>
+<pre><code>$ systemctl list-units --type service --all
+UNIT                               LOAD   ACTIVE SUB     DESCRIPTION
+accounts-daemon.service            loaded active running Accounts Service
+acpid.service                      loaded active running ACPI event daemon
+apparmor.service                   loaded active exited  LSB: AppArmor initialization
+apport.service                     loaded active exited  LSB: automatic crash report generation
 
-<p>ビルドしたheadless_shellには問題になった依存は含まれていないようだ。</p>
-
-<pre><code>$ ldd headless_shell 
-	linux-vdso.so.1 =&gt;  (0x00007ffcb6fed000)
-	libpthread.so.0 =&gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000)
-	libdl.so.2 =&gt; /lib64/libdl.so.2 (0x00007f5f17bba000)
-	librt.so.1 =&gt; /lib64/librt.so.1 (0x00007f5f179b1000)
-	libnss3.so =&gt; /usr/lib64/libnss3.so (0x00007f5f17692000)
-	libnssutil3.so =&gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000)
-	libsmime3.so =&gt; /usr/lib64/libsmime3.so (0x00007f5f1723e000)
-	libnspr4.so =&gt; /lib64/libnspr4.so (0x00007f5f17001000)
-	libexpat.so.1 =&gt; /lib64/libexpat.so.1 (0x00007f5f16dd8000)
-	libfontconfig.so.1 =&gt; not found
-	libfreetype.so.6 =&gt; /usr/lib64/libfreetype.so.6 (0x00007f5f16b3b000)
-	libm.so.6 =&gt; /lib64/libm.so.6 (0x00007f5f16839000)
-	libstdc++.so.6 =&gt; /usr/lib64/libstdc++.so.6 (0x00007f5f16533000)
-	libgcc_s.so.1 =&gt; /lib64/libgcc_s.so.1 (0x00007f5f1631d000)
-	libc.so.6 =&gt; /lib64/libc.so.6 (0x00007f5f15f5b000)
-	/lib64/ld-linux-x86-64.so.2 (0x000055ba0af5e000)
-	libplc4.so =&gt; /lib64/libplc4.so (0x00007f5f15d55000)
-	libplds4.so =&gt; /lib64/libplds4.so (0x00007f5f15b51000)
+$ systemctl list-unit-files --type service
+UNIT FILE                                  STATE   
+accounts-daemon.service                    enabled 
+acpid.service                              disabled
+apport-forward@.service                    static   # WantedByがない
+apt-daily-upgrade.service                  static
 </code></pre>
 
-<p>Puppetterで落としてくる普通のChromeは<a href="http://docs.aws.amazon.com/lambda/latest/dg/limits.html">Lambdaの制限</a>の50MBを超えていたが、
-ビルドしたものはぎりぎり超えていないのでパッケージに含められるようになった。
-PuppeteerのChromeは環境変数<code>PUPPETEER_SKIP_CHROMIUM_DOWNLOAD</code>を設定することで<a href="https://github.com/GoogleChrome/puppeteer/blob/2817130fe099a7431e98c20ce1f44c6e547d4ca9/docs/api.md#puppeteer">含めないようにできる</a>。</p>
+<p>Serviceは次のようなファイルで定義される。</p>
 
-<p>他のパッケージのサイズによっては50MBを超えてしまうこともあるので、
-パッケージに含めず<a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/v0.9.0/src/util.js#L62">S3からダウンロード</a>できるようにもした。</p>
+<pre><code>$ systemctl cat ssh
+# /lib/systemd/system/ssh.service
+[Unit]
+Description=OpenBSD Secure Shell server
+After=network.target auditd.service # 対象Unitがactiveになった後に開始する
+# Wants= # 対象Unitを開始しactiveかどうかにかかわらずその後に開始する
+# 対象ファイルが存在している(!がついていたらいない)場合開始する
+ConditionPathExists=!/etc/ssh/sshd_not_to_be_run
 
-<p>いずれの場合も最終的な置き先はLambdaで唯一書き込める<code>/tmp</code>になる。
-この領域は512MBまで使えるので展開してもまだ余裕がある。</p>
+[Service]
+EnvironmentFile=-/etc/default/ssh # 環境変数の設定。ただしファイル内で環境変数は使えない。
+ExecStartPre=/usr/sbin/sshd -t # 起動する前に実行するコマンド
+ExecStart=/usr/sbin/sshd -D $SSHD_OPTS # 起動するとき
+ExecReload=/usr/sbin/sshd -t # リロードするとき
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartPreventExitStatus=255
+Type=notify
 
-<pre><code>Error: EROFS: read-only file system, open 'node_modules/puppeteer/.local-chromium'
+[Install]
+WantedBy=multi-user.target # enableにしたとき対象UnitのWantsにこのUnitが加わって自動起動するようになる
+Alias=sshd.service
 </code></pre>
 
-<h2 id="chromeのlaunch時のoption">ChromeのLaunch時のOption</h2>
+<p>簡単なServiceを動かしてみる。</p>
 
-<p>いろいろ試した結果、最低限必要だったのはこのあたり。</p>
+<pre><code>$ cat /lib/systemd/system/my-test.service 
+[Unit]
+Description=My test service
 
-<pre><code>exports.launchOptionForLambda = [
-    // error when launch(); No usable sandbox! Update your kernel
-    '--no-sandbox',
-    // error when launch(); Failed to load libosmesa.so
-    '--disable-gpu', 
-    // freeze when newPage()
-    '--single-process'
-];
+[Service]
+ExecStart=/usr/bin/yes
+KillMode=process
+Restart=on-failure
+Type=simple
+
+[Install]
+WantedBy=multi-user.target
+
+$ systemctl start my-test.service
+$ systemctl status my-test.service -l
+● my-test.service - My test service
+   Loaded: loaded (/lib/systemd/system/my-test.service; disabled; vendor preset: enabled)
+   Active: active (running) since Wed 2019-08-30 22:20:46 JST; 58s ago
+ Main PID: 26063 (yes)
+    Tasks: 1
+   Memory: 88.0K
+      CPU: 13ms
+   CGroup: /system.slice/my-test.service
+           └─26063 /usr/bin/yes
+
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y
+Aug 30 22:21:16 150-95-202-235 yes[26063]: y          
 </code></pre>
 
-<p>エラーは分かりづらいものが多く、ときにはエラーすら出ずに止まってしまうこともある。
-デバッグの際はdumpioを有効にする。</p>
+<p>systemd-journald.serviceがsystemdのログを書いていて、journalctlで見ることもできる。</p>
 
-<pre><code>const browser = await puppeteer.launch({
-    ...
-    dumpio: !!util.DEBUG,
-});  
+<pre><code>$ journalctl -u my-test.service -f
+-- Logs begin at Wed 2019-08-30 23:40:16 JST. --
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
+Aug 30 23:43:46 150-95-202-235 yes[26063]: y
 </code></pre>
 
-<h2 id="babel">Babel</h2>
+<h2 id="参考">参考</h2>
 
-<p>現在のLambdaのNodeのバージョンはv6.10.3。
-<a href="http://node.green/">node.green</a>によるとES2015は99%対応していて、ES2016もべき乗演算子(2 ** 3 = 8)以外は対応しているが、ES2017のasync/awaitは7.6からなので、8系に対応するまではbabelにかける必要がある。
-ちなみにPuppeteerは6.4以降で<a href="https://github.com/GoogleChrome/puppeteer/tree/master/utils/node6-transform">動く</a>。</p>
-
-<pre><code>$ yarn add --dev babel-cli babel-preset-env
-</code></pre>
-
-<p><a href="https://github.com/babel/babel-preset-env">babel-preset-env</a>
-.babelrcはこんな感じ。</p>
-
-<pre><code>$ cat .babelrc
-{
-  &quot;presets&quot;: [
-    [&quot;env&quot;, {
-      &quot;targets&quot;: {
-        &quot;node&quot;: &quot;6.10&quot;
-      }
-    }]
-  ]
-}
-</code></pre>
+<p><a href="https://access.redhat.com/documentation/ja-jp/red_hat_enterprise_linux/7/html/system_administrators_guide/sect-managing_services_with_systemd-targets">10.3. systemd ターゲットでの作業 Red Hat Enterprise Linux 7 | Red Hat Customer Portal</a></p>
 
         </div>
       </article>
