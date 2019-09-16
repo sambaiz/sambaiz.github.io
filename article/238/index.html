@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>User NamespaceでrootになってNetwork Namespaceを作りvethとNATで外と通信する - sambaiz-net</title>
-  <meta name="twitter:title" content="User NamespaceでrootになってNetwork Namespaceを作りvethとNATで外と通信する - sambaiz-net">
-  <meta property='og:title' content="User NamespaceでrootになってNetwork Namespaceを作りvethとNATで外と通信する - sambaiz-net">
+  <title>Goのnet/http/pprofでCPUやMemoryをprofileする流れと内部実装 - sambaiz-net</title>
+  <meta name="twitter:title" content="Goのnet/http/pprofでCPUやMemoryをprofileする流れと内部実装 - sambaiz-net">
+  <meta property='og:title' content="Goのnet/http/pprofでCPUやMemoryをprofileする流れと内部実装 - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="コンテナ技術で使われているuidやpid、networkなどを分離できるLinuxの機能">
-  <meta name="twitter:description" content="コンテナ技術で使われているuidやpid、networkなどを分離できるLinuxの機能">
+  <meta name="description" content="pprof">
+  <meta name="twitter:description" content="pprof">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/237/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/238/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "User NamespaceでrootになってNetwork Namespaceを作りvethとNATで外と通信する | sambaiz-net ",
-    "datePublished": "2019-09-06T02:20:00JST",
-    "dateModified": "2019-09-06T02:20:00JST",
+    "headline": "Goのnet/http/pprofでCPUやMemoryをprofileする流れと内部実装 | sambaiz-net ",
+    "datePublished": "2019-09-16T13:49:00JST",
+    "dateModified": "2019-09-16T13:49:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "コンテナ技術で使われているuidやpid、networkなどを分離できるLinuxの機能"
+    "description": "pprof"
   }
 </script>
 </head>
@@ -170,225 +170,248 @@
 
       <article class="single">
         <div class="single body">
-          <h1>User NamespaceでrootになってNetwork Namespaceを作りvethとNATで外と通信する</h1>
-          <p>(2019-09-06)</p>
+          <h1>Goのnet/http/pprofでCPUやMemoryをprofileする流れと内部実装</h1>
+          <p>(2019-09-16)</p>
           
 
-<p>LinuxのNamespaceはuidやpid、networkなどを分離できる機能で、Dockerなどのコンテナ技術で使われている。</p>
+<p>Goの<a href="https://golang.org/pkg/net/http/pprof/">net/http/pprof</a>は
+<a href="https://github.com/google/pprof">pprof</a>で可視化できるprofile.protoを返すAPIを提供するpackage。
+profileを出力する方法はほかにもあるが、サーバーのような動き続けるアプリケーションのprofileを取るのに使う。</p>
 
-<pre><code># Amazon Linux 2 (ami-0ff21806645c5e492)
-$ uname -r
-4.14.138-114.102.amzn2.x86_64
+<p><a href="https://www.sambaiz.net/article/47/">go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる - sambaiz-net</a></p>
+
+<h2 id="profileを取る">profileを取る</h2>
+
+<p><code>import _ &quot;net/http/pprof&quot;</code>して<code>http.ListenAndServe()</code>する。</p>
+
+<pre><code>package main
+
+import (
+	&quot;fmt&quot;
+	&quot;net/http&quot;
+	_ &quot;net/http/pprof&quot;
+	&quot;time&quot;
+
+	&quot;golang.org/x/crypto/bcrypt&quot;
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	for i := 0; i &lt; 3; i++ {
+		bcrypt.GenerateFromPassword([]byte(&quot;PASSWORD&quot;), bcrypt.DefaultCost)
+	}
+	arr := []int{}
+	for i := 0; i &lt;  10000; i++ {
+		arr = append(arr, i)
+	}
+	fmt.Fprintf(w, &quot;OK&quot;)
+}
+
+func main() {
+	http.HandleFunc(&quot;/foo&quot;, handler)
+	fmt.Println(&quot;Listening on :8080&quot;)
+	if err := http.ListenAndServe(&quot;:8080&quot;, nil); err != nil {
+		panic(err)
+	}
+}
 </code></pre>
 
-<h2 id="user-namespaceでrootになる">User NamespaceでRootになる</h2>
+<p>CPUは<code>debug/pprof/profile</code>を叩いた後の一定時間のみprofileするのでその間にリクエストを送る必要がある。</p>
 
-<p>rootでないと正常終了しないコードを書いた。</p>
+<pre><code>.PHONY: build clean run request cpu_profile memory_profile
 
-<pre><code>$ cat /tmp/root_only.sh
-#!/bin/sh
+build: clean
+	go build main.go
 
-if [ &quot;$(id -u)&quot; != &quot;0&quot; ]; then
-  echo &quot;you are not root...&quot;
-  exit 1
-fi
-echo &quot;you are root!&quot;
+clean:
+	rm main
+
+run: build
+	./main
+
+cpu_profile: request
+	bash -c 'sleep 5s; for var in `seq 100`; do curl -s http://localhost:8080/foo; done' &gt; /dev/null &amp;
+	go tool pprof -http=&quot;:8000&quot; ./main localhost:8080/debug/pprof/profile?seconds=10
+
+memory_profile: request
+	bash -c 'sleep 5s; for var in `seq 100`; do curl -s http://localhost:8080/foo; done' &gt; /dev/null
+	go tool pprof -http=&quot;:8000&quot; ./main localhost:8080/debug/pprof/allocs
 </code></pre>
 
-<p>実際ec2-userでは<code>exit 1</code>になる。</p>
+<p>profileが終わるとWeb UIが立ち上がる。Flame Graphの縦はスタックを、横の長さは時間や量を表す。これはCPUのもの。</p>
 
-<pre><code>$ id -u
-1000
+<p><img src="https://www.sambaiz.net/images/238-2.png" alt="CPUのFlame Graph" /></p>
 
-$ sh /tmp/root_only.sh; echo $?
-you are not root...
-1
+<p>ここから<code>blowfish.ExpandKey()</code>で呼ばれている<code>blowfish.encryptBlock()</code>が実行時間のほとんど全てを占めていることが分かり、Sourceからコードと合わせて行ごとのかかった時間を見ることができる。</p>
+
+<p><img src="https://www.sambaiz.net/images/238-1.png" alt="行ことのかかった時間" /></p>
+
+<p>flatとcumの違いは呼び出した関数の時間も含めるかどうかで、他の関数を呼んでいない<code>encryptBlock()</code>では同じ値になっているが、呼び出し元をみると微小のflatに対してcumが大きくなっていることが確認できる。</p>
+
+<pre><code>49 10ms 10ms   for i := 0; i &lt; 256; i += 2 { 
+50 20ms 2.44s    l, r = encryptBlock(l, r, c) 
+51 .    .        c.s0[i], c.s0[i+1] = l, r 
+52 .    .      } 
 </code></pre>
 
-<p>User Namespaceを作る。rootでないとそれ以外のNamespaceは作れない。</p>
+<p>Costを最小にして再度profileを取ってみると、<code>encryptBlock()</code>の割合が少なくなり他の関数が表に出てくる。</p>
 
-<pre><code>$ unshare --net
-unshare: unshare failed: Operation not permitted
+<p><img src="https://www.sambaiz.net/images/238-3.png" alt="MinCostでのFlame Graph" /></p>
 
-$ unshare --user
-$ id
-uid=65534(nfsnobody) gid=65534(nfsnobody) groups=65534(nfsnobody)
+<h2 id="内部実装">内部実装</h2>
 
-$ echo $$
-3537
+<p>importすると<a href="https://github.com/golang/go/blob/go1.13/src/net/http/pprof/pprof.go#L72">init()</a>でエンドポイントが追加される。</p>
+
+<pre><code>func init() {
+	http.HandleFunc(&quot;/debug/pprof/&quot;, Index)
+	http.HandleFunc(&quot;/debug/pprof/cmdline&quot;, Cmdline)
+	http.HandleFunc(&quot;/debug/pprof/profile&quot;, Profile)
+	http.HandleFunc(&quot;/debug/pprof/symbol&quot;, Symbol)
+	http.HandleFunc(&quot;/debug/pprof/trace&quot;, Trace)
+}
 </code></pre>
 
-<p>他のshellを開き、Namespaceの外側からuid_mapを書き込む。
-外側の1000から始まるuidを、このNamespaceの0から始まるuidに範囲1でマッピングする。</p>
+<h3 id="debug-pprof">/debug/pprof/*</h3>
 
-<pre><code># Namespace外
-$ echo '0 1000 1' &gt; /proc/3537/uid_map
+<p>profileの一覧ページおよびCPU以外のprofileを返す。</p>
+
+<pre><code>func Index(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, &quot;/debug/pprof/&quot;) {
+		name := strings.TrimPrefix(r.URL.Path, &quot;/debug/pprof/&quot;)
+		if name != &quot;&quot; {
+			handler(name).ServeHTTP(w, r)
+			return
+		}
+	}
+
+	var profiles []profile
+	for _, p := range pprof.Profiles() {
+		profiles = append(profiles, profile{
+			Name:  p.Name(),
+			Href:  p.Name() + &quot;?debug=1&quot;,
+			Desc:  profileDescriptions[p.Name()],
+			Count: p.Count(),
+		})
+	}
+	...
+	if err := indexTmpl.Execute(w, profiles); err != nil {
+		log.Print(err)
+	}
+}
+
+func (name handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	p := pprof.Lookup(string(name))
+	...
+	p.WriteTo(w, debug)
+}
 </code></pre>
 
-<p>要するに、uid=1000だったec2-userは、このNamespaceではuid=0(root)になる。上のコードも正常終了した。</p>
+<p><a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L226">Lookup()</a>は
+名前からprofileを取得する関数。
+built-inのprofileに加えて独自のprofileを<a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L279">Add()</a>することもできる。</p>
 
-<pre><code>$ id -u
-0
+<pre><code>func Lookup(name string) *Profile {
+	lockProfiles()
+	defer unlockProfiles()
+	return profiles.m[name]
+}
 
-$ sh /tmp/root_only.sh 
-you are root!
-0
+func lockProfiles() {
+	profiles.mu.Lock()
+	if profiles.m == nil {
+		// Initial built-in profiles.
+		profiles.m = map[string]*Profile{
+			&quot;goroutine&quot;:    goroutineProfile,
+			&quot;threadcreate&quot;: threadcreateProfile,
+			&quot;heap&quot;:         heapProfile,
+			&quot;allocs&quot;:       allocsProfile,
+			&quot;block&quot;:        blockProfile,
+			&quot;mutex&quot;:        mutexProfile,
+		}
+	}
+}
 </code></pre>
 
-<p>権限昇格してしまったように見えるかもしれないが、もちろんそんなことはなくて元々のユーザーのパーミッションでできなかったことはできない。</p>
+<p>Profileは<code>count()</code>や<code>write()</code>する関数を持つstruct。それぞれ
+<a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L252">p.Count()</a>と
+<a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L324">p.WrireTo()</a>で呼ばれる。</p>
 
-<pre><code>$ touch /root_power
-touch: cannot touch '/root_power': Permission denied
+<pre><code>type Profile struct {
+	name  string
+	mu    sync.Mutex
+	m     map[interface{}][]uintptr
+	count func() int
+	write func(io.Writer, int) error
+}
+
+var allocsProfile = &amp;Profile{
+	name:  &quot;allocs&quot;,
+	count: countHeap,
+	write: writeAlloc,
+}
+
+func countHeap() int {
+	n, _ := runtime.MemProfile(nil, true)
+	return n
+}
+
+func writeAlloc(w io.Writer, debug int) error {
+	return writeHeapInternal(w, debug, &quot;alloc_space&quot;)
+}
 </code></pre>
 
-<p>Namespace内で作ったファイルをNamespace外で見ると、元々のユーザーで作ったことになっている。</p>
+<h3 id="debug-pprof-profile">/debug/pprof/profile</h3>
 
-<pre><code>$ touch /home/ec2-user/fake_root_power
-$ ls -l /home/ec2-user/
-total 0
--rw-rw-r-- 1 root nfsnobody 0 Sep  5 11:48 fake_root_power
+<p>CPU profileをStartして一定時間経ったらStopする。</p>
 
-# Namespace外
-$ ls -l /home/ec2-user/
-total 0
--rw-rw-r-- 1 ec2-user ec2-user 0 Sep  5 11:48 fake_root_power
+<pre><code>if err := pprof.StartCPUProfile(w); err != nil {
+	...
+}
+sleep(w, time.Duration(sec)*time.Second)
+pprof.StopCPUProfile()
 </code></pre>
 
-<h2 id="network-namespaceを作りvethでnamespace外と通信できるようにする">Network Namespaceを作りvethでNamespace外と通信できるようにする</h2>
+<p><a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L226">StartCPUProfile()</a>は
+<a href="https://github.com/golang/go/blob/go1.13/src/runtime/cpuprof.go#L54">SetCPUProfileRate()</a>してprofileを書いていく。</p>
 
-<p>ではrootだからといって特に何もできないのかというとそんなことはなく、User以外のNamespaceが作れる。</p>
-
-<p>Namespace外のネットワークはこんな感じ。</p>
-
-<pre><code>$ ip addr 
-1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-    inet6 ::1/128 scope host 
-       valid_lft forever preferred_lft forever
-2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 9001 qdisc pfifo_fast state UP group default qlen 1000
-    link/ether 06:fa:1d:4e:ec:92 brd ff:ff:ff:ff:ff:ff
-    inet 172.31.14.149/20 brd 172.31.15.255 scope global dynamic eth0
-       valid_lft 3449sec preferred_lft 3449sec
-    inet6 fe80::4fa:1dff:fe4e:ec92/64 scope link 
-       valid_lft forever preferred_lft forever
-
-$ ip route show table main
-default via 172.31.0.1 dev eth0 
-169.254.169.254 dev eth0 
-172.31.0.0/20 dev eth0 proto kernel scope link src 172.31.14.149
+<pre><code>func StartCPUProfile(w io.Writer) error {
+	const hz = 100
+	...
+	cpu.profiling = true
+	runtime.SetCPUProfileRate(hz)
+	go profileWriter(w)
+	return nil
+}
 </code></pre>
 
-<p>Namespaceを作るとloopbackしかアドレスが表示されなくなり、ルートテーブルが空になる。</p>
+<p><code>SetCPUProfileRate()</code>の内部では、OSに対応する
+<a href="https://github.com/golang/go/blob/go1.13/src/runtime/signal_unix.go#L236">setProcessCPUProfiler()</a>と
+<a href="https://github.com/golang/go/blob/go1.13/src/runtime/signal_unix.go#L256">setThreadCPUProfiler()</a>
+が呼ばれ、Unixの場合<code>setitimer(ITIMER_PROF)</code>システムコールでCPU時間10ms経過後SIGPROFが送られるようにして、これをハンドリングしている。</p>
 
-<pre><code>$ unshare --net
-$ ip addr
-1: lo: &lt;LOOPBACK&gt; mtu 65536 qdisc noop state DOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+<pre><code>func setProcessCPUProfiler(hz int32) {
+	if hz != 0 {
+		// Enable the Go signal handler if not enabled.
+		if atomic.Cas(&amp;handlingSig[_SIGPROF], 0, 1) {
+			atomic.Storeuintptr(&amp;fwdSig[_SIGPROF], getsig(_SIGPROF))
+			setsig(_SIGPROF, funcPC(sighandler))
+		}
+	}
+	...
+}
 
-$ ip r
-(empty)
-
-$ curl 8.8.8.8
-curl: (7) Couldn't connect to server
-
-$ echo $$
-1011
+func setThreadCPUProfiler(hz int32) {
+	var it itimerval
+	if hz == 0 {
+		setitimer(_ITIMER_PROF, &amp;it, nil)
+	} else {
+		it.it_interval.tv_sec = 0
+		it.it_interval.set_usec(1000000 / hz)
+		it.it_value = it.it_interval
+		setitimer(_ITIMER_PROF, &amp;it, nil)
+	}
+	...
+}
 </code></pre>
-
-<p>2つのインタフェース間で通信できるvethのインタフェースを作成し、一つはNamespaceの中に移動する。sudoが必要。</p>
-
-<pre><code># Namespace外
-$ sudo ip link add name veth0-host type veth peer name veth0-ct
-$ ip link
-...
-3: veth0-ct@veth0-host: &lt;BROADCAST,MULTICAST,M-DOWN&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
-    link/ether b2:09:b8:a4:65:3d brd ff:ff:ff:ff:ff:ff
-4: veth0-host@veth0-ct: &lt;BROADCAST,MULTICAST,M-DOWN&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
-    link/ether 4e:89:1e:aa:84:ec brd ff:ff:ff:ff:ff:ff
-
-$ sudo ip addr add 192.168.10.1/24 dev veth0-host
-$ sudo ip link set up veth0-host
-
-$ sudo ip link set veth0-ct netns 1011
-</code></pre>
-
-<p>インタフェースを立ち上げるとルートテーブルが更新され、Namespace内外が通信できるようになる。</p>
-
-<pre><code>$ ip addr add 192.168.10.2/24 dev veth0-ct
-$ ping 192.168.10.1
-connect: Network is unreachable
-
-$ ip link set up veth0-ct
-$ ip r
-192.168.10.0/24 dev veth0-ct proto kernel scope link src 192.168.10.2
-
-$ ip addr
-1: lo: &lt;LOOPBACK&gt; mtu 65536 qdisc noop state DOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-3: veth0-ct§if4: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP group default qlen 1000
-    link/ether b2:09:b8:a4:65:3d brd ff:ff:ff:ff:ff:ff link-netnsid 0
-    inet 192.168.10.2/24 scope global veth0-ct
-       valid_lft forever preferred_lft forever
-    inet6 fe80::b009:b8ff:fea4:653d/64 scope link 
-       valid_lft forever preferred_lft forever
-
-$ ping 192.168.10.1
-PING 192.168.10.1 (192.168.10.1) 56(84) bytes of data.
-64 bytes from 192.168.10.1: icmp_seq=1 ttl=255 time=0.027 ms
-64 bytes from 192.168.10.1: icmp_seq=2 ttl=255 time=0.031 ms
-</code></pre>
-
-<h2 id="natしてインターネットと通信できるようにする">NATしてインターネットと通信できるようにする</h2>
-
-<p>まだインターネットにはルーティングされていないので通信できない。</p>
-
-<pre><code>$ ping 8.8.8.8
-connect: Network is unreachable
-</code></pre>
-
-<p>Namespace外でIPマスカレードする。</p>
-
-<pre><code># Namespace外
-$ sudo bash -c 'echo 1 &gt; /proc/sys/net/ipv4/ip_forward
-$ sudo iptables --table nat --flush
-$ sudo iptables --table nat --append POSTROUTING --source 192.168.10.0/24 --jump MASQUERADE
-$ sudo iptables --table nat --list
-Chain PREROUTING (policy ACCEPT)
-target     prot opt source               destination         
-
-Chain INPUT (policy ACCEPT)
-target     prot opt source               destination         
-
-Chain OUTPUT (policy ACCEPT)
-target     prot opt source               destination         
-
-Chain POSTROUTING (policy ACCEPT)
-target     prot opt source               destination         
-MASQUERADE  all  --  ip-192-168-10-0.ap-northeast-1.compute.internal/24  anywhere
-</code></pre>
-
-<p>デフォルトゲートウェイをNamespace外のvethにするとインターネットと通信できるようになる。</p>
-
-<pre><code>$ ip route add default via 192.168.10.1
-$ ip r
-default via 192.168.10.1 dev veth0-ct 
-192.168.10.0/24 dev veth0-ct proto kernel scope link src 192.168.10.2
-
-$ ping 8.8.8.8
-PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
-64 bytes from 8.8.8.8: icmp_seq=1 ttl=41 time=2.70 ms
-64 bytes from 8.8.8.8: icmp_seq=2 ttl=41 time=2.78 ms
-</code></pre>
-
-<h2 id="参考">参考</h2>
-
-<p><a href="https://gihyo.jp/admin/serial/01/linux_containers/0006">第6回　Linuxカーネルのコンテナ機能［5］ ─ネットワーク：LXCで学ぶコンテナ入門 －軽量仮想化環境を実現する技術｜gihyo.jp … 技術評論社</a></p>
-
-<p><a href="http://gihyo.jp/admin/serial/01/linux_containers/0016">第16回　Linuxカーネルのコンテナ機能 [6] ─ユーザ名前空間：LXCで学ぶコンテナ入門 －軽量仮想化環境を実現する技術｜gihyo.jp … 技術評論社</a></p>
-
-<p><a href="https://blog.kamijin-fanta.info/2018/12/netns/">LinuxのNetns/veth/Bridge/NATで仮想ネットワーク構築 - kamijin-fanta</a></p>
 
         </div>
       </article>
