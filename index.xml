@@ -6,8 +6,167 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-09-16 13:49:00 &#43;0900 JST</updated>
+    <updated>2019-09-17 09:42:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Ansibleでnginxを入れてLoad Balancingさせる</title>
+          <link>https://www.sambaiz.net/article/239/</link>
+          <pubDate>Tue, 17 Sep 2019 09:42:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/239/</guid>
+          <description>
+
+&lt;p&gt;EC2でUbuntu Server 18.04 LTS (ami-07d0cf3af28718ef8) の t3.medium (2vCPU, 4GiB) インスタンスを3台立ち上げた。この内1台をLB用とし、2台のAppサーバーに負荷分散させる。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/ansible-nginx-lb-example&#34;&gt;https://github.com/sambaiz/ansible-nginx-lb-example&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;nginx-conf&#34;&gt;nginx.conf&lt;/h2&gt;
+
+&lt;p&gt;LBとAppのnginx.conf。upstreamはデフォルトでラウンドロビンする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat conf/lb/nginx.conf
+...
+http {
+  ...
+
+  upstream app-server {
+    server ip-172-31-94-208.ec2.internal;
+    server ip-172-31-88-90.ec2.internal;
+  }
+
+  server {
+    listen          80;
+    server_name     .compute-1.amazonaws.com;
+    access_log      /var/log/nginx/app-server.log main;
+
+    location / {
+      proxy_pass      http://app-server;
+    }
+  }
+}
+
+$ cat conf/app/nginx.conf
+...
+http {
+  ...
+  server {
+    listen       80;
+    server_name  .compute-1.amazonaws.com;
+
+    location / {
+      proxy_pass  http://127.0.0.1:8080;
+    }
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;環境構築&#34;&gt;環境構築&lt;/h2&gt;
+
+&lt;p&gt;AnsibleでnginxとAppをインストールする。&lt;/p&gt;
+
+&lt;p&gt;まず&lt;a href=&#34;https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html&#34;&gt;Inventory&lt;/a&gt;を書いて疎通確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pip install --user ansible
+$ cat hosts
+[lb]
+ec2-3-227-2-54.compute-1.amazonaws.com        ansible_ssh_private_key_file=***.pem        ansible_user=ubuntu
+
+[app]
+ec2-3-229-113-100.compute-1.amazonaws.com        ansible_ssh_private_key_file=***.pem     ansible_user=ubuntu
+ec2-35-175-201-30.compute-1.amazonaws.com        ansible_ssh_private_key_file=***.pem     ansible_user=ubuntu
+
+$ ansible all -i ./hosts -m ping
+ec2-3-227-2-54.compute-1.amazonaws.com | SUCCESS =&amp;gt; {
+    &amp;quot;ansible_facts&amp;quot;: {
+        &amp;quot;discovered_interpreter_python&amp;quot;: &amp;quot;/usr/bin/python3&amp;quot;
+    }, 
+    &amp;quot;changed&amp;quot;: false, 
+    &amp;quot;ping&amp;quot;: &amp;quot;pong&amp;quot;
+}
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Ansible Galaxyからnginx公式の&lt;a href=&#34;https://galaxy.ansible.com/nginxinc/nginx&#34;&gt;role&lt;/a&gt;を持ってくる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ansible-galaxy install nginxinc.nginx
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Playbookはこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;---
+- hosts: lb
+  become: yes
+  become_user: root
+  roles:
+  - role: nginxinc.nginx
+    vars:
+      nginx_main_upload_enable: true
+      nginx_main_upload_src: conf/lb/nginx.conf
+      nginx_main_upload_dest: /etc/nginx/
+- hosts: app
+  become: yes
+  become_user: root
+  roles:
+  - role: nginxinc.nginx
+    vars:
+      nginx_main_upload_enable: true
+      nginx_main_upload_src: conf/app/nginx.conf
+      nginx_main_upload_dest: /etc/nginx/
+  tasks:
+  - name: Copy app
+    copy:
+      src: main
+      dest: /root/app
+      owner: root
+      group: root
+      mode: &#39;700&#39;
+  - name: Copy service file
+    copy:
+      src: conf/app/myapp.service
+      dest: /lib/systemd/system/myapp.service
+      owner: root
+      group: root
+      mode: &#39;644&#39;
+  - name: restart myapp.service
+    systemd:
+      name: myapp.service
+      state: restarted
+      daemon_reload: yes
+      enabled: yes
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Playbookを実行。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ansible-playbook -i ./hosts playbook.yml
+
+$ ansible app -i ./hosts -m shell -a &amp;quot;systemctl status myapp&amp;quot;
+ec2-35-175-201-30.compute-1.amazonaws.com | CHANGED | rc=0 &amp;gt;&amp;gt;
+● myapp.service - My app service
+   Loaded: loaded (/lib/systemd/system/myapp.service; enabled; vendor preset: enabled)
+   Active: active (running) since Mon 2019-09-16 14:45:20 UTC; 18min ago
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Apache Benchを実行し負荷分散できていることを確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# Single machine
+$ ab -n 100 -c 10 http://ec2-3-229-113-100.compute-1.amazonaws.com/
+...
+Requests per second:    7.67 [#/sec] (mean)
+Time per request:       130.409 [ms] (mean, across all concurrent requests)
+
+# Load balanced
+$ ab -n 100 -c 10 http://ec2-3-227-2-54.compute-1.amazonaws.com/
+...
+Requests per second:    11.47 [#/sec] (mean)
+Time per request:       87.209 [ms] (mean, across all concurrent requests)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/239-1.png&#34; alt=&#34;2台のCPU使用率&#34; /&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
