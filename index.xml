@@ -6,8 +6,222 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-09-21 22:50:00 &#43;0900 JST</updated>
+    <updated>2019-10-01 23:25:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>K8s上でElastic APMを動かして外部のGo製APIサーバーのリクエストをトレースする</title>
+          <link>https://www.sambaiz.net/article/241/</link>
+          <pubDate>Tue, 01 Oct 2019 23:25:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/241/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/elastic/cloud-on-k8s&#34;&gt;Elastic Cloud on Kubernetes (ECK)&lt;/a&gt;で
+Kubernetesクラスタ上にElasticsearch, KibanaとAPM Serverを立ち上げ、外部のGo製APIサーバーのリクエストをトレースする。
+クラスタはGKEで作成し、ノードプールはn2-highmem-4(2vCPU, 13GB)の3台にした。&lt;/p&gt;
+
+&lt;h2 id=&#34;インストール-https-www-elastic-co-guide-en-cloud-on-k8s-0-9-k8s-quickstart-html&#34;&gt;&lt;a href=&#34;https://www.elastic.co/guide/en/cloud-on-k8s/0.9/k8s-quickstart.html&#34;&gt;インストール&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;ElasticSearchやKibana, APM ServerのCRDやelastic-operatorなどをインストールする。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/182/&#34;&gt;KubernetesのCustom Resource Definition(CRD)とCustom Controller - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl apply -f https://download.elastic.co/downloads/eck/0.9.0/all-in-one.yaml
+customresourcedefinition.apiextensions.k8s.io/apmservers.apm.k8s.elastic.co created
+customresourcedefinition.apiextensions.k8s.io/elasticsearches.elasticsearch.k8s.elastic.co created
+customresourcedefinition.apiextensions.k8s.io/trustrelationships.elasticsearch.k8s.elastic.co created
+customresourcedefinition.apiextensions.k8s.io/kibanas.kibana.k8s.elastic.co created
+clusterrole.rbac.authorization.k8s.io/elastic-operator created
+clusterrolebinding.rbac.authorization.k8s.io/elastic-operator created
+namespace/elastic-system created
+statefulset.apps/elastic-operator created
+secret/webhook-server-secret created
+serviceaccount/elastic-operator created
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get pod -n elastic-system
+NAME                 READY   STATUS    RESTARTS   AGE
+elastic-operator-0   1/1     Running   1          91s
+
+$ kubectl -n elastic-system logs -f statefulset.apps/elastic-operator
+...
+{&amp;quot;level&amp;quot;:&amp;quot;info&amp;quot;,&amp;quot;ts&amp;quot;:1569230702.0881083,&amp;quot;logger&amp;quot;:&amp;quot;kubebuilder.controller&amp;quot;,&amp;quot;msg&amp;quot;:&amp;quot;Starting workers&amp;quot;,&amp;quot;controller&amp;quot;:&amp;quot;elasticsearch-controller&amp;quot;,&amp;quot;worker count&amp;quot;:1}
+{&amp;quot;level&amp;quot;:&amp;quot;info&amp;quot;,&amp;quot;ts&amp;quot;:1569230702.1144261,&amp;quot;logger&amp;quot;:&amp;quot;kubebuilder.webhook&amp;quot;,&amp;quot;msg&amp;quot;:&amp;quot;starting the webhook server.&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;resources&#34;&gt;Resources&lt;/h2&gt;
+
+&lt;h3 id=&#34;elasticsearch-https-github-com-elastic-cloud-on-k8s-blob-0-9-0-operators-pkg-apis-elasticsearch-v1alpha1-elasticsearch-types-go-l19&#34;&gt;&lt;a href=&#34;https://github.com/elastic/cloud-on-k8s/blob/0.9.0/operators/pkg/apis/elasticsearch/v1alpha1/elasticsearch_types.go#L19&#34;&gt;Elasticsearch&lt;/a&gt;&lt;/h3&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat &amp;lt;&amp;lt;EOF | kubectl apply -f -
+apiVersion: elasticsearch.k8s.elastic.co/v1alpha1
+kind: Elasticsearch
+metadata:
+  name: myes
+spec:
+  version: 7.2.0
+  nodes:
+  - nodeCount: 1
+    config:
+      node.master: true
+      node.data: true
+      node.ingest: true
+    volumeClaimTemplates:
+      - metadata:
+          name: elasticsearch-data
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+          storageClassName: standard
+EOF
+
+$ kubectl get elasticsearch
+NAME   HEALTH   NODES   VERSION   PHASE         AGE
+myes   green    1       7.2.0     Operational   4m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Podが立ち上がるまで少し時間がかかる。ユーザーelasticのパスワードはsecretにある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ kubectl get secret | grep &#39;myes&#39;
+myes-es-7jzg7sqxqt-certs         Opaque                                3      4m42s
+myes-es-7jzg7sqxqt-config        Opaque                                1      4m42s
+myes-es-elastic-user             Opaque                                1      4m42s
+myes-es-http-ca-internal         Opaque                                2      4m43s
+myes-es-http-certs-internal      Opaque                                2      4m43s
+myes-es-http-certs-public        Opaque                                1      4m43s
+myes-es-internal-users           Opaque                                3      4m42s
+myes-es-transport-ca-internal    Opaque                                2      4m42s
+myes-es-transport-certs-public   Opaque                                1      4m42s
+myes-es-xpack-file-realm         Opaque                                3      4m42s
+
+$ PASSWORD=$(kubectl get secret myes-es-elastic-user -o=jsonpath=&#39;{.data.elastic}&#39; | base64 -D)
+$ kubectl port-forward service/myes-es-http 9200 &amp;amp;
+$ curl -u &amp;quot;elastic:$PASSWORD&amp;quot; -k &amp;quot;https://localhost:9200&amp;quot; | jq &amp;quot;.cluster_name&amp;quot;
+&amp;quot;myes&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;kibana-https-github-com-elastic-cloud-on-k8s-blob-0-9-0-operators-pkg-apis-kibana-v1alpha1-kibana-types-go-l20&#34;&gt;&lt;a href=&#34;https://github.com/elastic/cloud-on-k8s/blob/0.9.0/operators/pkg/apis/kibana/v1alpha1/kibana_types.go#L20&#34;&gt;Kibana&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;port-forwardなしで外からアクセスできるようにserviceをLoadBalancerにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat &amp;lt;&amp;lt;EOF | kubectl apply -f -
+apiVersion: kibana.k8s.elastic.co/v1alpha1
+kind: Kibana
+metadata:
+  name: mykibana
+spec:
+  version: 7.2.0
+  nodeCount: 1
+  http:
+    service:
+      spec:
+        type: LoadBalancer
+  elasticsearchRef:
+    name: myes
+EOF
+
+$ kubectl get kibana
+NAME       HEALTH   NODES   VERSION   AGE
+mykibana   green    1       7.2.0     1m
+
+$ open https://$(kubectl get service mykibana-kb-http -o=jsonpath=&#39;{.status.loadBalancer.ingress[0].ip}:{.spec.ports[0].port}&#39;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ユーザーelasticでログインできる。&lt;/p&gt;
+
+&lt;h3 id=&#34;apmserver-https-github-com-elastic-cloud-on-k8s-blob-0-9-0-operators-pkg-apis-apm-v1alpha1-apmserver-types-go-l19&#34;&gt;&lt;a href=&#34;https://github.com/elastic/cloud-on-k8s/blob/0.9.0/operators/pkg/apis/apm/v1alpha1/apmserver_types.go#L19&#34;&gt;ApmServer&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;今回はクラスタ外から送るので同じくLoadBalancerにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat &amp;lt;&amp;lt;EOF | kubectl apply -f -
+apiVersion: apm.k8s.elastic.co/v1alpha1
+kind: ApmServer
+metadata:
+  name: myapm-server
+spec:
+  version: 7.2.0
+  nodeCount: 1
+  http:
+    service:
+      spec:
+        type: LoadBalancer
+  elasticsearchRef:
+    name: myes
+EOF
+
+$ kubectl get apmserver
+NAME           HEALTH   NODES   VERSION   AGE
+myapm-server   green    1       7.2.0     9m
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;KibanaからAPM Serverが動いていることを確認する。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/241.png&#34; alt=&#34;APM Server status&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;apm-agentの設定&#34;&gt;APM Agentの設定&lt;/h2&gt;
+
+&lt;p&gt;APM Agentをモニタリングするアプリケーションに入れる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get go.elastic.co/apm
+
+$ export ELASTIC_APM_SERVER_URL=https://$(kubectl get service myapm-server-apm-http -o=jsonpath=&#39;{.status.loadBalancer.ingress[0].ip}:{.spec.ports[0].port}&#39;)
+
+$ export ELASTIC_APM_SECRET_TOKEN=$(kubectl get secret/myapm-server-apm-token -o=jsonpath=&#39;{.data.secret-token}&#39; | base64 -D)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.elastic.co/guide/en/apm/agent/go/1.x/instrumenting-source.html#builtin-modules-apmhttp&#34;&gt;module/apmhttp&lt;/a&gt;や
+&lt;a href=&#34;https://www.elastic.co/guide/en/apm/agent/go/1.x/instrumenting-source.html#builtin-modules-apmsql&#34;&gt;module/apmsql&lt;/a&gt;を使うと、
+リクエスト全体のTransactionに対してそれぞれの処理部分がSpanとしてトレースされる。
+contextを渡してやらないとTransactionを追跡できずSpanが作成されない。
+&lt;a href=&#34;https://www.elastic.co/guide/en/apm/agent/go/1.x/instrumenting-source.html#custom-instrumentation&#34;&gt;自前で実装&lt;/a&gt;することもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import (
+	&amp;quot;net/http&amp;quot;
+
+	&amp;quot;go.elastic.co/apm/module/apmhttp&amp;quot;
+	&amp;quot;go.elastic.co/apm/module/apmsql&amp;quot;
+	_ &amp;quot;go.elastic.co/apm/module/apmsql/mysql&amp;quot;
+)
+
+var tracingClient = apmhttp.WrapClient(http.DefaultClient)
+
+func main() {
+	mux := http.NewServeMux()
+  mux.HandleFunc(&amp;quot;/ping&amp;quot;, func(w http.ResponseWriter, r *http.Request) {
+    	db, err := apmsql.Open(&amp;quot;mysql&amp;quot;, dsn)
+      tracingClient.Do(req.WithContext(ctx))
+      fmt.Fprintf(w, &amp;quot;ok&amp;quot;)
+  })
+	http.ListenAndServe(&amp;quot;:8080&amp;quot;, apmhttp.Wrap(mux))
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これで実行しCheck agent statusしても&lt;code&gt;No data has been received from agents yet&lt;/code&gt;から動かない。
+デフォルトでログが出ないので&lt;a href=&#34;https://www.elastic.co/guide/en/apm/agent/go/current/configuration.html#config-log-file&#34;&gt;ELASTIC_APM_LOG_FILE&lt;/a&gt;に値を入れてログを見てみたところ証明書で引っかかっていることが分かった。
+&lt;a href=&#34;https://www.elastic.co/guide/en/apm/agent/go/current/configuration.html#config-server-cert&#34;&gt;ELASTIC_APM_VERIFY_SERVER_CERT&lt;/a&gt;をfalseにしたところ送られるようになったのでLaunch APMする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ export ELASTIC_APM_LOG_FILE=stderr
+{&amp;quot;level&amp;quot;:&amp;quot;error&amp;quot;,&amp;quot;time&amp;quot;:&amp;quot;2019-10-01T19:18:15+09:00&amp;quot;,&amp;quot;message&amp;quot;:&amp;quot;config request failed: sending config request failed: Get https://104.155.169.150:8200/config/v1/agents?service.name=isucari: x509: cannot validate certificate for 104.155.169.150 because it doesn&#39;t contain any IP SANs&amp;quot;}
+
+$ export ELASTIC_APM_VERIFY_SERVER_CERT=false
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/isucon/isucon9-qualify.git&#34;&gt;ISUCON9の予選問題&lt;/a&gt;に入れてみた。
+リクエスト中の外部サーバーへのリクエストやDBのクエリのタイミングやかかっている時間がTimeline上に表示される。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/241-2.png&#34; alt=&#34;Timeline&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.elastic.co/jp/blog/how-to-instrument-your-go-app-with-the-elastic-apm-go-agent&#34;&gt;How to instrument your Go application with the Elastic APM Go agent | Elastic Blog&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -183,7 +397,8 @@ Index_comment:
 2 rows in set (0.01 sec)
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;そこで&lt;code&gt;created_at&lt;/code&gt;にインデックスを張る。&lt;code&gt;(status, created_at)&lt;/code&gt;の複合キーも試してみたが&lt;code&gt;status&lt;/code&gt;のカーディナリティが低いからか使われなかった。&lt;code&gt;created_at&lt;/code&gt;は範囲で取るので逆順のキーだと&lt;code&gt;status&lt;/code&gt;を絞るためにB+Treeのleaf nodeを全て見ていく必要があり意味がない。&lt;/p&gt;
+&lt;p&gt;そこで&lt;code&gt;created_at&lt;/code&gt;にインデックスを張る。&lt;code&gt;(status, created_at)&lt;/code&gt;の複合キーも試してみたが&lt;code&gt;status&lt;/code&gt;のカーディナリティが低いからか使われなかった。&lt;code&gt;created_at&lt;/code&gt;は範囲で取るので&lt;code&gt;(created_at, status)&lt;/code&gt;だと&lt;code&gt;status&lt;/code&gt;を絞るためにB+Treeのleaf nodeを全て見ていく必要があり意味がない。
+また、SELECTのカラムを絞って必要なデータがleaf nodeに揃っているカバリングインデックスにできれば、PKのB+Treeを見にいく必要がなくなり速くなるが、今回はクエリの内容は変えないことにする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;mysql&amp;gt; ALTER TABLE items ADD INDEX idx_created_at (created_at);
 &lt;/code&gt;&lt;/pre&gt;
