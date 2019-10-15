@@ -6,8 +6,753 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-10-05 23:41:00 &#43;0900 JST</updated>
+    <updated>2019-10-15 09:41:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>goyaccでparserを生成しLispのcons,car,cdrの式を評価する</title>
+          <link>https://www.sambaiz.net/article/244/</link>
+          <pubDate>Tue, 15 Oct 2019 09:41:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/244/</guid>
+          <description>
+
+&lt;p&gt;GoでLispのcons,car,cdrの式を評価したい。
+流れとしては字句解析器(lexer, tokenizer, scanner)でソースコードを分割しtoken列にして、構文解析器(parser)で構文木を作るなりして評価できるようにする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install clisp
+$ clisp
+&amp;gt; (cons 1 ())
+(1)
+&amp;gt; (cons () 1)
+(NIL . 1)
+&amp;gt; (car (cons 1 (cons 2 3)))
+1
+&amp;gt; (cdr (cons 1 (cons 2 3)))
+(2 . 3)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;goの字句解析器と構文解析器&#34;&gt;Goの字句解析器と構文解析器&lt;/h2&gt;
+
+&lt;p&gt;Goの字句解析器と構文解析器がGoが実装されているので見てみる。&lt;/p&gt;
+
+&lt;h3 id=&#34;go-scanner-https-golang-org-pkg-go-scanner&#34;&gt;&lt;a href=&#34;https://golang.org/pkg/go/scanner/&#34;&gt;go/scanner&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;ソースコードを分割して&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/token/token.go&#34;&gt;go/token&lt;/a&gt;にする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;go/token&amp;quot;
+	&amp;quot;go/scanner&amp;quot;
+)
+
+func main() {
+	var sc scanner.Scanner
+	src := []byte(`(&amp;quot;A&amp;quot; + &amp;quot;B&amp;quot;) + &amp;quot;C&amp;quot;`)
+	errorHandler := func(pos token.Position, msg string) { fmt.Printf(&amp;quot;ERROR %v %v\n&amp;quot;, pos, msg)}
+	sc.Init(token.NewFileSet().AddFile(&amp;quot;&amp;quot;, -1, len(src)), src, errorHandler, 0)
+	fmt.Printf(&amp;quot;%6v %6v %6v\n&amp;quot;, &amp;quot;pos&amp;quot;, &amp;quot;tok&amp;quot;, &amp;quot;lit&amp;quot;)
+	for {
+		pos, tok, lit := sc.Scan()
+		if tok == token.EOF {
+			break
+		}
+		fmt.Printf(&amp;quot;%6v %6v %6v\n&amp;quot;, pos, tok, lit)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;pos    tok    lit
+  1      (       
+  2 STRING    &amp;quot;A&amp;quot;
+  6      +       
+  8 STRING    &amp;quot;B&amp;quot;
+ 11      )       
+ 13      +       
+ 15 STRING    &amp;quot;C&amp;quot;
+ 18      ;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/scanner/scanner.go&#34;&gt;実装&lt;/a&gt;を見ていく。&lt;/p&gt;
+
+&lt;p&gt;まず&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/scanner/scanner.go#L703&#34;&gt;skipWhitespace()&lt;/a&gt;でスペースやタブなどを無視して読み進める(&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/scanner/scanner.go#L56&#34;&gt;next()&lt;/a&gt;)。
+その後、見ている文字(s.ch)によってどう読み進めるかを判断する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (s *Scanner) Scan() (pos token.Pos, tok token.Token, lit string) {
+scanAgain:
+	s.skipWhitespace()
+
+	// current token start
+	pos = s.file.Pos(s.offset)
+
+	// determine token value
+	insertSemi := false
+	switch ch := s.ch; {
+	case isLetter(ch):
+		...
+	default:
+		s.next() // always make progress
+		switch ch {
+		case -1:
+			if s.insertSemi {
+				s.insertSemi = false // EOF consumed
+				return pos, token.SEMICOLON, &amp;quot;\n&amp;quot;
+			}
+			tok = token.EOF
+		case &#39;&amp;quot;&#39;:
+			...
+		}
+	}
+	if s.mode&amp;amp;dontInsertSemis == 0 {
+		s.insertSemi = insertSemi
+	}
+
+	return
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;文字列だったら(&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/scanner/scanner.go#L342&#34;&gt;isLetter()&lt;/a&gt;=true)、
+&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/scanner/scanner.go#L350&#34;&gt;scanIdentifier()&lt;/a&gt;で文字列の最後まで読み進めて、
+&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/token/token.go#L290&#34;&gt;Lookup()&lt;/a&gt;で
+trueやbreakといったキーワードなのか、そうでないのか(token.IDENT)を判定する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;case isLetter(ch):
+    lit = s.scanIdentifier()
+    if len(lit) &amp;gt; 1 {
+        // keywords are longer than one letter - avoid lookup otherwise
+        tok = token.Lookup(lit)
+        switch tok {
+        case token.IDENT, token.BREAK, token.CONTINUE, token.FALLTHROUGH, token.RETURN:
+            insertSemi = true
+        }
+    } else {
+        insertSemi = true
+        tok = token.IDENT
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;&amp;quot;&lt;/code&gt;は&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/scanner/scanner.go#L636&#34;&gt;scanString()&lt;/a&gt;で次の&lt;code&gt;&amp;quot;&lt;/code&gt;が来るまで
+中身をstringとして読み進める。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;case &#39;&amp;quot;&#39;:
+    insertSemi = true
+    tok = token.STRING
+    lit = s.scanString()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;+&lt;/code&gt;や&lt;code&gt;-&lt;/code&gt;は&lt;code&gt;++&lt;/code&gt;や&lt;code&gt;+=&lt;/code&gt;かもしれないので次の文字を見て判断したり、&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;case &#39;+&#39;:
+    tok = s.switch3(token.ADD, token.ADD_ASSIGN, &#39;+&#39;, token.INC)
+    if tok == token.INC {
+        insertSemi = true
+    }
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;.&lt;/code&gt;は&lt;code&gt;...&lt;/code&gt;かもしれないのでさらにその次の文字まで見ていたりする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;case &#39;.&#39;:
+    // fractions starting with a &#39;.&#39; are handled by outer switch
+    tok = token.PERIOD
+    if s.ch == &#39;.&#39; &amp;amp;&amp;amp; s.peek() == &#39;.&#39; {
+        s.next()
+        s.next() // consume last &#39;.&#39;
+        tok = token.ELLIPSIS
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;go-parser-https-golang-org-pkg-go-parser&#34;&gt;&lt;a href=&#34;https://golang.org/pkg/go/parser/&#34;&gt;go/parser&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/ast/ast.go&#34;&gt;go/ast&lt;/a&gt;を生成する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+    
+import (
+    &amp;quot;fmt&amp;quot;
+    &amp;quot;go/ast&amp;quot;
+    &amp;quot;go/parser&amp;quot;
+)
+
+func f(a string) string {
+    return &amp;quot;X&amp;quot;
+}
+
+func main() {
+    exprs := []string{
+        &amp;quot;1 + 1&amp;quot;,
+        &amp;quot;true || !false&amp;quot;,
+        `(1 + 1) * f(&amp;quot;A&amp;quot;)`,
+		&amp;quot;X ((Y))))&amp;quot;,
+    }
+    for _, e := range exprs {
+        expr, err := parser.ParseExpr(e)
+        if err != nil {
+            fmt.Printf(&amp;quot;%s =&amp;gt; %s&amp;quot;, e, err)
+            continue
+        } 
+        if be, ok := expr.(*ast.BinaryExpr); ok {
+            fmt.Printf(&amp;quot;%s =&amp;gt; %T(%+v) %T(%+v) %T(%+v)\n&amp;quot;, e, be.X, be.X, be.Op, be.Op, be.Y, be.Y)
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;1 + 1 =&amp;gt; *ast.BasicLit(&amp;amp;{ValuePos:1 Kind:INT Value:1}) token.Token(+) *ast.BasicLit(&amp;amp;{ValuePos:5 Kind:INT Value:1})
+true || !false =&amp;gt; *ast.Ident(true) token.Token(||) *ast.UnaryExpr(&amp;amp;{OpPos:9 Op:! X:false})
+(1 + 1) * f(&amp;quot;A&amp;quot;) =&amp;gt; *ast.ParenExpr(&amp;amp;{Lparen:1 X:0xc00006a1b0 Rparen:7}) token.Token(*) *ast.CallExpr(&amp;amp;{Fun:f Lparen:12 Args:[0xc0000720c0] Ellipsis:0 Rparen:16})
+X ((Y)))) =&amp;gt; 1:8: expected &#39;EOF&#39;, found &#39;)&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/blob/go1.13.1/src/go/parser/parser.go&#34;&gt;実装&lt;/a&gt;を見てみたが再帰の連続でかなり骨が折れた。
+調べてみると&lt;a href=&#34;https://godoc.org/golang.org/x/tools/cmd&#34;&gt;golang.org/x/tools/cmd&lt;/a&gt;にあるgoyaccを使うと文法からparserを生成できるようなので
+これを使うことにした。&lt;/p&gt;
+
+&lt;h2 id=&#34;goyacc&#34;&gt;goyacc&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://godoc.org/golang.org/x/tools/cmd/goyacc&#34;&gt;goyacc&lt;/a&gt;はparser generatorであるyacc(yet another compiler compiler)のGo版。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go get golang.org/x/tools/cmd/goyacc
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;yacc文法ファイル&lt;a href=&#34;https://github.com/golang/tools/blob/gopls/v0.1.7/cmd/goyacc/testdata/expr/expr.y&#34;&gt;expr.y&lt;/a&gt;に対して実行すると
+&lt;code&gt;y.go&lt;/code&gt;ができる。実行すると入力を受け付け、式を評価して表示するが、これはgoyaccの機能ではなく文法ファイルに書いてある挙動。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ wget https://raw.githubusercontent.com/golang/tools/gopls/v0.1.7/cmd/goyacc/testdata/expr/expr.y
+$ goyacc -p &amp;quot;expr&amp;quot; expr.y
+$ go run y.go
+&amp;gt; 2 * ((2 + 2) - 1) / 2
+3
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;yacc文法ファイル&#34;&gt;yacc文法ファイル&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;%%&lt;/code&gt;で区切られた3つの部分からなる。&lt;/p&gt;
+
+&lt;h3 id=&#34;定義部&#34;&gt;定義部&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;%{&lt;/code&gt;と&lt;code&gt;%}&lt;/code&gt;で囲まれた部分にコードを書けるのでpackage名やimportを書く。
+&lt;code&gt;%union&lt;/code&gt;は取り得る型の共用体で、&lt;code&gt;%token &amp;lt;type&amp;gt;&lt;/code&gt;で規則によってreduceされる非終端記号を、&lt;code&gt;%type &amp;lt;type&amp;gt;&lt;/code&gt;で終端記号の種類と型を定義する。
+大文字と小文字は区別され、非終端記号は小文字で、終端記号は大文字にすることが多いようだ。
+&lt;code&gt;&#39;&#39;&lt;/code&gt;で囲まれた一文字記号はここで定義しなくても規則で使える。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;%{
+
+package main
+
+import (
+	&amp;quot;bufio&amp;quot;
+	&amp;quot;bytes&amp;quot;
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;io&amp;quot;
+	&amp;quot;log&amp;quot;
+	&amp;quot;math/big&amp;quot;
+	&amp;quot;os&amp;quot;
+	&amp;quot;unicode/utf8&amp;quot;
+)
+
+%}
+
+%union {
+	num *big.Rat
+}
+
+%type	&amp;lt;num&amp;gt;	expr expr1 expr2 expr3
+
+%token &#39;+&#39; &#39;-&#39; &#39;*&#39; &#39;/&#39; &#39;(&#39; &#39;)&#39;
+
+%token	&amp;lt;num&amp;gt;	NUM
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;規則部&#34;&gt;規則部&lt;/h3&gt;
+
+&lt;p&gt;BNF(Backus-Naur Form)のような記法で、&lt;code&gt;左辺: 右辺&lt;/code&gt;で右辺が左辺にreduceされる規則を表す。
+&lt;code&gt;{}&lt;/code&gt;の中にはコードが書けて、&lt;code&gt;$$&lt;/code&gt;が左辺で&lt;code&gt;$n&lt;/code&gt;が右辺のn番目のtokenになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;top:
+	expr
+	{
+		if $1.IsInt() {
+			fmt.Println($1.Num().String())
+		} else {
+			fmt.Println($1.String())
+		}
+	}
+
+expr:
+	expr1
+|	&#39;+&#39; expr
+	{
+		$$ = $2
+	}
+|	&#39;-&#39; expr
+	{
+		$$ = $2.Neg($2)
+	}
+
+expr1:
+	expr2
+|	expr1 &#39;+&#39; expr2
+	{
+		$$ = $1.Add($1, $3)
+	}
+|	expr1 &#39;-&#39; expr2
+	{
+		$$ = $1.Sub($1, $3)
+	}
+
+expr2:
+	expr3
+|	expr2 &#39;*&#39; expr3
+	{
+		$$ = $1.Mul($1, $3)
+	}
+|	expr2 &#39;/&#39; expr3
+	{
+		$$ = $1.Quo($1, $3)
+	}
+
+expr3:
+	NUM
+|	&#39;(&#39; expr &#39;)&#39;
+	{
+		$$ = $2
+	}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;ユーザ定義部&#34;&gt;ユーザ定義部&lt;/h3&gt;
+
+&lt;p&gt;コードを書けてそのまま出力されるが、別のgoファイルに分けた方がエディタのシンタックスハイライトやエラーチェックが効くので書きやすいと思う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;...
+func main() {
+	in := bufio.NewReader(os.Stdin)
+	for {
+		if _, err := os.Stdout.WriteString(&amp;quot;&amp;gt; &amp;quot;); err != nil {
+			log.Fatalf(&amp;quot;WriteString: %s&amp;quot;, err)
+		}
+		line, err := in.ReadBytes(&#39;\n&#39;)
+		if err == io.EOF {
+			return
+		}
+		if err != nil {
+			log.Fatalf(&amp;quot;ReadBytes: %s&amp;quot;, err)
+		}
+
+		exprParse(&amp;amp;exprLex{line: line})
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;&amp;lt;prefix&amp;gt;Parse&lt;/code&gt;はgoyaccによって作られる関数で、&lt;code&gt;Lex(*&amp;lt;prefix&amp;gt;SymType) int&lt;/code&gt;と&lt;code&gt;Error(string)&lt;/code&gt;を実装したLexerを引数に取る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;// The parser uses the type &amp;lt;prefix&amp;gt;Lex as a lexer. It must provide
+// the methods Lex(*&amp;lt;prefix&amp;gt;SymType) int and Error(string).
+type exprSymType struct {
+    yys int
+    num *big.Rat
+}
+type exprLexer interface {
+    Lex(lval *exprSymType) int
+    Error(s string)
+}
+func exprParse(exprlex exprLexer) int {
+    return exprNewParser().Parse(exprlex)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;Lex()&lt;/code&gt;は値を&lt;code&gt;*&amp;lt;prefix&amp;gt;SymType&lt;/code&gt;に入れて、一文字記号はそのruneをintにキャストしたものを、それ以外のtoken(NUM)はgoyaccによって数値が割り当てられているのでそれを返す。
+最後まで読んだら0を返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;const eof = 0
+
+func (x *exprLex) Lex(yylval *exprSymType) int {
+	for {
+		c := x.next()
+		switch c {
+		case eof:
+			return eof
+		case &#39;0&#39;, &#39;1&#39;, &#39;2&#39;, &#39;3&#39;, &#39;4&#39;, &#39;5&#39;, &#39;6&#39;, &#39;7&#39;, &#39;8&#39;, &#39;9&#39;:
+			return x.num(c, yylval)
+		case &#39;+&#39;, &#39;-&#39;, &#39;*&#39;, &#39;/&#39;, &#39;(&#39;, &#39;)&#39;:
+			return int(c)
+
+		// Recognize Unicode multiplication and division
+		// symbols, returning what the parser expects.
+		case &#39;×&#39;:
+			return &#39;*&#39;
+		case &#39;÷&#39;:
+			return &#39;/&#39;
+
+		case &#39; &#39;, &#39;\t&#39;, &#39;\n&#39;, &#39;\r&#39;:
+		default:
+			log.Printf(&amp;quot;unrecognized character %q&amp;quot;, c)
+		}
+	}
+}
+
+const NUM = 57346
+
+func (x *exprLex) num(c rune, yylval *exprSymType) int {
+        add := func(b *bytes.Buffer, c rune) {
+                if _, err := b.WriteRune(c); err != nil {
+                        log.Fatalf(&amp;quot;WriteRune: %s&amp;quot;, err)
+                }
+        }
+        var b bytes.Buffer
+        add(&amp;amp;b, c)
+L:
+        for {
+                c = x.next()
+                switch c {
+                case &#39;0&#39;, &#39;1&#39;, &#39;2&#39;, &#39;3&#39;, &#39;4&#39;, &#39;5&#39;, &#39;6&#39;, &#39;7&#39;, &#39;8&#39;, &#39;9&#39;, &#39;.&#39;, &#39;e&#39;, &#39;E&#39;:
+                        add(&amp;amp;b, c)
+                default:
+                        break L
+                }
+        }
+        if c != eof {
+                x.peek = c
+        }
+        yylval.num = &amp;amp;big.Rat{}
+        _, ok := yylval.num.SetString(b.String())
+        if !ok {
+                log.Printf(&amp;quot;bad number %q&amp;quot;, b.String())
+                return eof
+        }
+        return NUM
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;cons-car-cdr評価器を作る&#34;&gt;cons,car,cdr評価器を作る&lt;/h2&gt;
+
+&lt;p&gt;ということでcons,car,cdr評価器を作る。全体のコードはGitHubにある。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/sambaiz/goyacc-carcdr-evaluator&#34;&gt;sambaiz/goyacc-carcdr-evaluator&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;yacc文法ファイル-1&#34;&gt;yacc文法ファイル&lt;/h3&gt;
+
+&lt;p&gt;文法ファイルのコードは最低限にして同じpackageのgoファイルに書いているのでユーザ定義部は空。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;%{
+
+package parser
+
+import (
+	&amp;quot;bytes&amp;quot;
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;log&amp;quot;
+	&amp;quot;strconv&amp;quot;
+)
+
+%}
+
+%union {
+	value *Value
+	num float64
+}
+
+%type &amp;lt;value&amp;gt; expr list nil atom 
+
+%token CAR CDR CONS NIL
+
+%token &amp;lt;num&amp;gt; NUM
+
+%%
+
+expr:
+	list
+|	atom
+
+list:
+	&#39;(&#39; CAR list &#39;)&#39;
+	{
+		$$ = $3.Left
+	}
+|	&#39;(&#39; CDR list &#39;)&#39;
+	{
+		$$ = $3.Right
+	}
+|	&#39;(&#39; CONS expr expr &#39;)&#39;
+	{
+		$$ = &amp;amp;Value{Left: $3, Right: $4}
+	}
+|	nil
+
+nil:
+	NIL
+	{
+		$$ = &amp;amp;Value{IsNil: true}
+	}
+|	&#39;(&#39; &#39;)&#39;
+	{
+		$$ = &amp;amp;Value{IsNil: true}
+	}
+
+atom: 
+	NUM
+	{
+		$$ = &amp;amp;Value{Num: $1}
+	}
+
+%%
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;lexer&#34;&gt;Lexer&lt;/h3&gt;
+
+&lt;p&gt;サンプルコードをベースにcons,car,cdr,nilに対応した。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package parser
+
+import (
+	&amp;quot;bytes&amp;quot;
+	&amp;quot;errors&amp;quot;
+	&amp;quot;log&amp;quot;
+	&amp;quot;strconv&amp;quot;
+	&amp;quot;unicode&amp;quot;
+	&amp;quot;unicode/utf8&amp;quot;
+)
+
+type lexer struct {
+	line []byte
+	peek *rune
+	err error
+}
+
+func newLexer(line []byte) *lexer {
+	return &amp;amp;lexer{
+		line: line,
+	}
+}
+
+const eof = 0
+
+func (x *lexer) Lex(yylval *exprSymType) int {
+	for {
+		c := x.next()
+		if &#39;a&#39; &amp;lt;= c &amp;amp;&amp;amp; c &amp;lt;= &#39;z&#39; || &#39;A&#39; &amp;lt;= c &amp;amp;&amp;amp; c &amp;lt;= &#39;Z&#39;  {
+			return x.token(c, yylval)
+		}
+		switch c {
+		case eof:
+			return eof
+		case &#39;0&#39;, &#39;1&#39;, &#39;2&#39;, &#39;3&#39;, &#39;4&#39;, &#39;5&#39;, &#39;6&#39;, &#39;7&#39;, &#39;8&#39;, &#39;9&#39;:
+			return x.num(c, yylval)
+		case &#39;(&#39;, &#39;)&#39;:
+			return int(c)
+
+		case &#39; &#39;, &#39;\t&#39;, &#39;\n&#39;, &#39;\r&#39;:
+		default:
+			log.Printf(&amp;quot;unrecognized character %q&amp;quot;, c)
+		}
+	}
+}
+
+func (x *lexer) next() rune {
+	...
+}
+
+func (x *lexer) num(c rune, yylval *exprSymType) int {
+	...
+}
+
+var tokenMap = map[string]int{
+	&amp;quot;car&amp;quot;: CAR,
+	&amp;quot;cdr&amp;quot;: CDR,
+	&amp;quot;cons&amp;quot;: CONS,
+	&amp;quot;nil&amp;quot;: NIL,
+}
+
+func (x *lexer) token(c rune, yylval *exprSymType) int {
+	add := func(b *bytes.Buffer, c rune) {
+		if _, err := b.WriteRune(c); err != nil {
+			log.Fatalf(&amp;quot;WriteRune: %s&amp;quot;, err)
+		}
+	}
+	var b bytes.Buffer
+	add(&amp;amp;b, unicode.ToLower(c))
+	for {
+		c = x.next()
+		if &#39;a&#39; &amp;lt;= c &amp;amp;&amp;amp; c &amp;lt;= &#39;z&#39; || &#39;A&#39; &amp;lt;= c &amp;amp;&amp;amp; c &amp;lt;= &#39;Z&#39; {
+			add(&amp;amp;b, unicode.ToLower(c))
+		} else {
+			x.peek = &amp;amp;c
+			break
+		}
+	}
+	token, ok := tokenMap[b.String()]
+	if !ok {
+		log.Printf(&amp;quot;unknown token %q&amp;quot;, b.String())
+		return eof
+	}
+	return token
+}
+
+
+func (x *lexer) Error(s string) {
+	x.err = errors.New(s)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;テストを書く。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package parser
+
+import (
+	&amp;quot;fmt&amp;quot;
+	&amp;quot;github.com/stretchr/testify/assert&amp;quot;
+	&amp;quot;testing&amp;quot;
+)
+
+func TestLexerLex(t *testing.T) {
+	tests := []struct {
+		expr []byte
+		outs []int
+		symTypes []*exprSymType
+	} {
+		{
+			expr: []byte(&amp;quot;123.456&amp;quot;),
+			outs: []int{NUM},
+			symTypes: []*exprSymType{
+				{
+					num: 123.456,
+				},
+			},
+		},
+		{
+			expr: []byte(&amp;quot;(cons 1 2)&amp;quot;),
+			outs: []int{&#39;(&#39;, CONS, NUM, NUM, &#39;)&#39;},
+			symTypes: []*exprSymType{
+				{},
+				{},
+				{
+					num: 1,
+				},
+				{
+					num: 2,
+				},
+				{},
+			},
+		},
+		{
+			expr: []byte(&amp;quot;(cdr (CONS (car (cons () NIL)) 1e5))&amp;quot;),
+			outs: []int{&#39;(&#39;, CDR, &#39;(&#39;, CONS, &#39;(&#39;, CAR, &#39;(&#39;, CONS, &#39;(&#39;, &#39;)&#39;, NIL, &#39;)&#39;, &#39;)&#39;, NUM, &#39;)&#39;, &#39;)&#39;},
+			symTypes: []*exprSymType{
+				{},
+				{}, // CDR
+				{},
+				{}, // CONS
+				{},
+				{}, // CAR
+				{},
+				{}, // CONS
+				{},
+				{},
+				{}, // NIL
+				{},
+				{},
+				{
+					num: 1e5,
+				},
+				{},
+				{},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprintf(&amp;quot;%s -&amp;gt; %v&amp;quot;, string(test.expr), test.outs), func(t *testing.T) {
+			i := 0
+			lexer := newLexer([]byte(test.expr))
+			for {
+				symType := &amp;amp;exprSymType{}
+				char := lexer.Lex(symType)
+				if char == eof {
+					break
+				}
+				assert.Equal(t, test.outs[i], char)
+				assert.Equal(t, test.symTypes[i], symType)
+				i++
+			}
+			assert.Equal(t, i, len(test.outs))
+		})
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;parser&#34;&gt;Parser&lt;/h3&gt;
+
+&lt;p&gt;サンプルでは直接&lt;code&gt;&amp;lt;prefix&amp;gt;Parse()&lt;/code&gt;を呼んでいたが、評価した値を扱えるように&lt;code&gt;&amp;lt;prefix&amp;gt;ParserImpl&lt;/code&gt;からParseする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package parser
+
+func Parse(line string) (*Value, error) {
+	exprErrorVerbose = true
+	parser := &amp;amp;exprParserImpl{}
+	lexer := newLexer([]byte(line))
+	parser.Parse(lexer)
+	if lexer.err != nil {
+		return nil, lexer.err
+	}
+	if len(parser.stack) &amp;lt; 2 {
+		return nil, nil
+	}
+	return parser.stack[1].value, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;package parser
+
+import (
+	&amp;quot;github.com/stretchr/testify/assert&amp;quot;
+	&amp;quot;testing&amp;quot;
+)
+
+func TestParse(t *testing.T) {
+	tests := []struct {
+		in string
+		expected string
+	} {
+		{
+			in: &amp;quot;123.456&amp;quot;,
+			expected: &amp;quot;123.456&amp;quot;,
+		},
+		{
+			in: &amp;quot;(cdr (CONS (car (cons () NIL)) 1e5))&amp;quot;,
+			expected: &amp;quot;100000&amp;quot;,
+		},
+		{
+			in: &amp;quot;(cons (cons 1 2) 3)&amp;quot;,
+			expected: &amp;quot;((1 . 2) . 3)&amp;quot;,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.in, func(t *testing.T) {
+			out, err := Parse(test.in)
+			assert.Equal(t, test.expected, out.String())
+			assert.Nil(t, err)
+		})
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;実行結果&#34;&gt;実行結果&lt;/h3&gt;
+
+&lt;p&gt;動いた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go run main.go
+&amp;gt; (car (cdr (cons 1 (cons (cons 20 300.4) (cons 50 60)))))
+(20 . 300.4)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.eidos.ic.i.u-tokyo.ac.jp/~tau/lecture/programming_languages/gen/slides/pdf/09-lexer-parser.pdf&#34;&gt;プログラミング言語 8 字句解析器(lexer)と構文解析器(parser)&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://i.loveruby.net/ja/rhg/book/yacc.html&#34;&gt;第9章 速習yacc&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -62,8 +807,8 @@ profileが出力できずbcryptがボトルネックであることに最後ま�
 &lt;p&gt;午後はサーバーを1台再起不能にした。あとはN+1をやって終了。表彰と講評。ブラウザチェックNGで参考記録になったが、スコアは3611で17位相当だった。
 1位の白金動物園は35801、2位のnilは29704(しかも一人で)とスコアを見ると全くかなわないという感じ。
 ただN+1やインデックスなど基本的なところは押さえていたようだったので、まずはそのステージを超えなくてはいけなかった。
-またインメモリにデータを持つと負荷のパラメータである日数を伸ばしたときにOOMになってしまう。
-今回はメモリが少なかったのでインメモリにするのではなくSQLでスコアを上げられるようになっていたそうだ。&lt;/p&gt;
+また一通りインメモリにデータを持ったら負荷のパラメータである日数を伸ばしたときにOOMになった。
+今回はメモリが少なかったのでSQLの修正でスコアを上げられるようになっていたそうだ。&lt;/p&gt;
 
 &lt;p&gt;全てが終わり懇親会が始まった。&lt;/p&gt;
 
