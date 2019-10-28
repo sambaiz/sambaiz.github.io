@@ -6,8 +6,90 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-10-15 09:41:00 &#43;0900 JST</updated>
+    <updated>2019-10-28 22:54:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Lambda環境でできない処理をECSで実行する</title>
+          <link>https://www.sambaiz.net/article/245/</link>
+          <pubDate>Mon, 28 Oct 2019 22:54:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/245/</guid>
+          <description>
+
+&lt;p&gt;以前&lt;a href=&#34;https://github.com/sambaiz/cdkbot&#34;&gt;cdkbot&lt;/a&gt;というツールを出した。これはGitHubのPRからCDKのデプロイなどを実行できるツールでlambda上で動いていた。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/235/&#34;&gt;PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;npmやgitといった外部コマンドを実行するため、layerにバイナリを詰めて上げていた。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/233/&#34;&gt;Lambda上でnpm installできるLayerを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;CDKにはローカルのDockerfileをbuildしてECRに上げてくれる
+&lt;code&gt;ecs.ContainerImage.fromAsset()&lt;/code&gt;という関数があって、これに対応させるためlayerにdockerを追加してみたのだがrootが取れず動かない。
+rootなしで動く&lt;a href=&#34;https://github.com/indigo-dc/udocker&#34;&gt;udocker&lt;/a&gt;でdind(docker in docker)のイメージを動かしたりもしてみたがbuildはできなかった。&lt;/p&gt;
+
+&lt;p&gt;この他にもCloudFrontなどリソースによっては作成に時間がかかり、Lambdaのタイムアウト上限に到達する問題もあったので、lambda+API Gatewayでwebhookのリクエストだけ受け取り、ECS(Fargate)でTaskを立ち上げて処理を行うことにした。&lt;/p&gt;
+
+&lt;p&gt;templateにECSまわりのものを追加したところ、Serverless Application Repository非対応ということで上げられなくなってしまった。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/207/&#34;&gt;AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;taskへのパラメータの受け渡し&#34;&gt;Taskへのパラメータの受け渡し&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;runTask&lt;/code&gt;の&lt;code&gt;containerOverrides&lt;/code&gt;でコマンドの引数としてlambdaに来たリクエストをそのまま渡そうとしたところ、&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/APIReference/API_RunTask.html&#34;&gt;8192文字&lt;/a&gt;文字の上限に当たってしまったので
+SQSで受け渡すようにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sess := session.New()
+sqsSvc := sqs.New(sess)
+if _, err := sqsSvc.SendMessage(&amp;amp;sqs.SendMessageInput{
+    MessageBody:    aws.String(string(payload)),
+    QueueUrl:       aws.String(os.Getenv(&amp;quot;OPERATION_QUEUE_URL&amp;quot;)),
+    MessageGroupId: aws.String(&amp;quot;group&amp;quot;),
+}); err != nil {
+    fmt.Println(err.Error())
+    return response{
+        StatusCode: http.StatusInternalServerError,
+    }, err
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;同時実行数を制限する&#34;&gt;同時実行数を制限する&lt;/h2&gt;
+
+&lt;p&gt;アプリケーションの特性上、同時実行されないようにしたい。
+そこで普段はTask0のServiceを作成し、実行するときは要求Taskを1にして、Queueが空になるまで実行させ、最後に0に戻すようにした。Taskがない場合は立ち上がりにやや時間がかかるが、元々Lambdaで動いていたこともあって常に料金が発生する常駐リソースをなるべく使いたくなかった。将来常駐オプションを追加するかもしれない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;sess := session.New()
+sqsSvc := sqs.New(sess)
+for {
+    res, err := sqsSvc.ReceiveMessage(&amp;amp;sqs.ReceiveMessageInput{
+        QueueUrl:            aws.String(os.Getenv(&amp;quot;OPERATION_QUEUE_URL&amp;quot;)),
+        MaxNumberOfMessages: aws.Int64(1),
+    })
+    if err != nil {
+        logger.Error(&amp;quot;receive message error&amp;quot;, zap.Error(err))
+        break
+    }
+
+    if len(res.Messages) == 0 {
+        break
+    }
+    ...
+}
+
+ecsSvc := ecs.New(sess)
+if _, err := ecsSvc.UpdateService(&amp;amp;ecs.UpdateServiceInput{
+    Cluster:      aws.String(os.Getenv(&amp;quot;TASK_ECS_CLUSTER_ARN&amp;quot;)),
+    DesiredCount: aws.Int64(0),
+    Service:      aws.String(os.Getenv(&amp;quot;OPERATION_SERVICE_ARN&amp;quot;)),
+}); err != nil {
+    logger.Error(&amp;quot;shutdown task error&amp;quot;, zap.Error(err))
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -2109,6 +2191,11 @@ cdkbotでは必要ならデプロイするStackを選べて、完了してから
 
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/207/&#34;&gt;AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
+&lt;blockquote&gt;
+&lt;p&gt;追記 (2019-10-26): ap-northeast-1に対応していないのと、ECSのリソースを作成できないため、Serverless Application Repositoryに公開するのはやめた。makeでインストールできる。
+&lt;a href=&#34;https://www.sambaiz.net/article/245/&#34;&gt;Lambda環境でできない処理をECSで実行する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
 &lt;h3 id=&#34;外部コマンド&#34;&gt;外部コマンド&lt;/h3&gt;
 
 &lt;p&gt;gitやnpmといった外部コマンドを実行する必要があるが、標準では入っていないのでLambda Layerで入れている。&lt;/p&gt;
@@ -3964,7 +4051,7 @@ SageMakerやRoboMaker&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/deepracer
 &lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/222/&#34;&gt;AWS CDKでCloudFormationのテンプレートをTypeScriptから生成しデプロイする - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 
 &lt;blockquote&gt;
-&lt;p&gt;追記 (2019-08-29): このフローにおけるいくつかの問題を解決した新しいツールを作った。
+&lt;p&gt;追記 (2019-08-29): このフローで起こったいくつかの問題を解決するため新しいツールを作った。
 &lt;a href=&#34;https://www.sambaiz.net/article/235/&#34;&gt;PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
 &lt;/blockquote&gt;
 
