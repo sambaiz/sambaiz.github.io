@@ -6,87 +6,217 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2019</rights>
-    <updated>2019-10-28 22:54:00 &#43;0900 JST</updated>
+    <updated>2019-11-15 20:12:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>Lambda環境でできない処理をECSで実行する</title>
-          <link>https://www.sambaiz.net/article/245/</link>
+          <title>ECS(EC2)のCloudFormation最小構成</title>
+          <link>https://www.sambaiz.net/article/247/</link>
+          <pubDate>Fri, 15 Nov 2019 20:12:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/247/</guid>
+          <description>&lt;p&gt;EC2でECSのServiceを動かすCFnテンプレートを書く。以前Fargateで動かしたものを一部再利用する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/221/&#34;&gt;ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;EC2で動かす場合、自分でリソースが不足しないようにインスタンスのスケールを気遣うことになるが、VPC外での実行や&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_definition_parameters.html#variablelist&#34;&gt;privilegedをtrueにする&lt;/a&gt;などEC2でしかできないことがある。あと同リソースで比較すると安い。&lt;/p&gt;
+
+&lt;p&gt;まずはEC2インスタンス以外のリソースを書く。LaunchType以外はFargateのときとほぼ同じ。
+LBなしでバッチのようなものを動かすことを想定した最小構成。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ECSCluster:
+  Type: AWS::ECS::Cluster
+  Properties:
+    ClusterName: &#39;test-cluster&#39;
+LogGroup:
+  Type: AWS::Logs::LogGroup
+  Properties: 
+    LogGroupName: &#39;test-task-log-group&#39;
+    RetentionInDays: 1
+TaskDefinition:
+  Type: AWS::ECS::TaskDefinition
+  Properties: 
+    RequiresCompatibilities:
+      - EC2
+    Cpu: &#39;256&#39;
+    Memory: &#39;512&#39;
+    ContainerDefinitions: 
+      - Name: &#39;app&#39;
+        Image: &#39;busybox&#39;
+        EntryPoint: 
+          - &#39;sh&#39;
+          - &#39;-c&#39;
+        Command: 
+          - &#39;while true; do echo &amp;quot;{\&amp;quot;foo\&amp;quot;:1000,\&amp;quot;time\&amp;quot;:\&amp;quot;2019-05-09T20:00:00+09:00\&amp;quot;}&amp;quot;; sleep 10; done&#39;
+        Essential: &#39;true&#39;
+        LogConfiguration:
+          LogDriver: &#39;awslogs&#39;
+          Options:
+            awslogs-group: !Ref LogGroup
+            awslogs-region: &#39;ap-northeast-1&#39;
+            awslogs-stream-prefix: &#39;app&#39;
+        Environment:
+          - Name: &#39;TZ&#39;
+            Value: &#39;Asia/Tokyo&#39;
+    Volumes: 
+      - Name: &#39;varlog&#39;
+ECSService:
+  Type: AWS::ECS::Service
+  Properties:
+    Cluster: !Ref ECSCluster
+    LaunchType: EC2
+    DesiredCount: 1
+    TaskDefinition: !Ref TaskDefinition
+    ServiceName: &#39;test-service&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;EC2インスタンスとECSクラスタの紐付きはAssociationのようなリソースがあるわけではなく、
+&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/ecs-optimized_AMI.html&#34;&gt;ECS-optimized AMI&lt;/a&gt;から&lt;code&gt;echo ECS_CLUSTER=&amp;lt;cluster name&amp;gt; &amp;gt;&amp;gt; /etc/ecs/ecs.config&lt;/code&gt;で指定したクラスタにインスタンスを登録する。そのために必要なroleを付ける。&lt;/p&gt;
+
+&lt;p&gt;各リージョンごとのAMI IDをMappingsで書き並べてもいいが、次のように書くとParameter Storeから最新のAMI IDを&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/retrieve-ecs-optimized_AMI.html&#34;&gt;取得できる&lt;/a&gt;。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;Parameters:
+  ECSAMI:
+    Description: AMI ID
+    Type: AWS::SSM::Parameter::Value&amp;lt;AWS::EC2::Image::Id&amp;gt;
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なお、amazon-linux2ルートデバイスは&lt;code&gt;/dev/sda1&lt;/code&gt;ではなく&lt;code&gt;/dev/xvda&lt;/code&gt;なので
+間違えると &lt;code&gt;Client.InstanceInitiatedShutdown: Instance initiated shutdown&lt;/code&gt;
+でインスタンスが落ち続けてServiceがstableにならず失敗する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;ECSAutoScalingGroup: 
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties: 
+      AvailabilityZones: 
+        !GetAZs &amp;quot;&amp;quot;
+      LaunchConfigurationName: !Ref LaunchConfig
+      MinSize: &amp;quot;1&amp;quot;
+      MaxSize: &amp;quot;1&amp;quot;
+EC2Role:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Statement:
+      - Effect: Allow
+        Principal:
+          Service: [&#39;ec2.amazonaws.com&#39;]
+        Action: [&#39;sts:AssumeRole&#39;]
+    Path: /
+    Policies:
+    - PolicyName: ecs-service
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: 
+            - &#39;ecs:CreateCluster&#39;
+            - &#39;ecs:DeregisterContainerInstance&#39;
+            - &#39;ecs:DiscoverPollEndpoint&#39;
+            - &#39;ecs:Poll&#39;
+            - &#39;ecs:RegisterContainerInstance&#39;
+            - &#39;ecs:StartTelemetrySession&#39;
+            - &#39;ecs:Submit*&#39;
+            - &#39;logs:CreateLogStream&#39;
+            - &#39;logs:PutLogEvents&#39;
+          Resource: &#39;*&#39;
+EC2InstanceProfile:
+  Type: AWS::IAM::InstanceProfile
+  Properties:
+    Path: /
+    Roles: 
+      - !Ref &#39;EC2Role&#39;
+LaunchConfig: 
+  Type: AWS::AutoScaling::LaunchConfiguration
+  Properties:
+    ImageId: !Ref ECSAMI
+    IamInstanceProfile: !Ref EC2InstanceProfile
+    UserData:
+      Fn::Base64: !Sub |
+        #!/bin/bash -xe
+        echo ECS_CLUSTER=${ECSCluster} &amp;gt;&amp;gt; /etc/ecs/ecs.config          
+    InstanceType: &amp;quot;t2.small&amp;quot;
+    BlockDeviceMappings: 
+      - DeviceName: &amp;quot;/dev/xvda&amp;quot;
+        Ebs: 
+          VolumeSize: &amp;quot;30&amp;quot;
+          VolumeType: &amp;quot;gp2&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>単調性のある式の解を二分法で求める (ABC144 D - Water Bottle)</title>
+          <link>https://www.sambaiz.net/article/246/</link>
           <pubDate>Mon, 28 Oct 2019 22:54:00 &#43;0900</pubDate>
           <author>sambaiz</author>
-          <guid>https://www.sambaiz.net/article/245/</guid>
-          <description>
+          <guid>https://www.sambaiz.net/article/246/</guid>
+          <description>&lt;p&gt;&lt;a href=&#34;https://atcoder.jp/contests/abc144&#34;&gt;AtCoder Beginner Contest 144&lt;/a&gt;の
+&lt;a href=&#34;https://atcoder.jp/contests/abc144/tasks/abc144_d&#34;&gt;D - Water Bottle&lt;/a&gt;をやってみた。&lt;/p&gt;
 
-&lt;p&gt;以前&lt;a href=&#34;https://github.com/sambaiz/cdkbot&#34;&gt;cdkbot&lt;/a&gt;というツールを出した。これはGitHubのPRからCDKのデプロイなどを実行できるツールでlambda上で動いていた。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;高橋君は、底面が1辺 a cm の正方形であり、高さが b cm であるような直方体型の水筒を持っています。(水筒の厚みは無視できます。)
+この水筒の中に体積 x cm^3 の水を入れ、底面の正方形の1辺を軸として、この水筒を徐々に傾けます。
+水を溢れさせずに水筒を傾けることができる最大の角度を求めてください。
 
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/235/&#34;&gt;PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+水を溢れさせずに水筒を傾けることができる最大の角度を度数法で出力せよ。
+出力は、ジャッジの出力との絶対誤差または相対誤差が10^6以下のとき正解と判定される。
+&lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;npmやgitといった外部コマンドを実行するため、layerにバイナリを詰めて上げていた。&lt;/p&gt;
+&lt;p&gt;水が溢れるパターンは次の2通りあって、水が入っている、または入ってない部分の三角柱を除いた部分の体積がxになるようなθをatanで出せる。&lt;/p&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/233/&#34;&gt;Lambda上でnpm installできるLayerを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/246.png&#34; alt=&#34;水が溢れるパターン&#34; /&gt;&lt;/p&gt;
 
-&lt;p&gt;CDKにはローカルのDockerfileをbuildしてECRに上げてくれる
-&lt;code&gt;ecs.ContainerImage.fromAsset()&lt;/code&gt;という関数があって、これに対応させるためlayerにdockerを追加してみたのだがrootが取れず動かない。
-rootなしで動く&lt;a href=&#34;https://github.com/indigo-dc/udocker&#34;&gt;udocker&lt;/a&gt;でdind(docker in docker)のイメージを動かしたりもしてみたがbuildはできなかった。&lt;/p&gt;
+&lt;p&gt;解説を見ると、これに加えて二分法を使って数値的に求める解法も紹介されていた。
+二分法というのは解が含まれる区間の中間での値を求め、その値が解より小さいか大きいかによって二分したどちらかの区間を選ぶ操作を繰り返すことで区間の幅を狭めて解を求めるアルゴリズム。収束条件として式に単調性がある必要があるが、θに対してこぼれる限界の水の体積の式は単調減少するので用いることができる。
+解説にもコードが付いていたがまずは見ずに書いてみた。&lt;/p&gt;
 
-&lt;p&gt;この他にもCloudFrontなどリソースによっては作成に時間がかかり、Lambdaのタイムアウト上限に到達する問題もあったので、lambda+API Gatewayでwebhookのリクエストだけ受け取り、ECS(Fargate)でTaskを立ち上げて処理を行うことにした。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;cmath&amp;gt;
+#include &amp;lt;iomanip&amp;gt;
+using namespace std;
 
-&lt;p&gt;templateにECSまわりのものを追加したところ、Serverless Application Repository非対応ということで上げられなくなってしまった。&lt;/p&gt;
+double waterVolume(int a, int b, double rad)
+{
+    if (rad &amp;lt; atan(1.0 * b / a))
+    {
+        return a * a * b - (a * (a * tan(rad)) / 2 * a);
+    }
+    else
+    {
+        return b * (b * tan(M_PI / 2 - rad)) / 2 * a;
+    }
+}
 
-&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/207/&#34;&gt;AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net&lt;/a&gt;&lt;/p&gt;
-
-&lt;h2 id=&#34;taskへのパラメータの受け渡し&#34;&gt;Taskへのパラメータの受け渡し&lt;/h2&gt;
-
-&lt;p&gt;&lt;code&gt;runTask&lt;/code&gt;の&lt;code&gt;containerOverrides&lt;/code&gt;でコマンドの引数としてlambdaに来たリクエストをそのまま渡そうとしたところ、&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/APIReference/API_RunTask.html&#34;&gt;8192文字&lt;/a&gt;文字の上限に当たってしまったので
-SQSで受け渡すようにした。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;sess := session.New()
-sqsSvc := sqs.New(sess)
-if _, err := sqsSvc.SendMessage(&amp;amp;sqs.SendMessageInput{
-    MessageBody:    aws.String(string(payload)),
-    QueueUrl:       aws.String(os.Getenv(&amp;quot;OPERATION_QUEUE_URL&amp;quot;)),
-    MessageGroupId: aws.String(&amp;quot;group&amp;quot;),
-}); err != nil {
-    fmt.Println(err.Error())
-    return response{
-        StatusCode: http.StatusInternalServerError,
-    }, err
+int main()
+{
+    double a, b, x;
+    cin &amp;gt;&amp;gt; a &amp;gt;&amp;gt; b &amp;gt;&amp;gt; x;
+    double min = 0, max = M_PI / 2;
+    while (true)
+    {
+        double m = (min + max) / 2;
+        double vol = waterVolume(a, b, m);
+        if (abs(vol - x) &amp;lt; pow(10, -6))
+        {
+            cout &amp;lt;&amp;lt; setprecision(8) &amp;lt;&amp;lt; m / M_PI * 180 &amp;lt;&amp;lt; endl;
+            return 0;
+        }
+        else if (vol &amp;gt; x)
+        {
+            min = m;
+        }
+        else
+        {
+            max = m;
+        }
+    }
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;h2 id=&#34;同時実行数を制限する&#34;&gt;同時実行数を制限する&lt;/h2&gt;
-
-&lt;p&gt;アプリケーションの特性上、同時実行されないようにしたい。
-そこで普段はTask0のServiceを作成し、実行するときは要求Taskを1にして、Queueが空になるまで実行させ、最後に0に戻すようにした。Taskがない場合は立ち上がりにやや時間がかかるが、元々Lambdaで動いていたこともあって常に料金が発生する常駐リソースをなるべく使いたくなかった。将来常駐オプションを追加するかもしれない。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;sess := session.New()
-sqsSvc := sqs.New(sess)
-for {
-    res, err := sqsSvc.ReceiveMessage(&amp;amp;sqs.ReceiveMessageInput{
-        QueueUrl:            aws.String(os.Getenv(&amp;quot;OPERATION_QUEUE_URL&amp;quot;)),
-        MaxNumberOfMessages: aws.Int64(1),
-    })
-    if err != nil {
-        logger.Error(&amp;quot;receive message error&amp;quot;, zap.Error(err))
-        break
-    }
-
-    if len(res.Messages) == 0 {
-        break
-    }
-    ...
-}
-
-ecsSvc := ecs.New(sess)
-if _, err := ecsSvc.UpdateService(&amp;amp;ecs.UpdateServiceInput{
-    Cluster:      aws.String(os.Getenv(&amp;quot;TASK_ECS_CLUSTER_ARN&amp;quot;)),
-    DesiredCount: aws.Int64(0),
-    Service:      aws.String(os.Getenv(&amp;quot;OPERATION_SERVICE_ARN&amp;quot;)),
-}); err != nil {
-    logger.Error(&amp;quot;shutdown task error&amp;quot;, zap.Error(err))
-}
-&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;a href=&#34;https://atcoder.jp/contests/abc144/submissions/8133803&#34;&gt;解説のコード&lt;/a&gt;では、パターンの判定で&lt;code&gt;a * tan(theta) &amp;lt;= b&lt;/code&gt;を使っているのと、有限回のループでxを上回らない最大のθを探すようになっていた。&lt;/p&gt;
 </description>
         </item>
       

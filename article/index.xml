@@ -6,28 +6,34 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Mon, 28 Oct 2019 22:54:00 +0900</lastBuildDate>
+    <lastBuildDate>Fri, 15 Nov 2019 20:12:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
-      <title>Lambda環境でできない処理をECSで実行する</title>
-      <link>https://www.sambaiz.net/article/245/</link>
+      <title>ECS(EC2)のCloudFormation最小構成</title>
+      <link>https://www.sambaiz.net/article/247/</link>
+      <pubDate>Fri, 15 Nov 2019 20:12:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/247/</guid>
+      <description>EC2でECSのServiceを動かすCFnテンプレートを書く。以前Fargateで動かしたものを一部再利用する。
+ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net
+EC2で動かす場合、自分でリソースが不足しないようにインスタンスのスケールを気遣うことになるが、VPC外での実行やprivilegedをtrueにするなどEC2でしかできないことがある。あと同リソースで比較すると安い。
+まずはEC2インスタンス以外のリソースを書く。LaunchType以外はFargateのときとほぼ同じ。 LBなしでバッチのようなものを動かすことを想定した最小構成。
+ECSCluster: Type: AWS::ECS::Cluster Properties: ClusterName: &#39;test-cluster&#39; LogGroup: Type: AWS::Logs::LogGroup Properties: LogGroupName: &#39;test-task-log-group&#39; RetentionInDays: 1 TaskDefinition: Type: AWS::ECS::TaskDefinition Properties: RequiresCompatibilities: - EC2 Cpu: &#39;256&#39; Memory: &#39;512&#39; ContainerDefinitions: - Name: &#39;app&#39; Image: &#39;busybox&#39; EntryPoint: - &#39;sh&#39; - &#39;-c&#39; Command: - &#39;while true; do echo &amp;quot;{\&amp;quot;foo\&amp;quot;:1000,\&amp;quot;time\&amp;quot;:\&amp;quot;2019-05-09T20:00:00+09:00\&amp;quot;}&amp;quot;; sleep 10; done&#39; Essential: &#39;true&#39; LogConfiguration: LogDriver: &#39;awslogs&#39; Options: awslogs-group: !Ref LogGroup awslogs-region: &#39;ap-northeast-1&#39; awslogs-stream-prefix: &#39;app&#39; Environment: - Name: &#39;TZ&#39; Value: &#39;Asia/Tokyo&#39; Volumes: - Name: &#39;varlog&#39; ECSService: Type: AWS::ECS::Service Properties: Cluster: !</description>
+    </item>
+    
+    <item>
+      <title>単調性のある式の解を二分法で求める (ABC144 D - Water Bottle)</title>
+      <link>https://www.sambaiz.net/article/246/</link>
       <pubDate>Mon, 28 Oct 2019 22:54:00 +0900</pubDate>
       
-      <guid>https://www.sambaiz.net/article/245/</guid>
-      <description>以前cdkbotというツールを出した。これはGitHubのPRからCDKのデプロイなどを実行できるツールでlambda上で動いていた。
-PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net
-npmやgitといった外部コマンドを実行するため、layerにバイナリを詰めて上げていた。
-Lambda上でnpm installできるLayerを作った - sambaiz-net
-CDKにはローカルのDockerfileをbuildしてECRに上げてくれる ecs.ContainerImage.fromAsset()という関数があって、これに対応させるためlayerにdockerを追加してみたのだがrootが取れず動かない。 rootなしで動くudockerでdind(docker in docker)のイメージを動かしたりもしてみたがbuildはできなかった。
-この他にもCloudFrontなどリソースによっては作成に時間がかかり、Lambdaのタイムアウト上限に到達する問題もあったので、lambda+API Gatewayでwebhookのリクエストだけ受け取り、ECS(Fargate)でTaskを立ち上げて処理を行うことにした。
-templateにECSまわりのものを追加したところ、Serverless Application Repository非対応ということで上げられなくなってしまった。
-AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net
-Taskへのパラメータの受け渡し runTaskのcontainerOverridesでコマンドの引数としてlambdaに来たリクエストをそのまま渡そうとしたところ、8192文字文字の上限に当たってしまったので SQSで受け渡すようにした。
-sess := session.New() sqsSvc := sqs.New(sess) if _, err := sqsSvc.SendMessage(&amp;amp;sqs.SendMessageInput{ MessageBody: aws.String(string(payload)), QueueUrl: aws.String(os.Getenv(&amp;quot;OPERATION_QUEUE_URL&amp;quot;)), MessageGroupId: aws.String(&amp;quot;group&amp;quot;), }); err != nil { fmt.Println(err.Error()) return response{ StatusCode: http.StatusInternalServerError, }, err }  同時実行数を制限する アプリケーションの特性上、同時実行されないようにしたい。 そこで普段はTask0のServiceを作成し、実行するときは要求Taskを1にして、Queueが空になるまで実行させ、最後に0に戻すようにした。Taskがない場合は立ち上がりにやや時間がかかるが、元々Lambdaで動いていたこともあって常に料金が発生する常駐リソースをなるべく使いたくなかった。将来常駐オプションを追加するかもしれない。
-sess := session.New() sqsSvc := sqs.New(sess) for { res, err := sqsSvc.</description>
+      <guid>https://www.sambaiz.net/article/246/</guid>
+      <description>AtCoder Beginner Contest 144の D - Water Bottleをやってみた。
+高橋君は、底面が1辺 a cm の正方形であり、高さが b cm であるような直方体型の水筒を持っています。(水筒の厚みは無視できます。) この水筒の中に体積 x cm^3 の水を入れ、底面の正方形の1辺を軸として、この水筒を徐々に傾けます。 水を溢れさせずに水筒を傾けることができる最大の角度を求めてください。 水を溢れさせずに水筒を傾けることができる最大の角度を度数法で出力せよ。 出力は、ジャッジの出力との絶対誤差または相対誤差が10^6以下のとき正解と判定される。  水が溢れるパターンは次の2通りあって、水が入っている、または入ってない部分の三角柱を除いた部分の体積がxになるようなθをatanで出せる。
+解説を見ると、これに加えて二分法を使って数値的に求める解法も紹介されていた。 二分法というのは解が含まれる区間の中間での値を求め、その値が解より小さいか大きいかによって二分したどちらかの区間を選ぶ操作を繰り返すことで区間の幅を狭めて解を求めるアルゴリズム。収束条件として式に単調性がある必要があるが、θに対してこぼれる限界の水の体積の式は単調減少するので用いることができる。 解説にもコードが付いていたがまずは見ずに書いてみた。
+#include &amp;lt;iostream&amp;gt; #include &amp;lt;cmath&amp;gt; #include &amp;lt;iomanip&amp;gt; using namespace std; double waterVolume(int a, int b, double rad) { if (rad &amp;lt; atan(1.0 * b / a)) { return a * a * b - (a * (a * tan(rad)) / 2 * a); } else { return b * (b * tan(M_PI / 2 - rad)) / 2 * a; } } int main() { double a, b, x; cin &amp;gt;&amp;gt; a &amp;gt;&amp;gt; b &amp;gt;&amp;gt; x; double min = 0, max = M_PI / 2; while (true) { double m = (min + max) / 2; double vol = waterVolume(a, b, m); if (abs(vol - x) &amp;lt; pow(10, -6)) { cout &amp;lt;&amp;lt; setprecision(8) &amp;lt;&amp;lt; m / M_PI * 180 &amp;lt;&amp;lt; endl; return 0; } else if (vol &amp;gt; x) { min = m; } else { max = m; } } }  解説のコードでは、パターンの判定でa * tan(theta) &amp;lt;= bを使っているのと、有限回のループでxを上回らない最大のθを探すようになっていた。</description>
     </item>
     
     <item>
