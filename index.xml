@@ -6,8 +6,105 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-01-04 21:25:00 &#43;0900 JST</updated>
+    <updated>2020-01-12 17:41:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Objective-CでFrameworkを作りSwiftからimportする</title>
+          <link>https://www.sambaiz.net/article/254/</link>
+          <pubDate>Sun, 12 Jan 2020 17:41:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/254/</guid>
+          <description>
+
+&lt;h2 id=&#34;frameworkの作成&#34;&gt;Frameworkの作成&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;New -&amp;gt; Project&lt;/code&gt;でFrameworkをLanguage Objective-Cで作成。&lt;/p&gt;
+
+&lt;p&gt;最低限の実装とHeaderを書いた。このHeaderはBuild PhasesのHeadersにPublicとして登録されている。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;TestObjcFramework.m&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;#import &amp;lt;Foundation/Foundation.h&amp;gt;
+
+void hello() {
+    NSLog(@&amp;quot;hello&amp;quot;);
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;TestObjcFramework.h&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;#import &amp;lt;UIKit/UIKit.h&amp;gt;
+
+//! Project version number for TestObjcFramework.
+FOUNDATION_EXPORT double TestObjcFrameworkVersionNumber;
+
+//! Project version string for TestObjcFramework.
+FOUNDATION_EXPORT const unsigned char TestObjcFrameworkVersionString[];
+
+// In this header, you should import all the public headers of your framework using statements like #import &amp;lt;TestObjcFramework/PublicHeader.h&amp;gt;
+
+void hello(void);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;arm64(実機)/x86_64(Simulator)両方で使えるUniversal Frameworkをビルドするため、
+&lt;code&gt;New -&amp;gt; Target&lt;/code&gt;でAggregateを作成し、Build PhasesのNew Run Script Phaseで、
+各環境で&lt;code&gt;xcodebuild&lt;/code&gt;して&lt;code&gt;lipo&lt;/code&gt;でUniversal Binaryにする次のスクリプトを追加する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://gist.github.com/cromandini/1a9c4aeab27ca84f5d79#file-universal-framework-sh&#34;&gt;https://gist.github.com/cromandini/1a9c4aeab27ca84f5d79#file-universal-framework-sh&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/254.png&#34; alt=&#34;Build Phases&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Targetを追加したAggregateにしてビルドするとFrameworkができる。
+Frameworkはライブラリを内包したディレクトリ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ tree TestObjcFramework.framework/
+TestObjcFramework.framework/
+├── Headers
+│   └── TestObjcFramework.h
+├── Info.plist
+├── Modules
+│   └── module.modulemap
+├── TestObjcFramework
+└── _CodeSignature
+    └── CodeResources
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;swiftからimport&#34;&gt;Swiftからimport&lt;/h2&gt;
+
+&lt;p&gt;適当にSingle View Appを作成。FrameworkをProjectのディレクトリ直下に置き、Dynamic frameworkなのでEmebedded BinariesにFrameworkを追加。
+ビルド時に見つからなかったらBuild SettingsのFramework Search Pathsに&lt;code&gt;$(PROJECT_DIR)&lt;/code&gt;が含まれていることを確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;import UIKit
+import TestObjcFramework
+
+class ViewController: UIViewController {
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        hello()
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;通常Framework名と同名のHeaderがあるので誤解していたが、importのところに書くのはimportしたいHeader名ではなくFramework名。
+&lt;code&gt;Modules/module.modulemap&lt;/code&gt;にumbrella headerが書かれていて、これが読まれる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;framework module TestObjcFramework {
+  umbrella header &amp;quot;TestObjcFramework.h&amp;quot;
+
+  export *
+  module * { export * }
+}
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -151,11 +248,14 @@ for_each(vec.begin(), vec.end(), [](int x) { cout &amp;lt;&amp;lt; x &amp;lt;&am
 &lt;h3 id=&#34;copy&#34;&gt;copy&lt;/h3&gt;
 
 &lt;p&gt;指定した範囲の値を順に代入していく。
-&lt;code&gt;back_inserter()&lt;/code&gt; は代入する代わりに引数の &lt;code&gt;.push_back()&lt;/code&gt; を呼ぶoutput iteratorを生成する。&lt;/p&gt;
+&lt;code&gt;inserter()&lt;/code&gt; と &lt;code&gt;back_inserter()&lt;/code&gt; は代入する代わりに引数の &lt;code&gt;.insert()&lt;/code&gt; や &lt;code&gt;.push_back()&lt;/code&gt; を呼ぶoutput iteratorを生成する。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;vector&amp;lt;int&amp;gt; vec = {3, 1, 2, 4};
 copy(vec.begin(), vec.end(), back_inserter(vec));
+set&amp;lt;int&amp;gt; st;
+copy(vec.begin(), vec.end(), inserter(st, st.end()));
 for_each(vec.begin(), vec.end(), [](int x) { cout &amp;lt;&amp;lt; x &amp;lt;&amp;lt; endl; }); // =&amp;gt; 3 1 2 4 3 1 2 4
+for_each(st.begin(), st.end(), [](int x) { cout &amp;lt;&amp;lt; x &amp;lt;&amp;lt; endl; });   // =&amp;gt; 1 2 3 4
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
