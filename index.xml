@@ -6,12 +6,178 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-01-25 23:55:00 &#43;0900 JST</updated>
+    <updated>2020-02-11 01:55:00 &#43;0900 JST</updated>
 
     
       
         <item>
-          <title>GCDのDispatchQueueに処理を投げて並列実行させる</title>
+          <title>AndroidのListViewで再利用されるViewのgetGlobalVisibleRect()が意図した値を返さない</title>
+          <link>https://www.sambaiz.net/article/257/</link>
+          <pubDate>Tue, 11 Feb 2020 01:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/257/</guid>
+          <description>
+
+&lt;h2 id=&#34;listviewのviewの再利用&#34;&gt;ListViewのViewの再利用&lt;/h2&gt;
+
+&lt;p&gt;まずはListViewのViewが再利用されていることを確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package com.example.listviewglobalvisiblerect
+
+import android.widget.BaseAdapter
+import android.content.Context
+import android.view.View
+import android.view.ViewGroup
+import android.app.Activity
+import android.graphics.Color
+import android.graphics.Rect
+import android.util.Log
+import android.widget.TextView
+
+
+data class SampleData(val id: Long, val value: String)
+
+class SampleAdapter: BaseAdapter {
+    private val context: Context
+    private val items: List&amp;lt;SampleData&amp;gt;
+    private val views = ArrayList&amp;lt;View&amp;gt;()
+
+    constructor(context: Context, items: List&amp;lt;SampleData&amp;gt;) {
+        this.context = context
+        this.items = items
+    }
+
+    override fun getCount(): Int {
+        return items.size
+    }
+
+    override fun getItem(position: Int): Any {
+        return items.get(position)
+    }
+
+    override fun getItemId(position: Int): Long {
+        return items.get(position).id
+    }
+
+    override fun getView(position: Int, convertView: View?, container: ViewGroup?): View {
+        var view = convertView ?: (this.context as Activity).layoutInflater.inflate(R.layout.sample_list_item, container, false)
+        if (convertView == null) {
+            Log.v(&amp;quot;SampleAdapter&amp;quot;, &amp;quot;view ${position} is created&amp;quot;)
+            view.tag = position
+            if (position == 0) {
+                view.setBackgroundColor(Color.LTGRAY)
+            }
+            views.add(view)
+        } else {
+            Log.v(&amp;quot;SampleAdapter&amp;quot;, &amp;quot;view ${convertView.tag} is recycled at ${position}&amp;quot;)
+        }
+        view.findViewById&amp;lt;TextView&amp;gt;(R.id.text_view).setText(items.get(position).value)
+        return view
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;position == 0&lt;/code&gt; のCellだけ生成時に背景色を灰色にしたところ、他のpositionでも再利用された灰色のCellが登場した。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/257.png&#34; alt=&#34;再利用されて色が変わったままのCell&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;画面に表示される分のViewが生成され、スクロールすると画面外に出たViewが再利用された。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;V/SampleAdapter: view 0 is created
+V/SampleAdapter: view 1 is created
+V/SampleAdapter: view 2 is created
+V/SampleAdapter: view 3 is created
+V/SampleAdapter: view 4 is created
+V/SampleAdapter: view 0 is recycled at 5
+V/SampleAdapter: view 1 is recycled at 6
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;各viewにgetglobalvisiblerect-を実行した結果&#34;&gt;各ViewにgetGlobalVisibleRect()を実行した結果&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://developer.android.com/reference/android/view/View.html#getGlobalVisibleRect(android.graphics.Rect)&#34;&gt;getGlobalVisibleRect()&lt;/a&gt;はViewの可視領域を取得できる関数で、領域がない場合falseを返す。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;views.forEach { v -&amp;gt;
+    var rect = Rect();
+    if (v.getGlobalVisibleRect(rect)) {
+        Log.v(&amp;quot;SampleAdapter&amp;quot;, &amp;quot;view ${v.tag} visible rect: ${rect} has_parent: ${v.parent != null}&amp;quot;)
+    } else {
+        Log.v(&amp;quot;SampleAdapter&amp;quot;, v.tag.toString() + &amp;quot; is not visible&amp;quot;)
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;再利用待ち(&lt;code&gt;parent=false&lt;/code&gt;)の画面内にないView 1はfalseを返すと思っていたが、実際はtrueを返し正しくない値が入ってしまう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;V/SampleAdapter: view 0 visible rect: Rect(0, 1520 - 1080, 2018) has_parent: true
+V/SampleAdapter: view 1 visible rect: Rect(0, 0 - 1185, 498) has_parent: false
+V/SampleAdapter: view 2 visible rect: Rect(0, 66 - 1080, 515) has_parent: true
+V/SampleAdapter: view 3 visible rect: Rect(0, 518 - 1080, 1016) has_parent: true
+V/SampleAdapter: view 4 visible rect: Rect(0, 1019 - 1080, 1517) has_parent: true
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>Buildkitとは</title>
+          <link>https://www.sambaiz.net/article/258/</link>
+          <pubDate>Tue, 11 Feb 2020 01:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/258/</guid>
+          <description>
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/moby/buildkit&#34;&gt;Buildkit&lt;/a&gt;は高速でセキュアなコンテナイメージのビルドツール。
+Docker本体にも18.09から&lt;a href=&#34;https://docs.docker.com/develop/develop-images/build_enhancements/&#34;&gt;統合され&lt;/a&gt;、
+&lt;code&gt;DOCKER_BUILDKIT=1 docker build&lt;/code&gt; するとBuildkitが使われるようになった。&lt;/p&gt;
+
+&lt;h3 id=&#34;llb-low-level-builder&#34;&gt;LLB (low-level builder)&lt;/h3&gt;
+
+&lt;p&gt;BuildkitはDockerfileなどをLLBという中間言語にコンパイルする。
+LLBは依存関係を表すDAG(Directed acyclic graph; 有向非巡回グラフ)で、
+protobufで&lt;a href=&#34;https://github.com/moby/buildkit/blob/758c61e8730eac0da8a8cce72ec4009868c92165/solver/pb/ops.proto&#34;&gt;定義されている&lt;/a&gt;。
+これによって処理を並列に実行したり、Dockerfileを変更してもそれ以降のステージのキャッシュを全て破棄する必要がなくなった。&lt;/p&gt;
+
+&lt;h3 id=&#34;mount-type-cache&#34;&gt;&lt;code&gt;--mount=type=cache&lt;/code&gt;&lt;/h3&gt;
+
+&lt;p&gt;Dockerfileを変更しても残せるキャッシュ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# syntax = docker/dockerfile:1.1-experimental
+FROM golang
+
+RUN --mount=type=cache,target=/root/.cache/go-build \ 
+    go build ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;mount-type-secret&#34;&gt;&lt;code&gt;--mount=type=secret&lt;/code&gt;&lt;/h3&gt;
+
+&lt;p&gt;秘密鍵など一度ADDしてしまったファイルは最終的に消してもレイヤ上に残ってしまうが、&lt;code&gt;--mount=type=secret&lt;/code&gt; でマウントすると残らない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;# syntax = docker/dockerfile:1.1-experimental
+FROM alpine:20200122
+
+RUN apk add --no-cache git openssh
+
+RUN --mount=type=secret,id=ssh,dst=/root/.ssh/id_rsa \
+    ssh-keyscan -H github.com &amp;gt;&amp;gt; /root/.ssh/known_hosts &amp;amp;&amp;amp; \
+    git clone ...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;pre&gt;&lt;code&gt;$ DOCKER_BUILDKIT=1 docker build --secret id=ssh,src=./id_rsa .
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://blog.mobyproject.org/introducing-buildkit-17e056cc5317&#34;&gt;Introducing BuildKit - Moby Blog&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://medium.com/nttlabs/docker-v18-09-%E6%96%B0%E6%A9%9F%E8%83%BD-%E3%82%A4%E3%83%A1%E3%83%BC%E3%82%B8%E3%83%93%E3%83%AB%E3%83%89-%E3%82%BB%E3%82%AD%E3%83%A5%E3%83%AA%E3%83%86%E3%82%A3-9534714c26e2&#34;&gt;Docker 18.09 新機能 (イメージビルド&amp;amp;セキュリティ) - nttlabs - Medium&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>SwiftでGCDのDispatchQueueに処理を投げて並列実行させる</title>
           <link>https://www.sambaiz.net/article/256/</link>
           <pubDate>Sat, 25 Jan 2020 23:55:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -95,7 +261,9 @@ return concurrent 2 thread: &amp;lt;NSThread: 0x600001631600&amp;gt;{number = 6,
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;シングルスレッドで、ある処理が実行されている間は他の処理が走っていない。&lt;/p&gt;
+&lt;p&gt;シングルスレッドで、ある処理が実行されている間は他の処理が走っていない。
+古くからある&lt;a href=&#34;https://developer.apple.com/documentation/foundation/nslock&#34;&gt;NSLock&lt;/a&gt;でも排他制御することはできるが、
+&lt;a href=&#34;https://developer.apple.com/library/archive/documentation/General/Conceptual/ConcurrencyProgrammingGuide/ThreadMigration/ThreadMigration.html#//apple_ref/doc/uid/TP40008091-CH105-SW3&#34;&gt;コストが高い&lt;/a&gt;。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;start concurrent 1 thread: &amp;lt;NSThread: 0x600001c0c200&amp;gt;{number = 5, name = (null)}
 start concurrent 3 thread: &amp;lt;NSThread: 0x600001c60080&amp;gt;{number = 6, name = (null)}
@@ -849,6 +1017,8 @@ public:
     }
 };
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;対象の素数が引数で渡される&lt;a href=&#34;https://leetcode.com/problems/super-ugly-number/&#34;&gt;Super Ugly Number - LeetCode&lt;/a&gt;も同様に解ける。&lt;/p&gt;
 </description>
         </item>
       
