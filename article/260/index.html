@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.38.2" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
+    crossorigin="anonymous">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+  <link rel="stylesheet" href="/css/slidebars.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+
+  <meta name="theme-color" content="#41a248">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="@sambaiz">
+  
+  <title>DAX (DynamoDB Accelerator)の特性と挙動確認 - sambaiz-net</title>
+  <meta name="twitter:title" content="DAX (DynamoDB Accelerator)の特性と挙動確認 - sambaiz-net">
+  <meta property='og:title' content="DAX (DynamoDB Accelerator)の特性と挙動確認 - sambaiz-net">
+  <meta property="og:type" content="article">
+  
+  <meta name="description" content="DynamoDBの前段に置かれるインメモリキャッシュ">
+  <meta name="twitter:description" content="DynamoDBの前段に置かれるインメモリキャッシュ">
+  
+  
+
+  <meta property="og:url" content="https://www.sambaiz.net/article/260/">
+  <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
+  <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
+  <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https://www.sambaiz.net/"
+    },
+    "headline": "DAX (DynamoDB Accelerator)の特性と挙動確認 | sambaiz-net ",
+    "datePublished": "2020-02-26T23:21:00JST",
+    "dateModified": "2020-02-26T23:21:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "DynamoDBの前段に置かれるインメモリキャッシュ"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="https://www.sambaiz.net/tags/aws">aws</a></li><li><a href="https://www.sambaiz.net/tags/golang">golang</a></li><li><a href="https://www.sambaiz.net/tags/machinelearning">machinelearning</a></li><li><a href="https://www.sambaiz.net/tags/log">log</a></li><li><a href="https://www.sambaiz.net/tags/kubernetes">kubernetes</a></li><li><a href="https://www.sambaiz.net/tags/infra">infra</a></li><li><a href="https://www.sambaiz.net/tags/python">python</a></li><li><a href="https://www.sambaiz.net/tags/lambda">lambda</a></li><li><a href="https://www.sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="https://www.sambaiz.net/tags/unity">unity</a></li><li><a href="https://www.sambaiz.net/tags/fluentd">fluentd</a></li><li><a href="https://www.sambaiz.net/tags/gcp">gcp</a></li><li><a href="https://www.sambaiz.net/tags/node.js">node.js</a></li><li><a href="https://www.sambaiz.net/tags/web">web</a></li><li><a href="https://www.sambaiz.net/tags/docker">docker</a></li><li><a href="https://www.sambaiz.net/tags/linux">linux</a></li><li><a href="https://www.sambaiz.net/tags/mysql">mysql</a></li><li><a href="https://www.sambaiz.net/tags/elasticsearch">elasticsearch</a></li><li><a href="https://www.sambaiz.net/tags/javascript">javascript</a></li><li><a href="https://www.sambaiz.net/tags/hololens">hololens</a></li><li><a href="https://www.sambaiz.net/tags/auth">auth</a></li><li><a href="https://www.sambaiz.net/tags/product">product</a></li><li><a href="https://www.sambaiz.net/tags/c&#43;&#43;">c&#43;&#43;</a></li><li><a href="https://www.sambaiz.net/tags/circleci">circleci</a></li><li><a href="https://www.sambaiz.net/tags/ios">ios</a></li><li><a href="https://www.sambaiz.net/tags/react">react</a></li><li><a href="https://www.sambaiz.net/tags/typescript">typescript</a></li><li><a href="https://www.sambaiz.net/tags/android">android</a></li><li><a href="https://www.sambaiz.net/tags/ble">ble</a></li><li><a href="https://www.sambaiz.net/tags/event">event</a></li><li><a href="https://www.sambaiz.net/tags/swift">swift</a></li><li><a href="https://www.sambaiz.net/tags/algorithm">algorithm</a></li><li><a href="https://www.sambaiz.net/tags/angular">angular</a></li><li><a href="https://www.sambaiz.net/tags/cron">cron</a></li><li><a href="https://www.sambaiz.net/tags/istio">istio</a></li><li><a href="https://www.sambaiz.net/tags/terraform">terraform</a></li><li><a href="https://www.sambaiz.net/tags/uwp">uwp</a></li><li><a href="https://www.sambaiz.net/tags/.net">.net</a></li><li><a href="https://www.sambaiz.net/tags/css">css</a></li><li><a href="https://www.sambaiz.net/tags/datadog">datadog</a></li><li><a href="https://www.sambaiz.net/tags/firebase">firebase</a></li><li><a href="https://www.sambaiz.net/tags/github">github</a></li><li><a href="https://www.sambaiz.net/tags/grpc">grpc</a></li><li><a href="https://www.sambaiz.net/tags/hadoop">hadoop</a></li><li><a href="https://www.sambaiz.net/tags/norikra">norikra</a></li><li><a href="https://www.sambaiz.net/tags/rx">rx</a></li><li><a href="https://www.sambaiz.net/tags/server">server</a></li><li><a href="https://www.sambaiz.net/tags/vr">vr</a></li><li><a href="https://www.sambaiz.net/tags/ansible">ansible</a></li><li><a href="https://www.sambaiz.net/tags/api">api</a></li><li><a href="https://www.sambaiz.net/tags/cdn">cdn</a></li><li><a href="https://www.sambaiz.net/tags/compress">compress</a></li><li><a href="https://www.sambaiz.net/tags/crypto">crypto</a></li><li><a href="https://www.sambaiz.net/tags/csharp">csharp</a></li><li><a href="https://www.sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="https://www.sambaiz.net/tags/digdag">digdag</a></li><li><a href="https://www.sambaiz.net/tags/hugo">hugo</a></li><li><a href="https://www.sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="https://www.sambaiz.net/tags/jvm">jvm</a></li><li><a href="https://www.sambaiz.net/tags/kotlin">kotlin</a></li><li><a href="https://www.sambaiz.net/tags/language">language</a></li><li><a href="https://www.sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="https://www.sambaiz.net/tags/lisp">lisp</a></li><li><a href="https://www.sambaiz.net/tags/math">math</a></li><li><a href="https://www.sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="https://www.sambaiz.net/tags/objective-c">objective-c</a></li><li><a href="https://www.sambaiz.net/tags/pytorch">pytorch</a></li><li><a href="https://www.sambaiz.net/tags/read_paper">read_paper</a></li><li><a href="https://www.sambaiz.net/tags/scikit-learn">scikit-learn</a></li><li><a href="https://www.sambaiz.net/tags/serialize">serialize</a></li><li><a href="https://www.sambaiz.net/tags/sonnet">sonnet</a></li><li><a href="https://www.sambaiz.net/tags/spark">spark</a></li><li><a href="https://www.sambaiz.net/tags/spec">spec</a></li><li><a href="https://www.sambaiz.net/tags/statistics">statistics</a></li><li><a href="https://www.sambaiz.net/tags/video">video</a></li><li><a href="https://www.sambaiz.net/tags/vscode">vscode</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="https://www.sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="https://www.sambaiz.net/">sambaiz-net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+        <style>
+          .filmarks-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .filmarks {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            background: url(/image/filmarks.svg) no-repeat;
+            background-size: 450%;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .vocabularycom-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .vocabularycom {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/vocabularycom.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .leetcode-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .leetcode {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/leetcode.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+        </style>
+        <div class="filmarks-base">
+          <a href="https://filmarks.com/users/sambaiz" class="filmarks"></a>
+        </div>
+        <div class="vocabularycom-base">
+          <a href="https://www.vocabulary.com/profiles/B0JI0K19KKMVKH" class="vocabularycom"></a>
+        </div>
+        <div class="leetcode-base">
+          <a href="https://leetcode.com/sambaiz/" class="leetcode"></a>
+        </div>
+      </div>
+    </header>
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>DAX (DynamoDB Accelerator)の特性と挙動確認</h1>
+          <p>(2020-02-26)</p>
+          
+
+<h2 id="daxとは">DAXとは</h2>
+
+<p><a href="https://aws.amazon.com/jp/dynamodb/dax/">DAX</a>はDynamoDBの前段に置かれるインメモリキャッシュで、
+Read速度の向上(数ms-&gt;数百μs)とテーブルのRead Capacityの節約に効果がある。
+DynamoDBとSDKのAPIの互換性があるため置き換えるだけで使えるようになっている。
+クライアントの実装としてはHTTPではない独自のプロトコルで<a href="https://github.com/aws/aws-dax-go/blob/19b34c5c99ea4b76610dcbae7d87fd572de012df/dax/internal/client/single.go#L278">通信している</a>点が異なる。</p>
+
+<p>作成時に指定するのはノード数とインスタンスタイプで、
+ノード数はスループットに、インスタンスタイプはスループットとメモリ量(キャッシュヒット率)に<a href="https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/DAX.concepts.cluster.html#DAX.concepts.nodes">影響する</a>。
+複数のノードがある場合、一つがWriteするプライマリーノードになり、他はリードレプリカになる。
+なのでノード数を増やしてもWriteのスループットは上がらない。プライマリーノードに問題が発生したら<a href="https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/DAX.concepts.cluster.html#DAX.concepts.clusters">自動でフェイルオーバーする</a>。
+ノードは最大10個まで増減できるが、インスタンスタイプは変更できない。最大10個というのは足りるのかと思ったが、数百万RPS捌けるようなので十分そうだ。
+インスタンスに対して時間課金が発生する。最小のt2.small(1vCPU,1.55Gib) 1ノードでも東京リージョンでは月に$45ほどかかり、 可用性のために3ノード以上にすることが推奨されているので、ある程度の読み込み規模にならないとコストの削減は期待できない。</p>
+
+<h2 id="キャッシュの整合性-https-docs-aws-amazon-com-ja-jp-amazondynamodb-latest-developerguide-dax-consistency-html"><a href="https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/DAX.consistency.html">キャッシュの整合性</a></h2>
+
+<p>DAXはDynamoDBとは異なり、<a href="https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html">結果整合性のある読み込み(Eventually Consistent Reads)</a>のみをサポートしているので、プライマリノードにキャッシュされ、全てのノードにレプリケーションが完了するまでの間は異なる結果を返す可能性がある。また、DAXからDynamoDBへのリクエストも結果整合性のある読み込みで行われる。</p>
+
+<p>リクエストの結果は、Itemがなかった場合のネガティブキャッシュも含めて、
+Item Cache(<code>GetItem</code>,<code>BatchGetItem</code>)とQuery Cache(<code>Query</code>,<code>Scan</code>)にキャッシュされ、
+それぞれパラメータグループで設定された<a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DAX.cluster-management.html#DAX.cluster-management.custom-settings.ttl">TTL</a>が過ぎるか、LRUアルゴリズムによって破棄される。
+TTLのデフォルトは5分。</p>
+
+<p>書き込みリクエストが来るとまずDynamoDBに書き込んで成功したことを確認してからキャッシュしてレスポンスを返す。
+この際Item Cacheは更新されるが、Query Cacheは更新されずTTL/LRUによって破棄されるまで同じ値を返し続ける。
+大量のデータを書き込むと、その分レイテンシが増加したり、それらがすべてキャッシュに乗ることで既存のものがLRUで追い出されてキャッシュヒット率が悪くなることがあり、それらを回避するため直接書き込むという選択肢もある。ただしそうする場合、Item Cacheが更新されないことを許容する必要がある。</p>
+
+<h2 id="取れるメトリクス">取れるメトリクス</h2>
+
+<p>CPU使用率や、キャッシュヒット数、各リクエスト数や接続数が取れる。</p>
+
+<p><img src="https://www.sambaiz.net/images/260.png" alt="メトリクス" /></p>
+
+<h2 id="効果確認">効果確認</h2>
+
+<p>DAX/DynamoへリクエストするだけだったらLambdaでも良いが、負荷をかけるのでECS上にアプリケーションをデプロイすることにした。
+以前作ったBoilerplateベースで、コードは<a href="https://github.com/sambaiz/dax-test">ここ</a>。</p>
+
+<p><a href="https://www.sambaiz.net/article/259/">ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net</a></p>
+
+<p>TableとDAXのClusterを作成。</p>
+
+<pre><code>createDynamoTable() {
+  return new dynamodb.Table(this, 'DynamoTable', {
+    tableName: &quot;dax-test-table&quot;,
+    partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+    readCapacity: 50,
+    writeCapacity: 50,
+  });
+}
+
+createDaxCluster(subnetIds: string[]) {
+  const subnetGroup = new dax.CfnSubnetGroup(this, 'DaxSubnetGroup', {
+    subnetGroupName: &quot;dax-test-subntgroup&quot;,
+    description: &quot;for dax test&quot;,
+    subnetIds: subnetIds,
+  })
+  const daxRole = new iam.Role(this, 'DaxRole', {
+    assumedBy: new iam.ServicePrincipal('dax.amazonaws.com'),
+    managedPolicies: [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonDynamoDBFullAccess')
+    ]
+  })
+  return new dax.CfnCluster(this, 'DaxCluster', {
+    clusterName: &quot;dax-test&quot;,
+    nodeType: &quot;dax.r4.large&quot;,
+    replicationFactor: 1,
+    iamRoleArn: daxRole.roleArn,
+    subnetGroupName: subnetGroup.subnetGroupName,
+  })
+}
+</code></pre>
+
+<p>DynamoDBとinterfaceが同じなので<a href="https://github.com/guregu/dynamo">guregu/dynamo</a>もそのまま使えた。</p>
+
+<pre><code>func newDynamoClient(tableName string, throughDax bool) (*dynamo.DB, error) {
+	var (
+		client dynamodbiface.DynamoDBAPI
+		err    error
+	)
+	if throughDax {
+		cfg := dax.DefaultConfig()
+		cfg.HostPorts = []string{os.Getenv(&quot;DAX_CLUSTER_URL&quot;)}
+		cfg.Region = os.Getenv(&quot;AWS_REGION&quot;)
+		client, err = dax.New(cfg)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		client = dynamodb.New(session.New())
+	}
+	return dynamo.NewFromIface(client), nil
+}
+</code></pre>
+
+<p>DAXを通したときと通さなかった時の差を確認するため、クエリパラメータで振り分けるようにした。</p>
+
+<pre><code>func handleItem(db *dynamo.DB, dax *dynamo.DB) func(w http.ResponseWriter, r *http.Request) {
+	return auth(func(w http.ResponseWriter, r *http.Request) {
+		client := db
+		if r.URL.Query().Get(&quot;dax&quot;) == &quot;1&quot; {
+			client = dax
+		}
+		switch r.Method {
+		case http.MethodGet:
+			var item item
+			before := time.Now()
+			if err := client.Table(tableName).Get(&quot;id&quot;, r.URL.Query().Get(&quot;id&quot;)).One(&amp;item); err != nil {
+				if err != dynamo.ErrNotFound {
+					log.Printf(&quot;failed to get an item: %v&quot;, err)
+					http.Error(w, &quot;Internal Server Error&quot;, http.StatusInternalServerError)
+				}
+				return
+			}
+			fmt.Fprintln(w, response{
+				Message:      r.URL.Query().Get(&quot;message&quot;),
+				TimeMicrosec: time.Now().Sub(before).Nanoseconds() / 1000,
+			})
+		...
+		}
+	})
+}
+</code></pre>
+
+<p>初期データを挿入する。</p>
+
+<pre><code>$ BASE_URL=http://***
+$ TOKEN=DAXTEST
+$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/initialize&quot;
+ok
+</code></pre>
+
+<h3 id="read速度の向上">Read速度の向上</h3>
+
+<p>DynamoDBとDAXにそれぞれ<code>GetItem</code>すると、DynamoDBは5ms前後かかるところ、DAXはキャッシュされてからは500-1000μs前後で返ってきた。</p>
+
+<pre><code>$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&quot;
+{ 4768}
+
+$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
+{ 30628}
+
+$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
+{ 593}
+</code></pre>
+
+<p>一方書き込みは前述したように遅くなる。思いの外差があった。</p>
+
+<pre><code>$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item&quot; --data '{&quot;id&quot;: &quot;AAA&quot;, &quot;title&quot;: &quot;aaa&quot;}'
+{ 6135}
+
+$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?dax=1&quot; --data '{&quot;id&quot;: &quot;BBB&quot;, &quot;title&quot;: &quot;bbb&quot;}'
+{ 39011}
+</code></pre>
+
+<h3 id="read-capacityの節約">Read capacityの節約</h3>
+
+<p>全てキャッシュヒットするパターンで負荷をかけてみる。</p>
+
+<pre><code>$ ulimit -n 2000
+$ ab -n 10000 -c 1000 -r -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
+</code></pre>
+
+<p>裏側のTableのキャパシティが全く使われないことを確認できた。</p>
+
+<h3 id="ノードが落ちたときの挙動">ノードが落ちたときの挙動</h3>
+
+<p>ノードを1台にして再起動するとnetwork errorになった。</p>
+
+<pre><code>failed to get an item: InternalServerError: network error
+caused by: dial tcp 172.31.34.26:8111: connect: connection refused
+</code></pre>
+
+<p>ノードを2台に増やし、
+負荷をかけている途中におそらくプライマリーノードであろう最初の1台を落としてみる。
+フェイルオーバー中にいくらかエラーが返ることを想定していたが、そんなこともなく全て200で返った。
+SDKにリトライ処理が入っていたのでそこで吸収されているのかもしれない。</p>
+
+<pre><code>$ ab -n 20000 -c 10 -r -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
+</code></pre>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

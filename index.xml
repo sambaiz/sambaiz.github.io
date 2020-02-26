@@ -6,8 +6,201 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-02-24 16:17:00 &#43;0900 JST</updated>
+    <updated>2020-02-26 23:21:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>DAX (DynamoDB Accelerator)の特性と挙動確認</title>
+          <link>https://www.sambaiz.net/article/260/</link>
+          <pubDate>Wed, 26 Feb 2020 23:21:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/260/</guid>
+          <description>
+
+&lt;h2 id=&#34;daxとは&#34;&gt;DAXとは&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://aws.amazon.com/jp/dynamodb/dax/&#34;&gt;DAX&lt;/a&gt;はDynamoDBの前段に置かれるインメモリキャッシュで、
+Read速度の向上(数ms-&amp;gt;数百μs)とテーブルのRead Capacityの節約に効果がある。
+DynamoDBとSDKのAPIの互換性があるため置き換えるだけで使えるようになっている。
+クライアントの実装としてはHTTPではない独自のプロトコルで&lt;a href=&#34;https://github.com/aws/aws-dax-go/blob/19b34c5c99ea4b76610dcbae7d87fd572de012df/dax/internal/client/single.go#L278&#34;&gt;通信している&lt;/a&gt;点が異なる。&lt;/p&gt;
+
+&lt;p&gt;作成時に指定するのはノード数とインスタンスタイプで、
+ノード数はスループットに、インスタンスタイプはスループットとメモリ量(キャッシュヒット率)に&lt;a href=&#34;https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/DAX.concepts.cluster.html#DAX.concepts.nodes&#34;&gt;影響する&lt;/a&gt;。
+複数のノードがある場合、一つがWriteするプライマリーノードになり、他はリードレプリカになる。
+なのでノード数を増やしてもWriteのスループットは上がらない。プライマリーノードに問題が発生したら&lt;a href=&#34;https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/DAX.concepts.cluster.html#DAX.concepts.clusters&#34;&gt;自動でフェイルオーバーする&lt;/a&gt;。
+ノードは最大10個まで増減できるが、インスタンスタイプは変更できない。最大10個というのは足りるのかと思ったが、数百万RPS捌けるようなので十分そうだ。
+インスタンスに対して時間課金が発生する。最小のt2.small(1vCPU,1.55Gib) 1ノードでも東京リージョンでは月に$45ほどかかり、 可用性のために3ノード以上にすることが推奨されているので、ある程度の読み込み規模にならないとコストの削減は期待できない。&lt;/p&gt;
+
+&lt;h2 id=&#34;キャッシュの整合性-https-docs-aws-amazon-com-ja-jp-amazondynamodb-latest-developerguide-dax-consistency-html&#34;&gt;&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/DAX.consistency.html&#34;&gt;キャッシュの整合性&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;DAXはDynamoDBとは異なり、&lt;a href=&#34;https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html&#34;&gt;結果整合性のある読み込み(Eventually Consistent Reads)&lt;/a&gt;のみをサポートしているので、プライマリノードにキャッシュされ、全てのノードにレプリケーションが完了するまでの間は異なる結果を返す可能性がある。また、DAXからDynamoDBへのリクエストも結果整合性のある読み込みで行われる。&lt;/p&gt;
+
+&lt;p&gt;リクエストの結果は、Itemがなかった場合のネガティブキャッシュも含めて、
+Item Cache(&lt;code&gt;GetItem&lt;/code&gt;,&lt;code&gt;BatchGetItem&lt;/code&gt;)とQuery Cache(&lt;code&gt;Query&lt;/code&gt;,&lt;code&gt;Scan&lt;/code&gt;)にキャッシュされ、
+それぞれパラメータグループで設定された&lt;a href=&#34;https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DAX.cluster-management.html#DAX.cluster-management.custom-settings.ttl&#34;&gt;TTL&lt;/a&gt;が過ぎるか、LRUアルゴリズムによって破棄される。
+TTLのデフォルトは5分。&lt;/p&gt;
+
+&lt;p&gt;書き込みリクエストが来るとまずDynamoDBに書き込んで成功したことを確認してからキャッシュしてレスポンスを返す。
+この際Item Cacheは更新されるが、Query Cacheは更新されずTTL/LRUによって破棄されるまで同じ値を返し続ける。
+大量のデータを書き込むと、その分レイテンシが増加したり、それらがすべてキャッシュに乗ることで既存のものがLRUで追い出されてキャッシュヒット率が悪くなることがあり、それらを回避するため直接書き込むという選択肢もある。ただしそうする場合、Item Cacheが更新されないことを許容する必要がある。&lt;/p&gt;
+
+&lt;h2 id=&#34;取れるメトリクス&#34;&gt;取れるメトリクス&lt;/h2&gt;
+
+&lt;p&gt;CPU使用率や、キャッシュヒット数、各リクエスト数や接続数が取れる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/260.png&#34; alt=&#34;メトリクス&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;効果確認&#34;&gt;効果確認&lt;/h2&gt;
+
+&lt;p&gt;DAX/DynamoへリクエストするだけだったらLambdaでも良いが、負荷をかけるのでECS上にアプリケーションをデプロイすることにした。
+以前作ったBoilerplateベースで、コードは&lt;a href=&#34;https://github.com/sambaiz/dax-test&#34;&gt;ここ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/259/&#34;&gt;ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;TableとDAXのClusterを作成。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;createDynamoTable() {
+  return new dynamodb.Table(this, &#39;DynamoTable&#39;, {
+    tableName: &amp;quot;dax-test-table&amp;quot;,
+    partitionKey: { name: &#39;id&#39;, type: dynamodb.AttributeType.STRING },
+    readCapacity: 50,
+    writeCapacity: 50,
+  });
+}
+
+createDaxCluster(subnetIds: string[]) {
+  const subnetGroup = new dax.CfnSubnetGroup(this, &#39;DaxSubnetGroup&#39;, {
+    subnetGroupName: &amp;quot;dax-test-subntgroup&amp;quot;,
+    description: &amp;quot;for dax test&amp;quot;,
+    subnetIds: subnetIds,
+  })
+  const daxRole = new iam.Role(this, &#39;DaxRole&#39;, {
+    assumedBy: new iam.ServicePrincipal(&#39;dax.amazonaws.com&#39;),
+    managedPolicies: [
+      iam.ManagedPolicy.fromAwsManagedPolicyName(&#39;AmazonDynamoDBFullAccess&#39;)
+    ]
+  })
+  return new dax.CfnCluster(this, &#39;DaxCluster&#39;, {
+    clusterName: &amp;quot;dax-test&amp;quot;,
+    nodeType: &amp;quot;dax.r4.large&amp;quot;,
+    replicationFactor: 1,
+    iamRoleArn: daxRole.roleArn,
+    subnetGroupName: subnetGroup.subnetGroupName,
+  })
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;DynamoDBとinterfaceが同じなので&lt;a href=&#34;https://github.com/guregu/dynamo&#34;&gt;guregu/dynamo&lt;/a&gt;もそのまま使えた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func newDynamoClient(tableName string, throughDax bool) (*dynamo.DB, error) {
+	var (
+		client dynamodbiface.DynamoDBAPI
+		err    error
+	)
+	if throughDax {
+		cfg := dax.DefaultConfig()
+		cfg.HostPorts = []string{os.Getenv(&amp;quot;DAX_CLUSTER_URL&amp;quot;)}
+		cfg.Region = os.Getenv(&amp;quot;AWS_REGION&amp;quot;)
+		client, err = dax.New(cfg)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		client = dynamodb.New(session.New())
+	}
+	return dynamo.NewFromIface(client), nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;DAXを通したときと通さなかった時の差を確認するため、クエリパラメータで振り分けるようにした。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func handleItem(db *dynamo.DB, dax *dynamo.DB) func(w http.ResponseWriter, r *http.Request) {
+	return auth(func(w http.ResponseWriter, r *http.Request) {
+		client := db
+		if r.URL.Query().Get(&amp;quot;dax&amp;quot;) == &amp;quot;1&amp;quot; {
+			client = dax
+		}
+		switch r.Method {
+		case http.MethodGet:
+			var item item
+			before := time.Now()
+			if err := client.Table(tableName).Get(&amp;quot;id&amp;quot;, r.URL.Query().Get(&amp;quot;id&amp;quot;)).One(&amp;amp;item); err != nil {
+				if err != dynamo.ErrNotFound {
+					log.Printf(&amp;quot;failed to get an item: %v&amp;quot;, err)
+					http.Error(w, &amp;quot;Internal Server Error&amp;quot;, http.StatusInternalServerError)
+				}
+				return
+			}
+			fmt.Fprintln(w, response{
+				Message:      r.URL.Query().Get(&amp;quot;message&amp;quot;),
+				TimeMicrosec: time.Now().Sub(before).Nanoseconds() / 1000,
+			})
+		...
+		}
+	})
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;初期データを挿入する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ BASE_URL=http://***
+$ TOKEN=DAXTEST
+$ curl -X POST -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/initialize&amp;quot;
+ok
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;read速度の向上&#34;&gt;Read速度の向上&lt;/h3&gt;
+
+&lt;p&gt;DynamoDBとDAXにそれぞれ&lt;code&gt;GetItem&lt;/code&gt;すると、DynamoDBは5ms前後かかるところ、DAXはキャッシュされてからは500-1000μs前後で返ってきた。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/item?id=1&amp;quot;
+{ 4768}
+
+$ curl -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/item?id=1&amp;amp;dax=1&amp;quot;
+{ 30628}
+
+$ curl -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/item?id=1&amp;amp;dax=1&amp;quot;
+{ 593}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;一方書き込みは前述したように遅くなる。思いの外差があった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ curl -X POST -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/item&amp;quot; --data &#39;{&amp;quot;id&amp;quot;: &amp;quot;AAA&amp;quot;, &amp;quot;title&amp;quot;: &amp;quot;aaa&amp;quot;}&#39;
+{ 6135}
+
+$ curl -X POST -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/item?dax=1&amp;quot; --data &#39;{&amp;quot;id&amp;quot;: &amp;quot;BBB&amp;quot;, &amp;quot;title&amp;quot;: &amp;quot;bbb&amp;quot;}&#39;
+{ 39011}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;read-capacityの節約&#34;&gt;Read capacityの節約&lt;/h3&gt;
+
+&lt;p&gt;全てキャッシュヒットするパターンで負荷をかけてみる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ulimit -n 2000
+$ ab -n 10000 -c 1000 -r -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/item?id=1&amp;amp;dax=1&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;裏側のTableのキャパシティが全く使われないことを確認できた。&lt;/p&gt;
+
+&lt;h3 id=&#34;ノードが落ちたときの挙動&#34;&gt;ノードが落ちたときの挙動&lt;/h3&gt;
+
+&lt;p&gt;ノードを1台にして再起動するとnetwork errorになった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;failed to get an item: InternalServerError: network error
+caused by: dial tcp 172.31.34.26:8111: connect: connection refused
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ノードを2台に増やし、
+負荷をかけている途中におそらくプライマリーノードであろう最初の1台を落としてみる。
+フェイルオーバー中にいくらかエラーが返ることを想定していたが、そんなこともなく全て200で返った。
+SDKにリトライ処理が入っていたのでそこで吸収されているのかもしれない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ab -n 20000 -c 10 -r -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/item?id=1&amp;amp;dax=1&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>

@@ -6,10 +6,28 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Mon, 24 Feb 2020 16:17:00 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 26 Feb 2020 23:21:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>DAX (DynamoDB Accelerator)の特性と挙動確認</title>
+      <link>https://www.sambaiz.net/article/260/</link>
+      <pubDate>Wed, 26 Feb 2020 23:21:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/260/</guid>
+      <description>DAXとは DAXはDynamoDBの前段に置かれるインメモリキャッシュで、 Read速度の向上(数ms-&amp;gt;数百μs)とテーブルのRead Capacityの節約に効果がある。 DynamoDBとSDKのAPIの互換性があるため置き換えるだけで使えるようになっている。 クライアントの実装としてはHTTPではない独自のプロトコルで通信している点が異なる。
+作成時に指定するのはノード数とインスタンスタイプで、 ノード数はスループットに、インスタンスタイプはスループットとメモリ量(キャッシュヒット率)に影響する。 複数のノードがある場合、一つがWriteするプライマリーノードになり、他はリードレプリカになる。 なのでノード数を増やしてもWriteのスループットは上がらない。プライマリーノードに問題が発生したら自動でフェイルオーバーする。 ノードは最大10個まで増減できるが、インスタンスタイプは変更できない。最大10個というのは足りるのかと思ったが、数百万RPS捌けるようなので十分そうだ。 インスタンスに対して時間課金が発生する。最小のt2.small(1vCPU,1.55Gib) 1ノードでも東京リージョンでは月に$45ほどかかり、 可用性のために3ノード以上にすることが推奨されているので、ある程度の読み込み規模にならないとコストの削減は期待できない。
+キャッシュの整合性 DAXはDynamoDBとは異なり、結果整合性のある読み込み(Eventually Consistent Reads)のみをサポートしているので、プライマリノードにキャッシュされ、全てのノードにレプリケーションが完了するまでの間は異なる結果を返す可能性がある。また、DAXからDynamoDBへのリクエストも結果整合性のある読み込みで行われる。
+リクエストの結果は、Itemがなかった場合のネガティブキャッシュも含めて、 Item Cache(GetItem,BatchGetItem)とQuery Cache(Query,Scan)にキャッシュされ、 それぞれパラメータグループで設定されたTTLが過ぎるか、LRUアルゴリズムによって破棄される。 TTLのデフォルトは5分。
+書き込みリクエストが来るとまずDynamoDBに書き込んで成功したことを確認してからキャッシュしてレスポンスを返す。 この際Item Cacheは更新されるが、Query Cacheは更新されずTTL/LRUによって破棄されるまで同じ値を返し続ける。 大量のデータを書き込むと、その分レイテンシが増加したり、それらがすべてキャッシュに乗ることで既存のものがLRUで追い出されてキャッシュヒット率が悪くなることがあり、それらを回避するため直接書き込むという選択肢もある。ただしそうする場合、Item Cacheが更新されないことを許容する必要がある。
+取れるメトリクス CPU使用率や、キャッシュヒット数、各リクエスト数や接続数が取れる。
+効果確認 DAX/DynamoへリクエストするだけだったらLambdaでも良いが、負荷をかけるのでECS上にアプリケーションをデプロイすることにした。 以前作ったBoilerplateベースで、コードはここ。
+ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net
+TableとDAXのClusterを作成。
+createDynamoTable() { return new dynamodb.Table(this, &#39;DynamoTable&#39;, { tableName: &amp;quot;dax-test-table&amp;quot;, partitionKey: { name: &#39;id&#39;, type: dynamodb.AttributeType.STRING }, readCapacity: 50, writeCapacity: 50, }); } createDaxCluster(subnetIds: string[]) { const subnetGroup = new dax.CfnSubnetGroup(this, &#39;DaxSubnetGroup&#39;, { subnetGroupName: &amp;quot;dax-test-subntgroup&amp;quot;, description: &amp;quot;for dax test&amp;quot;, subnetIds: subnetIds, }) const daxRole = new iam.</description>
+    </item>
     
     <item>
       <title>ECSでアプリケーションを動かすBoilerplateを作った</title>
