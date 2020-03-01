@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>DAX (DynamoDB Accelerator)の特性と挙動確認 - sambaiz-net</title>
-  <meta name="twitter:title" content="DAX (DynamoDB Accelerator)の特性と挙動確認 - sambaiz-net">
-  <meta property='og:title' content="DAX (DynamoDB Accelerator)の特性と挙動確認 - sambaiz-net">
+  <title>Go Modulesのproxyとsumdb - sambaiz-net</title>
+  <meta name="twitter:title" content="Go Modulesのproxyとsumdb - sambaiz-net">
+  <meta property='og:title' content="Go Modulesのproxyとsumdb - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="DynamoDBの前段に置かれるインメモリキャッシュ">
-  <meta name="twitter:description" content="DynamoDBの前段に置かれるインメモリキャッシュ">
+  <meta name="description" content="Go1.13からデフォルトで使われるようになったGo Modulesのミラーとchecksumを返すサーバー">
+  <meta name="twitter:description" content="Go1.13からデフォルトで使われるようになったGo Modulesのミラーとchecksumを返すサーバー">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/260/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/261/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https://www.sambaiz.net/"
     },
-    "headline": "DAX (DynamoDB Accelerator)の特性と挙動確認 | sambaiz-net ",
-    "datePublished": "2020-02-26T23:21:00JST",
-    "dateModified": "2020-02-26T23:21:00JST",
+    "headline": "Go Modulesのproxyとsumdb | sambaiz-net ",
+    "datePublished": "2020-02-29T23:55:00JST",
+    "dateModified": "2020-02-29T23:55:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "DynamoDBの前段に置かれるインメモリキャッシュ"
+    "description": "Go1.13からデフォルトで使われるようになったGo Modulesのミラーとchecksumを返すサーバー"
   }
 </script>
 </head>
@@ -172,194 +172,98 @@
 
       <article class="single">
         <div class="single body">
-          <h1>DAX (DynamoDB Accelerator)の特性と挙動確認</h1>
-          <p>(2020-02-26)</p>
+          <h1>Go Modulesのproxyとsumdb</h1>
+          <p>(2020-02-29)</p>
           
 
-<h2 id="daxとは">DAXとは</h2>
+<p><a href="https://blog.golang.org/module-mirror-launch">Module Mirror and Checksum Database Launched - The Go Blog</a></p>
 
-<p><a href="https://aws.amazon.com/jp/dynamodb/dax/">DAX</a>はDynamoDBの前段に置かれるマネージドなインメモリキャッシュで、
-Read速度の向上(数ms-&gt;数百μs)とテーブルのRead Capacityの節約に効果がある。</p>
+<p>Go1.13からデフォルトで使われるようになったGo Modulesのミラーとchecksumを返すサーバー。
+Googleによって運営されている。</p>
 
-<p>DynamoDBとSDKのAPIの互換性があるため置き換えるだけで使えるようになっている。
-クライアントの実装としてはHTTPではない独自のプロトコルで<a href="https://github.com/aws/aws-dax-go/blob/19b34c5c99ea4b76610dcbae7d87fd572de012df/dax/internal/client/single.go#L278">通信している</a>点が異なる。</p>
+<ul>
+<li><a href="https://proxy.golang.org/">proxy.golang.org</a></li>
+<li><a href="https://index.golang.org/">index.golang.org</a>: proxyで利用可能なモジュールとバージョンの一覧</li>
+<li><a href="https://sum.golang.org/">sum.golang.org</a></li>
+</ul>
 
-<p>クラスタ作成時に指定するのはノード数とインスタンスタイプで、
-ノード数はスループットに、インスタンスタイプはスループットとメモリ量(キャッシュヒット率)に<a href="https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/DAX.concepts.cluster.html#DAX.concepts.nodes">影響する</a>。
-複数のノードがある場合、一つがWriteするプライマリーノードになり、他はリードレプリカになる。
-なのでノード数を増やしてもWriteのスループットは上がらない。プライマリーノードに問題が発生したら<a href="https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/DAX.concepts.cluster.html#DAX.concepts.clusters">自動でフェイルオーバーする</a>。
-ノードは最大10個まで増減できるが、インスタンスタイプは変更できない。最大10個というのは足りるのかと思ったが、数百万RPS捌けるようなので十分そうだ。</p>
+<pre><code>$ curl &quot;https://proxy.golang.org/github.com/labstack/echo/v4/@v/v4.1.14.mod&quot;
+module github.com/labstack/echo/v4
 
-<p>インスタンスに対して時間課金が発生し、可用性のために3ノード以上にすることが推奨されている。
-そのため、リクエストがそれほどなかったり、キャッシュミスばかりだとインスタンス代の方が高くつくこともあるが、
-そこそこReadするなら目に見えてコスト削減されるはずだ。ただしどれくらい次の整合性を許容できるかによる。</p>
+go 1.12
 
-<h2 id="キャッシュの整合性-https-docs-aws-amazon-com-ja-jp-amazondynamodb-latest-developerguide-dax-consistency-html"><a href="https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/DAX.consistency.html">キャッシュの整合性</a></h2>
+require (
+        github.com/dgrijalva/jwt-go v3.2.0+incompatible
+        github.com/labstack/gommon v0.3.0
+        github.com/mattn/go-colorable v0.1.4 // indirect
+        github.com/mattn/go-isatty v0.0.11 // indirect
+        github.com/stretchr/testify v1.4.0
+        github.com/valyala/fasttemplate v1.1.0
+        golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876
+        golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553 // indirect
+        golang.org/x/sys v0.0.0-20191228213918-04cbcbbfeed8 // indirect
+        golang.org/x/text v0.3.2 // indirect
+)
 
-<p>DAXはDynamoDBとは異なり、<a href="https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html">結果整合性のある読み込み(Eventually Consistent Reads)</a>のみをサポートしているので、プライマリノードにキャッシュされ、全てのノードにレプリケーションが完了するまでの間は異なる結果を返す可能性がある。また、DAXからDynamoDBへのリクエストも結果整合性のある読み込みで行われる。</p>
+$ wget &quot;https://proxy.golang.org/github.com/labstack/echo/v4/@v/v4.1.14.zip&quot;
 
-<p>リクエストの結果は、Itemがなかった場合のネガティブキャッシュも含めて、
-Item Cache(<code>GetItem</code>,<code>BatchGetItem</code>)とQuery Cache(<code>Query</code>,<code>Scan</code>)にキャッシュされ、
-それぞれパラメータグループで設定された<a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DAX.cluster-management.html#DAX.cluster-management.custom-settings.ttl">TTL</a>が過ぎるか、LRUアルゴリズムによって破棄される。
-TTLのデフォルトは5分。</p>
+$ curl &quot;https://index.golang.org/index?since=2020-02-28T09:00:00.000000Z&amp;limit=5&quot;
+{&quot;Path&quot;:&quot;github.com/openebs/api&quot;,&quot;Version&quot;:&quot;v0.0.0-20200228085622-f3442fff37bf&quot;,&quot;Timestamp&quot;:&quot;2020-02-28T09:00:05.62813Z&quot;}
+{&quot;Path&quot;:&quot;github.com/dirkarnez/dirk-commons&quot;,&quot;Version&quot;:&quot;v0.0.0-20200228090031-1926f326c678&quot;,&quot;Timestamp&quot;:&quot;2020-02-28T09:00:50.00608Z&quot;}
+{&quot;Path&quot;:&quot;github.com/jfrog-solutiontest/food&quot;,&quot;Version&quot;:&quot;v4.107.0+incompatible&quot;,&quot;Timestamp&quot;:&quot;2020-02-28T09:01:10.76502Z&quot;}
+{&quot;Path&quot;:&quot;github.com/nexus49/dapr-components&quot;,&quot;Version&quot;:&quot;v0.0.0-20200228090009-67e985bdc953&quot;,&quot;Timestamp&quot;:&quot;2020-02-28T09:01:15.618406Z&quot;}
+{&quot;Path&quot;:&quot;github.com/Krajiyah/ble-sdk&quot;,&quot;Version&quot;:&quot;v0.0.7-0.20200228090109-03b5ffe425a0&quot;,&quot;Timestamp&quot;:&quot;2020-02-28T09:01:23.38344Z&quot;}
 
-<p>書き込みリクエストが来るとまずDynamoDBに書き込んで成功したことを確認してからキャッシュしてレスポンスを返す。
-この際Item Cacheは更新されるが、Query Cacheは更新されずTTL/LRUによって破棄されるまで同じ値を返し続けてしまう。
-もし問題がある場合は、TTLを短くするかDynamoDBを直接見に行くことになるが、そうするとDAXの効果が薄れてしまう。
-また、大量のデータを書き込むと、その分レイテンシが増加したり、それらがすべてキャッシュに乗ることで既存のものがLRUで追い出されてキャッシュヒット率が悪くなることがあり、それらを回避するため直接書き込むという選択肢もあるが、Item Cacheが更新されないことを許容する必要がある。</p>
+$ curl &quot;https://sum.golang.org/lookup/github.com/labstack/echo/v4@v4.1.14&quot;
+732868
+github.com/labstack/echo/v4 v4.1.14 h1:h8XP66UfB3tUm+L3QPw7tmwAu3pJaA/nyfHPCcz46ic=
+github.com/labstack/echo/v4 v4.1.14/go.mod h1:Q5KZ1vD3V5FEzjM79hjwVrC3ABr7F5IdM23bXQMRDGg=
 
-<h2 id="取れるメトリクス">取れるメトリクス</h2>
+go.sum database tree
+823876
+ZBYxqpUFH3ncXs339d5qBfgo3tHnWPr8D10JLtW4Jck=
 
-<p>CPU使用率や、キャッシュヒット数、各リクエスト数や接続数が取れる。</p>
-
-<p><img src="https://www.sambaiz.net/images/260.png" alt="メトリクス" /></p>
-
-<h2 id="挙動確認">挙動確認</h2>
-
-<p>DAX/DynamoへリクエストするだけだったらLambdaでも良いが、負荷をかけるのでECS上にアプリケーションをデプロイすることにした。
-以前作ったBoilerplateベースで、コードは<a href="https://github.com/sambaiz/dax-test">ここ</a>。</p>
-
-<p><a href="https://www.sambaiz.net/article/259/">ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net</a></p>
-
-<p>TableとDAXのClusterを作成。</p>
-
-<pre><code>createDynamoTable() {
-  return new dynamodb.Table(this, 'DynamoTable', {
-    tableName: &quot;dax-test-table&quot;,
-    partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-    readCapacity: 50,
-    writeCapacity: 50,
-  });
-}
-
-createDaxCluster(subnetIds: string[]) {
-  const subnetGroup = new dax.CfnSubnetGroup(this, 'DaxSubnetGroup', {
-    subnetGroupName: &quot;dax-test-subntgroup&quot;,
-    description: &quot;for dax test&quot;,
-    subnetIds: subnetIds,
-  })
-  const daxRole = new iam.Role(this, 'DaxRole', {
-    assumedBy: new iam.ServicePrincipal('dax.amazonaws.com'),
-    managedPolicies: [
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonDynamoDBFullAccess')
-    ]
-  })
-  return new dax.CfnCluster(this, 'DaxCluster', {
-    clusterName: &quot;dax-test&quot;,
-    nodeType: &quot;dax.r4.large&quot;,
-    replicationFactor: 1,
-    iamRoleArn: daxRole.roleArn,
-    subnetGroupName: subnetGroup.subnetGroupName,
-  })
-}
+— sum.golang.org Az3grhvh6SDXL4PTk3rZJCs2x9Bbgfz5u1PudLDRYcToGxRUazHb59qSrBx9GeniTj8AO7zSFKQyBNHS+13M4FcFMQo=
 </code></pre>
 
-<p>DynamoDBとinterfaceが同じなので<a href="https://github.com/guregu/dynamo">guregu/dynamo</a>もそのまま使えた。</p>
+<p>proxyを通すことでオリジナルのリポジトリが消えてビルドできなくなるのを回避でき、
+コミット履歴を含まないコードを持って来るので高速化される。一度proxyに乗ったバージョンは取り下げられない。
+また、sumに問い合わせることで、初回getで <code>go.sum</code> がなくてもコードの真正性を保証でき、
+他のproxyを使ったとしてもセキュリティが担保される。</p>
 
-<pre><code>func newDynamoClient(tableName string, throughDax bool) (*dynamo.DB, error) {
-	var (
-		client dynamodbiface.DynamoDBAPI
-		err    error
-	)
-	if throughDax {
-		cfg := dax.DefaultConfig()
-		cfg.HostPorts = []string{os.Getenv(&quot;DAX_CLUSTER_URL&quot;)}
-		cfg.Region = os.Getenv(&quot;AWS_REGION&quot;)
-		client, err = dax.New(cfg)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		client = dynamodb.New(session.New())
-	}
-	return dynamo.NewFromIface(client), nil
-}
+<h3 id="環境変数-https-golang-org-doc-go1-13-modules"><a href="https://golang.org/doc/go1.13#modules">環境変数</a></h3>
+
+<p><code>GOPROXY</code> / <code>GOSUMDB</code> で向き先を変えることができる。
+例えば、<code>GOPROXY</code> をdirectのみにするとproxyは使われない。</p>
+
+<pre><code>$ go version
+go version go1.13 darwin/azmd64
+
+$ go env GOPROXY
+https://proxy.golang.org,direct
+
+$ go env GOSUMDB
+sum.golang.org
+
+$ go env -w GOPROXY=direct
+$ go env -w GOSUMDB=off
 </code></pre>
 
-<p>DAXを通したときと通さなかった時の差を確認するため、クエリパラメータで振り分けるようにした。</p>
+<p>また、 <code>GOPRIVATE</code> のパスに前方一致するモジュールはproxyおよびsumdbの対象外になる。
+<code>GONOPROXY</code> / <code>GONOSUMDB</code> を設定すると別個にオーバーライドされる。</p>
 
-<pre><code>func handleItem(db *dynamo.DB, dax *dynamo.DB) func(w http.ResponseWriter, r *http.Request) {
-	return auth(func(w http.ResponseWriter, r *http.Request) {
-		client := db
-		if r.URL.Query().Get(&quot;dax&quot;) == &quot;1&quot; {
-			client = dax
-		}
-		switch r.Method {
-		case http.MethodGet:
-			var item item
-			before := time.Now()
-			if err := client.Table(tableName).Get(&quot;id&quot;, r.URL.Query().Get(&quot;id&quot;)).One(&amp;item); err != nil {
-				if err != dynamo.ErrNotFound {
-					log.Printf(&quot;failed to get an item: %v&quot;, err)
-					http.Error(w, &quot;Internal Server Error&quot;, http.StatusInternalServerError)
-				}
-				return
-			}
-			fmt.Fprintln(w, response{
-				Message:      r.URL.Query().Get(&quot;message&quot;),
-				TimeMicrosec: time.Now().Sub(before).Nanoseconds() / 1000,
-			})
-		...
-		}
-	})
-}
+<pre><code>$ go env -w GOPRIVATE=*.example.com,*.example.net/foo
 </code></pre>
 
-<p>初期データを挿入する。</p>
+<p>sumからアクセスできないprivateなモジュールをgo getしようとすると <code>410 Gone</code> になってしまうので <code>GOPRIVATE</code> に入れる。</p>
 
-<pre><code>$ BASE_URL=http://***
-$ TOKEN=DAXTEST
-$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/initialize&quot;
-ok
-</code></pre>
+<pre><code>$ go get github.com/sambaiz/test-private-go-module
+go: finding github.com/sambaiz/test-private-go-module latest
+go: downloading github.com/sambaiz/test-private-go-module v0.0.0-20200301002106-c8098ddbacf5
+verifying github.com/sambaiz/test-private-go-module@v0.0.0-20200301002106-c8098ddbacf5: github.com/sambaiz/test-private-go-module@v0.0.0-20200301002106-c8098ddbacf5: reading https://sum.golang.org/lookup/github.com/sambaiz/test-private-go-module@v0.0.0-20200301002106-c8098ddbacf5: 410 Gone
 
-<h3 id="read速度の向上">Read速度の向上</h3>
-
-<p>DynamoDBとDAXにそれぞれ<code>GetItem</code>すると、DynamoDBは5ms前後かかるところ、DAXはキャッシュされてからは500-1000μs前後で返ってきた。</p>
-
-<pre><code>$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&quot;
-{ 4768}
-
-$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
-{ 30628}
-
-$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
-{ 593}
-</code></pre>
-
-<p>一方書き込みは前述したように遅くなる。思いの外差があった。</p>
-
-<pre><code>$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item&quot; --data '{&quot;id&quot;: &quot;AAA&quot;, &quot;title&quot;: &quot;aaa&quot;}'
-{ 6135}
-
-$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?dax=1&quot; --data '{&quot;id&quot;: &quot;BBB&quot;, &quot;title&quot;: &quot;bbb&quot;}'
-{ 39011}
-</code></pre>
-
-<h3 id="read-capacityの節約">Read capacityの節約</h3>
-
-<p>全てキャッシュヒットするパターンで負荷をかけてみる。</p>
-
-<pre><code>$ ulimit -n 2000
-$ ab -n 10000 -c 1000 -r -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
-</code></pre>
-
-<p>裏側のTableのキャパシティが全く使われないことを確認できた。</p>
-
-<h3 id="ノードが落ちたときの挙動">ノードが落ちたときの挙動</h3>
-
-<p>ノードを1台にして再起動するとnetwork errorになった。</p>
-
-<pre><code>failed to get an item: InternalServerError: network error
-caused by: dial tcp 172.31.34.26:8111: connect: connection refused
-</code></pre>
-
-<p>ノードを2台に増やし、
-負荷をかけている途中におそらくプライマリーノードであろう最初の1台を落としてみる。
-フェイルオーバー中にいくらかエラーが返ることを想定していたが、そんなこともなく全て200で返った。
-SDKにリトライ処理が入っていたのでそこで吸収されているのかもしれない。</p>
-
-<pre><code>$ ab -n 20000 -c 10 -r -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
+$ go env -w GOPRIVATE=github.com/sambaiz/test-private-go-module
+$ go get github.com/sambaiz/test-private-go-module
 </code></pre>
 
         </div>
