@@ -6,8 +6,98 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-02-29 23:55:00 &#43;0900 JST</updated>
+    <updated>2020-03-01 21:19:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Go Modulesのreplaceでforkしたコードのimportを書き換えずにfork後のpackageに向ける</title>
+          <link>https://www.sambaiz.net/article/262/</link>
+          <pubDate>Sun, 01 Mar 2020 21:19:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/262/</guid>
+          <description>&lt;p&gt;Goはimportの際に相対パスやモジュール名ではなく&lt;code&gt;github.com/foo/bar&lt;/code&gt;のようなフルパスで指定するため、forkしたコードを使うと参照するpackageは元のままになってしまう。Go Modulesのreplace directiveを使うとコードを書き換えずに依存先を変えることができる。相対パスも使える。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/golang/go/wiki/Modules#when-should-i-use-the-replace-directive&#34;&gt;When should I use the replace directive? · golang/go Wiki · GitHub&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;module example.com/me/hello
+
+require (
+    example.com/foo/bar v0.0.0
+)
+
+replace (
+    example.com/foo/bar/aaa =&amp;gt; ./
+    example.com/foo/bar/bbb =&amp;gt; example.com/hoge/bar/bbb v1.0.0
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fork元のmodule。文字列を出力するだけのもの。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat go-something/lib/lib.go 
+package lib
+
+import &amp;quot;fmt&amp;quot;
+
+func Do() {
+	fmt.Println(&amp;quot;this is original&amp;quot;)
+}
+
+$ cat go-something/main.go 
+package main
+
+import &amp;quot;github.com/sambaiz/go-something/lib&amp;quot;
+
+func main() {
+	lib.Do()
+}
+
+$ go run go-something/main.go 
+this is original
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;fork先のmodule。出力する文字列を変えている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat go-something-fork/lib/lib.go 
+package lib
+
+import &amp;quot;fmt&amp;quot;
+
+func Do() {
+	fmt.Println(&amp;quot;this is fork&amp;quot;) // edit
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;しかし、これを実行すると元々の文字列が出力されてしまう。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat go-something-fork/go.mod 
+module github.com/sambaiz/go-something-fork
+
+go 1.13
+
+require github.com/sambaiz/go-something v0.0.0-20200301104436-97bba924e129
+
+$ go run go-something-fork/main.go 
+this is original
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;replaceを追加して実行すると文字列が変わり、fork先のpackageをimportしていることが確認できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat go-something-fork/go.mod 
+module github.com/sambaiz/go-something-fork
+
+go 1.13
+
+require github.com/sambaiz/go-something v0.0.0-00010101000000-000000000000
+
+replace github.com/sambaiz/go-something =&amp;gt; ./
+
+$ go run go-something-fork/main.go 
+this is fork
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
