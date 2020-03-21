@@ -6,8 +6,50 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-03-01 21:19:00 &#43;0900 JST</updated>
+    <updated>2020-03-22 01:19:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Goのツールのバージョンをgo.modで指定する</title>
+          <link>https://www.sambaiz.net/article/263/</link>
+          <pubDate>Sun, 22 Mar 2020 01:19:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/263/</guid>
+          <description>&lt;p&gt;バージョンの違いによって挙動が変わったり、動かなくなったりするのを防ぐ。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://github.com/go-modules-by-example/index/blob/master/010_tools/README.md&#34;&gt;Tools as dependencies&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;まず次の &lt;code&gt;tools.go&lt;/code&gt; のようなファイルを作ってimportし、
+&lt;code&gt;go mod tidy&lt;/code&gt; で消えないようにする。
+build tagが付いているので通常のbuild時には影響を及ぼさない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat tools.go
+// +build tools
+
+package pkg
+
+import (
+	_ &amp;quot;golang.org/x/lint/golint&amp;quot;
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次にGOBINを変更して &lt;code&gt;go install&lt;/code&gt; し指定したディレクトリにバイナリを持ってきてこれを実行する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;export GOBIN:=$(PWD)/bin
+
+$(GOBIN)/golint:
+	go install golang.org/x/lint/golint
+
+.PHONY: test
+
+test: $(GOBIN)/golint
+	go test -v ./pkg/...
+	bin/golint ./pkg/...
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -115,7 +157,7 @@ Googleによって運営されている。&lt;/p&gt;
 
 &lt;ul&gt;
 &lt;li&gt;&lt;a href=&#34;https://proxy.golang.org/&#34;&gt;proxy.golang.org&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;&lt;a href=&#34;https://index.golang.org/&#34;&gt;index.golang.org&lt;/a&gt;: proxyで利用可能なモジュールとバージョンの一覧&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://index.golang.org/&#34;&gt;index.golang.org&lt;/a&gt;: proxyで利用可能なmoduleとバージョンの一覧&lt;/li&gt;
 &lt;li&gt;&lt;a href=&#34;https://sum.golang.org/&#34;&gt;sum.golang.org&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;
 
@@ -181,13 +223,13 @@ $ go env -w GOPROXY=direct
 $ go env -w GOSUMDB=off
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;また、 &lt;code&gt;GOPRIVATE&lt;/code&gt; のパスに前方一致するモジュールはproxyおよびsumdbの対象外になる。
+&lt;p&gt;また、 &lt;code&gt;GOPRIVATE&lt;/code&gt; のパスに前方一致するmoduleはproxyおよびsumdbの対象外になる。
 &lt;code&gt;GONOPROXY&lt;/code&gt; / &lt;code&gt;GONOSUMDB&lt;/code&gt; を設定すると別個にオーバーライドされる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ go env -w GOPRIVATE=*.example.com,*.example.net/foo
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;sumからアクセスできないprivateなモジュールをgo getしようとすると &lt;code&gt;410 Gone&lt;/code&gt; になってしまうので &lt;code&gt;GOPRIVATE&lt;/code&gt; に入れる。&lt;/p&gt;
+&lt;p&gt;sumからアクセスできないprivateなmoduleをgo getしようとすると &lt;code&gt;410 Gone&lt;/code&gt; になってしまうので &lt;code&gt;GOPRIVATE&lt;/code&gt; に入れる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ go get github.com/sambaiz/test-private-go-module
 go: finding github.com/sambaiz/test-private-go-module latest
@@ -390,8 +432,7 @@ caused by: dial tcp 172.31.34.26:8111: connect: connection refused
 
 &lt;p&gt;ノードを2台に増やし、
 負荷をかけている途中におそらくプライマリーノードであろう最初の1台を落としてみる。
-フェイルオーバー中にいくらかエラーが返ることを想定していたが、そんなこともなく全て200で返った。
-SDKにリトライ処理が入っていたのでそこで吸収されているのかもしれない。&lt;/p&gt;
+フェイルオーバー中にいくらかエラーが返ることを想定していたが、そんなこともなく全て200で返った。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ ab -n 20000 -c 10 -r -H &amp;quot;Authorization: token ${TOKEN}&amp;quot; &amp;quot;${BASE_URL}/item?id=1&amp;amp;dax=1&amp;quot;
 &lt;/code&gt;&lt;/pre&gt;
@@ -16330,12 +16371,17 @@ class ElbWarmer(HttpLocust):
   max_wait = 3000
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;stableに&lt;a href=&#34;https://github.com/kubernetes/charts/tree/master/stable/locust&#34;&gt;Chart&lt;/a&gt;はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、&lt;code&gt;helm repo add&lt;/code&gt;するために&lt;code&gt;package&lt;/code&gt;して、これを参照する&lt;code&gt;index.yaml&lt;/code&gt;を生成した。&lt;/p&gt;
+&lt;p&gt;stableに&lt;a href=&#34;https://github.com/kubernetes/charts/tree/master/stable/locust&#34;&gt;Chart&lt;/a&gt;はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、&lt;code&gt;package&lt;/code&gt; して、&lt;code&gt;helm repo index&lt;/code&gt; でこれを参照する&lt;code&gt;index.yaml&lt;/code&gt;を生成した。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;追記(2020-03-11): 今はConfigmapを自分で作成し &lt;code&gt;--set worker.config.configmapName=***&lt;/code&gt; することでforkしなくてもよく&lt;a href=&#34;https://github.com/helm/charts/commit/0ab53c795720882f3f9630c12f8ecf96ba881638&#34;&gt;なった&lt;/a&gt;
+&lt;code&gt;kubectl create configmap locust-worker-configs --from-file tasks/tasks.py&lt;/code&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
 
 &lt;pre&gt;&lt;code&gt;$ helm package .
 $ helm repo index .
-$ ls locust-0.1.2.tgz index.yaml 
-index.yaml		locust-0.1.2.tgz
+$ ls
+index.yaml		locust-0.1.2.tgz		...
 $ cat index.yaml
 apiVersion: v1
 entries:
@@ -21970,8 +22016,13 @@ $ kubectl config current-context
 minikube
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;まずk8sクラスタ上にHelmの管理サーバーTillerをインストールする必要がある。
-ついでにリポジトリをupdateする。&lt;/p&gt;
+&lt;p&gt;まずk8sクラスタ上にHelmの管理サーバーTillerをインストールする必要がある。&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;追記(2020-03-11): Helm 3.0からTillerがなくなり &lt;code&gt;helm init&lt;/code&gt; も不要に&lt;a href=&#34;https://helm.sh/blog/helm-3-released/&#34;&gt;なった&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;ついでにリポジトリをupdateする。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ helm init
 $ ls ~/.helm/
