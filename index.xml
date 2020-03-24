@@ -6,8 +6,238 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-03-22 01:19:00 &#43;0900 JST</updated>
+    <updated>2020-03-24 22:06:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>iOSのipa(app)のProfileを異なるTeamのものに置き換えて実機で動かす</title>
+          <link>https://www.sambaiz.net/article/265/</link>
+          <pubDate>Tue, 24 Mar 2020 22:06:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/265/</guid>
+          <description>
+
+&lt;p&gt;Profileを置き換えて有効期限やDevice IDを更新する。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.sambaiz.net/article/264/&#34;&gt;iOSアプリのProvisioning profile - sambaiz-net&lt;/a&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;codesignでの試み&#34;&gt;codesignでの試み&lt;/h2&gt;
+
+&lt;p&gt;&lt;code&gt;.ipa&lt;/code&gt; をunzipすると &lt;code&gt;.app&lt;/code&gt; が出てくる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ unzip my-test-app.ipa
+$ tree Payload/
+Payload/
+└── my-test-app.app
+    ├── Base.lproj
+    │   └── LaunchScreen.storyboardc
+    │       ├── 01J-lp-oVM-view-Ze5-6b-2t3.nib
+    │       ├── Info.plist
+    │       └── UIViewController-01J-lp-oVM.nib
+    ├── Info.plist
+    ├── PkgInfo
+    ├── _CodeSignature
+    │   └── CodeResources
+    ├── embedded.mobileprovision
+    └── my-test-app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;codesign&lt;/code&gt; で entitlements を確認する。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ codesign -d --entitlements :- my-test-app.app &amp;gt; entitlements.plist
+$ cat entitlements.plist 
+&amp;lt;?xml version=&amp;quot;1.0&amp;quot; encoding=&amp;quot;UTF-8&amp;quot;?&amp;gt;
+&amp;lt;!DOCTYPE plist PUBLIC &amp;quot;-//Apple//DTD PLIST 1.0//EN&amp;quot; &amp;quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&amp;quot;&amp;gt;
+&amp;lt;plist version=&amp;quot;1.0&amp;quot;&amp;gt;
+&amp;lt;dict&amp;gt;
+	&amp;lt;key&amp;gt;application-identifier&amp;lt;/key&amp;gt;
+	&amp;lt;string&amp;gt;****.net.sambaiz.test-app&amp;lt;/string&amp;gt;
+	&amp;lt;key&amp;gt;com.apple.developer.team-identifier&amp;lt;/key&amp;gt;
+	&amp;lt;string&amp;gt;****&amp;lt;/string&amp;gt;
+	&amp;lt;key&amp;gt;get-task-allow&amp;lt;/key&amp;gt;
+	&amp;lt;true/&amp;gt;
+	&amp;lt;key&amp;gt;keychain-access-groups&amp;lt;/key&amp;gt;
+	&amp;lt;array&amp;gt;
+		&amp;lt;string&amp;gt;****.net.sambaiz.test-app&amp;lt;/string&amp;gt;
+	&amp;lt;/array&amp;gt;
+&amp;lt;/dict&amp;gt;
+&amp;lt;/plist&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;--force&lt;/code&gt; で上書き署名する。entitlementsなしで署名すると
+&lt;code&gt;The application could not be verified&lt;/code&gt; になった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ codesign --force \ 
+--sign &amp;quot;Apple Development: *****@***** (******)&amp;quot; \ 
+--entitlements entitlements.plist \ 
+my-test-app.app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これでデプロイしたところ &lt;code&gt;A valid provisioning profile for this executable was not found&lt;/code&gt; のエラーが出た。
+単にcodesignするだけでは &lt;code&gt;embedded.mobileprovision&lt;/code&gt; は元のままだ。
+また、Teamが異なればApp IDのPrefixも異なるので &lt;code&gt;entitlements.plist&lt;/code&gt; や &lt;code&gt;Info.plist&lt;/code&gt; を編集する必要があったりとなかなかやることが多い。&lt;/p&gt;
+
+&lt;h2 id=&#34;fastlaneのsighでのresign&#34;&gt;fastlaneのsighでのresign&lt;/h2&gt;
+
+&lt;p&gt;調べてみるとfastlaneの&lt;a href=&#34;https://docs.fastlane.tools/actions/sigh/&#34;&gt;sigh&lt;/a&gt;
+でresignするとApp IDの変更や &lt;code&gt;embedded.mobileprovision&lt;/code&gt; の置き換えなどを1コマンドでやってくれるらしい。&lt;/p&gt;
+
+&lt;p&gt;fastlaneのインストール。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install fastlane
+$ fastlane -v
+fastlane 2.143.0
+
+$ export FASTLANE_USER=****@****
+# store password in the macOS Keychain
+$ fastlane fastlane-credentials add -u ${FASTLANE_USER}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;resignする。Profileはマニュアルで作ってダウンロードするか、
+&lt;code&gt;~/Library/MobileDevice/Provisioning Profiles&lt;/code&gt; を探して使う。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ fastlane sigh resign my-test-app.ipa --signing_identity &amp;quot;Apple Development: ****&amp;quot; -p &amp;quot;****.mobileprovision&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;これを&lt;a href=&#34;https://github.com/ios-control/ios-deploy&#34;&gt;ios-deploy&lt;/a&gt;でデプロイしたところ無事成功した。便利。
+試しにデプロイするDeviceを外したProfileでresignしてみると
+&lt;code&gt;The executable was signed with invalid entitlements&lt;/code&gt; でインストールできなくなったので新しいProfileが効いてそうだ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ unzip my-test-app.ipa
+$ ios-deploy --debug --bundle Payload/my-test-app.app
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.minimalab.com/blog/2016/04/14/resign-ipa/&#34;&gt;ipa ファイルを再署名する&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://qiita.com/seyself/items/8f62677547ef597cee67&#34;&gt;ipaファイルのProvisioningを差し替える - Qiita&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://qiita.com/toshi0383/items/2d82104c5e70c249f0a1&#34;&gt;iOS受託開発における署名付け替えの技術 - Qiita&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
+    
+      
+        <item>
+          <title>iOSアプリのProvisioning profile</title>
+          <link>https://www.sambaiz.net/article/264/</link>
+          <pubDate>Tue, 24 Mar 2020 21:30:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/264/</guid>
+          <description>
+
+&lt;p&gt;アプリを実機にデプロイするために必要なもの。
+App ID (prefix + Bundle ID)やインストール可能なDevice ID、署名に用いた
+&lt;a href=&#34;https://help.apple.com/developer-account/#/deveedc0daa0&#34;&gt;Certificates&lt;/a&gt;
+の公開鍵などを含む。これらが一致しないとインストールできない。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/264.png&#34; alt=&#34;Xcode上で見られる情報&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;次のTypeのProfileが存在する。&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&#34;https://help.apple.com/developer-account/#/devf2eb157f8&#34;&gt;development profile&lt;/a&gt;:
+開発用のprofile。TeamのDeviceで動かす。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://help.apple.com/developer-account/#/dev4fd1495fc&#34;&gt;ad hoc profile&lt;/a&gt;:
+テスト用のprofile。UDIDを登録したDeviceに配布できる。
+AccountにDevice family (iPhone, iPad, etc.)ごとに100台まで登録可能。&lt;/li&gt;
+&lt;li&gt;&lt;a href=&#34;https://help.apple.com/developer-account/#/devbd904d1a5&#34;&gt;App Store profile&lt;/a&gt;:
+App Storeに上げるためのprofile。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls ~/Library/MobileDevice/Provisioning\ Profiles
+****.mobileprovision
+...
+
+$ security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/****.mobileprovision
+&amp;lt;?xml version=&amp;quot;1.0&amp;quot; encoding=&amp;quot;UTF-8&amp;quot;?&amp;gt;
+&amp;lt;!DOCTYPE plist PUBLIC &amp;quot;-//Apple//DTD PLIST 1.0//EN&amp;quot; &amp;quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&amp;quot;&amp;gt;
+&amp;lt;plist version=&amp;quot;1.0&amp;quot;&amp;gt;
+&amp;lt;dict&amp;gt;
+	&amp;lt;key&amp;gt;AppIDName&amp;lt;/key&amp;gt;
+	&amp;lt;string&amp;gt;XC net sambaiz test-app&amp;lt;/string&amp;gt;
+	&amp;lt;key&amp;gt;ApplicationIdentifierPrefix&amp;lt;/key&amp;gt;
+	&amp;lt;array&amp;gt;
+	&amp;lt;string&amp;gt;****&amp;lt;/string&amp;gt;
+	&amp;lt;/array&amp;gt;
+	&amp;lt;key&amp;gt;CreationDate&amp;lt;/key&amp;gt;
+	&amp;lt;date&amp;gt;2020-03-18T11:05:13Z&amp;lt;/date&amp;gt;
+	&amp;lt;key&amp;gt;Platform&amp;lt;/key&amp;gt;
+	&amp;lt;array&amp;gt;
+		&amp;lt;string&amp;gt;iOS&amp;lt;/string&amp;gt;
+	&amp;lt;/array&amp;gt;
+	&amp;lt;key&amp;gt;IsXcodeManaged&amp;lt;/key&amp;gt;
+	&amp;lt;true/&amp;gt;
+	&amp;lt;key&amp;gt;DeveloperCertificates&amp;lt;/key&amp;gt;
+	&amp;lt;array&amp;gt;
+	  &amp;lt;data&amp;gt;****&amp;lt;/data&amp;gt;
+    &amp;lt;data&amp;gt;****&amp;lt;/data&amp;gt;
+  &amp;lt;/array&amp;gt;
+
+								
+	&amp;lt;key&amp;gt;Entitlements&amp;lt;/key&amp;gt;
+	&amp;lt;dict&amp;gt;
+				
+				&amp;lt;key&amp;gt;application-identifier&amp;lt;/key&amp;gt;
+		&amp;lt;string&amp;gt;****.net.sambaiz.test-app&amp;lt;/string&amp;gt;
+				
+				&amp;lt;key&amp;gt;keychain-access-groups&amp;lt;/key&amp;gt;
+		&amp;lt;array&amp;gt;
+				&amp;lt;string&amp;gt;****.*&amp;lt;/string&amp;gt;
+		&amp;lt;/array&amp;gt;
+				
+				&amp;lt;key&amp;gt;get-task-allow&amp;lt;/key&amp;gt;
+		&amp;lt;true/&amp;gt;
+				
+				&amp;lt;key&amp;gt;com.apple.developer.team-identifier&amp;lt;/key&amp;gt;
+		&amp;lt;string&amp;gt;****&amp;lt;/string&amp;gt;
+
+	&amp;lt;/dict&amp;gt;
+	&amp;lt;key&amp;gt;ExpirationDate&amp;lt;/key&amp;gt;
+	&amp;lt;date&amp;gt;2020-03-25T11:05:13Z&amp;lt;/date&amp;gt;
+	&amp;lt;key&amp;gt;Name&amp;lt;/key&amp;gt;
+	&amp;lt;string&amp;gt;iOS Team Provisioning Profile: net.sambaiz.test-app&amp;lt;/string&amp;gt;
+	&amp;lt;key&amp;gt;ProvisionedDevices&amp;lt;/key&amp;gt;
+	&amp;lt;array&amp;gt;
+		&amp;lt;string&amp;gt;****&amp;lt;/string&amp;gt;
+	&amp;lt;/array&amp;gt;
+	&amp;lt;key&amp;gt;LocalProvision&amp;lt;/key&amp;gt;
+	&amp;lt;true/&amp;gt;
+	&amp;lt;key&amp;gt;TeamIdentifier&amp;lt;/key&amp;gt;
+	&amp;lt;array&amp;gt;
+		&amp;lt;string&amp;gt;****&amp;lt;/string&amp;gt;
+	&amp;lt;/array&amp;gt;
+	&amp;lt;key&amp;gt;TeamName&amp;lt;/key&amp;gt;
+	&amp;lt;string&amp;gt;Taiki Sakamoto&amp;lt;/string&amp;gt;
+	&amp;lt;key&amp;gt;TimeToLive&amp;lt;/key&amp;gt;
+	&amp;lt;integer&amp;gt;7&amp;lt;/integer&amp;gt;
+	&amp;lt;key&amp;gt;UUID&amp;lt;/key&amp;gt;
+	&amp;lt;string&amp;gt;*****-****&amp;lt;/string&amp;gt;
+	&amp;lt;key&amp;gt;Version&amp;lt;/key&amp;gt;
+	&amp;lt;integer&amp;gt;1&amp;lt;/integer&amp;gt;
+&amp;lt;/dict&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://help.apple.com/xcode/mac/current/#/dev80cc24546&#34;&gt;automatic manage signing&lt;/a&gt;
+を有効にすると、Xcodeが自動でCertificatesをダウンロードしてきて署名しProvisioning Profileを生成する。
+&lt;a href=&#34;https://developer.apple.com/account&#34;&gt;developer.apple.com/account&lt;/a&gt; からマニュアルで生成することもできる。&lt;/p&gt;
+
+&lt;p&gt;ダウンロードしたCertificatesはkeychainに保存されていて、CIで署名するのに必要なら
+そこから秘密鍵(.p12)を出力できる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ security find-identity -v -p codesigning 
+1) ***************************** &amp;quot;Apple Development: ****@****.com (******)&amp;quot;
+...
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://qiita.com/kazuhidet/items/5db08fdfeece820ece64&#34;&gt;iOS .mobileprovisionのデベロッパー証明書を確認する - Qiita&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -16,7 +246,7 @@
           <pubDate>Sun, 22 Mar 2020 01:19:00 &#43;0900</pubDate>
           <author>sambaiz</author>
           <guid>https://www.sambaiz.net/article/263/</guid>
-          <description>&lt;p&gt;バージョンの違いによって挙動が変わったり、動かなくなったりするのを防ぐ。&lt;/p&gt;
+          <description>&lt;p&gt;依存moduleと同様にツールもバージョンを指定し、挙動や出力が変わらないようにする。&lt;/p&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://github.com/go-modules-by-example/index/blob/master/010_tools/README.md&#34;&gt;Tools as dependencies&lt;/a&gt;&lt;/p&gt;
 
