@@ -6,8 +6,239 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-03-24 22:06:00 &#43;0900 JST</updated>
+    <updated>2020-03-28 23:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>作ったライブラリをCocoaPods/Carthageでimportする</title>
+          <link>https://www.sambaiz.net/article/266/</link>
+          <pubDate>Sat, 28 Mar 2020 23:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/266/</guid>
+          <description>
+
+&lt;h2 id=&#34;cocoapods-https-cocoapods-org&#34;&gt;&lt;a href=&#34;https://cocoapods.org&#34;&gt;CocoaPods&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;長らく使われている依存ライブラリ管理ツール。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ sudo gem install cocoapods
+$ pod --version
+1.9.1
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;podspec-https-guides-cocoapods-org-syntax-podspec-html&#34;&gt;&lt;a href=&#34;https://guides.cocoapods.org/syntax/podspec.html&#34;&gt;podspec&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;まずはライブラリ側の作業。podspecファイルを埋めていく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ ls
+SampleFramework			SampleFramework.xcodeproj	SampleFrameworkTests
+
+$ pod spec create SampleFrameworkSambaiz
+
+Specification created at SampleFrameworkSambaiz.podspec
+
+$ cat SampleFrameworkSambaiz.podspec 
+Pod::Spec.new do |spec|
+  spec.name             = &#39;SampleFrameworkSambaiz&#39;
+  spec.version          = &#39;0.0.2&#39;
+  spec.license          = { :type =&amp;gt; &#39;MIT&#39;, :file =&amp;gt; &#39;LICENSE&#39; }
+  spec.homepage         = &#39;https://github.com/sambaiz/ios-sample-framework&#39;
+  spec.authors          = { &#39;Taiki Sakamoto&#39; =&amp;gt; &#39;godgourd@gmail.com&#39; }
+  spec.summary          = &#39;Sample Framework&#39;
+  spec.description      = &amp;lt;&amp;lt;-DESC
+                            This 
+                            is 
+                            a sample framework
+                          DESC
+  spec.source           = { :git =&amp;gt; &#39;https://github.com/sambaiz/ios-sample-framework.git&#39;, :tag =&amp;gt; &#39;v0.0.2&#39; }
+  spec.source_files = &#39;SampleFramework/**/*.{h,m,swift}&#39;
+  spec.requires_arc     = true
+  spec.ios.deployment_target = &#39;9.0&#39;
+  spec.swift_version = &#39;4.0&#39;
+  spec.frameworks       = []
+  spec.weak_frameworks  = []
+end
+
+$ pod spec lint
+
+SampleFrameworkSambaiz.podspec passed validation.
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://guides.cocoapods.org/syntax/podspec.html#subspec&#34;&gt;subspec&lt;/a&gt;に分割すると一部だけインストールできるようになる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;spec.default_subspecs = &#39;All&#39;
+
+spec.subspec &#39;All&#39; do |sdk|
+  sdk.dependency              &#39;SampleFrameworkSambaiz/Foo&#39;
+  sdk.dependency              &#39;SampleFrameworkSambaiz/Bar&#39;
+end
+
+spec.subspec &#39;Foo&#39; do |core|
+  core.source_files         = &#39;SampleFramework/Foo/**/*.{h,m,swift}&#39;
+end
+
+spec.subspec &#39;Bar&#39; do |core|
+  core.source_files         = &#39;SampleFramework/Bar/**/*.{h,m,swift}&#39;
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;trunk-https-guides-cocoapods-org-making-getting-setup-with-trunk-html&#34;&gt;&lt;a href=&#34;https://guides.cocoapods.org/making/getting-setup-with-trunk.html&#34;&gt;trunk&lt;/a&gt;&lt;/h3&gt;
+
+&lt;p&gt;publishする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pod trunk register godgourd@gmail.com &#39;Taiki Sakamoto&#39; --description=&#39;mbp&#39;
+[!] Please verify the session by clicking the link in the verification email that has been sent to godgourd@gmail.com
+
+$ pod trunk me
+  - Name:     Taiki Sakamoto
+  - Email:    godgourd@gmail.com
+  - Since:    March 27th, 16:02
+  - Pods:     None
+  - Sessions:
+    - March 27th, 16:02 - August 2nd, 16:04. IP: xxx.xxx.xxx.xxx Description: test
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pushすると&lt;a href=&#34;https://github.com/CocoaPods/Specs&#34;&gt;CocoaPods/Spec&lt;/a&gt;にpodspecが上がる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pod trunk push SampleFrameworkSambaiz.podspec
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;import&#34;&gt;import&lt;/h3&gt;
+
+&lt;p&gt;アプリ側の作業。Podfileを書いていく。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pod init
+$ git status
+On branch master
+Untracked files:
+  (use &amp;quot;git add &amp;lt;file&amp;gt;...&amp;quot; to include in what will be committed)
+	Podfile
+
+$ vi Podfile
+# Uncomment the next line to define a global platform for your project
+# platform :ios, &#39;9.0&#39;
+
+target &#39;SampleApp&#39; do
+  # Comment the next line if you don&#39;t want to use dynamic frameworks
+  use_frameworks!
+
+  # Pods for SampleApp
+  pod &#39;SampleFrameworkSambaiz/Foo&#39;,  &#39;0.0.3&#39;
+
+  target &#39;SampleAppTests&#39; do
+    # Pods for testing
+  end
+
+end
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;なお、trunkではなく直接Gitリポジトリを参照することもできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;pod &#39;SampleFrameworkSambaiz/Foo&#39;, :git =&amp;gt; &#39;https://github.com/sambaiz/ios-sample-framework.git&#39;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;pushしただけではローカルに反映されていないのでupdateしてからinstallする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ pod repo update
+Updating spec repo `trunk`
+
+$ pod install
+$ tree ~/.cocoapods/repos/trunk/Specs/f/5/4/SampleFrameworkSambaiz
+/Users/sambaiz/.cocoapods/repos/trunk/Specs/f/5/4/SampleFrameworkSambaiz
+├── 0.0.3
+│   ├── SampleFrameworkSambaiz.podspec.json
+│   └── SampleFrameworkSambaiz.podspec.json.etag
+└── 0.0.4
+    ├── SampleFrameworkSambaiz.podspec.json
+    └── SampleFrameworkSambaiz.podspec.json.etag
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Podsディレクトリとxcworkspaceができている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ git status
+On branch master
+Changes not staged for commit:
+  (use &amp;quot;git add &amp;lt;file&amp;gt;...&amp;quot; to update what will be committed)
+  (use &amp;quot;git restore &amp;lt;file&amp;gt;...&amp;quot; to discard changes in working directory)
+	modified:   SampleApp.xcodeproj/project.pbxproj
+
+Untracked files:
+  (use &amp;quot;git add &amp;lt;file&amp;gt;...&amp;quot; to include in what will be committed)
+	Podfile
+	Podfile.lock
+	Pods/
+	SampleApp.xcworkspace/
+
+$ tree Pods/SampleFrameworkSambaiz
+Pods/SampleFrameworkSambaiz
+├── LICENSE
+└── SampleFramework
+    └── Foo
+        └── Foo.swift
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;xcworkspaceを開くと元々のアプリとPodsのprojectが入っていて、
+依存frameworkにPodsのものが追加されているのでそのままimportできるようになっている。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/266.png&#34; alt=&#34;xcworkspaceの構成&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通常、アプリのビルド時にPodsの方もビルドするのでライブラリのサイズによっては時間がかかってしまう。
+これを解消するには&lt;a href=&#34;https://github.com/leavez/cocoapods-binary&#34;&gt;cocoapods-binary&lt;/a&gt;で
+&lt;a href=&#34;http://guides.cocoapods.org/plugins/pre-compiling-dependencies.html&#34;&gt;Pre-compiling&lt;/a&gt;するか
+Carthageを使う。&lt;/p&gt;
+
+&lt;h2 id=&#34;carthage-https-github-com-carthage-carthage&#34;&gt;&lt;a href=&#34;https://github.com/Carthage/Carthage&#34;&gt;Carthage&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;後発の依存ライブラリ管理ツール。ハンニバルのカルタゴであるが、カーセッジと発音する人もいる。
+update時にframeworkをビルドするのでアプリケーションのビルドが遅くならず、workspaceを生成せず依存も触らないので挙動がシンプル。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ brew install carthage
+$ carthage version
+0.34.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ライブラリ側はManaged SchemasのSharedにチェックを入れるだけ。&lt;/p&gt;
+
+&lt;h3 id=&#34;import-1&#34;&gt;import&lt;/h3&gt;
+
+&lt;p&gt;Cartfileを書いてupdateする。CocoaPodsのtrunkのようなものは存在せず、直接リポジトリを参照する。
+updateするとBuildディレクトリにframeworkができるのでこれを依存に入れればimportできる。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cat Cartfile
+github &amp;quot;sambaiz/ios-sample-framework&amp;quot; &amp;gt;= 0.0.4
+
+$ carthage update
+*** Fetching ios-sample-framework
+*** Checking out ios-sample-framework at &amp;quot;v0.0.5&amp;quot;
+*** xcodebuild output can be found in /var/folders/1x/bzw0n3ss6_j0t7nlphn2cjrm7ngzh2/T/carthage-xcodebuild.Owsxl9.log
+*** Building scheme &amp;quot;SampleFramework&amp;quot; in SampleFramework.xcodeproj
+
+$ tree -L 3 Carthage/
+Carthage/
+├── Build
+│   └── iOS
+│       ├── 33F1736C-D538-3EE2-9BF7-86004B596A9B.bcsymbolmap
+│       ├── SampleFramework.framework
+│       └── SampleFramework.framework.dSYM
+└── Checkouts
+    └── ios-sample-framework
+        ├── LICENSE
+        ├── SampleFramework
+        ├── SampleFramework.xcodeproj
+        ├── SampleFrameworkSambaiz.podspec
+        └── SampleFrameworkTests
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;あとはBuild PhasesのScriptに &lt;code&gt;carthage copy-frameworks&lt;/code&gt; を入れる。
+これは提出用アプリにシミュレーター用のバイナリが含まれないようにするためらしい。&lt;/p&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://www.slideshare.net/syoikeda/carthagen&#34;&gt;Carthageについて知りたいn個のこと&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -81,7 +312,7 @@ my-test-app.app
 &lt;h2 id=&#34;fastlaneのsighでのresign&#34;&gt;fastlaneのsighでのresign&lt;/h2&gt;
 
 &lt;p&gt;調べてみるとfastlaneの&lt;a href=&#34;https://docs.fastlane.tools/actions/sigh/&#34;&gt;sigh&lt;/a&gt;
-でresignするとApp IDの変更や &lt;code&gt;embedded.mobileprovision&lt;/code&gt; の置き換えなどを1コマンドでやってくれるらしい。&lt;/p&gt;
+でresignするとApp IDの変更や &lt;code&gt;embedded.mobileprovision&lt;/code&gt; の置き換えなどもやってくれるらしい。&lt;/p&gt;
 
 &lt;p&gt;fastlaneのインストール。&lt;/p&gt;
 
@@ -121,7 +352,7 @@ $ ios-deploy --debug --bundle Payload/my-test-app.app
     
       
         <item>
-          <title>iOSアプリのProvisioning profile</title>
+          <title>iOSアプリのProvisioning Profile</title>
           <link>https://www.sambaiz.net/article/264/</link>
           <pubDate>Tue, 24 Mar 2020 21:30:00 &#43;0900</pubDate>
           <author>sambaiz</author>
@@ -129,9 +360,9 @@ $ ios-deploy --debug --bundle Payload/my-test-app.app
           <description>
 
 &lt;p&gt;アプリを実機にデプロイするために必要なもの。
-App ID (prefix + Bundle ID)やインストール可能なDevice ID、署名に用いた
-&lt;a href=&#34;https://help.apple.com/developer-account/#/deveedc0daa0&#34;&gt;Certificates&lt;/a&gt;
-の公開鍵などを含む。これらが一致しないとインストールできない。&lt;/p&gt;
+App ID (prefix + Bundle ID)やインストール可能なDevice ID、
+&lt;a href=&#34;https://developer.apple.com/jp/support/code-signing/&#34;&gt;コード署名&lt;/a&gt;に用いた
+Apple発行の&lt;a href=&#34;https://help.apple.com/developer-account/#/deveedc0daa0&#34;&gt;証明書&lt;/a&gt;などを含む。これらが一致しないとインストールできない。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/264.png&#34; alt=&#34;Xcode上で見られる情報&#34; /&gt;&lt;/p&gt;
 
@@ -221,11 +452,11 @@ $ security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/****.mobilepr
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;&lt;a href=&#34;https://help.apple.com/xcode/mac/current/#/dev80cc24546&#34;&gt;automatic manage signing&lt;/a&gt;
-を有効にすると、Xcodeが自動でCertificatesをダウンロードしてきて署名しProvisioning Profileを生成する。
-&lt;a href=&#34;https://developer.apple.com/account&#34;&gt;developer.apple.com/account&lt;/a&gt; からマニュアルで生成することもできる。&lt;/p&gt;
+を有効にすると、Xcodeが自動で証明書を要求しダウンロードしてきて署名しProvisioning Profileを生成する。
+証明書はkeychainに保存されていて、CIで署名するのに必要ならそこから秘密鍵(.p12)を出力できる。&lt;/p&gt;
 
-&lt;p&gt;ダウンロードしたCertificatesはkeychainに保存されていて、CIで署名するのに必要なら
-そこから秘密鍵(.p12)を出力できる。&lt;/p&gt;
+&lt;p&gt;証明書やProvisioning Profileは
+&lt;a href=&#34;https://developer.apple.com/account&#34;&gt;developer.apple.com/account&lt;/a&gt; からマニュアルで生成することもできる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ security find-identity -v -p codesigning 
 1) ***************************** &amp;quot;Apple Development: ****@****.com (******)&amp;quot;
