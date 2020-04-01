@@ -6,8 +6,126 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-03-28 23:55:00 &#43;0900 JST</updated>
+    <updated>2020-04-01 23:55:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Bellman–Ford法とDijkstra法で最短経路問題を解く</title>
+          <link>https://www.sambaiz.net/article/267/</link>
+          <pubDate>Wed, 01 Apr 2020 23:55:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/267/</guid>
+          <description>
+
+&lt;p&gt;Bellman–Ford法とDijkstra法で最短経路問題を解く。&lt;/p&gt;
+
+&lt;h2 id=&#34;bellman-ford法&#34;&gt;Bellman-Ford法&lt;/h2&gt;
+
+&lt;p&gt;始点の距離が0、それ以外の頂点の距離が無限大な初期状態から、
+全辺を見て各辺を通るとしたときに現在の距離を下回るなら更新する、というのを繰り返すアルゴリズム。
+辺の重みは負でも問題ないが、総和が負の値になる閉路が存在する場合、そこで無限ループしてしまうので決まらない。
+その場合を除けば、頂点の数を&lt;code&gt;|V|&lt;/code&gt;、辺の数を&lt;code&gt;|E|&lt;/code&gt;とすると、繰り返しは&lt;code&gt;|V|-1&lt;/code&gt;回で終わり、計算量は&lt;code&gt;O(|V||E|)&lt;/code&gt;になる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/267-bf.png&#34; alt=&#34;Bellman-Ford法&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;dijkstra法&#34;&gt;Dijkstra法&lt;/h2&gt;
+
+&lt;p&gt;同じく始点の距離が0、それ以外の頂点の距離が無限大な初期状態から、
+まだ選ばれていない頂点の中から最小の距離のものを1つ選んでその最短距離を確定させ、そこから伸びている辺を見て更新していく、というのを繰り返す。
+Bellman-Ford法が全ての頂点から同時に探索するのに対してDijkstra法は始点から着実に進んでいくイメージ。
+頂点を選ぶ/取り除くのに&lt;code&gt;O(log|V|)&lt;/code&gt;かかる二分ヒープのpriority queueで実装すると計算量は&lt;code&gt;O((|E|+|V|)log|V|)&lt;/code&gt;となる。
+Bellman-Ford法より高速だが、負の重みがあると選んだ頂点の現在の距離が最短であることが確定しないので適用できない。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/267-dijk.png&#34; alt=&#34;Dijkstra法&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;cheapest-flights-within-k-stops-leetcode-https-leetcode-com-problems-cheapest-flights-within-k-stops&#34;&gt;&lt;a href=&#34;https://leetcode.com/problems/cheapest-flights-within-k-stops/&#34;&gt;Cheapest Flights Within K Stops - LeetCode&lt;/a&gt;&lt;/h2&gt;
+
+&lt;p&gt;乗継K回以内のフライトの最安値を返す問題。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;There are n cities connected by m flights. Each flight starts from city u and arrives at v with a price w.
+
+Now given all the cities and flights, together with starting city src and the destination dst, your task is to find the cheapest price from src to dst with up to k stops. If there is no such route, output -1.
+
+Example 1:
+Input: 
+n = 3, edges = [[0,1,100],[1,2,100],[0,2,500]]
+src = 0, dst = 2, k = 1
+Output: 200
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;まずはBellman-Ford法で解く。繰り返しを最大K+1回で止めることで乗継K回以内という制約をかけている。
+実行時間は128ms。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class Solution {
+public:
+    int inf = 1000 * 100 + 1;
+    int findCheapestPrice(int n, vector&amp;lt;vector&amp;lt;int&amp;gt;&amp;gt;&amp;amp; flights, int src, int dst, int K) {
+        vector costs(n, inf);
+        costs[src] = 0;
+        int step = min(K + 1, n - 1);
+        for (int i = 0; i &amp;lt; step; i++) {
+            vector nextCosts = costs;
+            for(vector&amp;lt;int&amp;gt; flight: flights) {
+                nextCosts[flight[1]] = min(nextCosts[flight[1]], costs[flight[0]] + flight[2]);
+            }
+            costs = nextCosts;
+        }
+        
+        if (costs[dst] == inf) {
+            return -1;
+        }
+        return costs[dst];
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;次にDijkstra法で解く。価格と共に乗継数を持ち超過したルートは無視することで、最安でなくても乗継数が少ないルートも採用されるようにする。
+実行時間は172msとあまり振るわず。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://leetcode.com/problems/cheapest-flights-within-k-stops/discuss/115541/JavaPython-Priority-Queue-Solution&#34;&gt;[Java/Python] Priority Queue Solution - LeetCode Discuss&lt;/a&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;class Solution {
+public:
+    int inf = 1000 * 100 + 1;
+    int findCheapestPrice(int n, vector&amp;lt;vector&amp;lt;int&amp;gt;&amp;gt;&amp;amp; flights, int src, int dst, int K) {
+        map&amp;lt;int, map&amp;lt;int, int&amp;gt;&amp;gt; costs;
+        for (vector&amp;lt;int&amp;gt; flight: flights) {
+            costs[flight[0]][flight[1]] = flight[2]; // [from][to] = cost
+        }
+        
+        auto compare = [](vector&amp;lt;int&amp;gt; a, vector&amp;lt;int&amp;gt; b) { return a[1] &amp;gt; b[1]; };
+        priority_queue&amp;lt;vector&amp;lt;int&amp;gt;, vector&amp;lt;vector&amp;lt;int&amp;gt;&amp;gt;, decltype(compare)&amp;gt; Q(compare);
+        Q.push({src, 0, 0}); // city, price, stop 
+        
+        while(!Q.empty()) {
+            vector&amp;lt;int&amp;gt; current = Q.top();
+            Q.pop();
+            if (current[0] == dst) {
+                return current[1];
+            }
+            if (current[2] &amp;gt; K) {
+                continue;
+            }
+            for (auto cost: costs[current[0]]) {
+                Q.push({cost.first, current[1] + cost.second, current[2] + 1});
+            }
+        }
+        return -1;
+    }
+};
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://nw.tsuda.ac.jp/lec/BellmanFord/&#34;&gt;Bellman-Ford法: 負の重みのエッジを含むグラフにおける最短経路&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;http://www.ss.cs.meiji.ac.jp/CCP024.html&#34;&gt;ダイクストラ法&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm&#34;&gt;Dijkstra&amp;rsquo;s algorithm - Wikipedia&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -29,7 +147,7 @@ $ pod --version
 
 &lt;h3 id=&#34;podspec-https-guides-cocoapods-org-syntax-podspec-html&#34;&gt;&lt;a href=&#34;https://guides.cocoapods.org/syntax/podspec.html&#34;&gt;podspec&lt;/a&gt;&lt;/h3&gt;
 
-&lt;p&gt;まずはライブラリ側の作業。podspecファイルを埋めていく。&lt;/p&gt;
+&lt;p&gt;まずはライブラリ側の作業。podspecを埋めていく。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ ls
 SampleFramework			SampleFramework.xcodeproj	SampleFrameworkTests
@@ -65,7 +183,7 @@ $ pod spec lint
 SampleFrameworkSambaiz.podspec passed validation.
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;a href=&#34;https://guides.cocoapods.org/syntax/podspec.html#subspec&#34;&gt;subspec&lt;/a&gt;に分割すると一部だけインストールできるようになる。&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;https://guides.cocoapods.org/syntax/podspec.html#subspec&#34;&gt;subspec&lt;/a&gt;に分割すると一部だけインストールできる。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;spec.default_subspecs = &#39;All&#39;
 
@@ -750,6 +868,9 @@ TTLのデフォルトは5分。&lt;/p&gt;
 &lt;p&gt;CPU使用率や、キャッシュヒット数、各リクエスト数や接続数が取れる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/260.png&#34; alt=&#34;メトリクス&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;ノードごとのCPU使用率も取れる。Writeやキャッシュミスによるプライマリーノードの負荷の高まりに注意。
+レイテンシが大きくなり接続数が増える悪循環に陥る。&lt;/p&gt;
 
 &lt;h2 id=&#34;挙動確認&#34;&gt;挙動確認&lt;/h2&gt;
 
@@ -1624,7 +1745,7 @@ Q3.push(&amp;quot;AAA&amp;quot;);
 Q3.push(&amp;quot;A&amp;quot;);
 while (!Q3.empty())
 {
-    cout &amp;lt;&amp;lt; Q3.top() &amp;lt;&amp;lt; endl; // AAAA BCD X
+    cout &amp;lt;&amp;lt; Q3.top() &amp;lt;&amp;lt; endl; // AAAA AAA A
     Q3.pop();
 }
 &lt;/code&gt;&lt;/pre&gt;
