@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.38.2" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
+    crossorigin="anonymous">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+  <link rel="stylesheet" href="/css/slidebars.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+
+  <meta name="theme-color" content="#41a248">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="@sambaiz">
+  
+  <title>Goのcipher packageに実装されている暗号利用モードのベンチマーク - sambaiz-net</title>
+  <meta name="twitter:title" content="Goのcipher packageに実装されている暗号利用モードのベンチマーク - sambaiz-net">
+  <meta property='og:title' content="Goのcipher packageに実装されている暗号利用モードのベンチマーク - sambaiz-net">
+  <meta property="og:type" content="article">
+  
+  <meta name="description" content="CBC, CFB, OFB, CTR">
+  <meta name="twitter:description" content="CBC, CFB, OFB, CTR">
+  
+  
+
+  <meta property="og:url" content="https://www.sambaiz.net/article/268/">
+  <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
+  <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
+  <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https://www.sambaiz.net/"
+    },
+    "headline": "Goのcipher packageに実装されている暗号利用モードのベンチマーク | sambaiz-net ",
+    "datePublished": "2020-04-12T23:29:00JST",
+    "dateModified": "2020-04-12T23:29:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "CBC, CFB, OFB, CTR"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="https://www.sambaiz.net/tags/aws">aws</a></li><li><a href="https://www.sambaiz.net/tags/golang">golang</a></li><li><a href="https://www.sambaiz.net/tags/machinelearning">machinelearning</a></li><li><a href="https://www.sambaiz.net/tags/log">log</a></li><li><a href="https://www.sambaiz.net/tags/kubernetes">kubernetes</a></li><li><a href="https://www.sambaiz.net/tags/infra">infra</a></li><li><a href="https://www.sambaiz.net/tags/python">python</a></li><li><a href="https://www.sambaiz.net/tags/lambda">lambda</a></li><li><a href="https://www.sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="https://www.sambaiz.net/tags/unity">unity</a></li><li><a href="https://www.sambaiz.net/tags/fluentd">fluentd</a></li><li><a href="https://www.sambaiz.net/tags/gcp">gcp</a></li><li><a href="https://www.sambaiz.net/tags/node.js">node.js</a></li><li><a href="https://www.sambaiz.net/tags/web">web</a></li><li><a href="https://www.sambaiz.net/tags/docker">docker</a></li><li><a href="https://www.sambaiz.net/tags/linux">linux</a></li><li><a href="https://www.sambaiz.net/tags/mysql">mysql</a></li><li><a href="https://www.sambaiz.net/tags/elasticsearch">elasticsearch</a></li><li><a href="https://www.sambaiz.net/tags/ios">ios</a></li><li><a href="https://www.sambaiz.net/tags/javascript">javascript</a></li><li><a href="https://www.sambaiz.net/tags/hololens">hololens</a></li><li><a href="https://www.sambaiz.net/tags/auth">auth</a></li><li><a href="https://www.sambaiz.net/tags/product">product</a></li><li><a href="https://www.sambaiz.net/tags/c&#43;&#43;">c&#43;&#43;</a></li><li><a href="https://www.sambaiz.net/tags/circleci">circleci</a></li><li><a href="https://www.sambaiz.net/tags/react">react</a></li><li><a href="https://www.sambaiz.net/tags/typescript">typescript</a></li><li><a href="https://www.sambaiz.net/tags/algorithm">algorithm</a></li><li><a href="https://www.sambaiz.net/tags/android">android</a></li><li><a href="https://www.sambaiz.net/tags/ble">ble</a></li><li><a href="https://www.sambaiz.net/tags/event">event</a></li><li><a href="https://www.sambaiz.net/tags/swift">swift</a></li><li><a href="https://www.sambaiz.net/tags/angular">angular</a></li><li><a href="https://www.sambaiz.net/tags/cron">cron</a></li><li><a href="https://www.sambaiz.net/tags/istio">istio</a></li><li><a href="https://www.sambaiz.net/tags/terraform">terraform</a></li><li><a href="https://www.sambaiz.net/tags/uwp">uwp</a></li><li><a href="https://www.sambaiz.net/tags/.net">.net</a></li><li><a href="https://www.sambaiz.net/tags/crypto">crypto</a></li><li><a href="https://www.sambaiz.net/tags/css">css</a></li><li><a href="https://www.sambaiz.net/tags/datadog">datadog</a></li><li><a href="https://www.sambaiz.net/tags/firebase">firebase</a></li><li><a href="https://www.sambaiz.net/tags/github">github</a></li><li><a href="https://www.sambaiz.net/tags/grpc">grpc</a></li><li><a href="https://www.sambaiz.net/tags/hadoop">hadoop</a></li><li><a href="https://www.sambaiz.net/tags/norikra">norikra</a></li><li><a href="https://www.sambaiz.net/tags/rx">rx</a></li><li><a href="https://www.sambaiz.net/tags/server">server</a></li><li><a href="https://www.sambaiz.net/tags/vr">vr</a></li><li><a href="https://www.sambaiz.net/tags/ansible">ansible</a></li><li><a href="https://www.sambaiz.net/tags/api">api</a></li><li><a href="https://www.sambaiz.net/tags/cdn">cdn</a></li><li><a href="https://www.sambaiz.net/tags/compress">compress</a></li><li><a href="https://www.sambaiz.net/tags/csharp">csharp</a></li><li><a href="https://www.sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="https://www.sambaiz.net/tags/digdag">digdag</a></li><li><a href="https://www.sambaiz.net/tags/hugo">hugo</a></li><li><a href="https://www.sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="https://www.sambaiz.net/tags/jvm">jvm</a></li><li><a href="https://www.sambaiz.net/tags/kotlin">kotlin</a></li><li><a href="https://www.sambaiz.net/tags/language">language</a></li><li><a href="https://www.sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="https://www.sambaiz.net/tags/lisp">lisp</a></li><li><a href="https://www.sambaiz.net/tags/math">math</a></li><li><a href="https://www.sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="https://www.sambaiz.net/tags/objective-c">objective-c</a></li><li><a href="https://www.sambaiz.net/tags/pytorch">pytorch</a></li><li><a href="https://www.sambaiz.net/tags/read_paper">read_paper</a></li><li><a href="https://www.sambaiz.net/tags/scikit-learn">scikit-learn</a></li><li><a href="https://www.sambaiz.net/tags/serialize">serialize</a></li><li><a href="https://www.sambaiz.net/tags/sonnet">sonnet</a></li><li><a href="https://www.sambaiz.net/tags/spark">spark</a></li><li><a href="https://www.sambaiz.net/tags/spec">spec</a></li><li><a href="https://www.sambaiz.net/tags/statistics">statistics</a></li><li><a href="https://www.sambaiz.net/tags/video">video</a></li><li><a href="https://www.sambaiz.net/tags/vscode">vscode</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="https://www.sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="https://www.sambaiz.net/">sambaiz-net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+        <style>
+          .filmarks-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .filmarks {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            background: url(/image/filmarks.svg) no-repeat;
+            background-size: 450%;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .vocabularycom-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .vocabularycom {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/vocabularycom.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .leetcode-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .leetcode {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/leetcode.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+        </style>
+        <div class="filmarks-base">
+          <a href="https://filmarks.com/users/sambaiz" class="filmarks"></a>
+        </div>
+        <div class="vocabularycom-base">
+          <a href="https://www.vocabulary.com/profiles/B0JI0K19KKMVKH" class="vocabularycom"></a>
+        </div>
+        <div class="leetcode-base">
+          <a href="https://leetcode.com/sambaiz/" class="leetcode"></a>
+        </div>
+      </div>
+    </header>
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>Goのcipher packageに実装されている暗号利用モードのベンチマーク</h1>
+          <p>(2020-04-12)</p>
+          
+
+<p>暗号利用モードはブロック長より長いデータに対してどのようにブロック暗号を適用するかのアルゴリズム。</p>
+
+<h2 id="ブロック暗号">ブロック暗号</h2>
+
+<p>ブロック暗号は固定長のブロックを暗号化/復号する共通鍵暗号で、入力と同じ長さの出力を返す暗号化/復号関数からなる。
+アメリカ国立標準技術研究所（NIST) が標準暗号として採用したAES (Rijndael) が有名。
+最も単純な暗号利用モードとして、データをブロックに分割してそれぞれ独立に適用する Electronic Codebook (ECB) というのがあるが、
+鍵とブロックが同じなら毎回同じ出力になってしまうため、データのパターンが残ってしまうのとリプレイ攻撃に弱い問題があり使われない。
+また、データがブロック長の整数倍になるようにパディングが必要。</p>
+
+<p><img src="https://www.sambaiz.net/images/268-ecb.png" alt="ECBによる暗号化/復号" /></p>
+
+<h2 id="goのcrypto-cipher-packageに実装されている暗号化利用モード">Goのcrypto/cipher packageに実装されている暗号化利用モード</h2>
+
+<p>Goの<a href="https://golang.org/pkg/crypto/cipher/">crypto/cipher</a> packageには次の暗号化利用モードが実装されている。</p>
+
+<pre><code>$ go version
+go version go1.14 darwin/amd64
+</code></pre>
+
+<h3 id="cipher-block-chaining-cbc">Cipher Block Chaining (CBC)</h3>
+
+<p>データをブロックに分割し、前段の暗号文(最初はランダムなIV)と入力ブロックのXORを取ったものが暗号文で、
+これを復号関数にかけて前段の暗号文とのXORを取って復号する。
+IVがないと最初のブロックが復号できず、暗号文の一部が破損すると次のブロックまで復号できない。
+ECBと同様パディングが必要。最も広く使われているらしい。</p>
+
+<p><img src="https://www.sambaiz.net/images/268-cbc.png" alt="CBCによる暗号化/復号" /></p>
+
+<p>Goではパディングは自分でやる必要がある。</p>
+
+<pre><code>func (x *cbcEncrypter) CryptBlocks(dst, src []byte) {
+    if len(src)%x.blockSize != 0 {
+        panic(&quot;crypto/cipher: input not full blocks&quot;)
+    }
+    if len(dst) &lt; len(src) {
+        panic(&quot;crypto/cipher: output smaller than input&quot;)
+    }
+    if subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(&quot;crypto/cipher: invalid buffer overlap&quot;)
+    }
+
+    iv := x.iv
+
+    for len(src) &gt; 0 {
+        // Write the xor to dst, then encrypt in place.
+        xorBytes(dst[:x.blockSize], src[:x.blockSize], iv)
+        x.b.Encrypt(dst[:x.blockSize], dst[:x.blockSize])
+
+        // Move to the next block with this block as the next iv.
+        iv = dst[:x.blockSize]
+        src = src[x.blockSize:]
+        dst = dst[x.blockSize:]
+    }
+
+    // Save the iv for the next CryptBlocks call.
+    copy(x.iv, iv)
+}
+</code></pre>
+
+<p>足りないバイト数の値でパディングする<a href="https://tools.ietf.org/html/rfc5652#section-6.3">PKCS#7</a>の方式はこんな感じ。</p>
+
+<pre><code>func pad(data []byte, blockSize int) []byte {
+    padSize := blockSize - len(data) % blockSize
+    return append(data, bytes.Repeat([]byte{byte(padSize)}, padSize)...)
+}
+
+func unpad(data []byte) []byte {
+    padSize := int(data[len(data)-1])
+    return data[:len(data)-padSize]
+}
+</code></pre>
+
+<h3 id="cipher-feedback-cfb">Cipher Feedback (CFB)</h3>
+
+<p>ブロック暗号を使ってはいるがブロックに分割不要なストリーム暗号になった。したがってパディングする必要もない。
+前段の暗号文(最初はランダムなIV)を暗号関数にかけたものをストリーム暗号のKeystreamとし、これとデータのXORを取ったものが暗号文で、XORを再度取って復号する。
+暗号化/復号共に暗号関数を用いる。IVや暗号文が破損した場合それ以降の復号はできない。</p>
+
+<p><img src="https://www.sambaiz.net/images/268-cfb.png" alt="CFBによる暗号化/復号" /></p>
+
+<p><code>xorBytes()</code> はサイズが小さい方に合わせてXORを取る。</p>
+
+<pre><code>func (x *cfb) XORKeyStream(dst, src []byte) {
+    if len(dst) &lt; len(src) {
+        panic(&quot;crypto/cipher: output smaller than input&quot;)
+    }
+    if subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(&quot;crypto/cipher: invalid buffer overlap&quot;)
+    }
+    for len(src) &gt; 0 {
+        if x.outUsed == len(x.out) {
+            x.b.Encrypt(x.out, x.next)
+            x.outUsed = 0
+        }
+
+        if x.decrypt {
+            // We can precompute a larger segment of the
+            // keystream on decryption. This will allow
+            // larger batches for xor, and we should be
+            // able to match CTR/OFB performance.
+            copy(x.next[x.outUsed:], src)
+        }
+        n := xorBytes(dst, src, x.out[x.outUsed:])
+        if !x.decrypt {
+            copy(x.next[x.outUsed:], dst)
+        }
+        dst = dst[n:]
+        src = src[n:]
+        x.outUsed += n
+    }
+}
+</code></pre>
+
+<h3 id="output-feedback-ofb">Output Feedback (OFB)</h3>
+
+<p>同じくストリーミング暗号。
+CFBが暗号文を次にフィードバックしていたのに対し、OFBは暗号関数の出力をXORを取って暗号文にする前にフィードバックする。
+したがってKeystreamはIVがn回暗号関数を通ったものとなりデータに依存しないため先に計算することもできる。
+それらとXORを取ったものが暗号文になるため復号も全く同じ処理になる。</p>
+
+<p><img src="https://www.sambaiz.net/images/268-ofb.png" alt="OFBによる暗号化/復号" /></p>
+
+<pre><code>func (x *ofb) refill() {
+    bs := x.b.BlockSize()
+    remain := len(x.out) - x.outUsed
+    if remain &gt; x.outUsed {
+        return
+    }
+    copy(x.out, x.out[x.outUsed:])
+    x.out = x.out[:cap(x.out)]
+    for remain &lt; len(x.out)-bs {
+        x.b.Encrypt(x.cipher, x.cipher)
+        copy(x.out[remain:], x.cipher)
+        remain += bs
+    }
+    x.out = x.out[:remain]
+    x.outUsed = 0
+}
+
+func (x *ofb) XORKeyStream(dst, src []byte) {
+    if len(dst) &lt; len(src) {
+        panic(&quot;crypto/cipher: output smaller than input&quot;)
+    }
+    if subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(&quot;crypto/cipher: invalid buffer overlap&quot;)
+    }
+    for len(src) &gt; 0 {
+        if x.outUsed &gt;= len(x.out)-x.b.BlockSize() {
+            x.refill()
+        }
+        n := xorBytes(dst, src, x.out[x.outUsed:])
+        dst = dst[n:]
+        src = src[n:]
+        x.outUsed += n
+    }
+}
+</code></pre>
+
+<h3 id="counter-ctr">Counter (CTR)</h3>
+
+<p>同じくストリーミング暗号。IV相当のNonceと重複しないCounterを合わせて暗号関数に通したCounter blockをKeystreamとする。</p>
+
+<p><img src="https://www.sambaiz.net/images/268-ctr.png" alt="CTRによる暗号化/復号" /></p>
+
+<p>前段に依存しないため並列に暗号化できるがGoではされていない。</p>
+
+<pre><code>func NewCTR(block Block, iv []byte) Stream {
+    if ctr, ok := block.(ctrAble); ok {
+        return ctr.NewCTR(iv)
+    }
+    if len(iv) != block.BlockSize() {
+        panic(&quot;cipher.NewCTR: IV length must equal block size&quot;)
+    }
+    bufSize := streamBufferSize
+    if bufSize &lt; block.BlockSize() {
+        bufSize = block.BlockSize()
+    }
+    return &amp;ctr{
+        b:       block,
+        ctr:     dup(iv),
+        out:     make([]byte, 0, bufSize),
+        outUsed: 0,
+    }
+}
+
+func (x *ctr) refill() {
+    remain := len(x.out) - x.outUsed
+    copy(x.out, x.out[x.outUsed:])
+    x.out = x.out[:cap(x.out)]
+    bs := x.b.BlockSize()
+    for remain &lt;= len(x.out)-bs {
+        x.b.Encrypt(x.out[remain:], x.ctr)
+        remain += bs
+
+        // Increment counter
+        for i := len(x.ctr) - 1; i &gt;= 0; i-- {
+            x.ctr[i]++
+            if x.ctr[i] != 0 {
+                break
+            }
+        }
+    }
+    x.out = x.out[:remain]
+    x.outUsed = 0
+}
+
+func (x *ctr) XORKeyStream(dst, src []byte) {
+    if len(dst) &lt; len(src) {
+        panic(&quot;crypto/cipher: output smaller than input&quot;)
+    }
+    if subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(&quot;crypto/cipher: invalid buffer overlap&quot;)
+    }
+    for len(src) &gt; 0 {
+        if x.outUsed &gt;= len(x.out)-x.b.BlockSize() {
+            x.refill()
+        }
+        n := xorBytes(dst, src, x.out[x.outUsed:])
+        dst = dst[n:]
+        src = src[n:]
+        x.outUsed += n
+    }
+}
+</code></pre>
+
+<h2 id="ベンチマーク">ベンチマーク</h2>
+
+<p>それぞれの暗号利用モードで暗号化/復号する際のベンチマークを取る。
+OFBとCTRは暗号化/復号処理が同じなのでまとめている。</p>
+
+<pre><code>package sandbox
+
+import (
+    &quot;crypto/cipher&quot;
+)
+
+func EncryptWithCBC(block cipher.Block, iv []byte, data []byte) []byte {
+    enc := cipher.NewCBCEncrypter(block, iv)
+    encrypted := make([]byte, len(data))
+    enc.CryptBlocks(encrypted, data)
+    return encrypted
+}
+
+func DecryptWithCBC(block cipher.Block, iv []byte, data []byte) []byte {
+    dec := cipher.NewCBCDecrypter(block, iv)
+    decrypted := make([]byte, len(data))
+    dec.CryptBlocks(decrypted, data)
+    return decrypted
+}
+
+func EncryptWithCFB(block cipher.Block, iv []byte, data []byte) []byte {
+    enc := cipher.NewCFBEncrypter(block, iv)
+    encrypted := make([]byte, len(data))
+    enc.XORKeyStream(encrypted, data)
+    return encrypted
+}
+
+func DecryptWithCFB(block cipher.Block, iv []byte, data []byte) []byte {
+    dec := cipher.NewCFBDecrypter(block, iv)
+    decrypted := make([]byte, len(data))
+    dec.XORKeyStream(decrypted, data)
+    return decrypted
+}
+
+func EncryptDecryptWithOFB(block cipher.Block, iv []byte, data []byte) []byte {
+    enc := cipher.NewOFB(block, iv)
+    encrypted := make([]byte, len(data))
+    enc.XORKeyStream(encrypted, data)
+    return encrypted
+}
+
+
+func EncryptDecryptWithCTR(block cipher.Block, iv []byte, data []byte) []byte {
+    enc := cipher.NewCTR(block, iv)
+    encrypted := make([]byte, len(data))
+    enc.XORKeyStream(encrypted, data)
+    return encrypted
+}
+</code></pre>
+
+<p>ベンチマークのコード。128 bytesと12800 bytesのランダムなデータを入力とする。</p>
+
+<pre><code>package main
+
+import (
+    &quot;crypto/aes&quot;
+    &quot;crypto/cipher&quot;
+    &quot;crypto/rand&quot;
+    &quot;io&quot;
+    &quot;testing&quot;
+)
+
+func call(dataSize int, f func(block cipher.Block, iv []byte, data []byte) []byte) ([]byte, error) {
+    key := make([]byte, 32) // AES-256
+    if _, err := io.ReadFull(rand.Reader, key); err != nil {
+        return nil, err
+    }
+    block, err := aes.NewCipher(key)
+    if err != nil {
+        return nil, err
+    }
+
+    iv := make([]byte, 16) // = aes.BlockSize()
+    if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+        return nil, err
+    }
+
+    data := make([]byte, dataSize)
+    if _, err := io.ReadFull(rand.Reader, data); err != nil {
+        return nil, err
+    }
+    return f(block, iv, data), nil
+}
+
+func BenchmarkShortEncryptWithCBC(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(128, EncryptWithCBC)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortDecryptWithCBC(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(128, DecryptWithCBC)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortEncryptWithCFB(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(128, EncryptWithCFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortDecryptWithCFB(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(128, DecryptWithCFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortEncryptDecryptWithOFB(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(128, EncryptDecryptWithOFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortEncryptDecryptWithCTR(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(128, EncryptDecryptWithCTR)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongEncryptWithCBC(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(12800, EncryptWithCBC)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongDecryptWithCBC(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(12800, DecryptWithCBC)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongEncryptWithCFB(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(12800, EncryptWithCFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongDecryptWithCFB(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(12800, DecryptWithCFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongEncryptDecryptWithOFB(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(12800, EncryptDecryptWithOFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+
+func BenchmarkLongEncryptDecryptWithCTR(b *testing.B){
+    for i := 0; i &lt; b.N; i++ {
+        _, err := call(12800, EncryptDecryptWithCTR)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+</code></pre>
+
+<p>結果、128 bytesではCBCやCFBと比べてOFBとCTRのパフォーマンスがやや悪いが、
+12800 bytesではほとんど差が出なかった。</p>
+
+<pre><code>$ go test -bench &quot;.*&quot; -benchmem main_test.go  main.go 
+goos: darwin
+goarch: amd64
+BenchmarkShortEncryptWithCBC-4                    213852              5175 ns/op             992 B/op         11 allocs/op
+BenchmarkShortDecryptWithCBC-4                    229080              5087 ns/op             992 B/op         11 allocs/op
+BenchmarkShortEncryptWithCFB-4                    227516              5122 ns/op             992 B/op         11 allocs/op
+BenchmarkShortDecryptWithCFB-4                    226430              5124 ns/op             992 B/op         11 allocs/op
+BenchmarkShortEncryptDecryptWithOFB-4             210572              5566 ns/op            1488 B/op         11 allocs/op
+BenchmarkShortEncryptDecryptWithCTR-4             202731              5714 ns/op            1488 B/op         11 allocs/op
+BenchmarkLongEncryptWithCBC-4                       3387            335094 ns/op           27872 B/op         11 allocs/op
+BenchmarkLongDecryptWithCBC-4                       3412            333356 ns/op           27872 B/op         11 allocs/op
+BenchmarkLongEncryptWithCFB-4                       3273            341127 ns/op           27872 B/op         11 allocs/op
+BenchmarkLongDecryptWithCFB-4                       3344            339897 ns/op           27872 B/op         11 allocs/op
+BenchmarkLongEncryptDecryptWithOFB-4                3361            340044 ns/op           28368 B/op         11 allocs/op
+BenchmarkLongEncryptDecryptWithCTR-4                3302            335447 ns/op           28368 B/op         11 allocs/op
+</code></pre>
+
+<h2 id="参考">参考</h2>
+
+<p><a href="https://ja.wikipedia.org/wiki/%E6%9A%97%E5%8F%B7%E5%88%A9%E7%94%A8%E3%83%A2%E3%83%BC%E3%83%89">暗号利用モード - Wikipedia</a></p>
+
+<p><a href="https://kiririmode.hatenablog.jp/entry/20181014/1539473020">golang で AES/CBC/PKCS#7Padding の暗号化・復号化 - 理系学生日記</a></p>
+
+<p><a href="https://en.wikipedia.org/wiki/Padding_(cryptography)">Padding (cryptography) - Wikipedia</a></p>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

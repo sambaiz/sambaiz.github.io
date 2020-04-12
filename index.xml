@@ -6,8 +6,473 @@
     <language>ja</language>
     <author>sambaiz</author>
     <rights>(C) 2020</rights>
-    <updated>2020-04-01 23:55:00 &#43;0900 JST</updated>
+    <updated>2020-04-12 23:29:00 &#43;0900 JST</updated>
 
+    
+      
+        <item>
+          <title>Goのcipher packageに実装されている暗号利用モードのベンチマーク</title>
+          <link>https://www.sambaiz.net/article/268/</link>
+          <pubDate>Sun, 12 Apr 2020 23:29:00 &#43;0900</pubDate>
+          <author>sambaiz</author>
+          <guid>https://www.sambaiz.net/article/268/</guid>
+          <description>
+
+&lt;p&gt;暗号利用モードはブロック長より長いデータに対してどのようにブロック暗号を適用するかのアルゴリズム。&lt;/p&gt;
+
+&lt;h2 id=&#34;ブロック暗号&#34;&gt;ブロック暗号&lt;/h2&gt;
+
+&lt;p&gt;ブロック暗号は固定長のブロックを暗号化/復号する共通鍵暗号で、入力と同じ長さの出力を返す暗号化/復号関数からなる。
+アメリカ国立標準技術研究所（NIST) が標準暗号として採用したAES (Rijndael) が有名。
+最も単純な暗号利用モードとして、データをブロックに分割してそれぞれ独立に適用する Electronic Codebook (ECB) というのがあるが、
+鍵とブロックが同じなら毎回同じ出力になってしまうため、データのパターンが残ってしまうのとリプレイ攻撃に弱い問題があり使われない。
+また、データがブロック長の整数倍になるようにパディングが必要。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-ecb.png&#34; alt=&#34;ECBによる暗号化/復号&#34; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&#34;goのcrypto-cipher-packageに実装されている暗号化利用モード&#34;&gt;Goのcrypto/cipher packageに実装されている暗号化利用モード&lt;/h2&gt;
+
+&lt;p&gt;Goの&lt;a href=&#34;https://golang.org/pkg/crypto/cipher/&#34;&gt;crypto/cipher&lt;/a&gt; packageには次の暗号化利用モードが実装されている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go version
+go version go1.14 darwin/amd64
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;cipher-block-chaining-cbc&#34;&gt;Cipher Block Chaining (CBC)&lt;/h3&gt;
+
+&lt;p&gt;データをブロックに分割し、前段の暗号文(最初はランダムなIV)と入力ブロックのXORを取ったものが暗号文で、
+これを復号関数にかけて前段の暗号文とのXORを取って復号する。
+IVがないと最初のブロックが復号できず、暗号文の一部が破損すると次のブロックまで復号できない。
+ECBと同様パディングが必要。最も広く使われているらしい。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-cbc.png&#34; alt=&#34;CBCによる暗号化/復号&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Goではパディングは自分でやる必要がある。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (x *cbcEncrypter) CryptBlocks(dst, src []byte) {
+    if len(src)%x.blockSize != 0 {
+        panic(&amp;quot;crypto/cipher: input not full blocks&amp;quot;)
+    }
+    if len(dst) &amp;lt; len(src) {
+        panic(&amp;quot;crypto/cipher: output smaller than input&amp;quot;)
+    }
+    if subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(&amp;quot;crypto/cipher: invalid buffer overlap&amp;quot;)
+    }
+
+    iv := x.iv
+
+    for len(src) &amp;gt; 0 {
+        // Write the xor to dst, then encrypt in place.
+        xorBytes(dst[:x.blockSize], src[:x.blockSize], iv)
+        x.b.Encrypt(dst[:x.blockSize], dst[:x.blockSize])
+
+        // Move to the next block with this block as the next iv.
+        iv = dst[:x.blockSize]
+        src = src[x.blockSize:]
+        dst = dst[x.blockSize:]
+    }
+
+    // Save the iv for the next CryptBlocks call.
+    copy(x.iv, iv)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;足りないバイト数の値でパディングする&lt;a href=&#34;https://tools.ietf.org/html/rfc5652#section-6.3&#34;&gt;PKCS#7&lt;/a&gt;の方式はこんな感じ。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func pad(data []byte, blockSize int) []byte {
+    padSize := blockSize - len(data) % blockSize
+    return append(data, bytes.Repeat([]byte{byte(padSize)}, padSize)...)
+}
+
+func unpad(data []byte) []byte {
+    padSize := int(data[len(data)-1])
+    return data[:len(data)-padSize]
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;cipher-feedback-cfb&#34;&gt;Cipher Feedback (CFB)&lt;/h3&gt;
+
+&lt;p&gt;ブロック暗号を使ってはいるがブロックに分割不要なストリーム暗号になった。したがってパディングする必要もない。
+前段の暗号文(最初はランダムなIV)を暗号関数にかけたものをストリーム暗号のKeystreamとし、これとデータのXORを取ったものが暗号文で、XORを再度取って復号する。
+暗号化/復号共に暗号関数を用いる。IVや暗号文が破損した場合それ以降の復号はできない。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-cfb.png&#34; alt=&#34;CFBによる暗号化/復号&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;xorBytes()&lt;/code&gt; はサイズが小さい方に合わせてXORを取る。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (x *cfb) XORKeyStream(dst, src []byte) {
+    if len(dst) &amp;lt; len(src) {
+        panic(&amp;quot;crypto/cipher: output smaller than input&amp;quot;)
+    }
+    if subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(&amp;quot;crypto/cipher: invalid buffer overlap&amp;quot;)
+    }
+    for len(src) &amp;gt; 0 {
+        if x.outUsed == len(x.out) {
+            x.b.Encrypt(x.out, x.next)
+            x.outUsed = 0
+        }
+
+        if x.decrypt {
+            // We can precompute a larger segment of the
+            // keystream on decryption. This will allow
+            // larger batches for xor, and we should be
+            // able to match CTR/OFB performance.
+            copy(x.next[x.outUsed:], src)
+        }
+        n := xorBytes(dst, src, x.out[x.outUsed:])
+        if !x.decrypt {
+            copy(x.next[x.outUsed:], dst)
+        }
+        dst = dst[n:]
+        src = src[n:]
+        x.outUsed += n
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;output-feedback-ofb&#34;&gt;Output Feedback (OFB)&lt;/h3&gt;
+
+&lt;p&gt;同じくストリーミング暗号。
+CFBが暗号文を次にフィードバックしていたのに対し、OFBは暗号関数の出力をXORを取って暗号文にする前にフィードバックする。
+したがってKeystreamはIVがn回暗号関数を通ったものとなりデータに依存しないため先に計算することもできる。
+それらとXORを取ったものが暗号文になるため復号も全く同じ処理になる。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-ofb.png&#34; alt=&#34;OFBによる暗号化/復号&#34; /&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func (x *ofb) refill() {
+    bs := x.b.BlockSize()
+    remain := len(x.out) - x.outUsed
+    if remain &amp;gt; x.outUsed {
+        return
+    }
+    copy(x.out, x.out[x.outUsed:])
+    x.out = x.out[:cap(x.out)]
+    for remain &amp;lt; len(x.out)-bs {
+        x.b.Encrypt(x.cipher, x.cipher)
+        copy(x.out[remain:], x.cipher)
+        remain += bs
+    }
+    x.out = x.out[:remain]
+    x.outUsed = 0
+}
+
+func (x *ofb) XORKeyStream(dst, src []byte) {
+    if len(dst) &amp;lt; len(src) {
+        panic(&amp;quot;crypto/cipher: output smaller than input&amp;quot;)
+    }
+    if subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(&amp;quot;crypto/cipher: invalid buffer overlap&amp;quot;)
+    }
+    for len(src) &amp;gt; 0 {
+        if x.outUsed &amp;gt;= len(x.out)-x.b.BlockSize() {
+            x.refill()
+        }
+        n := xorBytes(dst, src, x.out[x.outUsed:])
+        dst = dst[n:]
+        src = src[n:]
+        x.outUsed += n
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;counter-ctr&#34;&gt;Counter (CTR)&lt;/h3&gt;
+
+&lt;p&gt;同じくストリーミング暗号。IV相当のNonceと重複しないCounterを合わせて暗号関数に通したCounter blockをKeystreamとする。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-ctr.png&#34; alt=&#34;CTRによる暗号化/復号&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;前段に依存しないため並列に暗号化できるがGoではされていない。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;func NewCTR(block Block, iv []byte) Stream {
+    if ctr, ok := block.(ctrAble); ok {
+        return ctr.NewCTR(iv)
+    }
+    if len(iv) != block.BlockSize() {
+        panic(&amp;quot;cipher.NewCTR: IV length must equal block size&amp;quot;)
+    }
+    bufSize := streamBufferSize
+    if bufSize &amp;lt; block.BlockSize() {
+        bufSize = block.BlockSize()
+    }
+    return &amp;amp;ctr{
+        b:       block,
+        ctr:     dup(iv),
+        out:     make([]byte, 0, bufSize),
+        outUsed: 0,
+    }
+}
+
+func (x *ctr) refill() {
+    remain := len(x.out) - x.outUsed
+    copy(x.out, x.out[x.outUsed:])
+    x.out = x.out[:cap(x.out)]
+    bs := x.b.BlockSize()
+    for remain &amp;lt;= len(x.out)-bs {
+        x.b.Encrypt(x.out[remain:], x.ctr)
+        remain += bs
+
+        // Increment counter
+        for i := len(x.ctr) - 1; i &amp;gt;= 0; i-- {
+            x.ctr[i]++
+            if x.ctr[i] != 0 {
+                break
+            }
+        }
+    }
+    x.out = x.out[:remain]
+    x.outUsed = 0
+}
+
+func (x *ctr) XORKeyStream(dst, src []byte) {
+    if len(dst) &amp;lt; len(src) {
+        panic(&amp;quot;crypto/cipher: output smaller than input&amp;quot;)
+    }
+    if subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(&amp;quot;crypto/cipher: invalid buffer overlap&amp;quot;)
+    }
+    for len(src) &amp;gt; 0 {
+        if x.outUsed &amp;gt;= len(x.out)-x.b.BlockSize() {
+            x.refill()
+        }
+        n := xorBytes(dst, src, x.out[x.outUsed:])
+        dst = dst[n:]
+        src = src[n:]
+        x.outUsed += n
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;ベンチマーク&#34;&gt;ベンチマーク&lt;/h2&gt;
+
+&lt;p&gt;それぞれの暗号利用モードで暗号化/復号する際のベンチマークを取る。
+OFBとCTRは暗号化/復号処理が同じなのでまとめている。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package sandbox
+
+import (
+    &amp;quot;crypto/cipher&amp;quot;
+)
+
+func EncryptWithCBC(block cipher.Block, iv []byte, data []byte) []byte {
+    enc := cipher.NewCBCEncrypter(block, iv)
+    encrypted := make([]byte, len(data))
+    enc.CryptBlocks(encrypted, data)
+    return encrypted
+}
+
+func DecryptWithCBC(block cipher.Block, iv []byte, data []byte) []byte {
+    dec := cipher.NewCBCDecrypter(block, iv)
+    decrypted := make([]byte, len(data))
+    dec.CryptBlocks(decrypted, data)
+    return decrypted
+}
+
+func EncryptWithCFB(block cipher.Block, iv []byte, data []byte) []byte {
+    enc := cipher.NewCFBEncrypter(block, iv)
+    encrypted := make([]byte, len(data))
+    enc.XORKeyStream(encrypted, data)
+    return encrypted
+}
+
+func DecryptWithCFB(block cipher.Block, iv []byte, data []byte) []byte {
+    dec := cipher.NewCFBDecrypter(block, iv)
+    decrypted := make([]byte, len(data))
+    dec.XORKeyStream(decrypted, data)
+    return decrypted
+}
+
+func EncryptDecryptWithOFB(block cipher.Block, iv []byte, data []byte) []byte {
+    enc := cipher.NewOFB(block, iv)
+    encrypted := make([]byte, len(data))
+    enc.XORKeyStream(encrypted, data)
+    return encrypted
+}
+
+
+func EncryptDecryptWithCTR(block cipher.Block, iv []byte, data []byte) []byte {
+    enc := cipher.NewCTR(block, iv)
+    encrypted := make([]byte, len(data))
+    enc.XORKeyStream(encrypted, data)
+    return encrypted
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;ベンチマークのコード。128 bytesと12800 bytesのランダムなデータを入力とする。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;package main
+
+import (
+    &amp;quot;crypto/aes&amp;quot;
+    &amp;quot;crypto/cipher&amp;quot;
+    &amp;quot;crypto/rand&amp;quot;
+    &amp;quot;io&amp;quot;
+    &amp;quot;testing&amp;quot;
+)
+
+func call(dataSize int, f func(block cipher.Block, iv []byte, data []byte) []byte) ([]byte, error) {
+    key := make([]byte, 32) // AES-256
+    if _, err := io.ReadFull(rand.Reader, key); err != nil {
+        return nil, err
+    }
+    block, err := aes.NewCipher(key)
+    if err != nil {
+        return nil, err
+    }
+
+    iv := make([]byte, 16) // = aes.BlockSize()
+    if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+        return nil, err
+    }
+
+    data := make([]byte, dataSize)
+    if _, err := io.ReadFull(rand.Reader, data); err != nil {
+        return nil, err
+    }
+    return f(block, iv, data), nil
+}
+
+func BenchmarkShortEncryptWithCBC(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(128, EncryptWithCBC)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortDecryptWithCBC(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(128, DecryptWithCBC)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortEncryptWithCFB(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(128, EncryptWithCFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortDecryptWithCFB(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(128, DecryptWithCFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortEncryptDecryptWithOFB(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(128, EncryptDecryptWithOFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkShortEncryptDecryptWithCTR(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(128, EncryptDecryptWithCTR)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongEncryptWithCBC(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(12800, EncryptWithCBC)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongDecryptWithCBC(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(12800, DecryptWithCBC)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongEncryptWithCFB(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(12800, EncryptWithCFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongDecryptWithCFB(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(12800, DecryptWithCFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+func BenchmarkLongEncryptDecryptWithOFB(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(12800, EncryptDecryptWithOFB)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+
+
+func BenchmarkLongEncryptDecryptWithCTR(b *testing.B){
+    for i := 0; i &amp;lt; b.N; i++ {
+        _, err := call(12800, EncryptDecryptWithCTR)
+        if err != nil {
+            b.Error(err)
+        }
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;結果、128 bytesではCBCやCFBと比べてOFBとCTRのパフォーマンスがやや悪いが、
+12800 bytesではほとんど差が出なかった。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ go test -bench &amp;quot;.*&amp;quot; -benchmem main_test.go  main.go 
+goos: darwin
+goarch: amd64
+BenchmarkShortEncryptWithCBC-4                    213852              5175 ns/op             992 B/op         11 allocs/op
+BenchmarkShortDecryptWithCBC-4                    229080              5087 ns/op             992 B/op         11 allocs/op
+BenchmarkShortEncryptWithCFB-4                    227516              5122 ns/op             992 B/op         11 allocs/op
+BenchmarkShortDecryptWithCFB-4                    226430              5124 ns/op             992 B/op         11 allocs/op
+BenchmarkShortEncryptDecryptWithOFB-4             210572              5566 ns/op            1488 B/op         11 allocs/op
+BenchmarkShortEncryptDecryptWithCTR-4             202731              5714 ns/op            1488 B/op         11 allocs/op
+BenchmarkLongEncryptWithCBC-4                       3387            335094 ns/op           27872 B/op         11 allocs/op
+BenchmarkLongDecryptWithCBC-4                       3412            333356 ns/op           27872 B/op         11 allocs/op
+BenchmarkLongEncryptWithCFB-4                       3273            341127 ns/op           27872 B/op         11 allocs/op
+BenchmarkLongDecryptWithCFB-4                       3344            339897 ns/op           27872 B/op         11 allocs/op
+BenchmarkLongEncryptDecryptWithOFB-4                3361            340044 ns/op           28368 B/op         11 allocs/op
+BenchmarkLongEncryptDecryptWithCTR-4                3302            335447 ns/op           28368 B/op         11 allocs/op
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h2 id=&#34;参考&#34;&gt;参考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://ja.wikipedia.org/wiki/%E6%9A%97%E5%8F%B7%E5%88%A9%E7%94%A8%E3%83%A2%E3%83%BC%E3%83%89&#34;&gt;暗号利用モード - Wikipedia&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://kiririmode.hatenablog.jp/entry/20181014/1539473020&#34;&gt;golang で AES/CBC/PKCS#7Padding の暗号化・復号化 - 理系学生日記&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Padding_(cryptography)&#34;&gt;Padding (cryptography) - Wikipedia&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+      
     
       
         <item>
@@ -15676,11 +16141,12 @@ print(df3.index.values) # [&#39;2014-11-01 10:00:00&#39; &#39;2014-11-01 12:00:0
           <guid>https://www.sambaiz.net/article/169/</guid>
           <description>
 
-&lt;p&gt;機械学習の良いハイパーパラメータを探す方法として、scikit-learnにも&lt;a href=&#34;http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html&#34;&gt;ある&lt;/a&gt;グリッドサーチがあるが、これは総当たりで試すもので時間がかかる。&lt;/p&gt;
+&lt;p&gt;ベイズ最適化で良いハイパーパラメータを効率的に探す。
+他の方法としてscikit-learnにも&lt;a href=&#34;http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html&#34;&gt;ある&lt;/a&gt;グリッドサーチがあるが、総当りなので時間がかかる。&lt;/p&gt;
 
-&lt;p&gt;それに対してベイズ最適化は、まず現在の最大値を超える確率や期待値を出力とする獲得関数を決めて、ガウス過程(GP)に従うと仮定する。
+&lt;p&gt;まず現在の最大値を超える確率や期待値を出力とする獲得関数を決めて、ガウス過程(GP)に従うと仮定する。
 ガウス過程は回帰関数の確率モデルで、任意の入力(x1, x2, &amp;hellip; , xn)に対応する出力(y1, y2, &amp;hellip;, yn)がガウス分布(=正規分布)に従うというもの。
-これによって予測されるまだ試していない入力での期待値や分散から次に試す値を決めて効率的に探すことができる。&lt;/p&gt;
+これによって予測されるまだ試していない入力での期待値や分散から次に試す値を決める。&lt;/p&gt;
 
 &lt;p&gt;今回はKaggleのTitanicのチュートリアルを、チューニングなしのランダムフォレストとXGBoostで解いたときの結果と比較して、ベイズ最適化によるハイパーパラメータで精度が向上するか確認する。&lt;/p&gt;
 
