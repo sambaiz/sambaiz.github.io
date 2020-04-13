@@ -240,11 +240,17 @@ ECBと同様パディングが必要。最も広く使われているらしい�
 
 <pre><code>func pad(data []byte, blockSize int) []byte {
     padSize := blockSize - len(data) % blockSize
-    return append(data, bytes.Repeat([]byte{byte(padSize)}, padSize)...)
+    ret := make([]byte, len(data) + padSize)
+    copy(ret, data)
+    copy(ret[len(data):], bytes.Repeat([]byte{byte(padSize)}, padSize))
+    return ret
 }
 
 func unpad(data []byte) []byte {
     padSize := int(data[len(data)-1])
+    if padSize &gt; len(data) {
+        return nil
+    }
     return data[:len(data)-padSize]
 }
 </code></pre>
@@ -341,7 +347,7 @@ func (x *ofb) XORKeyStream(dst, src []byte) {
 
 <p><img src="https://www.sambaiz.net/images/268-ctr.png" alt="CTRによる暗号化/復号" /></p>
 
-<p>前段に依存しないため並列に暗号化できるがGoではされていない。</p>
+<p>前段に依存しないため並列に暗号化できるがGoではしていない。</p>
 
 <pre><code>func NewCTR(block Block, iv []byte) Stream {
     if ctr, ok := block.(ctrAble); ok {
@@ -404,16 +410,34 @@ func (x *ctr) XORKeyStream(dst, src []byte) {
 
 <h2 id="ベンチマーク">ベンチマーク</h2>
 
-<p>それぞれの暗号利用モードで暗号化/復号する際のベンチマークを取る。
+<p>それぞれの暗号利用モードで暗号化/復号する際のベンチマークを取る。CBCはパディング込み。
 OFBとCTRは暗号化/復号処理が同じなのでまとめている。</p>
 
 <pre><code>package sandbox
 
 import (
+    &quot;bytes&quot;
     &quot;crypto/cipher&quot;
 )
 
+func pad(data []byte, blockSize int) []byte {
+    padSize := blockSize - len(data) % blockSize
+    ret := make([]byte, len(data) + padSize)
+    copy(ret, data)
+    copy(ret[len(data):], bytes.Repeat([]byte{byte(padSize)}, padSize))
+    return ret
+}
+
+func unpad(data []byte) []byte {
+    padSize := int(data[len(data)-1])
+    if padSize &gt; len(data) {
+        return nil
+    }
+    return data[:len(data)-padSize]
+}
+
 func EncryptWithCBC(block cipher.Block, iv []byte, data []byte) []byte {
+    data = pad(data, block.BlockSize())
     enc := cipher.NewCBCEncrypter(block, iv)
     encrypted := make([]byte, len(data))
     enc.CryptBlocks(encrypted, data)
@@ -459,7 +483,7 @@ func EncryptDecryptWithCTR(block cipher.Block, iv []byte, data []byte) []byte {
 
 <p>ベンチマークのコード。128 bytesと12800 bytesのランダムなデータを入力とする。</p>
 
-<pre><code>package main
+<pre><code>package sandbox
 
 import (
     &quot;crypto/aes&quot;
@@ -469,7 +493,8 @@ import (
     &quot;testing&quot;
 )
 
-func call(dataSize int, f func(block cipher.Block, iv []byte, data []byte) []byte) ([]byte, error) {
+func call(b *testing.B, dataSize int, f func(block cipher.Block, iv []byte, data []byte) []byte) ([]byte, error) {
+    b.StopTimer()
     key := make([]byte, 32) // AES-256
     if _, err := io.ReadFull(rand.Reader, key); err != nil {
         return nil, err
@@ -488,12 +513,13 @@ func call(dataSize int, f func(block cipher.Block, iv []byte, data []byte) []byt
     if _, err := io.ReadFull(rand.Reader, data); err != nil {
         return nil, err
     }
+    b.StartTimer()
     return f(block, iv, data), nil
 }
 
 func BenchmarkShortEncryptWithCBC(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(128, EncryptWithCBC)
+        _, err := call(b,128, EncryptWithCBC)
         if err != nil {
             b.Error(err)
         }
@@ -502,7 +528,7 @@ func BenchmarkShortEncryptWithCBC(b *testing.B){
 
 func BenchmarkShortDecryptWithCBC(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(128, DecryptWithCBC)
+        _, err := call(b,128, DecryptWithCBC)
         if err != nil {
             b.Error(err)
         }
@@ -511,7 +537,7 @@ func BenchmarkShortDecryptWithCBC(b *testing.B){
 
 func BenchmarkShortEncryptWithCFB(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(128, EncryptWithCFB)
+        _, err := call(b,128, EncryptWithCFB)
         if err != nil {
             b.Error(err)
         }
@@ -520,7 +546,7 @@ func BenchmarkShortEncryptWithCFB(b *testing.B){
 
 func BenchmarkShortDecryptWithCFB(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(128, DecryptWithCFB)
+        _, err := call(b,128, DecryptWithCFB)
         if err != nil {
             b.Error(err)
         }
@@ -529,7 +555,7 @@ func BenchmarkShortDecryptWithCFB(b *testing.B){
 
 func BenchmarkShortEncryptDecryptWithOFB(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(128, EncryptDecryptWithOFB)
+        _, err := call(b,128, EncryptDecryptWithOFB)
         if err != nil {
             b.Error(err)
         }
@@ -538,7 +564,7 @@ func BenchmarkShortEncryptDecryptWithOFB(b *testing.B){
 
 func BenchmarkShortEncryptDecryptWithCTR(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(128, EncryptDecryptWithCTR)
+        _, err := call(b,128, EncryptDecryptWithCTR)
         if err != nil {
             b.Error(err)
         }
@@ -547,7 +573,7 @@ func BenchmarkShortEncryptDecryptWithCTR(b *testing.B){
 
 func BenchmarkLongEncryptWithCBC(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(12800, EncryptWithCBC)
+        _, err := call(b,12800, EncryptWithCBC)
         if err != nil {
             b.Error(err)
         }
@@ -556,7 +582,7 @@ func BenchmarkLongEncryptWithCBC(b *testing.B){
 
 func BenchmarkLongDecryptWithCBC(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(12800, DecryptWithCBC)
+        _, err := call(b,12800, DecryptWithCBC)
         if err != nil {
             b.Error(err)
         }
@@ -565,7 +591,7 @@ func BenchmarkLongDecryptWithCBC(b *testing.B){
 
 func BenchmarkLongEncryptWithCFB(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(12800, EncryptWithCFB)
+        _, err := call(b,12800, EncryptWithCFB)
         if err != nil {
             b.Error(err)
         }
@@ -574,7 +600,7 @@ func BenchmarkLongEncryptWithCFB(b *testing.B){
 
 func BenchmarkLongDecryptWithCFB(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(12800, DecryptWithCFB)
+        _, err := call(b,12800, DecryptWithCFB)
         if err != nil {
             b.Error(err)
         }
@@ -583,7 +609,7 @@ func BenchmarkLongDecryptWithCFB(b *testing.B){
 
 func BenchmarkLongEncryptDecryptWithOFB(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(12800, EncryptDecryptWithOFB)
+        _, err := call(b,12800, EncryptDecryptWithOFB)
         if err != nil {
             b.Error(err)
         }
@@ -593,32 +619,32 @@ func BenchmarkLongEncryptDecryptWithOFB(b *testing.B){
 
 func BenchmarkLongEncryptDecryptWithCTR(b *testing.B){
     for i := 0; i &lt; b.N; i++ {
-        _, err := call(12800, EncryptDecryptWithCTR)
+        _, err := call(b,12800, EncryptDecryptWithCTR)
         if err != nil {
             b.Error(err)
         }
     }
-}
+}      
 </code></pre>
 
-<p>結果、128 bytesではCBCやCFBと比べてOFBとCTRのパフォーマンスがやや悪いが、
-12800 bytesではほとんど差が出なかった。</p>
+<p>128 bytesではCFBが最速でCBCがそれに次ぎ、OFBとCTRのパフォーマンスが悪く、
+12800 bytesではOFBが最速でCBCとCTRが同じくらい、CFBのパフォーマンスが悪いという結果になった。</p>
 
-<pre><code>$ go test -bench &quot;.*&quot; -benchmem main_test.go  main.go 
+<pre><code>$ go test -bench &quot;.*&quot; -benchmem main_test.go  main.go
 goos: darwin
 goarch: amd64
-BenchmarkShortEncryptWithCBC-4                    213852              5175 ns/op             992 B/op         11 allocs/op
-BenchmarkShortDecryptWithCBC-4                    229080              5087 ns/op             992 B/op         11 allocs/op
-BenchmarkShortEncryptWithCFB-4                    227516              5122 ns/op             992 B/op         11 allocs/op
-BenchmarkShortDecryptWithCFB-4                    226430              5124 ns/op             992 B/op         11 allocs/op
-BenchmarkShortEncryptDecryptWithOFB-4             210572              5566 ns/op            1488 B/op         11 allocs/op
-BenchmarkShortEncryptDecryptWithCTR-4             202731              5714 ns/op            1488 B/op         11 allocs/op
-BenchmarkLongEncryptWithCBC-4                       3387            335094 ns/op           27872 B/op         11 allocs/op
-BenchmarkLongDecryptWithCBC-4                       3412            333356 ns/op           27872 B/op         11 allocs/op
-BenchmarkLongEncryptWithCFB-4                       3273            341127 ns/op           27872 B/op         11 allocs/op
-BenchmarkLongDecryptWithCFB-4                       3344            339897 ns/op           27872 B/op         11 allocs/op
-BenchmarkLongEncryptDecryptWithOFB-4                3361            340044 ns/op           28368 B/op         11 allocs/op
-BenchmarkLongEncryptDecryptWithCTR-4                3302            335447 ns/op           28368 B/op         11 allocs/op
+BenchmarkShortEncryptWithCBC-4                    852924              1323 ns/op             416 B/op          6 allocs/op
+BenchmarkShortDecryptWithCBC-4                   1000000              1045 ns/op             240 B/op          4 allocs/op
+BenchmarkShortEncryptWithCFB-4                   1213734               987 ns/op             240 B/op          4 allocs/op
+BenchmarkShortDecryptWithCFB-4                   1228692              1155 ns/op             240 B/op          4 allocs/op
+BenchmarkShortEncryptDecryptWithOFB-4             701252              1608 ns/op             736 B/op          4 allocs/op
+BenchmarkShortEncryptDecryptWithCTR-4             709312              1747 ns/op             736 B/op          4 allocs/op
+BenchmarkLongEncryptWithCBC-4                      60972             23010 ns/op           27264 B/op          6 allocs/op
+BenchmarkLongDecryptWithCBC-4                      54586             22122 ns/op           13680 B/op          4 allocs/op
+BenchmarkLongEncryptWithCFB-4                      34948             30435 ns/op           13680 B/op          4 allocs/op
+BenchmarkLongDecryptWithCFB-4                      38904             28475 ns/op           13680 B/op          4 allocs/op
+BenchmarkLongEncryptDecryptWithOFB-4               59216             20488 ns/op           14176 B/op          4 allocs/op
+BenchmarkLongEncryptDecryptWithCTR-4               50810             23594 ns/op           14176 B/op          4 allocs/op
 </code></pre>
 
 <h2 id="参考">参考</h2>
