@@ -18,15 +18,15 @@
           <guid>https://www.sambaiz.net/article/268/</guid>
           <description>
 
-&lt;p&gt;暗号利用モードはブロック長より長いデータに対してどのようにブロック暗号を適用するかのアルゴリズム。&lt;/p&gt;
+&lt;p&gt;暗号利用モードはブロック長より長いメッセージに対してどのようにブロック暗号を適用するかのアルゴリズム。&lt;/p&gt;
 
 &lt;h2 id=&#34;ブロック暗号&#34;&gt;ブロック暗号&lt;/h2&gt;
 
 &lt;p&gt;ブロック暗号は固定長のブロックを暗号化/復号する共通鍵暗号で、入力と同じ長さの出力を返す暗号化/復号関数からなる。
 アメリカ国立標準技術研究所（NIST) が標準暗号として採用したAES (Rijndael) が有名。
-最も単純な暗号利用モードとして、データをブロックに分割してそれぞれ独立に適用する Electronic Codebook (ECB) というのがあるが、
-鍵とブロックが同じなら毎回同じ出力になってしまうため、データのパターンが残ってしまうのとリプレイ攻撃に弱い問題があり使われない。
-また、データがブロック長の整数倍になるようにパディングが必要。&lt;/p&gt;
+最も単純な暗号利用モードとして、メッセージをブロックに分割してそれぞれ独立に適用する Electronic Codebook (ECB) というのがあるが、
+鍵とブロックが同じなら毎回同じ出力になってしまうため、メッセージのパターンが残ってしまうのとリプレイ攻撃に弱い問題があり使われない。
+また、メッセージがブロック長の整数倍になるようにパディングが必要。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-ecb.png&#34; alt=&#34;ECBによる暗号化/復号&#34; /&gt;&lt;/p&gt;
 
@@ -40,10 +40,14 @@ go version go1.14 darwin/amd64
 
 &lt;h3 id=&#34;cipher-block-chaining-cbc&#34;&gt;Cipher Block Chaining (CBC)&lt;/h3&gt;
 
-&lt;p&gt;データをブロックに分割し、前段の暗号文(最初はランダムなIV)と入力ブロックのXORを取ったものが暗号文で、
-これを復号関数にかけて前段の暗号文とのXORを取って復号する。
+&lt;p&gt;メッセージをブロックに分割し、前段の暗号文(最初はランダムなIV)と入力ブロックのXORを取ったものが暗号文で、
+これを復号関数にかけて前段の暗号文とのXORを取って復号する。IVは平文のまま暗号文の前に付けるなどする。
 IVがないと最初のブロックが復号できず、暗号文の一部が破損すると次のブロックまで復号できない。
 ECBと同様パディングが必要。最も広く使われているらしい。&lt;/p&gt;
+
+&lt;p&gt;最後のブロックの暗号文をMAC(Message Authentication Code)とする&lt;a href=&#34;https://ja.wikipedia.org/wiki/CBC-MAC&#34;&gt;CBC-MAC&lt;/a&gt;では最初のブロックの改変を防ぐためIVが0固定で、
+任意のメッセージの最初のブロックを他のメッセージのMACとXORを取って後ろに結合することで、それまでの影響を打ち消し任意のメッセージ単体のMACと同じ値にする
+Length extension attackが成立する。そのためメッセージを固定長にするかメッセージ長を先頭に入れるなどの対策が必要。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-cbc.png&#34; alt=&#34;CBCによる暗号化/復号&#34; /&gt;&lt;/p&gt;
 
@@ -100,7 +104,7 @@ func unpad(data []byte) []byte {
 &lt;h3 id=&#34;cipher-feedback-cfb&#34;&gt;Cipher Feedback (CFB)&lt;/h3&gt;
 
 &lt;p&gt;ブロック暗号を使ってはいるがブロックに分割不要なストリーム暗号になった。したがってパディングする必要もない。
-前段の暗号文(最初はランダムなIV)を暗号関数にかけたものをストリーム暗号のKeystreamとし、これとデータのXORを取ったものが暗号文で、XORを再度取って復号する。
+前段の暗号文(最初はランダムなIV)を暗号関数にかけたものをストリーム暗号のKeystreamとし、これとメッセージのXORを取ったものが暗号文で、XORを再度取って復号する。
 暗号化/復号共に暗号関数を用いる。IVや暗号文が破損した場合それ以降の復号はできない。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-cfb.png&#34; alt=&#34;CFBによる暗号化/復号&#34; /&gt;&lt;/p&gt;
@@ -142,7 +146,7 @@ func unpad(data []byte) []byte {
 
 &lt;p&gt;同じくストリーミング暗号。
 CFBが暗号文を次にフィードバックしていたのに対し、OFBは暗号関数の出力をXORを取って暗号文にする前にフィードバックする。
-したがってKeystreamはIVがn回暗号関数を通ったものとなりデータに依存しないため先に計算することもできる。
+したがってKeystreamはIVがn回暗号関数を通ったものとなりメッセージに依存しないため先に計算することもできる。
 それらとXORを取ったものが暗号文になるため復号も全く同じ処理になる。&lt;/p&gt;
 
 &lt;p&gt;&lt;img src=&#34;https://www.sambaiz.net/images/268-ofb.png&#34; alt=&#34;OFBによる暗号化/復号&#34; /&gt;&lt;/p&gt;
@@ -252,8 +256,8 @@ func (x *ctr) XORKeyStream(dst, src []byte) {
 
 &lt;h2 id=&#34;ベンチマーク&#34;&gt;ベンチマーク&lt;/h2&gt;
 
-&lt;p&gt;それぞれの暗号利用モードで暗号化/復号する際のベンチマークを取る。CBCはパディング込み。
-OFBとCTRは暗号化/復号処理が同じなのでまとめている。&lt;/p&gt;
+&lt;p&gt;それぞれの暗号利用モードで暗号化/復号する際のベンチマークを取る。コードは&lt;a href=&#34;https://github.com/sambaiz/go-cipher-benchmark&#34;&gt;GitHub&lt;/a&gt;にある。
+CBCはパディング込み。OFBとCTRは暗号化/復号処理が同じなのでまとめている。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;package sandbox
 
@@ -323,153 +327,8 @@ func EncryptDecryptWithCTR(block cipher.Block, iv []byte, data []byte) []byte {
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;ベンチマークのコード。128 bytesと12800 bytesのランダムなデータを入力とする。&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;package sandbox
-
-import (
-    &amp;quot;crypto/aes&amp;quot;
-    &amp;quot;crypto/cipher&amp;quot;
-    &amp;quot;crypto/rand&amp;quot;
-    &amp;quot;io&amp;quot;
-    &amp;quot;testing&amp;quot;
-)
-
-func call(b *testing.B, dataSize int, f func(block cipher.Block, iv []byte, data []byte) []byte) ([]byte, error) {
-    b.StopTimer()
-    key := make([]byte, 32) // AES-256
-    if _, err := io.ReadFull(rand.Reader, key); err != nil {
-        return nil, err
-    }
-    block, err := aes.NewCipher(key)
-    if err != nil {
-        return nil, err
-    }
-
-    iv := make([]byte, 16) // = aes.BlockSize()
-    if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-        return nil, err
-    }
-
-    data := make([]byte, dataSize)
-    if _, err := io.ReadFull(rand.Reader, data); err != nil {
-        return nil, err
-    }
-    b.StartTimer()
-    return f(block, iv, data), nil
-}
-
-func BenchmarkShortEncryptWithCBC(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,128, EncryptWithCBC)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkShortDecryptWithCBC(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,128, DecryptWithCBC)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkShortEncryptWithCFB(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,128, EncryptWithCFB)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkShortDecryptWithCFB(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,128, DecryptWithCFB)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkShortEncryptDecryptWithOFB(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,128, EncryptDecryptWithOFB)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkShortEncryptDecryptWithCTR(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,128, EncryptDecryptWithCTR)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkLongEncryptWithCBC(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,12800, EncryptWithCBC)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkLongDecryptWithCBC(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,12800, DecryptWithCBC)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkLongEncryptWithCFB(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,12800, EncryptWithCFB)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkLongDecryptWithCFB(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,12800, DecryptWithCFB)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-func BenchmarkLongEncryptDecryptWithOFB(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,12800, EncryptDecryptWithOFB)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}
-
-
-func BenchmarkLongEncryptDecryptWithCTR(b *testing.B){
-    for i := 0; i &amp;lt; b.N; i++ {
-        _, err := call(b,12800, EncryptDecryptWithCTR)
-        if err != nil {
-            b.Error(err)
-        }
-    }
-}      
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;128 bytesではCFBが最速でCBCがそれに次ぎ、OFBとCTRのパフォーマンスが悪く、
+&lt;p&gt;入力は128 bytesと12800 bytesのランダムなバイト列。
+128 bytesではCFBが最速でCBCがそれに次ぎ、OFBとCTRのパフォーマンスが悪く、
 12800 bytesではOFBが最速でCBCとCTRが同じくらい、CFBのパフォーマンスが悪いという結果になった。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code&gt;$ go test -bench &amp;quot;.*&amp;quot; -benchmem main_test.go  main.go
