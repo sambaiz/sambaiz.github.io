@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "RBACが有効なGKEでHelmを使う | sambaiz-net ",
     "datePublished": "2018-03-18T01:04:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -175,21 +175,13 @@
           <h1>RBACが有効なGKEでHelmを使う</h1>
           <p>(2018-03-18)</p>
           <p><a href="https://www.sambaiz.net/article/122/">k8sのパッケージマネージャーHelmを使う - sambaiz-net</a></p>
-
 <pre><code>$ helm version
 Client: &amp;version.Version{SemVer:&quot;v2.8.2&quot;, GitCommit:&quot;a80231648a1473929271764b920a8e346f6de844&quot;, GitTreeState:&quot;clean&quot;}
 Server: &amp;version.Version{SemVer:&quot;v2.8.2&quot;, GitCommit:&quot;a80231648a1473929271764b920a8e346f6de844&quot;, GitTreeState:&quot;clean&quot;}
-</code></pre>
-
-<p>GKEで<code>helm init</code>して<code>helm install</code>したところ以下のエラーが返ってきた。</p>
-
+</code></pre><p>GKEで<code>helm init</code>して<code>helm install</code>したところ以下のエラーが返ってきた。</p>
 <pre><code>Error: release my-locust failed: namespaces &quot;default&quot; is forbidden: User &quot;system:serviceaccount:kube-system:default&quot; cannot get namespaces in the namespace &quot;default&quot;: Unknown user &quot;system:serviceaccount:kube-system:default&quot;
-</code></pre>
-
-<p>GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が<a href="https://cloud.google.com/kubernetes-engine/docs/role-based-access-control">有効になっている</a>ため、<a href="https://github.com/kubernetes/helm/blob/master/docs/rbac.md">Tillerインスタンスに権限を与える</a>必要がある。</p>
-
+</code></pre><p>GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が<a href="https://cloud.google.com/kubernetes-engine/docs/role-based-access-control">有効になっている</a>ため、<a href="https://github.com/kubernetes/helm/blob/master/docs/rbac.md">Tillerインスタンスに権限を与える</a>必要がある。</p>
 <p>ということでTiller用にnamespaceを切って、その中では好きにできる<a href="https://kubernetes.io/docs/admin/authorization/rbac/#role-and-clusterrole">Role</a>と、Tillerが使う<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/">ServiceAccount</a>を作成し、RoleBindingで紐づける。</p>
-
 <pre><code>kind: Role
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
@@ -219,27 +211,16 @@ roleRef:
   kind: Role
   name: tiller-manager
   apiGroup: rbac.authorization.k8s.io
-</code></pre>
-
-<p>Roleを追加するため、自分自身にsuper-user相当の<code>cluster-admin</code>roleをbindする。</p>
-
+</code></pre><p>Roleを追加するため、自分自身にsuper-user相当の<code>cluster-admin</code>roleをbindする。</p>
 <pre><code>$ kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=&lt;email&gt;
-</code></pre>
-
-<pre><code>$ kubectl create namespace tiller-world
+</code></pre><pre><code>$ kubectl create namespace tiller-world
 $ kubectl create -f tiller-rbac.yaml
-</code></pre>
-
-<p><code>helm init</code>時に作ったServiceAccountを渡す。</p>
-
+</code></pre><p><code>helm init</code>時に作ったServiceAccountを渡す。</p>
 <pre><code>$ helm init --tiller-namespace tiller-world --service-account tiller
 $ kubectl get deployment -n tiller-world
 NAME            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
 tiller-deploy   1         1         1            1           1m
-</code></pre>
-
-<p>Prometheusをinstallしてみる。</p>
-
+</code></pre><p>Prometheusをinstallしてみる。</p>
 <pre><code>$ helm install --name my-prometheus stable/prometheus --tiller-namespace tiller-world --namespace tiller-world
 $ kubectl get pods -n tiller-world
 NAME                                                           READY     STATUS    RESTARTS   AGE
@@ -247,12 +228,8 @@ my-prometheus-prometheus-alertmanager-85f75879db-9r9z2         2/2       Running
 my-prometheus-prometheus-kube-state-metrics-65dfc57897-95ts7   1/1       Running   0          1m
 my-prometheus-prometheus-server-7c98fb8ffb-s7jpq               2/2       Running   0          1m
 tiller-deploy-57dbcb6bbc-6srlt                                 1/1       Running   0          2m
-</code></pre>
-
-<hr />
-
+</code></pre><hr>
 <p>ただ、実際のところHelmが特定のnamespaceしか触れないのは不便だし、roleをあとから増やすのも面倒なので最初からcluster-adminのRoleを付けておいてもよいかもしれない。</p>
-
 <pre><code>apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -272,7 +249,6 @@ subjects:
     name: tiller
     namespace: kube-system
 </code></pre>
-
         </div>
       </article>
     </div>

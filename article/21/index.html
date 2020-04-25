@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "DeepDreaming with TensorFlowをやる(2) | sambaiz-net ",
     "datePublished": "2016-09-10T14:46:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,17 +174,12 @@
         <div class="single body">
           <h1>DeepDreaming with TensorFlowをやる(2)</h1>
           <p>(2016-09-10)</p>
-          
-
-<p><a href="https://www.sambaiz.net/article/20">前回</a>の続き。</p>
-
+          <p><a href="https://www.sambaiz.net/article/20">前回</a>の続き。</p>
 <h2 id="multiscale-image-generation">Multiscale image generation</h2>
-
 <p>様々なスケールで勾配上昇させる。小さなスケールで上昇させたものをより大きなスケールでさらに上昇させていく。
 ただ、壁紙のようなサイズを生成するような場合にそれを行うと、GPUのメモリを食いつぶしてしまう。
 これを避けるために、画像を小さなタイルに分割し、それぞれ独立に勾配を計算する。
 また、毎回画像をランダムにシフトしていくことで、タイルに見えることを避け、画像全体の品質を向上させる。</p>
-
 <pre><code>def tffunc(*argtypes):
     '''Helper that transforms TF-graph generating function into a regular one.
     See &quot;resize&quot; function below.
@@ -219,13 +214,9 @@ def calc_grad_tiled(img, t_grad, tile_size=512):
             g = sess.run(t_grad, {t_input:sub})
             grad[y:y+sz,x:x+sz] = g
     return np.roll(np.roll(grad, -sx, 1), -sy, 0)
-</code></pre>
-
-<p><code>tf.image.resize_bilinear</code>は<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/image.html#resize_bilinear">双線形補間によってリサイズする。</a></p>
-
+</code></pre><p><code>tf.image.resize_bilinear</code>は<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/image.html#resize_bilinear">双線形補間によってリサイズする。</a></p>
 <p><code>numpy.roll</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.roll.html">配列を第三引数axisによってローリングする</a>。
 axisを指定しない場合、フラットなものとして扱われる。</p>
-
 <pre><code>hoge = [[0, 1, 2],
         [3, 4, 5],
         [6, 7, 8]]
@@ -244,11 +235,8 @@ print(np.roll(hoge, 1, axis=1))
 # [[2 0 1]
 #  [5 3 4]
 #  [8 6 7]]
-</code></pre>
-
-<p>つまり、<code>calc_grad_tiled</code>では、ランダムにローリングして、タイルに分割して勾配を求め、ローリングした分を戻して返している。
+</code></pre><p>つまり、<code>calc_grad_tiled</code>では、ランダムにローリングして、タイルに分割して勾配を求め、ローリングした分を戻して返している。
 これと、画像サイズを<code>octave_scale</code>倍にしていく以外は前回やったのと基本的に同じだ。</p>
-
 <pre><code>def render_multiscale(t_obj, img0=img_noise, iter_n=10, step=1.0, octave_n=3, octave_scale=1.4):
     t_score = tf.reduce_mean(t_obj) # defining the optimization objective
     t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
@@ -268,20 +256,14 @@ print(np.roll(hoge, 1, axis=1))
         showarray(visstd(img))
 
 render_multiscale(T(layer)[:,:,:,channel])
-</code></pre>
-
-<h2 id="laplacian-pyramid-gradient-normalization">Laplacian Pyramid Gradient Normalization</h2>
-
+</code></pre><h2 id="laplacian-pyramid-gradient-normalization">Laplacian Pyramid Gradient Normalization</h2>
 <p>結果の画像は、高い周波数(ピクセルの変化の度合が高い)が多く含まれている。
 これを改善するための一つの方法として、毎回画像をぼかし、高周波数を抑え、画像を滑らかにするものがある。
 ただ、この方法は良い画像にするためにより多くの繰り返しが必要になってしまう。
 逆に、低周波数を上げるのは、ラプラシアンピラミッドを使う方法があって、これで勾配を正規化する。</p>
-
 <p>ラプラシアンピラミッドというのは、ガウシアンピラミッドにおける、ある解像度の画像と、
-その一つレベルの高い(解像度1/2 * <sup>1</sup>&frasl;<sub>2</sub> = <sup>1</sup>&frasl;<sub>4</sub>)画像をアップサンプルしたものの差分だ。</p>
-
+その一つレベルの高い(解像度1/2 * 1/2 = 1/4)画像をアップサンプルしたものの差分だ。</p>
 <p><a href="http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_pyramids/py_pyramids.html">画像ピラミッド — OpenCV-Python Tutorials 1 documentation</a></p>
-
 <pre><code>k = np.float32([1,4,6,4,1])
 k = np.outer(k, k)
 # [[  1.   4.   6.   4.   1.]
@@ -315,16 +297,13 @@ print(k5x5[0])
 # [[ 0.00390625  0.          0.        ]
 #  [ 0.          0.00390625  0.        ]
 #  [ 0.          0.          0.00390625]]]
-</code></pre>
-
-<p><code>numpy.outer</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.outer.html">外積を求める</a>もので、
+</code></pre><p><code>numpy.outer</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.outer.html">外積を求める</a>もので、
 <code>numpy.eye</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.eye.html">対角線が1で、それ以外は0の2次元行列を返す</a>。
 <code>k</code>を指定すると、対角線の位置を変更できるが、指定していない場合はNxNの単位行列が返ることになる。
 このフィルターで畳み込むことで、ラプラシアンピラミッドの1レベル高い画像に変換できる。
 <code>tf.nn.conv2d_transpose</code>は
 <a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/nn.html#conv2d_transpose">畳み込みの逆処理</a>のようなもので、
 これでアップサンプルした画像と元画像の差分を取って、ラプラシアンピラミッドを生成している。</p>
-
 <pre><code>def lap_split(img):
     '''Split the image into lo and hi frequency components'''
     with tf.name_scope('split'):
@@ -363,10 +342,7 @@ def lap_normalize(img, scale_n=4):
     tlevels = list(map(normalize_std, tlevels))
     out = lap_merge(tlevels)
     return out[0,:,:,:]
-</code></pre>
-
-<p><code>lap_normalize</code>で画像からラプラシアンピラミッドを生成し、それぞれで正規化してからマージして元の画像に戻す処理をしている。</p>
-
+</code></pre><p><code>lap_normalize</code>で画像からラプラシアンピラミッドを生成し、それぞれで正規化してからマージして元の画像に戻す処理をしている。</p>
 <pre><code>def render_lapnorm(t_obj, img0=img_noise, visfunc=visstd,
                    iter_n=10, step=1.0, octave_n=3, octave_scale=1.4, lap_n=4):
     t_score = tf.reduce_mean(t_obj) # defining the optimization objective
@@ -388,13 +364,9 @@ def lap_normalize(img, scale_n=4):
         showarray(visfunc(img))
 
 render_lapnorm(T(layer)[:,:,:,channel])
-</code></pre>
-
-<h2 id="deepdream">DeepDream</h2>
-
+</code></pre><h2 id="deepdream">DeepDream</h2>
 <p>で、これがDeepDreamのアルゴリズム。
 ラプラシアンピラミッドを生成して、リサイズの際に次のレベルのを足していっている。</p>
-
 <pre><code>def render_deepdream(t_obj, img0=img_noise,
                      iter_n=10, step=1.5, octave_n=4, octave_scale=1.4):
     t_score = tf.reduce_mean(t_obj) # defining the optimization objective
@@ -422,7 +394,6 @@ render_lapnorm(T(layer)[:,:,:,channel])
         clear_output()
         showarray(img/255.0)
 </code></pre>
-
         </div>
       </article>
     </div>

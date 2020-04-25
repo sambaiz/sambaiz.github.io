@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "User NamespaceでrootになってNetwork Namespaceを作りvethとNATで外と通信する | sambaiz-net ",
     "datePublished": "2019-09-06T02:20:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,19 +174,12 @@
         <div class="single body">
           <h1>User NamespaceでrootになってNetwork Namespaceを作りvethとNATで外と通信する</h1>
           <p>(2019-09-06)</p>
-          
-
-<p>LinuxのNamespaceはuidやpid、networkなどを分離できる機能で、Dockerなどのコンテナ技術で使われている。</p>
-
+          <p>LinuxのNamespaceはuidやpid、networkなどを分離できる機能で、Dockerなどのコンテナ技術で使われている。</p>
 <pre><code># Amazon Linux 2 (ami-0ff21806645c5e492)
 $ uname -r
 4.14.138-114.102.amzn2.x86_64
-</code></pre>
-
-<h2 id="user-namespaceでrootになる">User NamespaceでRootになる</h2>
-
+</code></pre><h2 id="user-namespaceでrootになる">User NamespaceでRootになる</h2>
 <p>rootでないと正常終了しないコードを書いた。</p>
-
 <pre><code>$ cat /tmp/root_only.sh
 #!/bin/sh
 
@@ -195,20 +188,14 @@ if [ &quot;$(id -u)&quot; != &quot;0&quot; ]; then
   exit 1
 fi
 echo &quot;you are root!&quot;
-</code></pre>
-
-<p>実際ec2-userでは<code>exit 1</code>になる。</p>
-
+</code></pre><p>実際ec2-userでは<code>exit 1</code>になる。</p>
 <pre><code>$ id -u
 1000
 
 $ sh /tmp/root_only.sh; echo $?
 you are not root...
 1
-</code></pre>
-
-<p>User Namespaceを作る。rootでないとそれ以外のNamespaceは作れない。</p>
-
+</code></pre><p>User Namespaceを作る。rootでないとそれ以外のNamespaceは作れない。</p>
 <pre><code>$ unshare --net
 unshare: unshare failed: Operation not permitted
 
@@ -218,33 +205,21 @@ uid=65534(nfsnobody) gid=65534(nfsnobody) groups=65534(nfsnobody)
 
 $ echo $$
 3537
-</code></pre>
-
-<p>他のshellを開き、Namespaceの外側からuid_mapを書き込む。
+</code></pre><p>他のshellを開き、Namespaceの外側からuid_mapを書き込む。
 外側の1000から始まるuidを、このNamespaceの0から始まるuidに範囲1でマッピングする。</p>
-
 <pre><code># Namespace外
 $ echo '0 1000 1' &gt; /proc/3537/uid_map
-</code></pre>
-
-<p>要するに、uid=1000だったec2-userは、このNamespaceではuid=0(root)になる。上のコードも正常終了した。</p>
-
+</code></pre><p>要するに、uid=1000だったec2-userは、このNamespaceではuid=0(root)になる。上のコードも正常終了した。</p>
 <pre><code>$ id -u
 0
 
 $ sh /tmp/root_only.sh 
 you are root!
 0
-</code></pre>
-
-<p>権限昇格してしまったように見えるかもしれないが、もちろんそんなことはなくて元々のユーザーのパーミッションでできなかったことはできない。</p>
-
+</code></pre><p>権限昇格してしまったように見えるかもしれないが、もちろんそんなことはなくて元々のユーザーのパーミッションでできなかったことはできない。</p>
 <pre><code>$ touch /root_power
 touch: cannot touch '/root_power': Permission denied
-</code></pre>
-
-<p>Namespace内で作ったファイルをNamespace外で見ると、元々のユーザーで作ったことになっている。</p>
-
+</code></pre><p>Namespace内で作ったファイルをNamespace外で見ると、元々のユーザーで作ったことになっている。</p>
 <pre><code>$ touch /home/ec2-user/fake_root_power
 $ ls -l /home/ec2-user/
 total 0
@@ -254,14 +229,9 @@ total 0
 $ ls -l /home/ec2-user/
 total 0
 -rw-rw-r-- 1 ec2-user ec2-user 0 Sep  5 11:48 fake_root_power
-</code></pre>
-
-<h2 id="network-namespaceを作りvethでnamespace外と通信できるようにする">Network Namespaceを作りvethでNamespace外と通信できるようにする</h2>
-
+</code></pre><h2 id="network-namespaceを作りvethでnamespace外と通信できるようにする">Network Namespaceを作りvethでNamespace外と通信できるようにする</h2>
 <p>ではrootだからといって特に何もできないのかというとそんなことはなく、User以外のNamespaceが作れる。</p>
-
 <p>Namespace外のネットワークはこんな感じ。</p>
-
 <pre><code>$ ip addr 
 1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
@@ -280,10 +250,7 @@ $ ip route show table main
 default via 172.31.0.1 dev eth0 
 169.254.169.254 dev eth0 
 172.31.0.0/20 dev eth0 proto kernel scope link src 172.31.14.149
-</code></pre>
-
-<p>Namespaceを作るとloopbackしかアドレスが表示されなくなり、ルートテーブルが空になる。</p>
-
+</code></pre><p>Namespaceを作るとloopbackしかアドレスが表示されなくなり、ルートテーブルが空になる。</p>
 <pre><code>$ unshare --net
 $ ip addr
 1: lo: &lt;LOOPBACK&gt; mtu 65536 qdisc noop state DOWN group default qlen 1000
@@ -297,10 +264,7 @@ curl: (7) Couldn't connect to server
 
 $ echo $$
 1011
-</code></pre>
-
-<p>2つのインタフェース間で通信できるvethのインタフェースを作成し、一つはNamespaceの中に移動する。sudoが必要。</p>
-
+</code></pre><p>2つのインタフェース間で通信できるvethのインタフェースを作成し、一つはNamespaceの中に移動する。sudoが必要。</p>
 <pre><code># Namespace外
 $ sudo ip link add name veth0-host type veth peer name veth0-ct
 $ ip link
@@ -314,10 +278,7 @@ $ sudo ip addr add 192.168.10.1/24 dev veth0-host
 $ sudo ip link set up veth0-host
 
 $ sudo ip link set veth0-ct netns 1011
-</code></pre>
-
-<p>インタフェースを立ち上げるとルートテーブルが更新され、Namespace内外が通信できるようになる。</p>
-
+</code></pre><p>インタフェースを立ち上げるとルートテーブルが更新され、Namespace内外が通信できるようになる。</p>
 <pre><code>$ ip addr add 192.168.10.2/24 dev veth0-ct
 $ ping 192.168.10.1
 connect: Network is unreachable
@@ -340,18 +301,11 @@ $ ping 192.168.10.1
 PING 192.168.10.1 (192.168.10.1) 56(84) bytes of data.
 64 bytes from 192.168.10.1: icmp_seq=1 ttl=255 time=0.027 ms
 64 bytes from 192.168.10.1: icmp_seq=2 ttl=255 time=0.031 ms
-</code></pre>
-
-<h2 id="natしてインターネットと通信できるようにする">NATしてインターネットと通信できるようにする</h2>
-
+</code></pre><h2 id="natしてインターネットと通信できるようにする">NATしてインターネットと通信できるようにする</h2>
 <p>まだインターネットにはルーティングされていないので通信できない。</p>
-
 <pre><code>$ ping 8.8.8.8
 connect: Network is unreachable
-</code></pre>
-
-<p>Namespace外でIPマスカレードする。</p>
-
+</code></pre><p>Namespace外でIPマスカレードする。</p>
 <pre><code># Namespace外
 $ sudo bash -c 'echo 1 &gt; /proc/sys/net/ipv4/ip_forward
 $ sudo iptables --table nat --flush
@@ -369,10 +323,7 @@ target     prot opt source               destination
 Chain POSTROUTING (policy ACCEPT)
 target     prot opt source               destination         
 MASQUERADE  all  --  ip-192-168-10-0.ap-northeast-1.compute.internal/24  anywhere
-</code></pre>
-
-<p>デフォルトゲートウェイをNamespace外のvethにするとインターネットと通信できるようになる。</p>
-
+</code></pre><p>デフォルトゲートウェイをNamespace外のvethにするとインターネットと通信できるようになる。</p>
 <pre><code>$ ip route add default via 192.168.10.1
 $ ip r
 default via 192.168.10.1 dev veth0-ct 
@@ -382,14 +333,9 @@ $ ping 8.8.8.8
 PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
 64 bytes from 8.8.8.8: icmp_seq=1 ttl=41 time=2.70 ms
 64 bytes from 8.8.8.8: icmp_seq=2 ttl=41 time=2.78 ms
-</code></pre>
-
-<h2 id="参考">参考</h2>
-
+</code></pre><h2 id="参考">参考</h2>
 <p><a href="https://gihyo.jp/admin/serial/01/linux_containers/0006">第6回　Linuxカーネルのコンテナ機能［5］ ─ネットワーク：LXCで学ぶコンテナ入門 －軽量仮想化環境を実現する技術｜gihyo.jp … 技術評論社</a></p>
-
 <p><a href="http://gihyo.jp/admin/serial/01/linux_containers/0016">第16回　Linuxカーネルのコンテナ機能 [6] ─ユーザ名前空間：LXCで学ぶコンテナ入門 －軽量仮想化環境を実現する技術｜gihyo.jp … 技術評論社</a></p>
-
 <p><a href="https://blog.kamijin-fanta.info/2018/12/netns/">LinuxのNetns/veth/Bridge/NATで仮想ネットワーク構築 - kamijin-fanta</a></p>
 
         </div>

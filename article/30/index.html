@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "mp4をエンコードしてMPEG-DASHにして再生する | sambaiz-net ",
     "datePublished": "2016-10-30T23:51:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,32 +174,19 @@
         <div class="single body">
           <h1>mp4をエンコードしてMPEG-DASHにして再生する</h1>
           <p>(2016-10-30)</p>
-          
-
-<h2 id="mpeg-dashとは">MPEG-DASHとは</h2>
-
+          <h2 id="mpeg-dashとは">MPEG-DASHとは</h2>
 <p>HTTPで動画をストリーミングするための規格。似たようなのにAppleの独自規格であるHLSなどがある。</p>
-
 <p>サーバーはMPD(Media Presentation Description)ファイルと、セグメントに分けられた動画や音声ファイルを持っていて、
 クライアントはMPDファイルをリクエストし、この内容をもとにセグメントをリクエストしていく。</p>
-
 <h2 id="準備">準備</h2>
-
 <p><a href="https://ffmpeg.org/ffmpeg.html">ffmpeg</a>と
 <a href="https://gpac.wp.mines-telecom.fr/mp4box/">MP4Box</a>を使うので、これらを実行できるようにする。
 Docker上で実行することもできて、その場合は以下のようにエイリアスを付けると便利。</p>
-
 <pre><code>$ alias ffmpeg='docker run --rm -v `pwd`:/tmp/workdir jrottenberg/ffmpeg'
 $ alias MP4Box='docker run --rm -v `pwd`:/work sambaiz/mp4box'
-</code></pre>
-
-<h2 id="エンコード">エンコード</h2>
-
+</code></pre><h2 id="エンコード">エンコード</h2>
 <pre><code>$ffmpeg -i input.mp4 -vcodec libx264 -vb 448k -r 30 -x264opts no-scenecut -g 15 -acodec libfaac -ac 2 -ab 128k -frag_duration 5000000 -movflags empty_moov output.mp4
-</code></pre>
-
-<p>オプションの意味は多分こんな感じ。</p>
-
+</code></pre><p>オプションの意味は多分こんな感じ。</p>
 <ul>
 <li><code>-vcodec libx264</code>: 動画を<a href="https://ja.wikipedia.org/wiki/H.264">H.264</a>にエンコードする</li>
 <li><code>-vb 448k</code>: 動画のビットレート(bps)</li>
@@ -212,11 +199,8 @@ $ alias MP4Box='docker run --rm -v `pwd`:/work sambaiz/mp4box'
 <li><code>-frag_duration 5000000</code>: フラグメント(セグメント)の時間(μs)。</li>
 <li><code>-movflags empty_moov</code>: 頭にmdat atom(データが含まれる)なしで、moov atom(メタ情報が含まれている)を書き始めるらしい。これにしないとMP4Boxに入れるときに失敗した。</li>
 </ul>
-
 <pre><code>$ MP4Box -info -v input.mp4
-</code></pre>
-
-<pre><code>...
+</code></pre><pre><code>...
 [iso file] Current top box start before parsing 0
 [iso file] Read Box type ftyp size 24 start 0
 [iso file] Current top box start before parsing 24
@@ -226,41 +210,22 @@ $ alias MP4Box='docker run --rm -v `pwd`:/work sambaiz/mp4box'
 [iso file] Current top box start before parsing 5216835
 [iso file] Read Box type moov size 13332 start 5216835 &lt;--
 ...
-</code></pre>
-
-<pre><code>$ MP4Box -info -v output.mp4
-</code></pre>
-
-<pre><code>[iso file] Current top box start before parsing 0
+</code></pre><pre><code>$ MP4Box -info -v output.mp4
+</code></pre><pre><code>[iso file] Current top box start before parsing 0
 [iso file] Read Box type ftyp size 36 start 0
 [iso file] Current top box start before parsing 36
 [iso file] Read Box type moov size 1186 start 36 &lt;--
-</code></pre>
-
-<h2 id="mpeg-dashにする">MPEG-DASHにする</h2>
-
+</code></pre><h2 id="mpeg-dashにする">MPEG-DASHにする</h2>
 <pre><code>$ MP4Box -dash 5000 output.mp4
 $ ls
 input.mp4 output.mp4 output_dash.mpd output_dashinit.mp4
-</code></pre>
-
-<p><code>-dash</code>はセグメントの時間。ただ、このmpdだと</p>
-
+</code></pre><p><code>-dash</code>はセグメントの時間。ただ、このmpdだと</p>
 <pre><code>Multiplexed representations are intentionally not supported, as they are not compliant with the DASH-AVC/264 guidelines
-</code></pre>
-
-<p>と出てしまい再生できない。中を見てみると、</p>
-
+</code></pre><p>と出てしまい再生できない。中を見てみると、</p>
 <pre><code>&lt;Representation id=&quot;1&quot; mimeType=&quot;video/mp4&quot; codecs=&quot;avc1.64000d,mp4a.40.2&quot; width=&quot;320&quot; height=&quot;240&quot; frameRate=&quot;30&quot; sar=&quot;1:1&quot; audioSamplingRate=&quot;44100&quot; startWithSAP=&quot;1&quot; bandwidth=&quot;564201&quot;&gt;
-</code></pre>
-
-<p>となっていて、動画と音声が一つのRepresentationになっているのがまずそうだったので、動画と音声を分けて実行した。</p>
-
+</code></pre><p>となっていて、動画と音声が一つのRepresentationになっているのがまずそうだったので、動画と音声を分けて実行した。</p>
 <pre><code>$ MP4Box -dash 5000 output.mp4#video output.mp4#audio
-</code></pre>
-
-<p>結果、できたmpdがこんな感じ。</p>
-
+</code></pre><p>結果、できたmpdがこんな感じ。</p>
 <pre><code>&lt;?xml version=&quot;1.0&quot;?&gt;
 &lt;!-- MPD file Generated with GPAC version 0.6.1-rev14-g8eb0297-master  at 2016-10-30T14:47:02.962Z--&gt;
 &lt;MPD xmlns=&quot;urn:mpeg:dash:schema:mpd:2011&quot; minBufferTime=&quot;PT1.500S&quot; type=&quot;static&quot; mediaPresentationDuration=&quot;PT0H0M21.545S&quot; maxSegmentDuration=&quot;PT0H0M10.000S&quot; profiles=&quot;urn:mpeg:dash:profile:full:2011&quot;&gt;
@@ -294,12 +259,8 @@ input.mp4 output.mp4 output_dash.mpd output_dashinit.mp4
   &lt;/AdaptationSet&gt;
  &lt;/Period&gt;
 &lt;/MPD&gt;
-</code></pre>
-
-<h2 id="再生する">再生する</h2>
-
+</code></pre><h2 id="再生する">再生する</h2>
 <p><a href="https://github.com/Dash-Industry-Forum/dash.js">dash.js</a>を使う。</p>
-
 <pre><code>&lt;html&gt;
   &lt;head&gt;
      &lt;script src=&quot;http://cdn.dashjs.org/latest/dash.all.min.js&quot;&gt;&lt;/script&gt;
@@ -316,10 +277,7 @@ input.mp4 output.mp4 output_dash.mpd output_dashinit.mp4
      &lt;/div&gt;
   &lt;/body&gt;
 &lt;/html&gt;
-</code></pre>
-
-<p>ローカルでサーバーを立ち上げる。</p>
-
+</code></pre><p>ローカルでサーバーを立ち上げる。</p>
 <pre><code>var static = require('node-static');
 
 var fileServer = new static.Server('./public');
@@ -329,14 +287,9 @@ require('http').createServer(function (request, response) {
         fileServer.serve(request, response);
     }).resume();
 }).listen(8080);
-</code></pre>
-
-<h2 id="参考">参考</h2>
-
+</code></pre><h2 id="参考">参考</h2>
 <p><a href="https://www.jstage.jst.go.jp/article/itej/67/2/67_109/_pdf">次世代動画配信技術「MPEG-DASH」技術概要と標準化・関連技術動向</a></p>
-
 <p><a href="http://qiita.com/tomoyukilabs/items/c4eb7a829baac880797c">FFmpegでHTML5 readyな動画ファイルを作成 (MP4, WebM) - Qiita</a></p>
-
 <p><a href="http://yebisupress.dac.co.jp/2015/11/04/profile%EF%BC%9Fatom%EF%BC%9Fmp4%E3%81%AE%E3%82%88%E3%81%8F%E3%82%8F%E3%81%8B%E3%82%89%E3%81%AA%E3%81%84%E3%81%82%E3%82%8C%E3%81%93%E3%82%8C%EF%BC%88atom%E7%B7%A8/">profile？atom？mp4のよくわからないあれこれ（atom編)</a></p>
 
         </div>

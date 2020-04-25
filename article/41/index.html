@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "ファイルディスクリプタの上限を増やす | sambaiz-net ",
     "datePublished": "2016-12-08T21:36:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,82 +174,50 @@
         <div class="single body">
           <h1>ファイルディスクリプタの上限を増やす</h1>
           <p>(2016-12-08)</p>
-          
-
-<h2 id="ファイルディスクリプタとは">ファイルディスクリプタとは</h2>
-
+          <h2 id="ファイルディスクリプタとは">ファイルディスクリプタとは</h2>
 <p>プロセスの外部とやりとりするための識別子。POSIXではint型で、0がstdin、1がstdout、2がstderrといったもの。
 ファイルやデバイスに対するopen()や、
 ネットワーク(INETドメインソケット)やホスト内(UNIXドメインソケット)で
 通信するためのソケットを生成するsocket()などのシステムコールで生成される。</p>
-
 <h2 id="ファイルディスクリプタの上限">ファイルディスクリプタの上限</h2>
-
 <p>一つのプロセスがリソースを食いつぶさないように
 使えるファイルディスクリプタの上限が決まっていて、<code>ulimit -n</code>で確認できる。デフォルトは大体1024。</p>
-
 <pre><code>$ ulimit -n
 1024
-</code></pre>
-
-<p>各プロセスの上限と使っているファイルディスクリプタはこれで確認できる。</p>
-
+</code></pre><p>各プロセスの上限と使っているファイルディスクリプタはこれで確認できる。</p>
 <pre><code>$ cat /proc/&lt;プロセスID&gt;/limits
 ...
 Max open files            1024                 4096                 files     
 ...
 
 $ ls -l /proc/&lt;プロセスID&gt;/fd
-</code></pre>
-
-<p>webサーバーのように同時にたくさん通信したりすると上限に達してしまい、<code>Too many open files</code>になってしまうので増やす必要がある。</p>
-
-<h3 id="etc-security-limits-conf-で変更する"><code>/etc/security/limits.conf</code>で変更する</h3>
-
+</code></pre><p>webサーバーのように同時にたくさん通信したりすると上限に達してしまい、<code>Too many open files</code>になってしまうので増やす必要がある。</p>
+<h3 id="etcsecuritylimitsconfで変更する"><code>/etc/security/limits.conf</code>で変更する</h3>
 <p>PAM認証時(ログインするときなど)に適用されるので、サーバーの起動時に立ち上がったデーモンには使えない。</p>
-
 <pre><code>$ cat /etc/pam.d/sshd
 ...
 session    required     pam_limits.so
 ...
-</code></pre>
-
-<p>全てのユーザー(<code>*</code>)のプロセスが使える
+</code></pre><p>全てのユーザー(<code>*</code>)のプロセスが使える
 ファイルディスクリプタ(nofile)のsoft(ユーザーが設定できる)とhard(rootが設定できる)上限を共に64000にする。</p>
-
 <pre><code>$ echo &quot;* hard nofile 64000&quot; &gt;&gt; /etc/security/limits.conf
 $ echo &quot;* soft nofile 64000&quot; &gt;&gt; /etc/security/limits.conf
 $ ulimit -n
 64000
-</code></pre>
-
-<h3 id="ulimit-n-で変更する"><code>ulimit -n</code>で変更する</h3>
-
+</code></pre><h3 id="ulimit--nで変更する"><code>ulimit -n</code>で変更する</h3>
 <p>シェルと、起動したプロセスで有効。</p>
-
 <pre><code>$ ulimit -n 64000
-</code></pre>
-
-<h3 id="dockerコンテナでは">dockerコンテナでは</h3>
-
+</code></pre><h3 id="dockerコンテナでは">dockerコンテナでは</h3>
 <p>run時に<a href="https://docs.docker.com/engine/reference/commandline/run/#/set-ulimits-in-container---ulimit">ulimitオプション</a>で
 <code>--ulimit nofile=11111</code>のように指定することもできる。</p>
-
 <pre><code>$ docker run -itd --ulimit nofile=11111 ubuntu
 $ docker exec -it &lt;id&gt; /bin/bash -c &quot;ulimit -n&quot;
 11111
-</code></pre>
-
-<h2 id="参考">参考</h2>
-
+</code></pre><h2 id="参考">参考</h2>
 <p><a href="https://open-groove.net/linux/memo-etcsecuritylimits-conf/">/etc/security/limits.confに関するメモ | OpenGroove</a></p>
-
 <p><a href="https://staffblog.yumemi.jp/%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%83%87%E3%82%A3%E3%82%B9%E3%82%AF%E3%83%AA%E3%83%97%E3%82%BF%E6%95%B0%E3%81%AE%E4%B8%8A%E9%99%90%E5%A4%89%E6%9B%B4%E3%81%A8limits-conf%E3%81%AE%E7%BD%A0-2/">ファイルディスクリプタ数の上限変更とlimits.confの罠</a></p>
-
 <p><a href="http://www.koikikukan.com/archives/2013/03/14-005555.php">Linuxのファイルディスクリプタ数を変更・確認する方法: 小粋空間</a></p>
-
-<p><a href="https://ja.wikipedia.org/wiki/ファイル記述子">ファイル記述子 - Wikipedia</a></p>
-
+<p><a href="https://ja.wikipedia.org/wiki/%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E8%A8%98%E8%BF%B0%E5%AD%90">ファイル記述子 - Wikipedia</a></p>
 <p><a href="http://qiita.com/kuni-nakaji/items/d11219e4ad7c74ece748">調べなきゃ寝れない！と調べたら余計に寝れなくなったソケットの話 - Qiita</a></p>
 
         </div>

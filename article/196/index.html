@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "FargateでECSを使う | sambaiz-net ",
     "datePublished": "2018-11-09T00:30:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,36 +174,24 @@
         <div class="single body">
           <h1>FargateでECSを使う</h1>
           <p>(2018-11-09)</p>
-          
-
-<p>ECSはAWSのコンテナオーケストレーションサービス。
+          <p>ECSはAWSのコンテナオーケストレーションサービス。
 クラスタは<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/launch_types.html#launch-type-ec2">EC2上に立てる</a>こともできるが、その場合Auto Scalingグループの設定や<a href="https://aws.amazon.com/jp/blogs/news/how-to-automate-container-instance-draining-in-amazon-ecs/">スケールイン時のdrain</a>などを考慮する必要がある。
 <a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/launch_types.html#launch-type-fargate">Fargate</a>で起動するとサーバーレスで実行でき、バックエンドの管理が必要がなくなる。
 <a href="https://aws.amazon.com/jp/fargate/pricing/">料金</a>は割り当てたvCPUとメモリによって、最低1分の1秒単位で課金される。
 Lambdaと同じくリソースあたりでいうとオンデマンドのEC2と比較して割高。ただし柔軟にリソースが指定できる分いくらか差は縮まる。</p>
-
 <p>特にバッチ処理のように常にリソースが必要ないTaskは都度インスタンスを立ち上げるのも面倒なので良いと思う。
 Lambdaと比較すると、実行環境を自由に作れるのと実行時間に制限がないというところが良いが、
 Taskを作るトリガーは現状cronだけなのでそれ以外のイベントで実行したい場合はLambdaと組み合わせる必要がある。</p>
-
 <p>AWSにはKubernetesクラスタを立てられるEKSもあるが、こちらはまだFargateに対応していない。
 もしかしたら今月末の<a href="https://reinvent.awsevents.com/">re:Invent</a>で何か発表されるかもしれない。</p>
-
 <h2 id="clusterの作成">Clusterの作成</h2>
-
 <p>まずはClusterを作成する。</p>
-
 <pre><code>$ aws ecs create-cluster --cluster-name test
-</code></pre>
-
-<p><img src="https://www.sambaiz.net/images/196.png" alt="ECSオブジェクト" /></p>
-
+</code></pre><p><img src="https://www.sambaiz.net/images/196.png" alt="ECSオブジェクト"></p>
 <h2 id="taskの登録">Taskの登録</h2>
-
 <p>イメージやポートマッピング、ヘルスチェックや割り当てるリソースといった<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_definition_parameters.html#container_definitions">Container definition</a>
 を含む<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_definition_parameters.html">Task definition</a>を書く。
 Fargateの場合networkModeはawsvpc固定になる。</p>
-
 <pre><code>{
     &quot;family&quot;: &quot;test-task&quot;, 
     &quot;networkMode&quot;: &quot;awsvpc&quot;, 
@@ -227,23 +215,16 @@ Fargateの場合networkModeはawsvpc固定になる。</p>
     &quot;cpu&quot;: &quot;256&quot;, 
     &quot;memory&quot;: &quot;512&quot;
 }
-</code></pre>
-
-<p>Taskを登録する。</p>
-
+</code></pre><p>Taskを登録する。</p>
 <pre><code>$ aws ecs register-task-definition --cli-input-json file://$(pwd)/task.json
 $ aws ecs list-task-definitions
     &quot;taskDefinitionArns&quot;: [
         &quot;arn:aws:ecs:ap-northeast-1:*****:task-definition/test-task:1&quot;
     ]
 }
-</code></pre>
-
-<h2 id="taskを実行">Taskを実行</h2>
-
+</code></pre><h2 id="taskを実行">Taskを実行</h2>
 <p><a href="https://docs.aws.amazon.com/cli/latest/reference/ecs/run-task.html">run-task</a>でTaskを実行できる。
 外からアクセスできるようにPublicIPを割り当てている。</p>
-
 <pre><code>{
   &quot;cluster&quot;: &quot;test&quot;,
   &quot;taskDefinition&quot;: &quot;test-task:1&quot;,
@@ -260,21 +241,13 @@ $ aws ecs list-task-definitions
     }
   }
 }
-</code></pre>
-
-<pre><code>$ aws ecs run-task --cli-input-json file://$(pwd)/run-task.json
-</code></pre>
-
-<p>TaskのNetworkのところにPublicIPが出ていて、アクセスするとWelcome to nginx!の表示が確認できる。</p>
-
-<p><img src="https://www.sambaiz.net/images/196-2.png" alt="TaskのNetwork" /></p>
-
+</code></pre><pre><code>$ aws ecs run-task --cli-input-json file://$(pwd)/run-task.json
+</code></pre><p>TaskのNetworkのところにPublicIPが出ていて、アクセスするとWelcome to nginx!の表示が確認できる。</p>
+<p><img src="https://www.sambaiz.net/images/196-2.png" alt="TaskのNetwork"></p>
 <h2 id="serviceを作成">Serviceを作成</h2>
-
 <p>上の方法でTaskを実行することもできるが、
 常時動くアプリケーションの場合、何か問題が起きてTaskが終了したら復活してほしい。
 それをやるのが<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/service_definition_parameters.html">Service</a>で、K8sでいうDeploymentのようなリソース。ELBと紐づけると複数のTaskで負荷分散できる。</p>
-
 <pre><code>{
     &quot;cluster&quot;: &quot;test&quot;,
     &quot;serviceName&quot;: &quot;test-service&quot;,
@@ -293,10 +266,7 @@ $ aws ecs list-task-definitions
         }
     }
 }
-</code></pre>
-
-<p>Serviceを作成するとdesiredCountの分Taskが立ち上がり、Taskを消すと再びその数になるように立ち上がる。</p>
-
+</code></pre><p>Serviceを作成するとdesiredCountの分Taskが立ち上がり、Taskを消すと再びその数になるように立ち上がる。</p>
 <pre><code>$ aws ecs create-service --cli-input-json file://$(pwd)/service.json
 $ aws ecs list-services --cluster test
 {
@@ -304,9 +274,7 @@ $ aws ecs list-services --cluster test
         &quot;arn:aws:ecs:ap-northeast-1:*****:service/test-service&quot;
     ]
 }
-</code></pre>
-
-<p><a href="https://www.sambaiz.net/article/221/">ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net</a></p>
+</code></pre><p><a href="https://www.sambaiz.net/article/221/">ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する - sambaiz-net</a></p>
 
         </div>
       </article>

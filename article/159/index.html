@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る | sambaiz-net ",
     "datePublished": "2018-03-13T01:04:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,36 +174,22 @@
         <div class="single body">
           <h1>Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る</h1>
           <p>(2018-03-13)</p>
-          
-
-<p>Logging AgentをNodeレベルの<a href="https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/">DaemonSet</a>として動かすのではなく、Podの中に<a href="https://kubernetes.io/docs/concepts/cluster-administration/logging/#using-a-sidecar-container-with-the-logging-agent">Sidecar Container</a>として動かす。その分リソースは食うけど、独立した設定で動かせる。</p>
-
+          <p>Logging AgentをNodeレベルの<a href="https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/">DaemonSet</a>として動かすのではなく、Podの中に<a href="https://kubernetes.io/docs/concepts/cluster-administration/logging/#using-a-sidecar-container-with-the-logging-agent">Sidecar Container</a>として動かす。その分リソースは食うけど、独立した設定で動かせる。</p>
 <h2 id="アプリケーション">アプリケーション</h2>
-
 <p><a href="https://github.com/sambaiz/go-logging-sample">https://github.com/sambaiz/go-logging-sample</a></p>
-
 <p>Goで定期的にログを出すサンプルコードを書いたのでこれを使う。
 <a href="https://github.com/spf13/viper">viper</a>で設定を持ち、
 <a href="https://github.com/uber-go/zap">zap</a>でログを出力する。
 あとSIGINTを拾ってSync()してGraceful Shutdownするようにしている。</p>
-
 <p><a href="https://www.sambaiz.net/article/104/">Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる - sambaiz-net</a></p>
-
 <p><a href="https://docs.docker.com/develop/develop-images/multistage-build/#name-your-build-stages">multistage-build</a>して、GKEで動かすのでContainer Registryに上げる。</p>
-
 <pre><code>$ docker build -t go-logging-sample .
 $ docker tag go-logging-sample gcr.io/&lt;project_id&gt;/go-logging-sample:v1 
 $ gcloud docker -- push gcr.io/&lt;project_id&gt;/go-logging-sample
-</code></pre>
-
-<h2 id="fluentdの設定">Fluentdの設定</h2>
-
+</code></pre><h2 id="fluentdの設定">Fluentdの設定</h2>
 <p><a href="https://github.com/kaizenplatform/fluent-plugin-bigquery">fluent-plugin-bigquery</a>プラグインを使う。</p>
-
 <p>projectとdataset、パーティションの<a href="https://cloud.google.com/bigquery/docs/creating-partitioned-tables">日付分割テーブル</a>に入れる場合は、auto_create_table<a href="https://github.com/kaizenplatform/fluent-plugin-bigquery#date-partitioned-table-support">できない</a>のでtableも作成しておく。</p>
-
 <p>fluentdの設定は<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/">ConfigMap</a>で持つ。</p>
-
 <pre><code>apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -238,10 +224,7 @@ data:
       fetch_schema true 
       ignore_unknown_values true	  
     &lt;/match&gt;
-</code></pre>
-
-<p>プラグイン入りのfluentdイメージもビルドして上げる。</p>
-
+</code></pre><p>プラグイン入りのfluentdイメージもビルドして上げる。</p>
 <pre><code>FROM fluent/fluentd:v1.1-onbuild
 
 RUN apk add --update --virtual .build-deps \
@@ -257,20 +240,14 @@ RUN apk add --update --virtual .build-deps \
            /home/fluent/.gem/ruby/*/cache/*.gem
 
 EXPOSE 24284
-</code></pre>
-
-<pre><code>$ touch fluent.conf
+</code></pre><pre><code>$ touch fluent.conf
 $ mkdir plugins
 $ docker build -t fluentd-bigquery .
 $ docker tag fluentd-bigquery gcr.io/&lt;project_id&gt;/fluentd-bigquery:v1 
 $ gcloud docker -- push gcr.io/&lt;project_id&gt;/fluentd-bigquery
-</code></pre>
-
-<h2 id="podの設定">Podの設定</h2>
-
+</code></pre><h2 id="podの設定">Podの設定</h2>
 <p>ConfigMapの<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#add-configmap-data-to-a-volume">Volume</a>と、ログが書かれるVolumeを定義し、
 これを各コンテナでマウントする。</p>
-
 <pre><code>apiVersion: v1
 kind: Pod
 metadata:
@@ -298,29 +275,18 @@ spec:
   - name: config-volume
     configMap:
       name: fluentd-config
-</code></pre>
-
-<h2 id="動かす">動かす</h2>
-
+</code></pre><h2 id="動かす">動かす</h2>
 <p>BigQueryの権限が付いたGKEのクラスタにデプロイ。</p>
-
 <p><a href="https://www.sambaiz.net/article/165/">TerraformでGKEクラスタとBigQueryを立てる - sambaiz-net</a></p>
-
 <pre><code>$ gcloud container clusters get-credentials &lt;cluster-name&gt; --zone &lt;zone&gt; --project &lt;project-name&gt;
 $ kubectl config current-context
 gke_***
 
 $ kubectl create -f fluentd-configmap.yaml
 $ kubectl create -f something-collector-pod.yaml
-</code></pre>
-
-<p>立ち上がらないときは<code>-c</code>でコンテナのnameを指定してログを見る。</p>
-
+</code></pre><p>立ち上がらないときは<code>-c</code>でコンテナのnameを指定してログを見る。</p>
 <pre><code>$ kubectl logs something-collector -c fluentd
-</code></pre>
-
-<p>OptionのUse Legacy SQLのチェックを外して<a href="https://cloud.google.com/bigquery/docs/reference/standard-sql/migrating-from-legacy-sql">標準SQL</a>でBigQueryに入っていることを確認した。</p>
-
+</code></pre><p>OptionのUse Legacy SQLのチェックを外して<a href="https://cloud.google.com/bigquery/docs/reference/standard-sql/migrating-from-legacy-sql">標準SQL</a>でBigQueryに入っていることを確認した。</p>
 <pre><code>SELECT
   *
 FROM
@@ -331,7 +297,6 @@ WHERE
   AND 
   TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(),DAY);
 </code></pre>
-
         </div>
       </article>
     </div>

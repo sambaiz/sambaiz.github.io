@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "複数EC2インスタンスを立ち上げてvegetaで負荷試験する | sambaiz-net ",
     "datePublished": "2016-12-18T20:52:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,25 +174,16 @@
         <div class="single body">
           <h1>複数EC2インスタンスを立ち上げてvegetaで負荷試験する</h1>
           <p>(2016-12-18)</p>
-          
-
-<p><a href="https://github.com/tsenart/vegeta">vegeta</a>で負荷をかける。</p>
-
+          <p><a href="https://github.com/tsenart/vegeta">vegeta</a>で負荷をかける。</p>
 <h2 id="インスタンスを立ち上げるスクリプト">インスタンスを立ち上げるスクリプト</h2>
-
 <p>コードはここ。 <a href="https://github.com/sambaiz/loadtest">sambaiz/loadtest</a></p>
-
 <p>まずキーペアを作成し、EC2インスタンスを立ち上げて、全てのインスタンスが使えるようになるまで待つ。</p>
-
 <pre><code>aws ec2 create-key-pair --key-name LoadTestKeyPare --query 'KeyMaterial' --output text &gt; LoadTestKeyPare.pem
 chmod 400 LoadTestKeyPare.pem
 aws ec2 run-instances --image-id $AMI_ID --count $INSTANCE_NUM --instance-type t2.micro --key-name LoadTestKeyPare --security-group-ids $SECURITY_GROUP_IDS --subnet-id $SUBNET_ID
 ...
 aws ec2 wait instance-status-ok --instance-ids $INSTANCE_IDS
-</code></pre>
-
-<p>このAMIは事前にPackerでつくったもの。vegetaをインストールしてファイルディスクリプタの上限を増やしている。</p>
-
+</code></pre><p>このAMIは事前にPackerでつくったもの。vegetaをインストールしてファイルディスクリプタの上限を増やしている。</p>
 <pre><code>{
   &quot;variables&quot;: {
     &quot;aws_access_key&quot;: &quot;&quot;,
@@ -218,12 +209,9 @@ aws ec2 wait instance-status-ok --instance-ids $INSTANCE_IDS
     ]
   }]
 }
-</code></pre>
-
-<p>立ち上がったインスタンスに対して<a href="https://code.google.com/p/pdsh/">pdsh</a>で
+</code></pre><p>立ち上がったインスタンスに対して<a href="https://code.google.com/p/pdsh/">pdsh</a>で
 各マシンでvegetaを実行させ($VEGETA_CMD)、結果のファイルを集めてreportのinputsで指定すると
 まとめてレポートを出力してくれる。</p>
-
 <pre><code>pdsh -l ec2-user -w `echo &quot;$PUBLIC_DNS_NAMES&quot; |  paste -d, -s -` &quot;$VEGETA_CMD &gt; result.bin&quot;
 
 for machine in $PUBLIC_DNS_NAMES; do
@@ -231,10 +219,7 @@ for machine in $PUBLIC_DNS_NAMES; do
 done
 
 vegeta report -inputs=`echo $PUBLIC_DNS_NAMES |  paste -d, -s -`
-</code></pre>
-
-<p>終わったら後片付けをする。trapでCtrl+C等での終了時もインスタンスが残らないようにする。</p>
-
+</code></pre><p>終わったら後片付けをする。trapでCtrl+C等での終了時もインスタンスが残らないようにする。</p>
 <pre><code>cleanup() {
   echo &quot;---- Clean up ----&quot;
   aws ec2 terminate-instances --instance-ids $INSTANCE_IDS
@@ -243,16 +228,10 @@ vegeta report -inputs=`echo $PUBLIC_DNS_NAMES |  paste -d, -s -`
   rm $PUBLIC_DNS_NAMES
 }
 trap cleanup EXIT SIGHUP SIGINT SIGQUIT SIGTERM
-</code></pre>
-
-<h2 id="実行する">実行する</h2>
-
+</code></pre><h2 id="実行する">実行する</h2>
 <pre><code>$ brew install awscli pdsh jq vegeta packer
 $ aws configure
-</code></pre>
-
-<p>こんな感じのスクリプト(sample/sample.sh)から実行する。</p>
-
+</code></pre><p>こんな感じのスクリプト(sample/sample.sh)から実行する。</p>
 <pre><code>#!/bin/bash
 
 export INSTANCE_NUM=3
@@ -267,20 +246,13 @@ export RESOURCES_DIR=res
 export VEGETA_CMD='vegeta attack -targets=res/targets.txt -rate=1000 -duration=10s'
 
 sh run.sh
-</code></pre>
-
-<p>sample/res/targets.txt</p>
-
+</code></pre><p>sample/res/targets.txt</p>
 <pre><code>GET http://example.com/
 
 POST http://example.com/
 @res/post.json
-</code></pre>
-
-<h2 id="結果">結果</h2>
-
+</code></pre><h2 id="結果">結果</h2>
 <p>何も指定しないとこんな感じ(-reporter=text)。</p>
-
 <pre><code>Requests      [total, rate]            10000, 1000.10
 Duration      [total, attack, wait]    10.011642793s, 9.998999835s, 12.642958ms
 Latencies     [mean, 50, 95, 99, max]  14.781775ms, 4.262304ms, 68.475899ms, 97.492882ms, 1.096072997s
@@ -289,11 +261,8 @@ Bytes Out     [total, mean]            110000, 11.00
 Success       [ratio]                  100.00%
 Status Codes  [code:count]             200:10000  
 Error Set:
-</code></pre>
-
-<p>他にもjsonだったり、plotを指定するとレイテンシのグラフのhtmlが出力される。</p>
-
-<p><img src="https://www.sambaiz.net/images/43_plot.jpg" alt="グラフ" /></p>
+</code></pre><p>他にもjsonだったり、plotを指定するとレイテンシのグラフのhtmlが出力される。</p>
+<p><img src="https://www.sambaiz.net/images/43_plot.jpg" alt="グラフ"></p>
 
         </div>
       </article>

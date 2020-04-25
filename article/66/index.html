@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する | sambaiz-net ",
     "datePublished": "2017-02-19T23:55:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,20 +174,14 @@
         <div class="single body">
           <h1>fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する</h1>
           <p>(2017-02-19)</p>
-          
-
-<h2 id="fluentdのmonitor-agent-http-docs-fluentd-org-v0-12-articles-monitoring"><a href="http://docs.fluentd.org/v0.12/articles/monitoring">fluentdのmonitor_agent</a></h2>
-
+          <h2 id="fluentdのmonitor_agenthttpdocsfluentdorgv012articlesmonitoring"><a href="http://docs.fluentd.org/v0.12/articles/monitoring">fluentdのmonitor_agent</a></h2>
 <p>メトリクスをjsonで返すAPIを提供する。</p>
-
 <pre><code>&lt;source&gt;
   @type monitor_agent
   bind 0.0.0.0
   port 24220
 &lt;/source&gt;
-</code></pre>
-
-<pre><code>$ curl localhost:24220/api/plugins.json | jq
+</code></pre><pre><code>$ curl localhost:24220/api/plugins.json | jq
 {
   &quot;plugins&quot;: [
     {
@@ -230,62 +224,42 @@
     }
   ]
 }
-</code></pre>
-
-<p>これをもとにStackdriverで異常を検知できるようにする。</p>
-
-<h2 id="google-stackdriver-https-cloud-google-com-stackdriver"><a href="https://cloud.google.com/stackdriver/">Google Stackdriver</a></h2>
-
+</code></pre><p>これをもとにStackdriverで異常を検知できるようにする。</p>
+<h2 id="google-stackdriverhttpscloudgooglecomstackdriver"><a href="https://cloud.google.com/stackdriver/">Google Stackdriver</a></h2>
 <p>GoogleがStackdriverを買収して改造したもの。GCPだけではなくAWSのリソースも監視できる。
 まだBeta。</p>
-
-<h2 id="ec2インスタンスを監視する-https-cloud-google-com-monitoring-quickstart-aws-configure-sd-acct"><a href="https://cloud.google.com/monitoring/quickstart-aws#configure-sd-acct">EC2インスタンスを監視する</a></h2>
-
+<h2 id="ec2インスタンスを監視するhttpscloudgooglecommonitoringquickstart-awsconfigure-sd-acct"><a href="https://cloud.google.com/monitoring/quickstart-aws#configure-sd-acct">EC2インスタンスを監視する</a></h2>
 <p>GCPのメニューのSTACKDRIVER -&gt; モニタリングで、プロジェクトを指定してStackdriverアカウントを作成する。</p>
-
 <p>今回はEC2で動いているfluentdを監視するので指示に従ってクロスアカウントアクセスのロールを作成、
 Role ARNを入力してAWSアカウントと接続すると、
 StackdriverのResouces-&gt;InstancesでCPUの使用率などは確認できるが、
 EC2にAgentを入れると詳細な情報を取得できる。</p>
-
 <p>GCPのメニューのサービスアカウントから接続したAWSアカウントを選択し、
 Project-&gt;編集者とLogging-&gt;ログ書き込みロールのサービスアカウントを作成する。
 新しい秘密鍵の提供にチェックを入れて、JSONのキーをダウンロードする。
 これをEC2の<code>/etc/google/auth/application_default_credentials.json</code>に置いて
 <code>chown root:root</code>、<code>chmod 400</code>する。</p>
-
 <p>Monitoring AgentとLogging Agentをインストールし、
 <code>stackdriver-collectd</code>と<code>google-fluentd</code>のプロセスがあれば正常。</p>
-
 <pre><code>curl -O https://repo.stackdriver.com/stack-install.sh
 sudo bash stack-install.sh --write-gcm
 
 curl -sSO https://dl.google.com/cloudagents/install-logging-agent.sh
 sudo bash install-logging-agent.sh
-</code></pre>
-
-<p>メモリの使用量やTCPコネクション数などがとれていることを確認する。
+</code></pre><p>メモリの使用量やTCPコネクション数などがとれていることを確認する。
 Googleのドキュメントには見つからなかったけど、
 旧Stackdriverと同様、<code>stackdriver_monitor: false</code>のタグを付けると
 <a href="https://support.stackdriver.com/customer/portal/articles/1491785-collecting-data-from-specific-resources-only">監視対象から外れる</a>
 っぽい。</p>
-
-<h2 id="カスタムメトリクスを送る-https-cloud-google-com-monitoring-custom-metrics"><a href="https://cloud.google.com/monitoring/custom-metrics/">カスタムメトリクスを送る</a></h2>
-
+<h2 id="カスタムメトリクスを送るhttpscloudgooglecommonitoringcustom-metrics"><a href="https://cloud.google.com/monitoring/custom-metrics/">カスタムメトリクスを送る</a></h2>
 <p>MetricDescriptorを作成し、これにTimeSeriesデータを書き込んでいく。</p>
-
-<h3 id="metricdescriptorの作成-https-cloud-google-com-monitoring-custom-metrics-creating-metrics-monitoring-create-metric-protocol"><a href="https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-create-metric-protocol">MetricDescriptorの作成</a></h3>
-
+<h3 id="metricdescriptorの作成httpscloudgooglecommonitoringcustom-metricscreating-metricsmonitoring-create-metric-protocol"><a href="https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-create-metric-protocol">MetricDescriptorの作成</a></h3>
 <p><a href="https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors">MetricDescriptor</a></p>
-
 <p>typeは<code>custom.googleapis.com/</code>
 から<a href="https://cloud.google.com/monitoring/custom-metrics/creating-metrics#custom_metric_names">始める</a>。</p>
-
 <p><a href="https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptors#MetricKind">metricKind</a>
 にはGAUGEのほかに変化量をとるDELTA、累積するCUMULATIVEを指定できる。</p>
-
 <p>labelはフィルタリングのためのもの。</p>
-
 <pre><code>{
   &quot;name&quot;: &quot;&quot;,
   &quot;description&quot;: &quot;fluentd buffer_queue_length&quot;,
@@ -301,22 +275,15 @@ Googleのドキュメントには見つからなかったけど、
     },
   ],
 }
-</code></pre>
-
-<p>これをGoで登録する。</p>
-
+</code></pre><p>これをGoで登録する。</p>
 <p>gcpのほうのprojectでProject-&gt;編集者のサービスアカウントを作成してパスを
 環境変数<code>GOOGLE_APPLICATION_CREDENTIALS</code>に入れて
 <a href="https://developers.google.com/identity/protocols/application-default-credentials">Default Credential</a>
 にする。</p>
-
 <p>必要なパッケージをgo get。</p>
-
 <pre><code>$ go get google.golang.org/api/monitoring/v3
 $ go get golang.org/x/oauth2/google
-</code></pre>
-
-<pre><code>func main() {
+</code></pre><pre><code>func main() {
 	ctx := context.Background()
 	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
 	if err != nil {
@@ -354,10 +321,7 @@ $ go get golang.org/x/oauth2/google
 
 	fmt.Println(&quot;done&quot;)
 }
-</code></pre>
-
-<p>登録されたことをlistで確認する。</p>
-
+</code></pre><p>登録されたことをlistで確認する。</p>
 <pre><code>response, err := client.Projects.MetricDescriptors.List(name).Context(ctx).Do()
 if err != nil {
   panic(err)
@@ -366,23 +330,16 @@ if err != nil {
 for _, v := range response.MetricDescriptors {
   fmt.Println(v.DisplayName)
 }
-</code></pre>
-
-<pre><code>API Request Count
+</code></pre><pre><code>API Request Count
 Agent Memory Usage
 Stream Space Used
 ...
 fluentd-buffer_queue_length
 ...
-</code></pre>
-
-<h3 id="timeseriesの書き込み-https-cloud-google-com-monitoring-custom-metrics-creating-metrics-monitoring-write-timeseries-protocol"><a href="https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-write-timeseries-protocol">TimeSeriesの書き込み</a></h3>
-
+</code></pre><h3 id="timeseriesの書き込みhttpscloudgooglecommonitoringcustom-metricscreating-metricsmonitoring-write-timeseries-protocol"><a href="https://cloud.google.com/monitoring/custom-metrics/creating-metrics#monitoring-write-timeseries-protocol">TimeSeriesの書き込み</a></h3>
 <p><a href="https://cloud.google.com/monitoring/api/ref_v3/rest/v3/TimeSeries">TimeSeries</a></p>
-
 <p>metricのtypeはMetricDescriptorのtypeと対応する。
 pointsのendTimeはRFC3339のUTC文字列で渡す。</p>
-
 <pre><code>{
  &quot;timeSeries&quot;: [
   {
@@ -414,13 +371,10 @@ pointsのendTimeはRFC3339のUTC文字列で渡す。</p>
   }
  ]
 }
-</code></pre>
-
-<p>resourceのtypeは
+</code></pre><p>resourceのtypeは
 <a href="https://cloud.google.com/logging/docs/reference/v2/rest/v2/monitoredResourceDescriptors/list#MonitoredResourceDescriptor">MonitoredResourceDescriptor</a>
 と対応していて、
 <a href="https://cloud.google.com/logging/docs/reference/v2/rest/v2/monitoredResourceDescriptors/list">list</a>で確認できる。</p>
-
 <pre><code>{
  &quot;resourceDescriptors&quot;: [
    {
@@ -449,10 +403,7 @@ pointsのendTimeはRFC3339のUTC文字列で渡す。</p>
   ...
  ]
 }
-</code></pre>
-
-<p>書くコード。</p>
-
+</code></pre><p>書くコード。</p>
 <pre><code>func writeFluentdBufferQueueLength() error {
 	ctx := context.Background()
 	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
@@ -569,12 +520,8 @@ func fetchFluentdMetrics() (*fluentdMetrics, error) {
 func int64p(n int64) *int64 {
 	return &amp;n
 }
-</code></pre>
-
-<p>これを<a href="https://github.com/jasonlvhit/gocron">gocron</a>などで定期的に実行させる。</p>
-
+</code></pre><p>これを<a href="https://github.com/jasonlvhit/gocron">gocron</a>などで定期的に実行させる。</p>
 <p>読むコード。確認用。</p>
-
 <pre><code>func readFluentdBufferQueueLength() error {
 	ctx := context.Background()
 	httpClient, err := google.DefaultClient(ctx, monitoring.CloudPlatformScope)
@@ -612,14 +559,10 @@ func int64p(n int64) *int64 {
 
 	return nil
 }
-</code></pre>
-
-<p>ちゃんと届いていれば
+</code></pre><p>ちゃんと届いていれば
 Resource-&gt;Metrics Explorerでもcustom/fluentd/buffer_queue_lengthを確認できる。</p>
-
 <p>これでAlertを設定できるようになった。TargetのResource TypeはCustom Metrics。</p>
-
-<p><img src="https://www.sambaiz.net/images/66.png" alt="Alertの設定" /></p>
+<p><img src="https://www.sambaiz.net/images/66.png" alt="Alertの設定"></p>
 
         </div>
       </article>

@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "Destributed TensorFlowの流れとSavedModelの出力 | sambaiz-net ",
     "datePublished": "2018-07-25T23:55:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,35 +174,24 @@
         <div class="single body">
           <h1>Destributed TensorFlowの流れとSavedModelの出力</h1>
           <p>(2018-07-25)</p>
-          
-
-<h2 id="distributed-tensorflow-https-www-tensorflow-org-deploy-distributed"><a href="https://www.tensorflow.org/deploy/distributed">Distributed TensorFlow</a></h2>
-
+          <h2 id="distributed-tensorflowhttpswwwtensorfloworgdeploydistributed"><a href="https://www.tensorflow.org/deploy/distributed">Distributed TensorFlow</a></h2>
 <p>クラスタを組んでGraphを分散実行する。</p>
-
 <p>クラスタは</p>
-
 <ul>
 <li>master: sessionを作成し、workerを制御する</li>
 <li>worker: 計算を行う</li>
 <li>ps(parameter server): 変数の値を持ち、更新する</li>
 </ul>
-
 <p>のjobからなり、gRPCの</p>
-
 <ul>
 <li><a href="https://github.com/tensorflow/tensorflow/blob/r1.9/tensorflow/core/protobuf/master_service.proto">Master Service</a></li>
 <li><a href="https://github.com/tensorflow/tensorflow/blob/r1.9/tensorflow/core/protobuf/worker_service.proto">Worker Service</a></li>
 </ul>
-
 <p>でやり取りする。</p>
-
 <h2 id="tensorflow-serverを立てる">TensorFlow serverを立てる</h2>
-
 <p>各jobとURLのmapを<a href="https://www.tensorflow.org/api_docs/python/tf/train/ClusterSpec">ClusterSpec</a>にして
 jobとindexと併せて<a href="https://www.tensorflow.org/api_docs/python/tf/train/ServerDef">ServerDef</a>を作って
 <a href="https://www.tensorflow.org/api_docs/python/tf/train/Server">Server</a>を立てる。</p>
-
 <pre><code>{
     &quot;master&quot;: [
         &quot;check-tf-config-master-34z8-0:2222&quot;
@@ -216,47 +205,32 @@ jobとindexと併せて<a href="https://www.tensorflow.org/api_docs/python/tf/tr
         &quot;check-tf-config-worker-34z8-1:2222&quot;
     ]
 }
-</code></pre>
-
-<pre><code>cluster_spec_object = tf.train.ClusterSpec(cluster_spec)
+</code></pre><pre><code>cluster_spec_object = tf.train.ClusterSpec(cluster_spec)
 server_def = tf.train.ServerDef(
     cluster=cluster_spec_object.as_cluster_def(),
     protocol=&quot;grpc&quot;,
     job_name=job_name, # worker, master, ps 
     task_index=0)
 server = tf.train.Server(server_def)
-</code></pre>
-
-<p>psのjobでは<code>server.join()</code>して待ち構える。</p>
-
+</code></pre><p>psのjobでは<code>server.join()</code>して待ち構える。</p>
 <pre><code>if job_name == &quot;ps&quot;:
     server.join()
 else:
     # build model
-</code></pre>
-
-<h2 id="workerにgraphを割り当てる">WorkerにGraphを割り当てる</h2>
-
+</code></pre><h2 id="workerにgraphを割り当てる">WorkerにGraphを割り当てる</h2>
 <p>workerの<a href="https://www.tensorflow.org/api_docs/python/tf/device">device</a>にGraphを割り当てる。
 deviceは<code>/job:worker/replica:0/task:0/device:GPU:0</code>
 のような<a href="https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/framework/device.py#L130">フォーマット</a>で表される。</p>
-
 <p>Graphの持ち方には一つのGraphの異なる計算箇所をそれぞれのworkerが持つIn-graph replicationと、
 それぞれGraphを持つBetween-graph replicationがある。これは後者の例で、<a href="https://www.tensorflow.org/api_docs/python/tf/train/replica_device_setter">replica_device_setter</a>によってラウンドロビンで各psに変数を配置する。</p>
-
 <pre><code>with tf.device(tf.train.replica_device_setter(
     cluster=cluster_spec,
     worker_device=device
 )):
     # graph
-</code></pre>
-
-<h2 id="syncreplicasoptimizerのhookを追加">SyncReplicasOptimizerのhookを追加</h2>
-
+</code></pre><h2 id="syncreplicasoptimizerのhookを追加">SyncReplicasOptimizerのhookを追加</h2>
 <p>同期して変数を更新する場合、<a href="https://www.tensorflow.org/api_docs/python/tf/train/SyncReplicasOptimizer">SyncReplicasOptimizer</a>を使い、make_session_run_hookで作られるhookをMonitoredTrainingSessionに渡す。</p>
-
 <p><a href="https://www.sambaiz.net/article/175/">TensorFlowのMonitoredSessionとSessionRunHookとsummaryのエラー - sambaiz-net</a></p>
-
 <pre><code>train_op = tf.train.SyncReplicasOptimizer(
     tf.train.AdamOptimizer(self.learning_rate),
     replicas_to_aggregate=self.worker_num,
@@ -277,20 +251,13 @@ with tf.train.MonitoredTrainingSession(
 ) as sess:
     while not sess.should_stop():
     # sess.run()
-</code></pre>
-
-<h2 id="savedmodelの出力">SavedModelの出力</h2>
-
+</code></pre><h2 id="savedmodelの出力">SavedModelの出力</h2>
 <p>実行後、SavedModelを出力する。</p>
-
 <p><a href="https://www.sambaiz.net/article/172/">TensorFlowのモデルをsave/loadする - sambaiz-net</a></p>
-
 <p>MonitoredTrainingSessionのsessは<code>should_stop()</code>がtrueになったあとは使えなくなるため、
 新しいsessionを作るかhookのendでする必要がある。</p>
-
 <p>新しいsessionでする例。そのままrestoreするとすでにworkerが終了している場合に、そのdeviceの変数もrestoreしようとして失敗するので
 <a href="https://www.tensorflow.org/api_docs/python/tf/train/import_meta_graph">import_meta_graph</a>のclear_devicesをTrueにしている。</p>
-
 <pre><code>with tf.Graph().as_default():
     with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state(&quot;ckpt&quot;)
@@ -299,10 +266,7 @@ with tf.train.MonitoredTrainingSession(
             clear_devices=True)
         saver.restore(sess, ckpt.model_checkpoint_path)
         save.save(sess, &quot;saved&quot;, signature_def_map)
-</code></pre>
-
-<p>hookでする例。restoreする必要がなくて良い。</p>
-
+</code></pre><p>hookでする例。restoreする必要がなくて良い。</p>
 <pre><code>class SavedModelBuilderHook(session_run_hook.SessionRunHook):
     def __init__(self, export_dir, signature_def_map, tags):
         self.export_dir = export_dir
@@ -319,7 +283,6 @@ with tf.train.MonitoredTrainingSession(
         )
         builder.save()
 </code></pre>
-
         </div>
       </article>
     </div>

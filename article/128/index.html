@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "Cloudera Docker ImageでHiveの実行環境を立ち上げてJSONのログにクエリを実行する | sambaiz-net ",
     "datePublished": "2017-08-24T09:22:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,42 +174,27 @@
         <div class="single body">
           <h1>Cloudera Docker ImageでHiveの実行環境を立ち上げてJSONのログにクエリを実行する</h1>
           <p>(2017-08-24)</p>
-          
-
-<h2 id="hiveとは-https-cwiki-apache-org-confluence-display-hive-home-home-apachehive"><a href="https://cwiki.apache.org/confluence/display/Hive/Home#Home-ApacheHive">Hiveとは</a></h2>
-
+          <h2 id="hiveとはhttpscwikiapacheorgconfluencedisplayhivehomehome-apachehive"><a href="https://cwiki.apache.org/confluence/display/Hive/Home#Home-ApacheHive">Hiveとは</a></h2>
 <p>Hadoop上で動くデータウェアハウスソフトウェア。
 SQLを拡張したHiveQLを書くとデータを処理するMapReduceやSpark、Tezのジョブが生成される。
 クエリの実行に時間がかかり、耐障害性があるのでDailyやHourlyのバッチで使われる。</p>
-
 <p>ちなみにAthenaにも使われている<a href="https://prestodb.io/">Presto</a>
 はタスクを並列に実行し、中間データをメモリ上に持つことで数分以内に結果が得られるので
 ダッシュボードなどの用途でアドホックに使える。中間データが大きいと<a href="https://aws.amazon.com/jp/blogs/news/top-10-performance-tuning-tips-for-amazon-athena/">時間がかかったり失敗する</a>。</p>
-
 <p><a href="https://www.cloudera.com/documentation/enterprise/5-5-x/topics/impala.html">Impala</a>はさらに速いけどメモリの消費が激しいらしい。</p>
-
-<h2 id="cloudera-docker-imageを起動する-https-www-cloudera-com-documentation-enterprise-latest-topics-quickstart-docker-container-html"><a href="https://www.cloudera.com/documentation/enterprise/latest/topics/quickstart_docker_container.html">Cloudera Docker Imageを起動する</a></h2>
-
+<h2 id="cloudera-docker-imageを起動するhttpswwwclouderacomdocumentationenterpriselatesttopicsquickstart_docker_containerhtml"><a href="https://www.cloudera.com/documentation/enterprise/latest/topics/quickstart_docker_container.html">Cloudera Docker Imageを起動する</a></h2>
 <p>Cloudera Docker Imageには</p>
-
 <ul>
 <li><a href="https://www.cloudera.com/products/open-source/apache-hadoop/key-cdh-components.html">CDH</a>: Clouderaのディストリビューション。Hadoop、Hive、SparkなどのOSSで構成されている。</li>
 <li><a href="https://www.cloudera.com/documentation/enterprise/latest/topics/cloudera_manager.html">Cloudera Manager</a>: CDHクラスタを管理する。無料のExpressと有料のEnterpriseで使える機能に<a href="https://www.cloudera.com/content/dam/www/static/documents/datasheets/cloudera-enterprise-datasheet.pdf">差がある</a>。</li>
 </ul>
-
 <p>が含まれていて、これを起動すると諸々立ち上がる。CDHクラスタを組むのはサポートされていないようなのでテスト用らしい。</p>
-
 <pre><code>$ docker pull cloudera/quickstart:latest
 $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 7180 -p 80 cloudera/quickstart /usr/bin/docker-quickstart
-</code></pre>
-
-<p>80がチュートリアルで、8888がHadoopのWeb UIの<a href="https://github.com/cloudera/hue">Hue</a>、7180がCloudera Manager。Dockerに割り当てるメモリが2GBだと<code>Failed to contact an active Resource Manager</code>になってしまったので4GBにした。</p>
-
+</code></pre><p>80がチュートリアルで、8888がHadoopのWeb UIの<a href="https://github.com/cloudera/hue">Hue</a>、7180がCloudera Manager。Dockerに割り当てるメモリが2GBだと<code>Failed to contact an active Resource Manager</code>になってしまったので4GBにした。</p>
 <h2 id="hiveのテーブルを作成して実行する">Hiveのテーブルを作成して実行する</h2>
-
 <p>チュートリアルでは<a href="http://sqoop.apache.org/">Sqoop</a>を使ってDBから取り込んでいるんだけど、
 今回はjsonのログのテーブルを作成する。</p>
-
 <pre><code>$ sqoop import-all-tables \
     -m 1 \
     --connect jdbc:mysql://localhost:3306/retail_db \
@@ -219,14 +204,9 @@ $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 71
     --as-parquetfile \
     --warehouse-dir=/user/hive/warehouse \
     --hive-import
-</code></pre>
-
-<p>JSONを扱うにはStringから<code>LATERAL VIEW json_tuple(json_str, &quot;field1&quot;, &quot;field2&quot;) j AS field1, field2</code>のように実行時にパースする方法と、<a href="https://github.com/rcongiu/Hive-JSON-Serde">JSON SerDe</a>で最初から別カラムにいれる方法があるが、今回はSerDeでやる。</p>
-
-<hr />
-
+</code></pre><p>JSONを扱うにはStringから<code>LATERAL VIEW json_tuple(json_str, &quot;field1&quot;, &quot;field2&quot;) j AS field1, field2</code>のように実行時にパースする方法と、<a href="https://github.com/rcongiu/Hive-JSON-Serde">JSON SerDe</a>で最初から別カラムにいれる方法があるが、今回はSerDeでやる。</p>
+<hr>
 <p>json_tupleを使う場合、配列はStringになってしまうのでこれをArrayにするには便利なUDF(User-Defined Functions)をまとめた<a href="https://github.com/klout/brickhouse">brickhouse</a>のjson_splitが使える。例えば、<code>SELECT col1 FROM table LATERAL VIEW explode(json_split('[&quot;a&quot;,&quot;b&quot;,&quot;c&quot; ]')) a as ja</code>のようにするとArrayになったStringがexplodeしてtableの各列に3種のカラムjaが並ぶ。</p>
-
 <table>
 <thead>
 <tr>
@@ -234,56 +214,40 @@ $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 71
 <th align="left">ja</th>
 </tr>
 </thead>
-
 <tbody>
 <tr>
 <td align="left">x</td>
 <td align="left">a</td>
 </tr>
-
 <tr>
 <td align="left">x</td>
 <td align="left">b</td>
 </tr>
-
 <tr>
 <td align="left">x</td>
 <td align="left">c</td>
 </tr>
-
 <tr>
 <td align="left">y</td>
 <td align="left">a</td>
 </tr>
-
 <tr>
 <td align="left">y</td>
 <td align="left">b</td>
 </tr>
-
 <tr>
 <td align="left">y</td>
 <td align="left">c</td>
 </tr>
 </tbody>
 </table>
-
 <p>Arrayが空の場合にexplodeすると消滅してしまうので、LEFT JOINのように残すにはarray(null)に加工してやるとよい。</p>
-
 <pre><code>CASE WHEN size(json_split(arr)) &gt; 0 THEN json_split(arr) ELSE array(null) END AS arr
-</code></pre>
-
-<hr />
-
+</code></pre><hr>
 <p>JSON SerDeのjarを持ってくる。</p>
-
 <pre><code>$ curl http://www.congiu.net/hive-json-serde/1.3.8/cdh5/json-serde-1.3.8-jar-with-dependencies.jar &gt; /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar
-</code></pre>
-
-<p>クエリはHueから実行できて、初期ユーザー名とパスワードはどちらもcloudera。</p>
-
+</code></pre><p>クエリはHueから実行できて、初期ユーザー名とパスワードはどちらもcloudera。</p>
 <p>CREATE TABLEはこんな感じ。スキーマ情報はmetastoreに入る。</p>
-
 <pre><code>ADD JAR /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar;
 
 CREATE EXTERNAL TABLE jinrou (
@@ -296,16 +260,10 @@ CREATE EXTERNAL TABLE jinrou (
       LOCATION '/user/cloudera/jinrou';
       
 ADD JAR /usr/lib/hive/lib/hive-contrib.jar;
-</code></pre>
-
-<p>指定したLOCATIONにログをアップロードする。これもHueからできる。</p>
-
+</code></pre><p>指定したLOCATIONにログをアップロードする。これもHueからできる。</p>
 <pre><code>{&quot;participant&quot;:[{&quot;user_id&quot;:1,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:2,&quot;role&quot;:&quot;wolf&quot;,&quot;team&quot;:&quot;wolf&quot;},{&quot;user_id&quot;:3,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:4,&quot;role&quot;:&quot;medium&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:5,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:6,&quot;role&quot;:&quot;fortune-teller&quot;,&quot;team&quot;:&quot;villager&quot;}],&quot;win_team&quot;:&quot;wolf&quot;,&quot;timestamp&quot;:&quot;2017-08-21T01:23:45.678+0900&quot;}
 {&quot;participant&quot;:[{&quot;user_id&quot;:3,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:4,&quot;role&quot;:&quot;wolf&quot;,&quot;team&quot;:&quot;wolf&quot;},{&quot;user_id&quot;:1,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:2,&quot;role&quot;:&quot;medium&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:6,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:5,&quot;role&quot;:&quot;fortune-teller&quot;,&quot;team&quot;:&quot;villager&quot;}],&quot;win_team&quot;:&quot;villager&quot;,&quot;timestamp&quot;:&quot;2017-08-21T02:34:56.789+0900&quot;}
-</code></pre>
-
-<p>SELECT文を実行すると</p>
-
+</code></pre><p>SELECT文を実行すると</p>
 <pre><code>SELECT user_id, role, SUM(is_win)/COUNT(1) AS wp FROM (
   SELECT 
     par.user_id,
@@ -314,10 +272,7 @@ ADD JAR /usr/lib/hive/lib/hive-contrib.jar;
     FROM jinrou
   LATERAL VIEW explode(participant) p AS par
 ) j GROUP BY user_id, role;
-</code></pre>
-
-<p>参照できている。</p>
-
+</code></pre><p>参照できている。</p>
 <pre><code>user_id,role,wp
 1,villager,0.5
 2,medium,0.0
@@ -329,14 +284,9 @@ ADD JAR /usr/lib/hive/lib/hive-contrib.jar;
 5,villager,0.0
 6,fortune-teller,0.0
 6,villager,1.0
-</code></pre>
-
-<p>テーブルの定義よりjsonのフィールドが多いと無視されて、ないものはNULLになる。</p>
-
+</code></pre><p>テーブルの定義よりjsonのフィールドが多いと無視されて、ないものはNULLになる。</p>
 <h2 id="参考">参考</h2>
-
 <p><a href="http://blog-jp.treasuredata.com/entry/2014/07/10/150250">『Prestoとは何か，Prestoで何ができるか』 - トレジャーデータ（Treasure Data）公式ブログ</a></p>
-
 <p><a href="http://recruit.gmo.jp/engineer/jisedai/blog/presto_spark_hive/">スケールアウト可能なSQLエンジンのベンチマークテスト：Presto vs Spark SQL vs Hive on Tez | GMOインターネット 次世代システム研究室</a></p>
 
         </div>

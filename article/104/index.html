@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる | sambaiz-net ",
     "datePublished": "2017-05-27T16:35:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,27 +174,17 @@
         <div class="single body">
           <h1>Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる</h1>
           <p>(2017-05-27)</p>
-          
-
-<p><a href="https://github.com/uber-go/zap">https://github.com/uber-go/zap</a></p>
-
+          <p><a href="https://github.com/uber-go/zap">https://github.com/uber-go/zap</a></p>
 <pre><code>$ go get -u go.uber.org/zap
 $ go get -u gopkg.in/natefinch/lumberjack.v2
-</code></pre>
-
-<h2 id="速さの秘訣">速さの秘訣</h2>
-
+</code></pre><h2 id="速さの秘訣">速さの秘訣</h2>
 <p><a href="https://techblog.ca-reward.co.jp/2016/06/post-33.html">Go言語のLogger「zap」は何故高速に構造化されたログを出力する事が出来るのか｜株式会社CAリワード</a></p>
-
 <p>reflectionとallocationの回避。</p>
-
 <p>一度allocateしたBufferやEncoderは
 <a href="https://golang.org/pkg/sync/#Pool">sync.Pool</a>で使い回している。
 このPoolはまさにallocateされたアイテムを再利用するためのもので、GCの負担を緩和させることができる。
 Poolのアイテムは勝手に削除されることがあり、もし参照しか持っていなかったらそのままdeallocateされる。</p>
-
 <p><a href="https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34">https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34</a></p>
-
 <pre><code>func NewPool() Pool {
 	return Pool{p: &amp;sync.Pool{
 		New: func() interface{} {
@@ -202,16 +192,11 @@ Poolのアイテムは勝手に削除されることがあり、もし参照し�
 		},
 	}}
 }
-</code></pre>
-
-<h2 id="使い方">使い方</h2>
-
+</code></pre><h2 id="使い方">使い方</h2>
 <p>現状ドキュメントが乏しいのでコードから探っていく必要がある。
 まずはQuick Startから。</p>
-
 <p><code>zap.NewProduction()</code>は<code>NewProductionConfig().Build(options...)</code>の<a href="https://github.com/uber-go/zap/blob/master/logger.go#L87">ショートカット</a>。
 ConfigをBuildしてLoggerを取得し、InfoやErrorで書く流れ。</p>
-
 <pre><code>logger, _ := zap.NewProduction()
 defer logger.Sync()
 logger.Info(&quot;Hoge&quot;,
@@ -219,13 +204,8 @@ logger.Info(&quot;Hoge&quot;,
   zap.Int(&quot;attempt&quot;, 3),
   zap.Duration(&quot;backoff&quot;, time.Second),
 )
-</code></pre>
-
-<pre><code>{&quot;level&quot;:&quot;info&quot;,&quot;ts&quot;:1495870212.3378785,&quot;caller&quot;:&quot;zap-log/main.go:36&quot;,&quot;msg&quot;:&quot;Hoge&quot;,&quot;attempt&quot;:3,&quot;backoff&quot;:1}
-</code></pre>
-
-<p><code>NewProductionConfig()</code>の内容はこんな感じ。ここからOutputPathを書き換えるとファイルに出力されるようにできる。</p>
-
+</code></pre><pre><code>{&quot;level&quot;:&quot;info&quot;,&quot;ts&quot;:1495870212.3378785,&quot;caller&quot;:&quot;zap-log/main.go:36&quot;,&quot;msg&quot;:&quot;Hoge&quot;,&quot;attempt&quot;:3,&quot;backoff&quot;:1}
+</code></pre><p><code>NewProductionConfig()</code>の内容はこんな感じ。ここからOutputPathを書き換えるとファイルに出力されるようにできる。</p>
 <pre><code>config := zap.Config{
     Level:       zap.NewAtomicLevelAt(zap.ErrorLevel),
     Development: false,
@@ -253,22 +233,16 @@ logger.Info(&quot;Hoge&quot;,
 config.OutputPaths = []string{&quot;./aaaa.log&quot;}
 logger, _ = config.Build()
 defer logger.Sync()
-</code></pre>
-
-<p>Buildの引数にも渡せるOptionというのは<code>apply(logger)</code>でloggerを操作するインタフェース。
+</code></pre><p>Buildの引数にも渡せるOptionというのは<code>apply(logger)</code>でloggerを操作するインタフェース。
 <a href="https://github.com/uber-go/zap/blob/74ca5ef91c08e5eafb5ab9739df05d66f1b5d8da/options.go#L55">zap.Fields</a>は
 フィールドを追加するもの。</p>
-
 <pre><code>logger = logger.WithOptions(zap.Fields(zap.String(&quot;hoge&quot;, &quot;fuga&quot;)))
 defer logger.Sync()
 logger.Error(&quot;aaa&quot;,
     zap.String(&quot;eee&quot;, &quot;eee&quot;),
 )
-</code></pre>
-
-<p><a href="https://github.com/uber-go/zap/blob/v1.4.0/config.go#L154">Build</a>の実装をみると、
+</code></pre><p><a href="https://github.com/uber-go/zap/blob/v1.4.0/config.go#L154">Build</a>の実装をみると、
 中では<code>zapcore.NewCore(enc, sink, cfg.Level)</code>とOptionを引数として取る<code>New()</code>でloggerを生成している。</p>
-
 <pre><code>enc, err := cfg.buildEncoder()
 if err != nil {
     return nil, err
@@ -283,12 +257,9 @@ log := New(
     zapcore.NewCore(enc, sink, cfg.Level),
     cfg.buildOptions(errSink)...,
 )
-</code></pre>
-
-<p>このsinkは<code>io.Writer</code>をwrapした<a href="https://github.com/uber-go/zap/blob/179e456766f6ba6d1006f432f90d52ecb6296e84/zapcore/write_syncer.go#L32">WriteSyncer</a>
+</code></pre><p>このsinkは<code>io.Writer</code>をwrapした<a href="https://github.com/uber-go/zap/blob/179e456766f6ba6d1006f432f90d52ecb6296e84/zapcore/write_syncer.go#L32">WriteSyncer</a>
 で、<code>AddSync(w io.Writer)</code>で変換できる。
 これに<a href="https://github.com/natefinch/lumberjack">lumberjack</a>を渡してやるとrotateできる。</p>
-
 <pre><code>config := zap.NewProductionConfig()
 enc := zapcore.NewJSONEncoder(config.EncoderConfig)
 sink := zapcore.AddSync(
@@ -307,7 +278,6 @@ logger.Error(&quot;aaa&quot;,
     zap.String(&quot;eeef&quot;, &quot;eefe&quot;),
 )
 </code></pre>
-
         </div>
       </article>
     </div>

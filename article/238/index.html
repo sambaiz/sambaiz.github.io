@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,29 +42,29 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "Goのnet/http/pprofでCPUやMemoryをprofileする流れと内部実装 | sambaiz-net ",
+    "headline": "Goのnet\/http\/pprofでCPUやMemoryをprofileする流れと内部実装 | sambaiz-net ",
     "datePublished": "2019-09-16T13:49:00JST",
     "dateModified": "2019-09-16T13:49:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,18 +174,12 @@
         <div class="single body">
           <h1>Goのnet/http/pprofでCPUやMemoryをprofileする流れと内部実装</h1>
           <p>(2019-09-16)</p>
-          
-
-<p>Goの<a href="https://golang.org/pkg/net/http/pprof/">net/http/pprof</a>は
+          <p>Goの<a href="https://golang.org/pkg/net/http/pprof/">net/http/pprof</a>は
 <a href="https://github.com/google/pprof">pprof</a>で可視化できるprofile.protoを返すAPIを提供するpackage。
 profileを出力する方法はほかにもあるが、サーバーのような動き続けるアプリケーションのprofileを取るのに使う。</p>
-
 <p><a href="https://www.sambaiz.net/article/47/">go testでベンチマークを取ってpprofで時間がかかっている箇所を調べる - sambaiz-net</a></p>
-
 <h2 id="profileを取る">profileを取る</h2>
-
 <p><code>import _ &quot;net/http/pprof&quot;</code>して<code>http.ListenAndServe()</code>する。</p>
-
 <pre><code>package main
 
 import (
@@ -215,10 +209,7 @@ func main() {
 		panic(err)
 	}
 }
-</code></pre>
-
-<p>CPUは<code>debug/pprof/profile</code>を叩いた後の一定時間のみprofileするのでその間にリクエストを送る必要がある。</p>
-
+</code></pre><p>CPUは<code>debug/pprof/profile</code>を叩いた後の一定時間のみprofileするのでその間にリクエストを送る必要がある。</p>
 <pre><code>.PHONY: build clean run request cpu_profile memory_profile
 
 build: clean
@@ -237,32 +228,19 @@ cpu_profile: request
 memory_profile: request
 	bash -c 'sleep 5s; for var in `seq 100`; do curl -s http://localhost:8080/foo; done' &gt; /dev/null
 	go tool pprof -http=&quot;:8000&quot; ./main localhost:8080/debug/pprof/allocs
-</code></pre>
-
-<p>profileが終わるとWeb UIが立ち上がる。Flame Graphの縦はスタックを、横の長さは時間や量を表す。これはCPUのもの。</p>
-
-<p><img src="https://www.sambaiz.net/images/238-2.png" alt="CPUのFlame Graph" /></p>
-
+</code></pre><p>profileが終わるとWeb UIが立ち上がる。Flame Graphの縦はスタックを、横の長さは時間や量を表す。これはCPUのもの。</p>
+<p><img src="https://www.sambaiz.net/images/238-2.png" alt="CPUのFlame Graph"></p>
 <p>ここから<code>blowfish.ExpandKey()</code>で呼ばれている<code>blowfish.encryptBlock()</code>が実行時間のほとんど全てを占めていることが分かり、Sourceからコードと合わせて行ごとのかかった時間を見ることができる。</p>
-
-<p><img src="https://www.sambaiz.net/images/238-1.png" alt="行ことのかかった時間" /></p>
-
+<p><img src="https://www.sambaiz.net/images/238-1.png" alt="行ことのかかった時間"></p>
 <p>flatとcumの違いは呼び出した関数の時間も含めるかどうかで、他の関数を呼んでいない<code>encryptBlock()</code>では同じ値になっているが、呼び出し元をみると微小のflatに対してcumが大きくなっていることが確認できる。</p>
-
 <pre><code>49 10ms 10ms   for i := 0; i &lt; 256; i += 2 { 
 50 20ms 2.44s    l, r = encryptBlock(l, r, c) 
 51 .    .        c.s0[i], c.s0[i+1] = l, r 
 52 .    .      } 
-</code></pre>
-
-<p>Costを最小にして再度profileを取ってみると、<code>encryptBlock()</code>の割合が少なくなり他の関数が表に出てくる。</p>
-
-<p><img src="https://www.sambaiz.net/images/238-3.png" alt="MinCostでのFlame Graph" /></p>
-
+</code></pre><p>Costを最小にして再度profileを取ってみると、<code>encryptBlock()</code>の割合が少なくなり他の関数が表に出てくる。</p>
+<p><img src="https://www.sambaiz.net/images/238-3.png" alt="MinCostでのFlame Graph"></p>
 <h2 id="内部実装">内部実装</h2>
-
 <p>importすると<a href="https://github.com/golang/go/blob/go1.13/src/net/http/pprof/pprof.go#L72">init()</a>でエンドポイントが追加される。</p>
-
 <pre><code>func init() {
 	http.HandleFunc(&quot;/debug/pprof/&quot;, Index)
 	http.HandleFunc(&quot;/debug/pprof/cmdline&quot;, Cmdline)
@@ -270,12 +248,8 @@ memory_profile: request
 	http.HandleFunc(&quot;/debug/pprof/symbol&quot;, Symbol)
 	http.HandleFunc(&quot;/debug/pprof/trace&quot;, Trace)
 }
-</code></pre>
-
-<h3 id="debug-pprof">/debug/pprof/*</h3>
-
+</code></pre><h3 id="debugpprof">/debug/pprof/*</h3>
 <p>profileの一覧ページおよびCPU以外のprofileを返す。</p>
-
 <pre><code>func Index(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, &quot;/debug/pprof/&quot;) {
 		name := strings.TrimPrefix(r.URL.Path, &quot;/debug/pprof/&quot;)
@@ -305,12 +279,9 @@ func (name handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	...
 	p.WriteTo(w, debug)
 }
-</code></pre>
-
-<p><a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L226">Lookup()</a>は
+</code></pre><p><a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L226">Lookup()</a>は
 名前からprofileを取得する関数。
 built-inのprofileに加えて独自のprofileを<a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L279">Add()</a>することもできる。</p>
-
 <pre><code>func Lookup(name string) *Profile {
 	lockProfiles()
 	defer unlockProfiles()
@@ -331,12 +302,9 @@ func lockProfiles() {
 		}
 	}
 }
-</code></pre>
-
-<p>Profileは<code>count()</code>や<code>write()</code>する関数を持つstruct。それぞれ
+</code></pre><p>Profileは<code>count()</code>や<code>write()</code>する関数を持つstruct。それぞれ
 <a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L252">p.Count()</a>と
 <a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L324">p.WrireTo()</a>で呼ばれる。</p>
-
 <pre><code>type Profile struct {
 	name  string
 	mu    sync.Mutex
@@ -359,22 +327,15 @@ func countHeap() int {
 func writeAlloc(w io.Writer, debug int) error {
 	return writeHeapInternal(w, debug, &quot;alloc_space&quot;)
 }
-</code></pre>
-
-<h3 id="debug-pprof-profile">/debug/pprof/profile</h3>
-
+</code></pre><h3 id="debugpprofprofile">/debug/pprof/profile</h3>
 <p>CPU profileをStartして一定時間経ったらStopする。</p>
-
 <pre><code>if err := pprof.StartCPUProfile(w); err != nil {
 	...
 }
 sleep(w, time.Duration(sec)*time.Second)
 pprof.StopCPUProfile()
-</code></pre>
-
-<p><a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L226">StartCPUProfile()</a>は
+</code></pre><p><a href="https://github.com/golang/go/blob/go1.13/src/runtime/pprof/pprof.go#L226">StartCPUProfile()</a>は
 <a href="https://github.com/golang/go/blob/go1.13/src/runtime/cpuprof.go#L54">SetCPUProfileRate()</a>してprofileを書いていく。</p>
-
 <pre><code>func StartCPUProfile(w io.Writer) error {
 	const hz = 100
 	...
@@ -383,13 +344,10 @@ pprof.StopCPUProfile()
 	go profileWriter(w)
 	return nil
 }
-</code></pre>
-
-<p><code>SetCPUProfileRate()</code>の内部では、OSに対応する
+</code></pre><p><code>SetCPUProfileRate()</code>の内部では、OSに対応する
 <a href="https://github.com/golang/go/blob/go1.13/src/runtime/signal_unix.go#L236">setProcessCPUProfiler()</a>と
 <a href="https://github.com/golang/go/blob/go1.13/src/runtime/signal_unix.go#L256">setThreadCPUProfiler()</a>
 が呼ばれ、Unixの場合<code>setitimer(ITIMER_PROF)</code>システムコールでCPU時間10ms経過後SIGPROFが送られるようにして、これをハンドリングしている。</p>
-
 <pre><code>func setProcessCPUProfiler(hz int32) {
 	if hz != 0 {
 		// Enable the Go signal handler if not enabled.
@@ -414,7 +372,6 @@ func setThreadCPUProfiler(hz int32) {
 	...
 }
 </code></pre>
-
         </div>
       </article>
     </div>

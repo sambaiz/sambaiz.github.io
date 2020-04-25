@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "iOSのipa(app)のProfileを異なるTeamのものに置き換えて実機で動かす | sambaiz-net ",
     "datePublished": "2020-03-24T22:06:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,16 +174,10 @@
         <div class="single body">
           <h1>iOSのipa(app)のProfileを異なるTeamのものに置き換えて実機で動かす</h1>
           <p>(2020-03-24)</p>
-          
-
-<p>Profileを置き換えて有効期限やDevice IDを更新する。</p>
-
+          <p>Profileを置き換えて有効期限やDevice IDを更新する。</p>
 <p><a href="https://www.sambaiz.net/article/264/">iOSアプリのProvisioning profile - sambaiz-net</a></p>
-
 <h2 id="codesignでの試み">codesignでの試み</h2>
-
 <p><code>.ipa</code> をunzipすると <code>.app</code> が出てくる。</p>
-
 <pre><code>$ unzip my-test-app.ipa
 $ tree Payload/
 Payload/
@@ -199,10 +193,7 @@ Payload/
     │   └── CodeResources
     ├── embedded.mobileprovision
     └── my-test-app
-</code></pre>
-
-<p><code>codesign</code> で entitlements を確認する。</p>
-
+</code></pre><p><code>codesign</code> で entitlements を確認する。</p>
 <pre><code>$ codesign -d --entitlements :- my-test-app.app &gt; entitlements.plist
 $ cat entitlements.plist 
 &lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
@@ -221,28 +212,19 @@ $ cat entitlements.plist
 	&lt;/array&gt;
 &lt;/dict&gt;
 &lt;/plist&gt;
-</code></pre>
-
-<p><code>--force</code> で上書き署名する。entitlementsなしで署名すると
+</code></pre><p><code>--force</code> で上書き署名する。entitlementsなしで署名すると
 <code>The application could not be verified</code> になった。</p>
-
 <pre><code>$ codesign --force \ 
 --sign &quot;Apple Development: *****@***** (******)&quot; \ 
 --entitlements entitlements.plist \ 
 my-test-app.app
-</code></pre>
-
-<p>これでデプロイしたところ <code>A valid provisioning profile for this executable was not found</code> のエラーが出た。
+</code></pre><p>これでデプロイしたところ <code>A valid provisioning profile for this executable was not found</code> のエラーが出た。
 単にcodesignするだけでは <code>embedded.mobileprovision</code> は元のままだ。
 また、Teamが異なればApp IDのPrefixも異なるので <code>entitlements.plist</code> や <code>Info.plist</code> を編集する必要があったりとなかなかやることが多い。</p>
-
 <h2 id="fastlaneのsighでのresign">fastlaneのsighでのresign</h2>
-
 <p>調べてみるとfastlaneの<a href="https://docs.fastlane.tools/actions/sigh/">sigh</a>
 でresignするとApp IDの変更や <code>embedded.mobileprovision</code> の置き換えなどもやってくれるらしい。</p>
-
 <p>fastlaneのインストール。</p>
-
 <pre><code>$ brew install fastlane
 $ fastlane -v
 fastlane 2.143.0
@@ -250,28 +232,17 @@ fastlane 2.143.0
 $ export FASTLANE_USER=****@****
 # store password in the macOS Keychain
 $ fastlane fastlane-credentials add -u ${FASTLANE_USER}
-</code></pre>
-
-<p>resignする。Profileはマニュアルで作ってダウンロードするか、
+</code></pre><p>resignする。Profileはマニュアルで作ってダウンロードするか、
 <code>~/Library/MobileDevice/Provisioning Profiles</code> を探して使う。</p>
-
 <pre><code>$ fastlane sigh resign my-test-app.ipa --signing_identity &quot;Apple Development: ****&quot; -p &quot;****.mobileprovision&quot;
-</code></pre>
-
-<p>これを<a href="https://github.com/ios-control/ios-deploy">ios-deploy</a>でデプロイしたところ無事成功した。便利。
+</code></pre><p>これを<a href="https://github.com/ios-control/ios-deploy">ios-deploy</a>でデプロイしたところ無事成功した。便利。
 試しにデプロイするDeviceを外したProfileでresignしてみると
 <code>The executable was signed with invalid entitlements</code> でインストールできなくなったので新しいProfileが効いてそうだ。</p>
-
 <pre><code>$ unzip my-test-app.ipa
 $ ios-deploy --debug --bundle Payload/my-test-app.app
-</code></pre>
-
-<h2 id="参考">参考</h2>
-
+</code></pre><h2 id="参考">参考</h2>
 <p><a href="http://www.minimalab.com/blog/2016/04/14/resign-ipa/">ipa ファイルを再署名する</a></p>
-
 <p><a href="https://qiita.com/seyself/items/8f62677547ef597cee67">ipaファイルのProvisioningを差し替える - Qiita</a></p>
-
 <p><a href="https://qiita.com/toshi0383/items/2d82104c5e70c249f0a1">iOS受託開発における署名付け替えの技術 - Qiita</a></p>
 
         </div>

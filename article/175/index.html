@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "TensorFlowのMonitoredSessionとSessionRunHookとsummaryのエラー | sambaiz-net ",
     "datePublished": "2018-07-01T23:50:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -175,23 +175,16 @@
           <h1>TensorFlowのMonitoredSessionとSessionRunHookとsummaryのエラー</h1>
           <p>(2018-07-01)</p>
           <p><a href="https://www.tensorflow.org/api_docs/python/tf/train/MonitoredSession">MonitoredSession</a></p>
-
 <p>deprecatedになった<a href="https://www.tensorflow.org/api_docs/python/tf/train/Supervisor">Supervisor</a>の後継。</p>
-
 <p><a href="https://www.tensorflow.org/api_docs/python/tf/train/MonitoredTrainingSession">MonitoredTrainingSession</a>で学習用のMonitoredSessionを生成する。
 このコンストラクタの引数でcheckpoint_dirを渡すと内部で<a href="https://www.tensorflow.org/api_docs/python/tf/train/CheckpointSaverHook">CheckpointSaverHook</a>が
 <a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/monitored_session.py#L396">追加される</a>ようになっていて、restoreしたり指定したタイミングでsaveしたりしてくれる。</p>
-
 <p>なので今回明示的に渡すhooksは
 指定したstepに到達したら<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L320">止めてくれる</a>、<a href="https://www.tensorflow.org/api_docs/python/tf/train/StopAtStepHook">StopAtStepHook</a>のみ。</p>
-
 <p>should_stop()がTrueな状態で<code>session.run()</code>しようとすると<code>Run called even after should_stop requested.</code>のエラーが出るため、
 今回は新しいsessionを作ってAccuracyを返しているが、hookでやった方がrestoreする必要がないので良さそうだ。</p>
-
 <p><a href="https://www.sambaiz.net/article/179/">Destributed TensorFlowの流れとSavedModelの出力 - sambaiz-net</a></p>
-
 <p>全体のコードは<a href="https://gist.github.com/sambaiz/72888520379cff778d6261cd417a3773">ここ</a>。</p>
-
 <pre><code>def train(self, learning_rate, variable_default_stddev, bias_default, last_step=800):
   test_images = self.images[:500]
   test_labels = self.labels[:500]
@@ -224,12 +217,9 @@
         g[&quot;placeholder&quot;][&quot;x&quot;]: list(test_images), 
         g[&quot;placeholder&quot;][&quot;y&quot;]: list(test_labels)
       }), savedir
-</code></pre>
-
-<p>hooksに渡す<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/session_run_hook.py#L103">SessionRunHook</a>は以下のメソッドからなる。
+</code></pre><p>hooksに渡す<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/session_run_hook.py#L103">SessionRunHook</a>は以下のメソッドからなる。
 <code>before_run()</code>で返すSessionRunArgsのfeed_dictはrunで渡すfeed_dictとmergeされ、
 fetchesはrunするたびに毎回評価される。</p>
-
 <pre><code>class MySessionRunHook:
   def __init__(self, feed_dict):
     self.feed_dict = feed_dict
@@ -254,12 +244,9 @@ fetchesはrunするたびに毎回評価される。</p>
   def end(self, session):
     &quot;&quot;&quot;Called at the end of session.&quot;&quot;&quot;
     print(&quot;end&quot;)
-</code></pre>
-
-<p>したがって、hooks内のfetchesにfeedする必要があるものが含まれる場合、
+</code></pre><p>したがって、hooks内のfetchesにfeedする必要があるものが含まれる場合、
 runする対象がfeedする必要がない場合でも<code>You must feed a value for placeholder tensor</code>のエラーが出ることになる。
 また、hooks内とrunの引数のfeed_dictが衝突した場合もエラーになる。</p>
-
 <pre><code>with tf.Graph().as_default():
   global_step = tf.train.get_or_create_global_step()
   x = tf.placeholder(tf.float32, name=&quot;x&quot;)
@@ -278,11 +265,8 @@ runする対象がfeedする必要がない場合でも<code>You must feed a val
       print(sess.run(y, feed_dict={x: 10}))
     except RuntimeError as err:
       print(err) # Same tensor is fed by a SessionRunHook and user. Conflict(s): [&lt;tf.Tensor 'x:0' shape=&lt;unknown&gt; dtype=float32&gt;]     
-</code></pre>
-
-<p>上で書いたようにMonitoredTrainingSessionは内部でCheckpointSaverHookを持っていて、
+</code></pre><p>上で書いたようにMonitoredTrainingSessionは内部でCheckpointSaverHookを持っていて、
 これがfetchesでsummaryを<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L689">返している</a>ので、一つでもsummaryを入れるとrunするときにそれに必要なfeed_dictを渡さないとエラーになる。</p>
-
 <pre><code>with tf.Graph().as_default():
   global_step = tf.train.get_or_create_global_step()
   x = tf.placeholder(tf.float32, name=&quot;x&quot;)
@@ -295,7 +279,6 @@ runする対象がfeedする必要がない場合でも<code>You must feed a val
     # sess.run(z, feed_dict={x: 10, y:20})
     step, zz = sess.run([global_step, z], feed_dict={x: 10, y:20}) # ok
 </code></pre>
-
         </div>
       </article>
     </div>

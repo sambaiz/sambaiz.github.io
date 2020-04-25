@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,29 +42,29 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "GoのgRPC ServerのInterceptor(recovery/auth/zap/prometheus) | sambaiz-net ",
+    "headline": "GoのgRPC ServerのInterceptor(recovery\/auth\/zap\/prometheus) | sambaiz-net ",
     "datePublished": "2018-06-26T23:50:00JST",
     "dateModified": "2018-06-26T23:50:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,39 +174,27 @@
         <div class="single body">
           <h1>GoのgRPC ServerのInterceptor(recovery/auth/zap/prometheus)</h1>
           <p>(2018-06-26)</p>
-          
-
-<p><a href="https://github.com/grpc/grpc-go">grpc-go</a>はInterceptor(Middleware)でhandlerの前後で処理を行うことができる。
+          <p><a href="https://github.com/grpc/grpc-go">grpc-go</a>はInterceptor(Middleware)でhandlerの前後で処理を行うことができる。
 UnaryとStreamで<a href="https://github.com/grpc/grpc-go/blob/master/interceptor.go#L60">シグネチャ</a>が異なる。</p>
-
 <pre><code>type UnaryServerInterceptor func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
 type StreamServerInterceptor func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error
-</code></pre>
-
-<pre><code>func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
+</code></pre><pre><code>func UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
     return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
         resp, err := handler(newCtx, req)
         fmt.Println(resp)
         return resp, err
 	}
 }
-</code></pre>
-
-<p>今回は良く使う<a href="https://github.com/grpc-ecosystem/go-grpc-middleware">go-grpc-middleware</a>の</p>
-
+</code></pre><p>今回は良く使う<a href="https://github.com/grpc-ecosystem/go-grpc-middleware">go-grpc-middleware</a>の</p>
 <ul>
 <li><a href="https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/recovery">recovery</a></li>
 <li><a href="https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/auth">auth</a></li>
 <li><a href="https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/logging/zap">zap</a></li>
 <li><a href="https://github.com/grpc-ecosystem/go-grpc-prometheus">prometehus</a></li>
 </ul>
-
 <p>Interceptorの挙動を確認する。</p>
-
 <h2 id="proto">proto</h2>
-
 <p>UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。</p>
-
 <pre><code>$ cat protos/sample/service.proto
 syntax = &quot;proto3&quot;;
 
@@ -230,13 +218,9 @@ $ mkdir go
 $ protoc --go_out=plugins=grpc:./go --proto_path=./protos protos/*/*.proto
 $ ls go/sample
 service.pb.go
-</code></pre>
-
-<h2 id="service">Service</h2>
-
+</code></pre><h2 id="service">Service</h2>
 <p>Unaryの方でcontextからユーザー名を取り出しているのと、
-Streamの方では&rdquo;panic&rdquo;という入力が来たときにpanicになるようにしている。</p>
-
+Streamの方では&quot;panic&quot;という入力が来たときにpanicになるようにしている。</p>
 <pre><code>type sampleService struct{}
 
 type ctxKey string
@@ -269,18 +253,12 @@ func (s *sampleService) SampleStream(stream sample.SampleService_SampleStreamSer
 		}
 	}
 }
-</code></pre>
-
-<h2 id="server">Server</h2>
-
+</code></pre><h2 id="server">Server</h2>
 <p>NewServerでUnary/StreamそれぞれのInterceptorを登録する。
 prometheusはさらに<a href="https://github.com/grpc-ecosystem/go-grpc-prometheus/blob/v1.2.0/server_metrics.go#L63">EnableHandlingTimeHistogram()</a>してRegisterしている。</p>
-
 <p>zapには<a href="https://github.com/uber-go/zap/blob/v1.8.0/logger.go#L93">NewProduction()</a>のloggerをそのまま渡しているのでログはstderrに<a href="https://github.com/uber-go/zap/blob/7307fae54f855761db01409a36e87fe18ebd8ef4/config.go#L124">出力される</a>。
 これを<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/91d9dda9fdb0440370fd55356f216a6293cbeb95/logging/zap/grpclogger.go#L15">ReplaceGrpcLogger()</a>でも渡しているのでgRPCライブラリ内部のエラーも出る。</p>
-
 <p><a href="https://www.sambaiz.net/article/104/">Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる - sambaiz-net</a></p>
-
 <pre><code>package main
 
 import (
@@ -343,10 +321,7 @@ func main() {
 	fmt.Printf(&quot;GRPC server started on :%d\n&quot;, port)
 	grpcServer.Serve(listener)
 }
-</code></pre>
-
-<p>authに渡している関数では<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/v1.0.0/auth/metadata.go#L24">AuthFromMD()</a>でmetadataのauthorizationのトークンを取得しユーザー名に変換してcontextに入れている。</p>
-
+</code></pre><p>authに渡している関数では<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/v1.0.0/auth/metadata.go#L24">AuthFromMD()</a>でmetadataのauthorizationのトークンを取得しユーザー名に変換してcontextに入れている。</p>
 <pre><code>func auth(ctx context.Context) (context.Context, error) {
 	token, err := grpc_auth.AuthFromMD(ctx, &quot;basic&quot;)
 	if err != nil {
@@ -362,21 +337,13 @@ func main() {
 	newCtx := context.WithValue(ctx, ctxKeyUserName, userName)
 	return newCtx, nil
 }
-</code></pre>
-
-<h2 id="client">Client</h2>
-
+</code></pre><h2 id="client">Client</h2>
 <p>UnaryとStreamのRPCにそれぞれリクエストを送る。</p>
-
 <p><a href="https://github.com/grpc/grpc-go/blob/v1.13.0/clientconn.go#L325">WithPerRPCCredentials()</a>で各RPCでauthorizationがmetadataとして渡るようにしている。
 <a href="https://github.com/grpc/grpc-go/blob/v1.13.0/metadata/metadata.go#L155">AppendToOutgoingContext</a>で都度含めることもできる。</p>
-
 <pre><code>ctx = metadata.AppendToOutgoingContext(ctx, key, value)
-</code></pre>
-
-<p>メトリクスは出していないがprometheusのClientのInterceptorを付けている。
+</code></pre><p>メトリクスは出していないがprometheusのClientのInterceptorを付けている。
 このようにIntercpetorによってはClient用のものも用意されている。</p>
-
 <pre><code>package main
 
 import (
@@ -453,13 +420,9 @@ func main() {
 		}
 	}
 }
-</code></pre>
-
-<h2 id="実行結果">実行結果</h2>
-
+</code></pre><h2 id="実行結果">実行結果</h2>
 <p>authによってユーザー名がcontextに入っている。
 recoveryがrecoverしているのでpanicしてもサーバーは落ちていない。</p>
-
 <pre><code>$ go run client.go
 - Unary -
 sam
@@ -475,30 +438,20 @@ $ go run main.go
 - Unary -
 sam
 ...
-</code></pre>
-
-<p>zapでログが出ている。</p>
-
+</code></pre><p>zapでログが出ている。</p>
 <pre><code>GRPC server started on :8080
 {&quot;level&quot;:&quot;info&quot;,&quot;ts&quot;:1530020624.963142,&quot;caller&quot;:&quot;zap/server_interceptors.go:40&quot;,&quot;msg&quot;:&quot;finished unary call with code OK&quot;,&quot;grpc.start_time&quot;:&quot;2018-06-26T22:43:44+09:00&quot;,&quot;system&quot;:&quot;grpc&quot;,&quot;span.kind&quot;:&quot;server&quot;,&quot;grpc.service&quot;:&quot;sample.SampleService&quot;,&quot;grpc.method&quot;:&quot;SampleUnary&quot;,&quot;grpc.code&quot;:&quot;OK&quot;,&quot;grpc.time_ms&quot;:0.27799999713897705}
 {&quot;level&quot;:&quot;info&quot;,&quot;ts&quot;:1530020624.9652505,&quot;caller&quot;:&quot;zap/grpclogger.go:41&quot;,&quot;msg&quot;:&quot;transport: loopyWriter.run returning. connection error: desc = \&quot;transport is closing\&quot;&quot;,&quot;system&quot;:&quot;grpc&quot;,&quot;grpc_log&quot;:true}
-</code></pre>
-
-<p>prometheusのInterceptorでCounterのメトリクスが追加されている。</p>
-
+</code></pre><p>prometheusのInterceptorでCounterのメトリクスが追加されている。</p>
 <pre><code>grpc_server_handled_total{grpc_code=&quot;OK&quot;,grpc_method=&quot;SampleUnary&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;unary&quot;} 1
 grpc_server_msg_sent_total{grpc_method=&quot;SampleStream&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;bidi_stream&quot;} 5
-</code></pre>
-
-<p><code>EnableHandlingTimeHistogram()</code>でHistogramsのメトリクスも追加されている。</p>
-
+</code></pre><p><code>EnableHandlingTimeHistogram()</code>でHistogramsのメトリクスも追加されている。</p>
 <pre><code>grpc_server_handling_seconds_bucket{grpc_method=&quot;SampleUnary&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;unary&quot;,le=&quot;0.005&quot;} 1
 grpc_server_handling_seconds_bucket{grpc_method=&quot;SampleUnary&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;unary&quot;,le=&quot;0.01&quot;} 1
 grpc_server_handling_seconds_bucket{grpc_method=&quot;SampleUnary&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;unary&quot;,le=&quot;0.025&quot;} 1
 grpc_server_handling_seconds_sum{grpc_method=&quot;SampleStream&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;bidi_stream&quot;} 271.267611998
 grpc_server_handling_seconds_count{grpc_method=&quot;SampleStream&quot;,grpc_service=&quot;sample.SampleService&quot;,grpc_type=&quot;bidi_stream&quot;} 1
 </code></pre>
-
         </div>
       </article>
     </div>

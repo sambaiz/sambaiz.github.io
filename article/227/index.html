@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす | sambaiz-net ",
     "datePublished": "2019-07-03T23:55:00JST",
@@ -50,25 +50,25 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
-    "description": "ALB-&gt;Cognito認証-&gt;Lambda"
+    "description": "ALB-\x3eCognito認証-\x3eLambda"
   }
 </script>
 </head>
@@ -174,38 +174,26 @@
         <div class="single body">
           <h1>LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす</h1>
           <p>(2019-07-03)</p>
-          
-
-<p>ALBのTargetとしてLambdaが<a href="https://aws.amazon.com/jp/blogs/news/lambda-functions-as-targets-for-application-load-balancers/">選択できるようになり</a>、
+          <p>ALBのTargetとしてLambdaが<a href="https://aws.amazon.com/jp/blogs/news/lambda-functions-as-targets-for-application-load-balancers/">選択できるようになり</a>、
 若干の時間課金が発生する代わりに柔軟にルーティングできるAPI Gatewayのように使えるようになった。
 ActionとしてCognito認証を入れて認証に失敗したらログイン画面を表示させる。</p>
-
 <p><a href="https://www.sambaiz.net/article/226/">API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net</a></p>
-
 <h2 id="acmで証明書を発行する">ACMで証明書を発行する</h2>
-
 <p>HTTPSでListenするため証明書が必要。
 <a href="https://aws.amazon.com/jp/certificate-manager/">AWS Certificate Manager (ACM)</a>でAWSで使える証明書を無料で発行でき参照できる。
 外部で取ったドメインでもよい。
 検証方法はDNSとメールとで選ぶことができて、DNSで行う場合Route53ならワンクリックで検証用のCNAMEレコードを作成できる。
 検証までやや時間がかかるのでちゃんと通ってるかnslookupで確認しといた方がよい。</p>
-
-<h2 id="application-load-balancer-alb-https-docs-aws-amazon-com-ja-jp-elasticloadbalancing-latest-application-introduction-html"><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/introduction.html">Application Load Balancer (ALB)</a></h2>
-
+<h2 id="application-load-balancer-albhttpsdocsawsamazoncomja_jpelasticloadbalancinglatestapplicationintroductionhtml"><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/introduction.html">Application Load Balancer (ALB)</a></h2>
 <p>次の要素から構成されるL7のロードバランサー。</p>
-
 <ul>
 <li><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/load-balancer-listeners.html">Listener</a>: 指定したプロトコルとポートでリクエストを受ける。</li>
-<li><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-update-rules.html">ListenerRule</a>: パスやHeaderなどの値を条件にどのTargetGroupにルーティングするかのルール。<br /></li>
+<li><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-update-rules.html">ListenerRule</a>: パスやHeaderなどの値を条件にどのTargetGroupにルーティングするかのルール。</li>
 <li><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/load-balancer-target-groups.html">TargetGroup</a>: ルーティングする1つ以上のTarget。Instance, IP, Lambdaが選べる。</li>
 </ul>
-
 <h2 id="ruleの作成">Ruleの作成</h2>
-
 <p>Serverless FrameworkではALBの<a href="https://serverless.com/framework/docs/providers/aws/events/alb/">enent</a>を付けるだけでLambdaに向くRuleが作成されるが、そこにはCognitoを追加できなさそうなので使っていない。OnUnauthenticatedRequestで認証失敗時の挙動を選択できる。UserPoolとSecretありのClientはあらかじめ作っておく。コールバックURLには<code>https://&lt;domain&gt;/oauth2/idpresponse</code>を追加する。</p>
-
 <p>API Gatewayだとタイムアウトの上限が<a href="https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/limits.html">30秒</a>なのに対してALBはLambdaの上限まで待てる。</p>
-
 <pre><code>$ cat serverless.yml
 service: alb-cognito-auth-example
 frameworkVersion: &quot;&gt;=1.28.0 &lt;2.0.0&quot;
@@ -284,11 +272,8 @@ resources:
           HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
           DNSName: !GetAtt ALB.DNSName
         Comment: &quot;Added by servereless-alb-cognito-auth-example&quot;
-</code></pre>
-
-<p><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-authenticate-users.html#user-claims-encoding">x-amzn-oidc-data</a> HeaderにALBが署名したJWTトークンが入っているので、
+</code></pre><p><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-authenticate-users.html#user-claims-encoding">x-amzn-oidc-data</a> HeaderにALBが署名したJWTトークンが入っているので、
 それがALBから来ているものかを検証しclaimを参照できる。リクエストはAPI Gatewayと同じような形式。</p>
-
 <pre><code>func ParseToken(tokenString string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// ES256
@@ -330,10 +315,7 @@ func Handler(request events.APIGatewayProxyRequest) (Response, error) {
 
 	return resp, nil
 }
-</code></pre>
-
-<h2 id="参考">参考</h2>
-
+</code></pre><h2 id="参考">参考</h2>
 <p><a href="https://tech.gunosy.io/entry/alb-login">まだログイン認証で消耗してるの？ ~ALBで簡単認証機構~ - Gunosy Tech Blog</a></p>
 
         </div>

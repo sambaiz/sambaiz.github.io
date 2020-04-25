@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "Lambda上でnpm installできるLayerを作った | sambaiz-net ",
     "datePublished": "2019-07-23T23:44:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -176,11 +176,8 @@
           <p>(2019-07-23)</p>
           <p>Lambda上でnpm installするためにnpmとnode, npmrc入りのLambda Layerを作った。
 <a href="https://github.com/sambaiz/npm-lambda-layer">GitHub</a>にある。</p>
-
 <p><a href="https://www.sambaiz.net/article/232/">Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net</a></p>
-
 <p>まずは<code>/usr/bin/npm</code>をそのまま入れて実行してみた。</p>
-
 <pre><code>FROM lambci/lambda-base:build
 
 WORKDIR /opt
@@ -191,14 +188,9 @@ RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
     cp /usr/bin/node bin/node &amp;&amp; \
     cp /usr/bin/npm bin/ &amp;&amp; \
     zip -yr /tmp/npm-layer.zip ./*
-</code></pre>
-
-<pre><code>$ docker build -t npmbin .
+</code></pre><pre><code>$ docker build -t npmbin .
 $ docker run npmbin cat /tmp/npm-layer.zip &gt; npm-layer.zip &amp;&amp; unzip npm-layer.zip -d layer
-</code></pre>
-
-<p>相対パスでの参照に失敗したようだが対象のパスが見当たらない。</p>
-
+</code></pre><p>相対パスでの参照に失敗したようだが対象のパスが見当たらない。</p>
 <pre><code>internal/modules/cjs/loader.js:628
     throw err;
     ^
@@ -220,16 +212,10 @@ Require stack:
   requireStack: [ '/opt/bin/npm' ]
 }
  exit status 1
-</code></pre>
-
-<p>というのもnpmはシンボリックリンクで、その参照先に対象のパスがあった。</p>
-
+</code></pre><p>というのもnpmはシンボリックリンクで、その参照先に対象のパスがあった。</p>
 <pre><code>$ ls -l /usr/bin/npm 
 lrwxrwxrwx 1 root root 38 Jul 23 09:34 /usr/bin/npm -&gt; ../lib/node_modules/npm/bin/npm-cli.js
-</code></pre>
-
-<p>これごとLayerに含めることにした。</p>
-
+</code></pre><p>これごとLayerに含めることにした。</p>
 <pre><code>FROM lambci/lambda-base:build
 
 WORKDIR /opt
@@ -241,28 +227,19 @@ RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
     cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;&amp; \
     ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;&amp; \
     zip -yr /tmp/npm-layer.zip ./*
-</code></pre>
-
-<p>すると次のエラーに変わった。Lambdaは<code>/tmp</code>にしかwriteできないのに$HOMEに書こうとしているようだ。</p>
-
+</code></pre><p>すると次のエラーに変わった。Lambdaは<code>/tmp</code>にしかwriteできないのに$HOMEに書こうとしているようだ。</p>
 <pre><code>Unhandled rejection Error: EACCES: permission denied, mkdir '/home/sbx_user1051'
 npm ERR! cb() never called!
 
 npm ERR! This is an error with npm itself. Please report this error at:
 npm ERR!     &lt;https://npm.community&gt;
 exit status 1
-</code></pre>
-
-<p>npm configのデフォルト値をみてみたところ、いくつか$HOMEを参照している。</p>
-
+</code></pre><p>npm configのデフォルト値をみてみたところ、いくつか$HOMEを参照している。</p>
 <pre><code>$ npm config ls -l | grep $HOME
 cache = &quot;/root/.npm&quot;
 init-module = &quot;/root/.npm-init.js&quot;
 userconfig = &quot;/root/.npmrc&quot;
-</code></pre>
-
-<p>そこでこれらの値を書き換えたnpmrcを含めた。</p>
-
+</code></pre><p>そこでこれらの値を書き換えたnpmrcを含めた。</p>
 <pre><code>ENV NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
 
 RUN ...
@@ -272,9 +249,7 @@ RUN ...
     chmod a+r $NPM_CONFIG_USERCONFIG &amp;&amp; \
     ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;&amp; \
     zip -yr /tmp/npm-layer.zip ./*
-</code></pre>
-
-<pre><code>func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+</code></pre><pre><code>func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	if err := os.Setenv(&quot;NPM_CONFIG_USERCONFIG&quot;, &quot;/opt/nodejs/.npmrc&quot;); err != nil {
 		return events.APIGatewayProxyResponse{
 			Body:       err.Error(),
@@ -283,18 +258,12 @@ RUN ...
 	}
 	...
 }
-</code></pre>
-
-<p>これでlocalでうまくいくことが確認できたのでデプロイしてみたところ、
+</code></pre><p>これでlocalでうまくいくことが確認できたのでデプロイしてみたところ、
 <code>Error: Cannot find module '../lib/utils/unsupported.js'</code> が再発してしまった。
 原因はシンボリックリンクがコピーになっているためで、<a href="https://github.com/awslabs/aws-sam-cli/pull/1140">PR</a>が上がっている。</p>
-
 <pre><code>out, err = exec.Command(&quot;ls&quot;, &quot;-l&quot;, &quot;/opt/bin/npm&quot;).CombinedOutput()
 // =&gt; ls: -rwxr-xr-x 1 root root 4566 Jul 24 2019 /opt/bin/npm
-</code></pre>
-
-<p>代わりにshell scriptを置くことにした。</p>
-
+</code></pre><p>代わりにshell scriptを置くことにした。</p>
 <pre><code>FROM lambci/lambda-base:build
 
 WORKDIR /opt
@@ -313,10 +282,7 @@ RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; \
     echo -e &quot;#!/bin/sh\n/opt/nodejs/node_modules/npm/bin/npm-cli.js \$@&quot; &gt; ./bin/npm &amp;&amp; \
     chmod a+x ./bin/npm &amp;&amp; \
     zip -yr /tmp/npm-layer.zip ./*
-</code></pre>
-
-<p>あとはタイムアウト対策のためMemorySizeを1024に増やしてようやく返ってくるようになった。</p>
-
+</code></pre><p>あとはタイムアウト対策のためMemorySizeを1024に増やしてようやく返ってくるようになった。</p>
 <pre><code>npm notice created a lockfile as package-lock.json. You should commit this file.
 npm WARN tmp@1.0.0 No description
 npm WARN tmp@1.0.0 No repository field.
@@ -325,7 +291,6 @@ npm WARN tmp@1.0.0 No repository field.
 added 50 packages from 37 contributors and audited 126 packages in 3.455s
 found 0 vulnerabilities
 </code></pre>
-
         </div>
       </article>
     </div>

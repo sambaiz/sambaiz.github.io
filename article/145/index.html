@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "Athenaのmigrationやpartitionするathena-adminを作った | sambaiz-net ",
     "datePublished": "2017-12-24T23:31:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -175,19 +175,14 @@
           <h1>Athenaのmigrationやpartitionするathena-adminを作った</h1>
           <p>(2017-12-24)</p>
           <p><a href="https://github.com/sambaiz/athena-admin">https://github.com/sambaiz/athena-admin</a></p>
-
 <p>AthenaはS3をデータソースとするマネージドなデータ分析基盤。Prestoベースで標準SQLを実行できる。</p>
-
 <p><a href="https://aws.amazon.com/jp/athena/pricing/">料金</a>はスキャンしたデータ量にかかり、$5/TB。1MB切り上げで、10MB以下のクエリは10MBになる。
 データ量に対してかなり安く使えるものの、フルスキャンしてしまうとBigQueryと同様にお金が溶けてしまうので、大抵はパーティションを切ることになるのだけど都度locationを指定して<code>ADD PARTITION</code>を実行するのは大変。さらにスキーマを変更するのにも<code>ALTER TABLE ADD COLUMNS</code>などはないのでテーブルを作り直すことになるが、当然パーティションも全部作り直すことになる。</p>
-
 <p>ではどうしようもないかというと<code>MSCK REPAIR TABLE</code>というのがあって、
 これはS3のObjectの<code>dt=YYYY-MM-DD</code>のようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだけど、勝手に<code>YYYY/MM/DD/HH</code>のprefixを付けてしまうFirehoseのようなのもある。</p>
-
 <p>今回作った<a href="https://github.com/sambaiz/athena-admin">athena-admin</a>は以下のような定義ファイルから、
 パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationする。
 このファイルを書き換えるだけで基本的にどうにかなるし、バージョン管理すればテーブル定義の変更を追うことができる。</p>
-
 <pre><code>{
   &quot;general&quot;: {
     &quot;athenaRegion&quot;: &quot;ap-northeast-1&quot;,
@@ -218,24 +213,17 @@
     }
   }
 }
-</code></pre>
-
-<p>使い方はこんな感じ。使い方によっては<code>migrate()</code>だけ呼ぶこともあると思う。
+</code></pre><p>使い方はこんな感じ。使い方によっては<code>migrate()</code>だけ呼ぶこともあると思う。
 <code>replaceObjects()</code>にはmatchedHandlerというのを渡すこともできて、
 UTCからJSTに変換するといったこともできる。</p>
-
 <pre><code>$ npm install athena-admin
-</code></pre>
-
-<pre><code>const AthenaAdmin = require('athena-admin').AthenaAdmin;
+</code></pre><pre><code>const AthenaAdmin = require('athena-admin').AthenaAdmin;
 const dbDef = require('./sampledatabase.json');
 const admin = new AthenaAdmin(dbDef);
 await admin.replaceObjects();
 await admin.migrate();
 await admin.partition();
-</code></pre>
-
-<blockquote>
+</code></pre><blockquote>
 <p>追記 (2019-01-01): AWS Glueを使っても同じことができる <a href="https://www.sambaiz.net/article/203/">AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net</a></p>
 </blockquote>
 

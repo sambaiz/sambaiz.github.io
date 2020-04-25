@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "NorikraでログをJOINする | sambaiz-net ",
     "datePublished": "2017-06-15T00:17:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -175,36 +175,25 @@
           <h1>NorikraでログをJOINする</h1>
           <p>(2017-06-15)</p>
           <p><a href="https://www.sambaiz.net/article/109/">NorikraとFluentdで流れてきたログをリアルタイムに集計する - sambaiz-net</a></p>
-
 <p>適当なログを出すコードを書いた。</p>
-
 <p><a href="https://github.com/sambaiz/lottery-log">sambaiz/lottery-log</a></p>
-
 <p>これは以下のようなlottery.logを出力し続け、数秒後に一定確率で同じuidのreceived.logを出力するもの。
 広告的に言えば、lotteryがimpで、receivedがclickといった感じかな。</p>
-
 <pre><code>// lottery.log
 {&quot;ts&quot;:1497453504.6818597,&quot;uid&quot;:&quot;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&quot;,&quot;prize&quot;:855,&quot;isWin&quot;:true}
 // received.log
 {&quot;ts&quot;:1497453515.932101,&quot;uid&quot;:&quot;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&quot;}
-</code></pre>
-
-<p>クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
+</code></pre><p>クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
 received_rateの計算にはサブクエリも使っている。
 received_rateの計算で分母に小さな値を足しているのはNaNやInfinityにならないようにするため。
 receivedログは最大30秒遅れて出力されるため、40秒前までのreceivedログをwin:timeで見ている。
 これをtime_batchにしてしまうと期待通りの結果にならないので注意。</p>
-
 <p>もう一つはJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。</p>
-
 <pre><code>$ docker exec norikra norikra-client query add lottery_agg '
 SELECT COUNT(*) as received_count, (COUNT(*) / (SELECT COUNT(*) + 0.00001 FROM lottery.win:time_batch(1 sec, 0).std:unique(uid))) as received_rate, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time(40 sec).std:unique(uid) as a, received.win:time_batch(1 sec, 0).std:unique(uid) as b WHERE a.uid = b.uid'
 
 $ docker exec norikra norikra-client query add lottery_win_rate 'SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)'
-</code></pre>
-
-<p>で、このクエリの結果をElasticsearchに送って可視化してみたのがこれ。</p>
-
+</code></pre><p>で、このクエリの結果をElasticsearchに送って可視化してみたのがこれ。</p>
 <pre><code>&lt;source&gt;
   @type tail
   path /var/log/lottery.log
@@ -267,11 +256,8 @@ $ docker exec norikra norikra-client query add lottery_win_rate 'SELECT avg(Bool
   type_name lottery_win_rate
   logstash_format true
 &lt;/match&gt;
-</code></pre>
-
-<p>received_rateを計算するときのウィンドウが1secと小さく、タイミングによってはreceivedの数がlotteryの数を上回ることがあるため1以下で絞っている。</p>
-
-<p><img src="https://www.sambaiz.net/images/111v.png" alt="可視化したもの" /></p>
+</code></pre><p>received_rateを計算するときのウィンドウが1secと小さく、タイミングによってはreceivedの数がlotteryの数を上回ることがあるため1以下で絞っている。</p>
+<p><img src="https://www.sambaiz.net/images/111v.png" alt="可視化したもの"></p>
 
         </div>
       </article>

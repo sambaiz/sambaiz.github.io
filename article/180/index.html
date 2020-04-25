@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,29 +42,29 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "GCPのCloud Pub/Sub | sambaiz-net ",
+    "headline": "GCPのCloud Pub\/Sub | sambaiz-net ",
     "datePublished": "2018-07-26T23:55:00JST",
     "dateModified": "2018-07-26T23:55:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -176,15 +176,11 @@
           <p>(2018-07-26)</p>
           <p>スケーラビリティに優れるメッセージングミドルウェア。
 データはPullするだけではなくhttpsのエンドポイントにPushすることもでき、Cloud Dataflowを通してBigQueryやCloud MLに繋げることもできる。GAEのTaskQueueのように遅延させる機能は今のところない。</p>
-
 <p><a href="https://www.sambaiz.net/article/178/">GAEのTaskQueue - sambaiz-net</a></p>
-
 <p><a href="https://cloud.google.com/pubsub/pricing">料金</a>はPublish/Pull/Pushしたデータ容量による。1TB送ると$60くらい。</p>
-
 <p>Goの<a href="https://github.com/GoogleCloudPlatform/google-cloud-go">クライアントライブラリ</a>で動かしてみる。
 まずTopicを作成して50件Publishした後、Subsriptionを作成して、再び50件Publishする。
 Publishできるデータは<a href="https://cloud.google.com/pubsub/docs/publisher#header_1">10MB未満</a>。</p>
-
 <pre><code>topic, err := client.CreateTopic(ctx, topicName)
 if err != nil {
   panic(err)
@@ -219,20 +215,15 @@ for i := 50; i &lt; 100; i++ {
   }()
   wg.Wait()
 }
-</code></pre>
-
-<pre><code>2018/07/26 21:42:51 Publish successful: 47
+</code></pre><pre><code>2018/07/26 21:42:51 Publish successful: 47
 2018/07/26 21:42:51 Publish successful: 48
 2018/07/26 21:42:51 Publish successful: 49
 2018/07/26 21:42:51 Create Subscription
 2018/07/26 21:42:58 Publish successful: 50
 2018/07/26 21:42:58 Publish successful: 51
 2018/07/26 21:42:58 Publish successful: 52
-</code></pre>
-
-<p>Pull時のHandlerとしてAckを呼ぶackHandlerと、Nackを呼ぶnackHandler、何もしないnothingHandlerを用意した。
+</code></pre><p>Pull時のHandlerとしてAckを呼ぶackHandlerと、Nackを呼ぶnackHandler、何もしないnothingHandlerを用意した。
 AckするとPub/Subからメッセージが消え、Nackまたはタイムアウトするとリトライされる。</p>
-
 <pre><code>type GotData struct {
 	sync.Mutex
 	gotData []string
@@ -264,15 +255,10 @@ func nackHandler(ctx context.Context, m *pubsub.Message) {
 func nothingHandler(ctx context.Context, m *pubsub.Message) {
 	log.Printf(&quot;nothingHandler got message: %s&quot;, m.Data)
 }
-</code></pre>
-
-<p>一つのSubscriptionを複数のSubscriberで使うことでメッセージを分散処理することができる。
+</code></pre><p>一つのSubscriptionを複数のSubscriberで使うことでメッセージを分散処理することができる。
 ただし同じstructを使うとエラーになるのでそれぞれ生成している。</p>
-
 <p>nothingHandlerではSubscriptionの<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L210">MaxExtension</a>を<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L240">デフォルト</a>の10分から10秒にすることでリトライを早めている。<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L136">AckDeadline</a>というのもあるがPullの場合、結局MaxExtensionまで延長してしまうので意味がないようだ。</p>
-
 <p>ReceiveSettingsにはほかに<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L217">MaxOutstandingMessages</a>というのもあり、一度に処理されるメッセージの量を制限することができる。</p>
-
 <pre><code>go func() {
   sub := client.Subscription(subscriptionName)
   if err := sub.Receive(ctx, ackHandler(cancel)); err != nil {
@@ -292,20 +278,14 @@ go func() {
 		panic(err)
   }
 }()
-</code></pre>
-
-<p>nack/nothingHandlerによっていくつかリトライされた後、ackHandlerにSubscription作成後のメッセージが全て届いた。
+</code></pre><p>nack/nothingHandlerによっていくつかリトライされた後、ackHandlerにSubscription作成後のメッセージが全て届いた。
 データは<a href="https://cloud.google.com/pubsub/faq#persistent">7日間</a>保持される。
 メッセージの順序は<a href="https://cloud.google.com/pubsub/docs/ordering">保証されず</a>、今回は1件ずつになっているが重複することがある。</p>
-
 <pre><code>2018/07/26 21:43:49 nothingHandler got message: 91
 2018/07/26 21:44:28 nackHandler got message: 91
 2018/07/26 21:44:30 ackHandler got message: 91 []string{&quot;50&quot;, &quot;51&quot;, &quot;52&quot;, &quot;53&quot;, &quot;54&quot;, &quot;55&quot;, &quot;56&quot;, &quot;57&quot;, &quot;58&quot;, &quot;59&quot;, &quot;60&quot;, &quot;61&quot;, &quot;62&quot;, &quot;63&quot;, &quot;64&quot;, &quot;65&quot;, &quot;66&quot;, &quot;67&quot;, &quot;68&quot;, &quot;69&quot;, &quot;70&quot;, &quot;71&quot;, &quot;72&quot;, &quot;73&quot;, &quot;74&quot;, &quot;75&quot;, &quot;76&quot;, &quot;77&quot;, &quot;78&quot;, &quot;79&quot;, &quot;80&quot;, &quot;81&quot;, &quot;82&quot;, &quot;83&quot;, &quot;84&quot;, &quot;85&quot;, &quot;86&quot;, &quot;87&quot;, &quot;88&quot;, &quot;89&quot;, &quot;90&quot;, &quot;91&quot;, &quot;92&quot;, &quot;93&quot;, &quot;94&quot;, &quot;95&quot;, &quot;96&quot;, &quot;97&quot;, &quot;98&quot;, &quot;99&quot;}
 2018/07/26 21:44:30 Finished!
-</code></pre>
-
-<p>スケールし、複数コンシューマーがそれぞれのタイミングでPullできるログの一時的な貯め先などとしてAWSのKinesis Data Streamsと同じようなユースケースで使われるが、Kinesisでは順序が保証されていたり、シャードの指定やデータの取り出し方といった扱いなど異なる点もある。</p>
-
+</code></pre><p>スケールし、複数コンシューマーがそれぞれのタイミングでPullできるログの一時的な貯め先などとしてAWSのKinesis Data Streamsと同じようなユースケースで使われるが、Kinesisでは順序が保証されていたり、シャードの指定やデータの取り出し方といった扱いなど異なる点もある。</p>
 <p><a href="https://www.sambaiz.net/article/67/">Kinesis Streams/Firehose/Analyticsを試す - sambaiz-net</a></p>
 
         </div>

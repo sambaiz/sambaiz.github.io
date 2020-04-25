@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "DAX (DynamoDB Accelerator)の特性と挙動確認 | sambaiz-net ",
     "datePublished": "2020-02-26T23:21:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,58 +174,39 @@
         <div class="single body">
           <h1>DAX (DynamoDB Accelerator)の特性と挙動確認</h1>
           <p>(2020-02-26)</p>
-          
-
-<h2 id="daxとは">DAXとは</h2>
-
+          <h2 id="daxとは">DAXとは</h2>
 <p><a href="https://aws.amazon.com/jp/dynamodb/dax/">DAX</a>はDynamoDBの前段に置かれるマネージドなインメモリキャッシュで、
 Read速度の向上(数ms-&gt;数百μs)とテーブルのRead Capacityの節約に効果がある。</p>
-
 <p>DynamoDBとSDKのAPIの互換性があるため置き換えるだけで使えるようになっている。
 クライアントの実装としてはHTTPではない独自のプロトコルで<a href="https://github.com/aws/aws-dax-go/blob/19b34c5c99ea4b76610dcbae7d87fd572de012df/dax/internal/client/single.go#L278">通信している</a>点が異なる。</p>
-
 <p>クラスタ作成時に指定するのはノード数とインスタンスタイプで、
 ノード数はスループットに、インスタンスタイプはスループットとメモリ量(キャッシュヒット率)に<a href="https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/DAX.concepts.cluster.html#DAX.concepts.nodes">影響する</a>。
 複数のノードがある場合、一つがWriteするプライマリーノードになり、他はリードレプリカになる。
 なのでノード数を増やしてもWriteのスループットは上がらない。プライマリーノードに問題が発生したら<a href="https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/DAX.concepts.cluster.html#DAX.concepts.clusters">自動でフェイルオーバーする</a>。
 ノードは最大10個まで増減できるが、インスタンスタイプは変更できない。最大10個というのは足りるのかと思ったが、数百万RPS捌けるようなので十分そうだ。</p>
-
 <p>インスタンスに対して時間課金が発生し、可用性のために3ノード以上にすることが推奨されている。
 そのため、リクエストがそれほどなかったり、キャッシュミスばかりだとインスタンス代の方が高くつくこともあるが、
 そこそこReadするなら目に見えてコスト削減されるはずだ。ただしどれくらい次の整合性を許容できるかによる。</p>
-
-<h2 id="キャッシュの整合性-https-docs-aws-amazon-com-ja-jp-amazondynamodb-latest-developerguide-dax-consistency-html"><a href="https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/DAX.consistency.html">キャッシュの整合性</a></h2>
-
+<h2 id="キャッシュの整合性httpsdocsawsamazoncomja_jpamazondynamodblatestdeveloperguidedaxconsistencyhtml"><a href="https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/DAX.consistency.html">キャッシュの整合性</a></h2>
 <p>DAXはDynamoDBとは異なり、<a href="https://docs.aws.amazon.com/ja_jp/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html">結果整合性のある読み込み(Eventually Consistent Reads)</a>のみをサポートしているので、プライマリノードにキャッシュされ、全てのノードにレプリケーションが完了するまでの間は異なる結果を返す可能性がある。また、DAXからDynamoDBへのリクエストも結果整合性のある読み込みで行われる。</p>
-
 <p>リクエストの結果は、Itemがなかった場合のネガティブキャッシュも含めて、
 Item Cache(<code>GetItem</code>,<code>BatchGetItem</code>)とQuery Cache(<code>Query</code>,<code>Scan</code>)にキャッシュされ、
 それぞれパラメータグループで設定された<a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DAX.cluster-management.html#DAX.cluster-management.custom-settings.ttl">TTL</a>が過ぎるか、LRUアルゴリズムによって破棄される。
 TTLのデフォルトは5分。</p>
-
 <p>書き込みリクエストが来るとまずDynamoDBに書き込んで成功したことを確認してからキャッシュしてレスポンスを返す。
 この際Item Cacheは更新されるが、Query Cacheは更新されずTTL/LRUによって破棄されるまで同じ値を返し続けてしまう。
 もし問題がある場合は、TTLを短くするかDynamoDBを直接見に行くことになるが、そうするとDAXの効果が薄れてしまう。
 また、大量のデータを書き込むと、その分レイテンシが増加したり、それらがすべてキャッシュに乗ることで既存のものがLRUで追い出されてキャッシュヒット率が悪くなることがあり、それらを回避するため直接書き込むという選択肢もあるが、Item Cacheが更新されないことを許容する必要がある。</p>
-
 <h2 id="取れるメトリクス">取れるメトリクス</h2>
-
 <p>CPU使用率や、キャッシュヒット数、各リクエスト数や接続数が取れる。</p>
-
-<p><img src="https://www.sambaiz.net/images/260.png" alt="メトリクス" /></p>
-
+<p><img src="https://www.sambaiz.net/images/260.png" alt="メトリクス"></p>
 <p>ノードごとのCPU使用率も取れる。Writeやキャッシュミスによるプライマリーノードの負荷の高まりに注意。
 レイテンシが大きくなり接続数が増える悪循環に陥る。</p>
-
 <h2 id="挙動確認">挙動確認</h2>
-
 <p>DAX/DynamoへリクエストするだけだったらLambdaでも良いが、負荷をかけるのでECS上にアプリケーションをデプロイすることにした。
 以前作ったBoilerplateベースで、コードは<a href="https://github.com/sambaiz/dax-test">ここ</a>。</p>
-
 <p><a href="https://www.sambaiz.net/article/259/">ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net</a></p>
-
 <p>TableとDAXのClusterを作成。</p>
-
 <pre><code>createDynamoTable() {
   return new dynamodb.Table(this, 'DynamoTable', {
     tableName: &quot;dax-test-table&quot;,
@@ -255,10 +236,7 @@ createDaxCluster(subnetIds: string[]) {
     subnetGroupName: subnetGroup.subnetGroupName,
   })
 }
-</code></pre>
-
-<p>DynamoDBとinterfaceが同じなので<a href="https://github.com/guregu/dynamo">guregu/dynamo</a>もそのまま使えた。</p>
-
+</code></pre><p>DynamoDBとinterfaceが同じなので<a href="https://github.com/guregu/dynamo">guregu/dynamo</a>もそのまま使えた。</p>
 <pre><code>func newDynamoClient(tableName string, throughDax bool) (*dynamo.DB, error) {
 	var (
 		client dynamodbiface.DynamoDBAPI
@@ -277,10 +255,7 @@ createDaxCluster(subnetIds: string[]) {
 	}
 	return dynamo.NewFromIface(client), nil
 }
-</code></pre>
-
-<p>DAXを通したときと通さなかった時の差を確認するため、クエリパラメータで振り分けるようにした。</p>
-
+</code></pre><p>DAXを通したときと通さなかった時の差を確認するため、クエリパラメータで振り分けるようにした。</p>
 <pre><code>func handleItem(db *dynamo.DB, dax *dynamo.DB) func(w http.ResponseWriter, r *http.Request) {
 	return auth(func(w http.ResponseWriter, r *http.Request) {
 		client := db
@@ -306,20 +281,13 @@ createDaxCluster(subnetIds: string[]) {
 		}
 	})
 }
-</code></pre>
-
-<p>初期データを挿入する。</p>
-
+</code></pre><p>初期データを挿入する。</p>
 <pre><code>$ BASE_URL=http://***
 $ TOKEN=DAXTEST
 $ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/initialize&quot;
 ok
-</code></pre>
-
-<h3 id="read速度の向上">Read速度の向上</h3>
-
+</code></pre><h3 id="read速度の向上">Read速度の向上</h3>
 <p>DynamoDBとDAXにそれぞれ<code>GetItem</code>すると、DynamoDBは5ms前後かかるところ、DAXはキャッシュされてからは500-1000μs前後で返ってきた。</p>
-
 <pre><code>$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&quot;
 { 4768}
 
@@ -328,42 +296,26 @@ $ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&
 
 $ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
 { 593}
-</code></pre>
-
-<p>一方書き込みは前述したように遅くなる。思いの外差があった。</p>
-
+</code></pre><p>一方書き込みは前述したように遅くなる。思いの外差があった。</p>
 <pre><code>$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item&quot; --data '{&quot;id&quot;: &quot;AAA&quot;, &quot;title&quot;: &quot;aaa&quot;}'
 { 6135}
 
 $ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?dax=1&quot; --data '{&quot;id&quot;: &quot;BBB&quot;, &quot;title&quot;: &quot;bbb&quot;}'
 { 39011}
-</code></pre>
-
-<h3 id="read-capacityの節約">Read capacityの節約</h3>
-
+</code></pre><h3 id="read-capacityの節約">Read capacityの節約</h3>
 <p>全てキャッシュヒットするパターンで負荷をかけてみる。</p>
-
 <pre><code>$ ulimit -n 2000
 $ ab -n 10000 -c 1000 -r -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
-</code></pre>
-
-<p>裏側のTableのキャパシティが全く使われないことを確認できた。</p>
-
+</code></pre><p>裏側のTableのキャパシティが全く使われないことを確認できた。</p>
 <h3 id="ノードが落ちたときの挙動">ノードが落ちたときの挙動</h3>
-
 <p>ノードを1台にして再起動するとnetwork errorになった。</p>
-
 <pre><code>failed to get an item: InternalServerError: network error
 caused by: dial tcp 172.31.34.26:8111: connect: connection refused
-</code></pre>
-
-<p>ノードを2台に増やし、
+</code></pre><p>ノードを2台に増やし、
 負荷をかけている途中におそらくプライマリーノードであろう最初の1台を落としてみる。
 フェイルオーバー中にいくらかエラーが返ることを想定していたが、そんなこともなく全て200で返った。</p>
-
 <pre><code>$ ab -n 20000 -c 10 -r -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
 </code></pre>
-
         </div>
       </article>
     </div>

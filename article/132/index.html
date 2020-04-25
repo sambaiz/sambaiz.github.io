@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,33 +42,33 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った | sambaiz-net ",
+    "headline": "Lambda上でPuppeteer\/Headless Chromeを動かすStarter Kitを作った | sambaiz-net ",
     "datePublished": "2017-09-10T23:45:00JST",
     "dateModified": "2017-09-10T23:45:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
-    "description": "LambdaでPuppeteer/Headless Chrome"
+    "description": "LambdaでPuppeteer\/Headless Chrome"
   }
 </script>
 </head>
@@ -174,35 +174,24 @@
         <div class="single body">
           <h1>Lambda上でPuppeteer/Headless Chromeを動かすStarter Kitを作った</h1>
           <p>(2017-09-10)</p>
-          
-
-<p><a href="https://github.com/GoogleChrome/puppeteer">Puppeteer</a>でHeadless Chromeを動かすコードを
+          <p><a href="https://github.com/GoogleChrome/puppeteer">Puppeteer</a>でHeadless Chromeを動かすコードを
 Lambda上で動かすStarter Kitを作った。</p>
-
 <p><a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit">puppeteer-lambda-starter-kit</a></p>
-
 <h2 id="chromeの準備">Chromeの準備</h2>
-
 <p>Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても
 Lambdaにないshared libraryに依存しているため失敗する。</p>
-
 <pre><code>error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory
-</code></pre>
-
-<p>Lambda上でHeadless Chromeを動かす例がないか調べたら<a href="https://github.com/adieuadieu/serverless-chrome">serverless-chrome</a>というのがあって、
+</code></pre><p>Lambda上でHeadless Chromeを動かす例がないか調べたら<a href="https://github.com/adieuadieu/serverless-chrome">serverless-chrome</a>というのがあって、
 Headless用の設定でChromeをビルドしていた。
 ほかには<a href="https://github.com/graphcool/chromeless">chromeless</a>というのもあるけど
 これはserverless-chromeに
 <a href="https://github.com/graphcool/chromeless/blob/master/serverless/serverless.yml#L46">依存している</a>。
 最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。</p>
-
 <p>serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。
 基本的には<a href="https://github.com/adieuadieu/serverless-chrome/tree/master/chrome">書いてある</a>
 通りやればうまくいく。他のプロセスとのshared memoryとして/dev/shmを使っているのを、/tmpに<a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/master/chrome/buildChrome.sh#L20">置き換える</a>
 ようにしないと、実行時の<code>page.goto()</code>で<code>Failed Provisional Load: ***, error_code: -12</code>になる。</p>
-
 <p>ビルドしたheadless_shellには問題になった依存は含まれていないようだ。</p>
-
 <pre><code>$ ldd headless_shell 
 	linux-vdso.so.1 =&gt;  (0x00007ffcb6fed000)
 	libpthread.so.0 =&gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000)
@@ -222,25 +211,16 @@ Headless用の設定でChromeをビルドしていた。
 	/lib64/ld-linux-x86-64.so.2 (0x000055ba0af5e000)
 	libplc4.so =&gt; /lib64/libplc4.so (0x00007f5f15d55000)
 	libplds4.so =&gt; /lib64/libplds4.so (0x00007f5f15b51000)
-</code></pre>
-
-<p>Puppetterで落としてくる普通のChromeは<a href="http://docs.aws.amazon.com/lambda/latest/dg/limits.html">Lambdaの制限</a>の50MBを超えていたが、
+</code></pre><p>Puppetterで落としてくる普通のChromeは<a href="http://docs.aws.amazon.com/lambda/latest/dg/limits.html">Lambdaの制限</a>の50MBを超えていたが、
 ビルドしたものはぎりぎり超えていないのでパッケージに含められるようになった。
 PuppeteerのChromeは環境変数<code>PUPPETEER_SKIP_CHROMIUM_DOWNLOAD</code>を設定することで<a href="https://github.com/GoogleChrome/puppeteer/blob/2817130fe099a7431e98c20ce1f44c6e547d4ca9/docs/api.md#puppeteer">含めないようにできる</a>。</p>
-
 <p>他のパッケージのサイズによっては50MBを超えてしまうこともあるので、
 パッケージに含めず<a href="https://github.com/sambaiz/puppeteer-lambda-starter-kit/blob/v0.9.0/src/util.js#L62">S3からダウンロード</a>できるようにもした。</p>
-
 <p>いずれの場合も最終的な置き先はLambdaで唯一書き込める<code>/tmp</code>になる。
 この領域は512MBまで使えるので展開してもまだ余裕がある。</p>
-
 <pre><code>Error: EROFS: read-only file system, open 'node_modules/puppeteer/.local-chromium'
-</code></pre>
-
-<h2 id="chromeのlaunch時のoption">ChromeのLaunch時のOption</h2>
-
+</code></pre><h2 id="chromeのlaunch時のoption">ChromeのLaunch時のOption</h2>
 <p>いろいろ試した結果、最低限必要だったのはこのあたり。</p>
-
 <pre><code>exports.launchOptionForLambda = [
     // error when launch(); No usable sandbox! Update your kernel
     '--no-sandbox',
@@ -249,29 +229,19 @@ PuppeteerのChromeは環境変数<code>PUPPETEER_SKIP_CHROMIUM_DOWNLOAD</code>�
     // freeze when newPage()
     '--single-process'
 ];
-</code></pre>
-
-<p>エラーは分かりづらいものが多く、ときにはエラーすら出ずに止まってしまうこともある。
+</code></pre><p>エラーは分かりづらいものが多く、ときにはエラーすら出ずに止まってしまうこともある。
 デバッグの際はdumpioを有効にする。</p>
-
 <pre><code>const browser = await puppeteer.launch({
     ...
     dumpio: !!util.DEBUG,
 });  
-</code></pre>
-
-<h2 id="babel">Babel</h2>
-
+</code></pre><h2 id="babel">Babel</h2>
 <p>現在のLambdaのNodeのバージョンはv6.10.3。
 <a href="http://node.green/">node.green</a>によるとES2015は99%対応していて、ES2016もべき乗演算子(2 ** 3 = 8)以外は対応しているが、ES2017のasync/awaitは7.6からなので、8系に対応するまではbabelにかける必要がある。
 ちなみにPuppeteerは6.4以降で<a href="https://github.com/GoogleChrome/puppeteer/tree/master/utils/node6-transform">動く</a>。</p>
-
 <pre><code>$ yarn add --dev babel-cli babel-preset-env
-</code></pre>
-
-<p><a href="https://github.com/babel/babel-preset-env">babel-preset-env</a>
+</code></pre><p><a href="https://github.com/babel/babel-preset-env">babel-preset-env</a>
 .babelrcはこんな感じ。</p>
-
 <pre><code>$ cat .babelrc
 {
   &quot;presets&quot;: [
@@ -283,7 +253,6 @@ PuppeteerのChromeは環境変数<code>PUPPETEER_SKIP_CHROMIUM_DOWNLOAD</code>�
   ]
 }
 </code></pre>
-
         </div>
       </article>
     </div>

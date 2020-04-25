@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する | sambaiz-net ",
     "datePublished": "2017-02-26T18:56:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,25 +174,16 @@
         <div class="single body">
           <h1>fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する</h1>
           <p>(2017-02-26)</p>
-          
-
-<p><a href="https://github.com/awslabs/aws-fluent-plugin-kinesis">aws-fluent-plugin-kinesis</a>でKinesis Streamsに送り、Lambdaで読んでS3に保存する。
+          <p><a href="https://github.com/awslabs/aws-fluent-plugin-kinesis">aws-fluent-plugin-kinesis</a>でKinesis Streamsに送り、Lambdaで読んでS3に保存する。
 要するにFirehoseのようなことをやりたいのだけれどTokyoリージョンにまだ来ないので自分でやる。</p>
-
 <h2 id="fluentdで送る">fluentdで送る</h2>
-
 <pre><code>$ td-agent-gem install fluent-plugin-kinesis
-</code></pre>
-
-<p><code>try_flush_interval</code>と<code>queued_chunk_flush_interval</code>はドキュメントには載っていないが、
+</code></pre><p><code>try_flush_interval</code>と<code>queued_chunk_flush_interval</code>はドキュメントには載っていないが、
 以下のページによるとそれぞれqueueに次のchunkがないときとあるときのflushする間隔。
 いずれもデフォルトは1だが、これを減らすことでもっと頻繁に吐き出されるようになるらしい。</p>
-
 <p><a href="https://github.com/sonots/fluentd-scr/blob/master/02_out_forward_buffered.md">Fluentd の out_forward と BufferedOutput</a></p>
-
 <p>あとシャードに振り分けるための<a href="https://github.com/awslabs/aws-fluent-plugin-kinesis#partition_key">partition_key</a>
 を指定できる。デフォルトはランダム。</p>
-
 <pre><code>&lt;source&gt;
   @type tail
   path /var/log/td-agent/hoge.log
@@ -217,28 +208,17 @@
   queued_chunk_flush_interval 0.01
   num_threads 15
 &lt;/match&gt;
-</code></pre>
-
-<p>いくつか送ってみる。</p>
-
+</code></pre><p>いくつか送ってみる。</p>
 <pre><code>for i in `seq 1 1000`
 do
   echo '{&quot;hoge&quot;: &quot;fuga&quot;, &quot;timestamp&quot;: &quot;2017-01-01T01:01:01+0900&quot;}' &gt;&gt; /var/log/td-agent/hoge.log
 done
-</code></pre>
-
-<p>kinesisのシャードが足りないと詰まってしまうので注意。</p>
-
+</code></pre><p>kinesisのシャードが足りないと詰まってしまうので注意。</p>
 <p><a href="https://www.sambaiz.net/article/84/">FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ - sambaiz.net</a></p>
-
 <h2 id="lambdaで読む">Lambdaで読む</h2>
-
 <p>Lambdaのトリガーの設定でKinesisを選ぶと、バッチサイズや開始位置を設定できる。</p>
-
-<p><img src="https://www.sambaiz.net/images/73-lambda-kinesis.png" alt="トリガーの設定" /></p>
-
+<p><img src="https://www.sambaiz.net/images/73-lambda-kinesis.png" alt="トリガーの設定"></p>
 <p>コードはこんな感じ。</p>
-
 <pre><code>'use strict';
 
 const zlib = require('zlib');
@@ -278,10 +258,7 @@ function putS3(key, data, gzip){
         });
     });
 }
-</code></pre>
-
-<p>トリガーを有効にするとイベントが発火してS3に保存されるようになった。</p>
-
+</code></pre><p>トリガーを有効にするとイベントが発火してS3に保存されるようになった。</p>
 <p>ただ、Kinesisをイベントトリガーにして都度出力すると、1ファイルのサイズが非常に小さくなってしまう。
 なんとかして都度出力しないようにするか、あるいは時間トリガーで実行するか、いずれにしてもどこまで読んだか記録しておかなくちゃいけないのでちょっと面倒だ。バッファリングしてくれるFirehoseが早く日本にも来て欲しい。</p>
 

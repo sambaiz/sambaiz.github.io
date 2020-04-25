@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "ApexでデプロイしたLambdaのトリガーをTerraformで管理する | sambaiz-net ",
     "datePublished": "2017-11-12T22:23:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,17 +174,12 @@
         <div class="single body">
           <h1>ApexでデプロイしたLambdaのトリガーをTerraformで管理する</h1>
           <p>(2017-11-12)</p>
-          
-
-<p>Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。
+          <p>Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。
 これを手作業で行うこともできるのだけど、せっかくなのでアプリケーションと一緒に管理したい。
 そんなときのために<code>terraform</code>コマンドをラップした<a href="http://apex.run/#managing-infrastructure">apex infra</a>が用意されている。</p>
-
 <p><a href="https://www.sambaiz.net/article/121/">TerraformでVPCを管理するmoduleを作る - sambaiz-net</a></p>
-
 <p>functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。
 その下に環境ごとのディレクトリを作成することもできて、その場合は<code>--env</code>で指定した環境のものが使われる。</p>
-
 <pre><code>- functions
 - infrastructure
   main.tf
@@ -194,22 +189,15 @@
       main.tf
       variables.tf
 project.json 
-</code></pre>
-
-<p>functionをデプロイするとそのARNが変数で取れるようになる。</p>
-
+</code></pre><p>functionをデプロイするとそのARNが変数で取れるようになる。</p>
 <pre><code>$ apex list --tfvars
 apex_function_hello=&quot;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&quot;
-</code></pre>
-
-<p>今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。</p>
-
+</code></pre><p>今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。</p>
 <ul>
 <li><a href="https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_rule.html">aws_cloudwatch_event_rule</a>でイベントルール(今回はschedule)を作成</li>
 <li><a href="https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_target.html">aws_cloudwatch_event_target</a>でルールにターゲット(今回はLambda)を設定</li>
 <li><a href="https://www.terraform.io/docs/providers/aws/r/lambda_permission.html">aws_lambda_permission</a>でルールに対象Lambdaをinvokeする権限を付ける</li>
 </ul>
-
 <pre><code>$ cat infrastructure/modules/cloudwatch_schefule/variables.tf
 variable &quot;lambda_function_name&quot; {}
 variable &quot;lambda_function_arn&quot; {}
@@ -237,9 +225,7 @@ resource &quot;aws_lambda_permission&quot; &quot;lambda&quot; {
   principal     = &quot;events.amazonaws.com&quot;
   source_arn    = &quot;${aws_cloudwatch_event_rule.lambda.arn}&quot;
 }
-</code></pre>
-
-<pre><code>$ cat infrastructure/variables.tf 
+</code></pre><pre><code>$ cat infrastructure/variables.tf 
 variable &quot;apex_function_names&quot; {
     type=&quot;map&quot;
 }
@@ -260,17 +246,11 @@ module &quot;hello_trigger&quot; {
   lambda_function_arn = &quot;${var.apex_function_hello}&quot;
   schedule_expression = &quot;cron(0/5 * * * ? *)&quot;
 }
-</code></pre>
-
-<p><code>init</code>してbackendを初期化してmoduleを準備する。</p>
-
+</code></pre><p><code>init</code>してbackendを初期化してmoduleを準備する。</p>
 <pre><code>$ apex infra init
 $ ls infrastructure/.terraform/modules/*****
 main.tf		variables.tf
-</code></pre>
-
-<p><code>plan</code>するとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。</p>
-
+</code></pre><p><code>plan</code>するとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。</p>
 <pre><code>$ apex infra plan
 + module.hello_trigger.aws_cloudwatch_event_rule.lambda
     arn:                 &quot;&lt;computed&gt;&quot;
@@ -290,20 +270,14 @@ main.tf		variables.tf
     principal:     &quot;events.amazonaws.com&quot;
     source_arn:    &quot;${aws_cloudwatch_event_rule.lambda.arn}&quot;
     statement_id:  &quot;AllowExecutionFromCloudWatch&quot;
-</code></pre>
-
-<p><code>apply</code>するとトリガーが登録される。</p>
-
+</code></pre><p><code>apply</code>するとトリガーが登録される。</p>
 <pre><code>$ apex infra apply
 $ apex logs hello
 ...
 /aws/lambda/usetf_hello 2017-11-12T13:20:14.561Z	37e75818-c7ac-11e7-a333-111863808b13	processing event:
 ...
 /aws/lambda/usetf_hello 2017-11-12T13:25:15.182Z	eb178941-c7ac-11e7-bde0-998ea9659640 processing event:
-</code></pre>
-
-<h2 id="参考">参考</h2>
-
+</code></pre><h2 id="参考">参考</h2>
 <p><a href="https://dev.classmethod.jp/cloud/aws/ami-and-snapshot-delete-with-apex-and-terraform/">ApexとTerraformでCloudWatch EventsによりInvokeされるLambda関数をデプロイする ｜ Developers.IO</a></p>
 
         </div>

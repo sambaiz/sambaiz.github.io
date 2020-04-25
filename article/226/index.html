@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.38.2" />
+  <meta name="generator" content="Hugo 0.69.2" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -42,7 +42,7 @@
     "@type": "BlogPosting",
     "mainEntityOfPage":{
       "@type":"WebPage",
-      "@id":"https://www.sambaiz.net/"
+      "@id":"https:\/\/www.sambaiz.net\/"
     },
     "headline": "API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く | sambaiz-net ",
     "datePublished": "2019-07-03T20:15:00JST",
@@ -50,21 +50,21 @@
     "author": {
       "@type": "Person",
       "name": "sambaiz",
-      "image": "https://www.sambaiz.net/images/my.jpg"
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
     },
     "publisher": {
       "@type": "Organization",
       "name": "sambaiz-net",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://www.sambaiz.net/images/my.jpg",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
         "height": 60,
         "width": 60
       }
     },
     "image": {
       "@type": "ImageObject",
-      "url": "https://www.sambaiz.net/images/my.jpg",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
       "height": 138,
       "width": 138
     },
@@ -174,23 +174,15 @@
         <div class="single body">
           <h1>API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く</h1>
           <p>(2019-07-03)</p>
-          
-
-<p>ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる。
+          <p>ブラウザから直接API GatewayのエンドポイントにアクセスしたときにCognitoのTokenで認証し、失敗したらログイン画面を表示させる。
 API GatewayでCognitoの認証をかける場合、AuthorizerでUserPoolを指定するのが最も簡単なパターンだが、
 これだとHeaderにTokenを付けてアクセスする必要があり認証に失敗するとUnauthorizedが返る。</p>
-
 <p><a href="https://www.sambaiz.net/article/157/">Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる - sambaiz-net</a></p>
-
 <p>なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。</p>
-
 <p><a href="https://www.sambaiz.net/article/227/">LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす - sambaiz-net</a></p>
-
 <h2 id="準備">準備</h2>
-
 <p>UserPoolとClientを作成する。
 CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseなのに注意。変えると作り直される。</p>
-
 <pre><code>Resources:
   Userpool:
     Type: AWS::Cognito::UserPool
@@ -214,34 +206,23 @@ CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseな
         Ref: Userpool
       ClientName: testclient
       GenerateSecret: true
-</code></pre>
-
-<p>今回はフェデレーションでGoogleアカウントでログインできるようにする。
+</code></pre><p>今回はフェデレーションでGoogleアカウントでログインできるようにする。
 ややこしい用語であるがID Poolの<a href="https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/cognito-identity.html">フェデレーティッドアイデンティティ</a>とは異なる。</p>
-
 <p>UserPoolのドメインや、<a href="https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/cognito-user-pools-social-idp.html">GoogleのOAuth Client ID</a>の発行とAttributes Mapping、Clientの設定はCloudFormationでできないので手でやる。
 Attributes Mappingで変えられるがusernameは<a href="https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/user-pool-settings-attributes.html#user-pool-settings-usernames">変更不可な値</a>なのでsubのままにしておく。</p>
-
 <p>設定が終わったら <code>https://&lt;user-pool-domain&gt;/login?client_id=&lt;client-id&gt;&amp;redirect_uri=&lt;redirect-uri&gt;&amp;response_type=code</code>
 にアクセスし、<code>&lt;redirect-uri&gt;?code=&lt;code&gt;</code> までリダイレクトされることを確認する。
 invalid_requestとだけ出てしまった場合はClientのAuthorization code grantにチェックが入っているか確認する。</p>
-
 <h2 id="実装">実装</h2>
-
 <p>Authorization Flowを行う。</p>
-
 <p><a href="https://www.sambaiz.net/article/48/">OAuth2.0のメモ - sambaiz-net</a></p>
-
 <p>Cookieで渡ってきたTokenを検証し、失敗した場合はログイン画面にリダイレクトさせる。
 identity_providerを指定するかClientに一つしか紐づいていなければそのプロバイダのログイン画面に飛び、そうでなければ選択する画面が表示される。
 ログインしてクエリパラメータとして渡ってきたcodeとstateもこの関数で受け取り、検証してTokenを発行し一旦返してCookieに焼く。</p>
-
 <p><a href="https://www.sambaiz.net/article/136/">OpenID ConnectのIDトークンの内容と検証 - sambaiz-net</a></p>
-
 <p>通常stateはサーバーに保持されるがDBを持たなくていいようにCookieに焼いている。
 CSRF対策のためのものなのでCookieが攻撃者に読み書きされなければ意味を為すと思っているが、このフローで問題がある場合は教えてほしい。
 State、Token共にCookieに焼いているためCORSのAccess-Control-Allow-Originを*などにしてしまうと穴が開く。</p>
-
 <pre><code>package auth
 
 import (
@@ -515,7 +496,6 @@ func getKey(token *jwt.Token, userPoolID string, region string) (interface{}, er
 	return nil, errors.New(&quot;unable to find key&quot;)
 }
 </code></pre>
-
         </div>
       </article>
     </div>
