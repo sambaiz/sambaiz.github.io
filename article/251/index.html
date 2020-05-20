@@ -289,6 +289,62 @@ public:
         return ret;
     }
 };
+</code></pre><h2 id="maximum-sum-circular-subarray---leetcodehttpsleetcodecomproblemsmaximum-sum-circular-subarray"><a href="https://leetcode.com/problems/maximum-sum-circular-subarray">Maximum Sum Circular Subarray - LeetCode</a></h2>
+<p>最大部分配列問題の配列が循環する版。</p>
+<pre><code>Given a circular array C of integers represented by A, find the maximum possible sum of a non-empty subarray of C.
+</code></pre><p>最大部分配列問題を<code>O(n)</code>で解く方法として<a href="https://en.wikipedia.org/wiki/Maximum_subarray_problem#Kadane's_algorithm">Kadane&rsquo;s algorithm</a>というのがあって、
+配列Aのn番目の要素<code>A[n]</code>を末尾とする部分配列のうち最大のものの和<code>S_n</code>は <code>max(S_{n-1} + A[n], A[n])</code> となるので、これを配列の始めから順に計算することでSが最大となる最大部分配列を探すことができる。</p>
+<p>ただ、この問題では配列が循環しているので <code>[10, -5, 10]</code> のような場合、末尾と先頭の10を部分配列として扱わなければいけない。
+そこで、始まりのindexをずらしてローテーションしたのが次の実装。ただこれだとタイムアウトしてしまう。</p>
+<pre><code>class Solution {
+public:
+    int maxSubarraySumCircular(vector&lt;int&gt;&amp; A) {
+        int ret = INT_MIN;
+        for (int i = 0; i &lt; A.size(); i++) {
+            int S = 0;
+            for(int j = 0; j &lt; A.size(); j++) {
+                S = max(S+A[(j+i) % A.size()], A[(j+i) % A.size()]);
+                ret = max(ret, S);
+            }
+        }
+        return ret;
+    }
+};
+</code></pre><p>両端またぎのケースは別に扱い、最小の部分を探して総和から引くようにしたのが次の実装。これで<code>O(n)</code>になり通るようになった。</p>
+<pre><code>class Solution {
+public:
+    int maxSubarraySumCircular(vector&lt;int&gt;&amp; A) {
+        // case 1. [... --answer-- ...]
+        long maxsub = A[0];
+        long sum = A[0];
+        long S = A[0];
+        for (int i = 1; i &lt; A.size(); i++) {
+            S = max(S+A[i], long(A[i]));
+            maxsub = max(maxsub, S);
+            sum += A[i];
+        }
+        
+        // case 2. [wer-- ...... --ans]
+        long minsub = A[0];
+        S = A[0];
+        bool isSubarray = false;
+        for (int i = 1; i &lt; A.size(); i++) {
+            if (S+A[i] &gt;= A[i]){
+                isSubarray = true;
+                S = A[i];
+            } else {
+                S += A[i];
+            }
+            minsub = min(minsub, S);
+        }
+        
+        if (isSubarray) {
+            return max(maxsub, sum - minsub);
+        } else {
+            return maxsub;
+        }
+    }
+};
 </code></pre><h2 id="ugly-number-ii---leetcodehttpsleetcodecomproblemsugly-number-ii"><a href="https://leetcode.com/problems/ugly-number-ii/">Ugly Number II - LeetCode</a></h2>
 <p>2, 3, 5のみで素因数分解できるn番目の正数を返す問題。</p>
 <pre><code>Write a program to find the n-th ugly number.
