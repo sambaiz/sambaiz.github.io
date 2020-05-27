@@ -6,10 +6,22 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sat, 23 May 2020 23:55:00 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 26 May 2020 01:21:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>SwiftのJSONEncoder/DecoderとCodable protocol</title>
+      <link>https://www.sambaiz.net/article/275/</link>
+      <pubDate>Tue, 26 May 2020 01:21:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/275/</guid>
+      <description>SwiftのJSONEncoder/Decoderは JSON文字列をCodable(Encodable &amp;amp; Decodable) protocolを実装したClassやStructにエンコード/デコードするオブジェクト。
+全ての変数がCodableで、特に何もする必要がない場合はCodableを付ければうまくいく。 String、Int、Doubleといったstandard libraryの型や、DateやDataなどFoundationの型はCodableになっている。
+CodingKeyでフィールド名のマッピングができる。デコード時にOptionalでないフィールドが足りなかったり型が異なると例外が飛び、エンコード時にはnilを無視する。
+struct Foo: Codable { var nums: [Int] var str: String enum CodingKeys: String, CodingKey { case nums = &amp;quot;numbers&amp;quot; case str } } var data = &amp;quot;&amp;quot;&amp;quot; { &amp;quot;numbers&amp;quot;: [100, 120], &amp;quot;str&amp;quot;: &amp;quot;Aaa&amp;quot; } &amp;quot;&amp;quot;&amp;quot;.data(using: .utf8)! let json = try! JSONDecoder().decode(Foo.self, from: data) print(json.str) // =&amp;gt; Aaa let enc = try! JSONEncoder().encode(json) print(String(data: enc, encoding: .utf8)!) // =&amp;gt; {&amp;quot;numbers&amp;quot;:[100,120],&amp;quot;str&amp;quot;:&amp;quot;Aaa&amp;quot;} var data = &amp;quot;&amp;quot;&amp;quot; { &amp;quot;numbers&amp;quot;: [100, 120], } &amp;quot;&amp;quot;&amp;quot;.</description>
+    </item>
     
     <item>
       <title>VPCエンドポイント</title>
@@ -176,6 +188,7 @@ DynamoDBとSDKのAPIの互換性があるため置き換えるだけで使える
 書き込みリクエストが来るとまずDynamoDBに書き込んで成功したことを確認してからキャッシュしてレスポンスを返す。 この際Item Cacheは更新されるが、Query Cacheは更新されずTTL/LRUによって破棄されるまで同じ値を返し続けてしまう。 もし問題がある場合は、TTLを短くするかDynamoDBを直接見に行くことになるが、そうするとDAXの効果が薄れてしまう。 また、大量のデータを書き込むと、その分レイテンシが増加したり、それらがすべてキャッシュに乗ることで既存のものがLRUで追い出されてキャッシュヒット率が悪くなることがあり、それらを回避するため直接書き込むという選択肢もあるが、Item Cacheが更新されないことを許容する必要がある。
 取れるメトリクス CPU使用率や、キャッシュヒット数、各リクエスト数や接続数が取れる。
 ノードごとのCPU使用率も取れる。Writeやキャッシュミスによるプライマリーノードの負荷の高まりに注意。 レイテンシが大きくなり接続数が増える悪循環に陥る。
+プライマリーノードのCPU使用率が80%程度でテーブルのキャパシティに余裕があってもリクエストがスロットリングされることがあり、一つ上のインスタンスタイプでクラスタを作り直したところ解消した。 この際、いきなり全リクエストが新クラスタに送られることで膨大なキャッシュミスが発生し、 テーブルのキャパシティを超過したりプライマリーノードに負荷が集中しないように、 Route53で割合で解決されるようにしたが、これはうまく流れてくれた。
 挙動確認 DAX/DynamoへリクエストするだけだったらLambdaでも良いが、負荷をかけるのでECS上にアプリケーションをデプロイすることにした。 以前作ったBoilerplateベースで、コードはここ。
 ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net
 TableとDAXのClusterを作成。
@@ -764,11 +777,10 @@ version: 2.1 orbs: aws-ecr: circleci/aws-ecr@3.1.0 slack: circleci/slack@2.3.0 e
       <description>Kaggleの家の売値を予測するCompetitionのKernelからデータの探り方を学ぶ。
 Comprehensive data exploration with Python
 正規化 予測する値であるSalePriceの分布を出すと、やや左に寄った非対称の分布をしている。
-import pandas as pd import seaborn as sns df = pd.read_csv(&#39;train.csv&#39;) df[&#39;SalePrice&#39;].describe() count 1460.000000 mean 180921.195890 std 79442.502883 min 34900.000000 25% 129975.000000 50% 163000.000000 75% 214000.000000 max 755000.000000 scipy.stats.probplot()で プロットしても直線で表されている正規分布から外れていることが分かるが、正規分布であることが望ましい。
+import pandas as pd import seaborn as sns df = pd.read_csv(&#39;train.csv&#39;) df[&#39;SalePrice&#39;].describe() count 1460.000000 mean 180921.195890 std 79442.502883 min 34900.000000 25% 129975.000000 50% 163000.000000 75% 214000.000000 max 755000.000000 scipy.stats.probplot()で 生成できる、2つの分布(今回はSalePriceの分布と正規分布)の同じ分位数の値をプロットしたQ-Q (quantile-quantile) plotを見ても直線で表されている正規分布から外れていることが分かる。 正規分布であることが望ましい。
 from scipy import stats import matplotlib.pyplot as plt res = stats.probplot(df[&#39;SalePrice&#39;], dist=&#39;norm&#39;, plot=plt) そこで対数をとって正規分布に近づけてやる。
 import numpy as np res = stats.probplot(np.log(df[&#39;SalePrice&#39;]), dist=&#39;norm&#39;, plot=plt) なお、この変換はBox-Cox transformationのλ=0のときにあたる。
-Box-Cox transformationで非正規分布のデータを正規分布に近づける - sambaiz-net
-欠損値 欠損率 特徴量の欠損(NA)率を多い順にならべてみると次のようにいくつかはほとんど欠損していることが分かる。</description>
+Box-Cox transformationで非正規分布のデータを正規分布に近づける - sambaiz-net</description>
     </item>
     
     <item>
