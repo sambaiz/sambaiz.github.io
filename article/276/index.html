@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Objective-CでFrameworkを作りSwiftからimportする - sambaiz-net</title>
-  <meta name="twitter:title" content="Objective-CでFrameworkを作りSwiftからimportする - sambaiz-net">
-  <meta property='og:title' content="Objective-CでFrameworkを作りSwiftからimportする - sambaiz-net">
+  <title>SwiftのURLSession - sambaiz-net</title>
+  <meta name="twitter:title" content="SwiftのURLSession - sambaiz-net">
+  <meta property='og:title' content="SwiftのURLSession - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="Framework">
-  <meta name="twitter:description" content="Framework">
+  <meta name="description" content="ネットワーク通信を行うURLSessionTaskを生成するオブジェクト">
+  <meta name="twitter:description" content="ネットワーク通信を行うURLSessionTaskを生成するオブジェクト">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/254/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/276/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "Objective-CでFrameworkを作りSwiftからimportする | sambaiz-net ",
-    "datePublished": "2020-01-12T17:41:00JST",
-    "dateModified": "2020-01-12T17:41:00JST",
+    "headline": "SwiftのURLSession | sambaiz-net ",
+    "datePublished": "2020-05-31T02:21:00JST",
+    "dateModified": "2020-05-31T02:21:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Framework"
+    "description": "ネットワーク通信を行うURLSessionTaskを生成するオブジェクト"
   }
 </script>
 </head>
@@ -172,71 +172,58 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Objective-CでFrameworkを作りSwiftからimportする</h1>
-          <p>(2020-01-12)</p>
-          <h2 id="frameworkの作成">Frameworkの作成</h2>
-<p><code>New -&gt; Project</code>でFrameworkをLanguage Objective-Cで作成。</p>
-<p>最低限の実装とHeaderを書いた。このHeaderはBuild PhasesのHeadersにPublicとして登録されている。</p>
-<ul>
-<li>TestObjcFramework.m</li>
-</ul>
-<pre><code>#import &lt;Foundation/Foundation.h&gt;
+          <h1>SwiftのURLSession</h1>
+          <p>(2020-05-31)</p>
+          <p>Swiftの<a href="https://developer.apple.com/documentation/foundation/urlsession">URLSession</a>は
+ネットワーク通信を行う<a href="https://developer.apple.com/documentation/foundation/urlsessiontask">URLSessionTask</a>を生成するオブジェクト。</p>
+<pre><code>func request(_ session: URLSession) -&gt; () -&gt; Void { return
+    {
+        guard let url = URL(string: &quot;https://api.publicapis.org/health&quot;) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = &quot;GET&quot;
+        request.addValue(&quot;application/json&quot;, forHTTPHeaderField: &quot;content-type&quot;)
 
-void hello() {
-    NSLog(@&quot;hello&quot;);
-};
-</code></pre><ul>
-<li>TestObjcFramework.h</li>
-</ul>
-<pre><code>#import &lt;UIKit/UIKit.h&gt;
-
-//! Project version number for TestObjcFramework.
-FOUNDATION_EXPORT double TestObjcFrameworkVersionNumber;
-
-//! Project version string for TestObjcFramework.
-FOUNDATION_EXPORT const unsigned char TestObjcFrameworkVersionString[];
-
-// In this header, you should import all the public headers of your framework using statements like #import &lt;TestObjcFramework/PublicHeader.h&gt;
-
-void hello(void);
-</code></pre><p>arm64(実機)/x86_64(Simulator)両方で使えるUniversal Frameworkをビルドするため、
-<code>New -&gt; Target</code>でAggregateを作成し、Build PhasesのNew Run Script Phaseで、
-各環境で<code>xcodebuild</code>して<code>lipo</code>でUniversal Binaryにする次のスクリプトを追加する。</p>
-<p><a href="https://gist.github.com/cromandini/1a9c4aeab27ca84f5d79#file-universal-framework-sh">https://gist.github.com/cromandini/1a9c4aeab27ca84f5d79#file-universal-framework-sh</a></p>
-<p><img src="https://www.sambaiz.net/images/254.png" alt="Build Phases"></p>
-<p>Targetを追加したAggregateにしてビルドするとFrameworkができる。
-Frameworkはライブラリを内包したディレクトリ。</p>
-<pre><code>$ tree TestObjcFramework.framework/
-TestObjcFramework.framework/
-├── Headers
-│   └── TestObjcFramework.h
-├── Info.plist
-├── Modules
-│   └── module.modulemap
-├── TestObjcFramework
-└── _CodeSignature
-    └── CodeResources
-</code></pre><h2 id="swiftからimport">Swiftからimport</h2>
-<p>適当にSingle View Appを作成。FrameworkをProjectのディレクトリ直下に置き、Dynamic frameworkなのでEmebedded BinariesにFrameworkを追加。
-ビルド時に見つからなかったらBuild SettingsのFramework Search Pathsに<code>$(PROJECT_DIR)</code>が含まれていることを確認する。</p>
-<pre><code>import UIKit
-import TestObjcFramework
-
-class ViewController: UIViewController {
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        hello()
+        let task = session.dataTask(with: request) { data, response, error in
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print(&quot;not http response \(error)&quot;)
+                return
+            }
+            guard httpResponse.statusCode / 100 == 2 else {
+                print(&quot;bad status code: \(httpResponse.statusCode)&quot;)
+                return
+            }
+            if let data = data {
+                if let str = String(data: data, encoding: .utf8) {
+                    print(str) // =&gt; {&quot;alive&quot;: true}
+                }
+            }
+        }
+        task.resume()
     }
 }
-</code></pre><p>通常Framework名と同名のHeaderがあるので誤解していたが、importのところに書くのはimportしたいHeader名ではなくFramework名。
-<code>Modules/module.modulemap</code>にumbrella headerが書かれていて、これが読まれる。</p>
-<pre><code>framework module TestObjcFramework {
-  umbrella header &quot;TestObjcFramework.h&quot;
-
-  export *
-  module * { export * }
+</code></pre><p>シングルトンのsharedのほか、コンストラクタに
+<a href="https://developer.apple.com/documentation/foundation/urlsessionconfiguration">URLSessionConfiguration</a>
+を渡して、<code>allowsCellularAccess</code> といった設定やdelegateを持ったインスタンスを作ることもできる。</p>
+<ul>
+<li>default: 挙動はsharedと同じ</li>
+<li>ephemeral: キャッシュ、cookie、認証情報をディスクに書き込まない</li>
+<li>background: アプリがフォアグラウンドになくても裏で通信し続ける。通信が終わったときにアプリが終了していたらバックグラウンドで再起動しUIApplicationDelegateの<a href="https://developer.apple.com/documentation/uikit/uiapplicationdelegate/1622941-application">メソッド</a>でidentifierが通知される。キューが全て捌けたときURLSessionDelegateの<a href="https://developer.apple.com/documentation/foundation/urlsessiondelegate/1617185-urlsessiondidfinishevents">urlSessionDidFinishEvents()</a>が呼ばれる。</li>
+</ul>
+<pre><code>struct ContentView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button(&quot;default&quot;, action: request(URLSession(configuration: .default)))
+            Button(&quot;ephemeral&quot;, action: request(URLSession(configuration: .ephemeral)))
+            // Button(&quot;background&quot;, action: request(URLSession(configuration: .background(withIdentifier: &quot;foo&quot;))))
+            // =&gt; Completion handler blocks are not supported in background sessions. Use a delegate instead
+        }
+    }
+    ...
 }
+</code></pre><p>delegateを強参照で持つためsessionを明示的に無効化しないと<a href="https://developer.apple.com/documentation/foundation/urlsession/1411597-init">メモリリークする</a>。</p>
+<pre><code>let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+session.invalidateAndCancel()
+// or session.finishTasksAndInvalidate()
 </code></pre>
         </div>
       </article>
