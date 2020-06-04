@@ -22,17 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>ios - sambaiz-net</title>
-  <meta name="twitter:title" content="ios - sambaiz-net">
-  <meta property='og:title' content="ios - sambaiz-net">
+  <title>iOSのnibで作成したViewに自前のCustom Classを設定して描画する - sambaiz-net</title>
+  <meta name="twitter:title" content="iOSのnibで作成したViewに自前のCustom Classを設定して描画する - sambaiz-net">
+  <meta property='og:title' content="iOSのnibで作成したViewに自前のCustom Classを設定して描画する - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="ルートのViewのCustom Classとして設定する場合とFile&#39;s OwnerのCustom Classとして設定する場合">
+  <meta name="twitter:description" content="ルートのViewのCustom Classとして設定する場合とFile&#39;s OwnerのCustom Classとして設定する場合">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/tags/ios/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/278/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https:\/\/www.sambaiz.net\/"
+    },
+    "headline": "iOSのnibで作成したViewに自前のCustom Classを設定して描画する | sambaiz-net ",
+    "datePublished": "2020-06-05T05:00:00JST",
+    "dateModified": "2020-06-05T05:00:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "ルートのViewのCustom Classとして設定する場合とFile\x27s OwnerのCustom Classとして設定する場合"
+  }
+</script>
 </head>
 
 <body>
@@ -128,176 +166,83 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">ios</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>iOSのnibで作成したViewに自前のCustom Classを設定して描画する</h1>
+          <p>(2020-06-05)</p>
+          <p>nibとUIViewを継承したCustomViewクラスを作成し、nibにLabelを配置して<code>@IBOutlet</code>と繋げた。</p>
+<pre><code>import Foundation
+import UIKit
+import viewframework
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/278/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-06-05</time>
-      </div>
-      <p class="article title">iOSのnibで作成したViewに自前のCustom Classを設定して描画する</p>
-    </div>
-  </article>
-</a>
+class CustomView: UIView {
+    @IBOutlet weak var labelview: UILabel?
+}
+</code></pre><p>このCustomViewをnibのViewと組み合わせて描画させるのに次の2つの方法がある。</p>
+<h2 id="ルートのviewのcustom-classとして設定する">ルートのViewのCustom Classとして設定する</h2>
+<p><img src="https://www.sambaiz.net/images/278-2.png" alt="ルートのViewのCustom ClassをCustomViewにした"></p>
+<p>nibのルートのViewのCustom ClassをCustomViewにすると、<code>UINib.instantiate()</code>でCustomViewの<code>required init?(coder: NSCoder)</code>が呼ばれインスタンスが作られるので、
+それをaddSubViewすることで描画できる。</p>
+<pre><code>import UIKit
 
+class ViewController: UIViewController {
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        let customView = UINib(nibName: &quot;CustomView&quot;, bundle: Bundle(for: type(of: self))).instantiate(withOwner: nil, options: nil).first as! CustomView
+        customView.labelview?.text = &quot;OK&quot;
+        view.addSubview(customView)
+    }
+}
+</code></pre><h2 id="files-ownerのcustom-classとして設定する">File&rsquo;s OwnerのCustom Classとして設定する</h2>
+<p><img src="https://www.sambaiz.net/images/278-1.png" alt="File&rsquo;s OwnerのCustom ClassをCustomViewにした"></p>
+<p>nibのFile&rsquo;s OwnerのCustom ClassをCustomViewにし、
+CustomView内で<code>withOwner: self</code>でnibをロードすると<code>@IBOutlet</code>にインスタンスが詰まるので、ルートのViewも繋げておいてそれをaddSubViewすればCustomView以下にnibのヒエラルキーそのまま描画される。</p>
+<pre><code>import Foundation
+import UIKit
+
+class CustomView: UIView {
+    @IBOutlet var view: UIView!
+    @IBOutlet weak var labelview: UILabel!
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        load()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError(&quot;init(coder:) has not been implemented&quot;)
+    }
+    
+    private func load() {
+        print(&quot;before loading nib: \(view)&quot;) // =&gt; nil
+        UINib(nibName: &quot;CustomView&quot;, bundle: Bundle(for: type(of: self))).instantiate(withOwner: self, options: nil)
+        // = Bundle(for: type(of: self)).loadNibNamed(&quot;CustomView&quot;, owner: self, options: nil)
+        print(&quot;after loading nib: \(view!.superview)&quot;) // =&gt; nil
+        addSubview(view)
+        print(&quot;after adding Subview: \(view?.superview?.classForCoder)&quot;) // =&gt; Optional(sampleapp.CustomView)
+    }
+}
+</code></pre><pre><code>import UIKit
+
+class ViewController: UIViewController {
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        let customView = CustomView(frame: view.frame)
+        customView.labelview?.text = &quot;OK&quot;
+        view.addSubview(customView)
+    }
+}
+</code></pre>
         </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/276/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-05-31</time>
-      </div>
-      <p class="article title">SwiftのURLSession</p>
+      </article>
     </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/275/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-05-26</time>
-      </div>
-      <p class="article title">SwiftのJSONEncoder/DecoderとCodable protocol</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/266/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-03-28</time>
-      </div>
-      <p class="article title">作ったライブラリをCocoaPods/Carthageでimportする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/265/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-03-24</time>
-      </div>
-      <p class="article title">iOSのipa(app)のProfileを異なるTeamのものに置き換えて実機で動かす</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/264/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-03-24</time>
-      </div>
-      <p class="article title">iOSアプリのProvisioning Profile</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/256/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-01-25</time>
-      </div>
-      <p class="article title">SwiftでGCDのDispatchQueueに処理を投げて並列実行させる</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/254/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-01-12</time>
-      </div>
-      <p class="article title">Objective-CでFrameworkを作りSwiftからimportする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/249/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2019-11-24</time>
-      </div>
-      <p class="article title">SwiftのError enumとtry, if case</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/248/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2019-11-24</time>
-      </div>
-      <p class="article title">SwiftのXMLParser</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/26/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-10-23</time>
-      </div>
-      <p class="article title">iOS端末をBLEのPeripheralにする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-      </div>
-
-      
-
-
-    </div>
-
   </div>
-
 </div>
 
 </div> 
