@@ -22,17 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>ble - sambaiz-net</title>
-  <meta name="twitter:title" content="ble - sambaiz-net">
-  <meta property='og:title' content="ble - sambaiz-net">
+  <title>Swiftのdesignated/convenience/required/default initializerと継承 - sambaiz-net</title>
+  <meta name="twitter:title" content="Swiftのdesignated/convenience/required/default initializerと継承 - sambaiz-net">
+  <meta property='og:title' content="Swiftのdesignated/convenience/required/default initializerと継承 - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="designated/convenience/required/default initializer">
+  <meta name="twitter:description" content="designated/convenience/required/default initializer">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/tags/ble/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/280/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https:\/\/www.sambaiz.net\/"
+    },
+    "headline": "Swiftのdesignated\/convenience\/required\/default initializerと継承 | sambaiz-net ",
+    "datePublished": "2020-06-23T21:15:00JST",
+    "dateModified": "2020-06-23T21:15:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "designated\/convenience\/required\/default initializer"
+  }
+</script>
 </head>
 
 <body>
@@ -128,78 +166,90 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">ble</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>Swiftのdesignated/convenience/required/default initializerと継承</h1>
+          <p>(2020-06-23)</p>
+          <p><a href="https://docs.swift.org/swift-book/LanguageGuide/Initialization.html">Initialization — The Swift Programming Language (Swift 5.3)</a></p>
+<p>designated initializerはプライマリなinitializerで、全ての初期化されていないプロパティを初期化し、スーパークラスの<code>init()</code>を呼んでチェーンを作る。
+convenience initializerは利便性のためのinitializerで、他のinitializerを呼んで最終的にdesignated initializerが呼ばれるようにする。
+required initializerはサブクラスでの継承が必須なinitializer。条件を満たさず継承されないのを回避できる。</p>
+<pre><code>class A: NSObject {
+    var some: String
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/105/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-06-04</time>
-      </div>
-      <p class="article title">Unity/UWPでBLEを扱うプラグインを作る</p>
-    </div>
-  </article>
-</a>
+    // designated initializer
+    override init() {
+        print(&quot;designated&quot;)
+        some = &quot;foo&quot;
+    }
 
+    // designated &amp; required initializer
+    required init(_ str: String) {
+        print(&quot;required \(str)&quot;)
+        some = &quot;bar&quot;
+    }
+    
+    convenience init(_ num: Int) {
+        self.init()
+        print(&quot;convenience \(num)&quot;)
+    }
+    
+    convenience init(num2: Int) {
+        self.init(num2)
+        print(&quot;convenience2 \(num2)&quot;)
+    }
+}
+</code></pre><p>designated initializerはクラスに一つ以上存在する必要があるが、次のように全てのプロパティが初期化されている場合default initializerが作られる。</p>
+<pre><code>class D {
+    var some: String = &quot;A&quot;
+    
+    convenience init(_ str: String) {
+        self.init()
+        some = str
+    }
+}
+</code></pre><p>デフォルトでinitializerは継承されないが、
+全てのdesignated initializerが定義されていない場合はまとめて継承される。
+全てのdesignated initializerが継承されている場合は全てのconvenience initializerも継承される。</p>
+<pre><code>class B: A {
+    required init(_ str: String) {
+        super.init(str)
+        print(&quot;overridden required \(str)&quot;)
+        some = &quot;bar&quot;
+    }
+    
+    convenience init(num2: Int) {
+        // self.init() error
+        self.init(&quot;a&quot;)
+        print(&quot;overridden convenience2 \(num2)&quot;)
+    }
+}
+
+class C: A {
+    convenience init(num2: Int) {
+        self.init()
+        print(&quot;overridden convenience2 \(num2)&quot;)
+    }
+}
+
+B(1) // error
+C(1)
+</code></pre><p>例えばrequired initializerを持つUIViewで、他のdesignated initializerをoverrideするとまとめて継承されなくなるので明示的に継承する必要がある。</p>
+<pre><code>class C: UIView {
+    // 'required' initializer 'init(coder:)' must be provided by subclass of 'UIView
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+    }
+}
+</code></pre>
         </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/27/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-10-23</time>
-      </div>
-      <p class="article title">UnityでAndroidのBLEを使うネイティブプラグインを作る</p>
+      </article>
     </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/26/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-10-23</time>
-      </div>
-      <p class="article title">iOS端末をBLEのPeripheralにする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/25/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-10-21</time>
-      </div>
-      <p class="article title">android-BluetoothLeGattを読む</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-      </div>
-
-      
-
-
-    </div>
-
   </div>
-
 </div>
 
 </div> 
