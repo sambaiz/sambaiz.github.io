@@ -6,10 +6,25 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Fri, 24 Jul 2020 22:59:00 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 26 Jul 2020 02:43:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>SageMakerで学習したPyTorchのモデルをElastic Inferenceを有効にしてホスティングする</title>
+      <link>https://www.sambaiz.net/article/290/</link>
+      <pubDate>Sun, 26 Jul 2020 02:43:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/290/</guid>
+      <description>学習させたモデルをSageMakerでホスティングする。
+SageMakerでPyTorchのモデルを学習させる - sambaiz-net
+推論時に呼ばれる関数 推論時には次の関数が呼ばれる。
+ model_fn(model_dir): モデルをロードする input_fn(request_body, request_content_type): リクエストボディのデシリアライズ predict_fn(input_data, model): モデルで推論する output_fn(prediction, content_type): Content-Typeに応じたシリアライズ  input_fn() と output_fn() はJSON, CSV, NPYに対応した実装が、predict_fn() はモデルを呼び出す実装がデフォルトとして用意されていて、 model_fn() も後述するElastic Inferenceを使う場合model.ptというファイルをロードするデフォルト実装が使われる。 ただしその場合torch.jit.save()でTorchScriptとして保存してある必要がある。
+今回は predict_fn() のみ実装した。
+$ cat inference.py import torch def predict_fn(input_data, model): device = torch.device(&#39;cuda&#39; if torch.cuda.is_available() else &#39;cpu&#39;) model = model.to(device) input_data = input_data.to(device) model.eval() with torch.jit.optimized_execution(True, {&amp;quot;target_device&amp;quot;: &amp;quot;eia:0&amp;quot;}): output = model(input_data) return output.max(1, keepdim=True)[1] デプロイ Training jobによってモデルが保存されたS3のパスを取ってきてPyTorchModelを作る。
+from sagemaker.pytorch.model import PyTorchModel training_job_name = &#39;pytorch-training-2020-07-25-08-41-45-674&#39; training_job = sess.</description>
+    </item>
     
     <item>
       <title>SageMakerでPyTorchのモデルを学習させる</title>
@@ -17,11 +32,12 @@
       <pubDate>Fri, 24 Jul 2020 22:59:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/287/</guid>
-      <description>コード まず学習させるモデルとそれを呼び出すエントリーポイントになるコードを書く。全体のコードはGitHubにある。 実際の環境と同じSageMakerのコンテナをローカルで動かしてVSCodeのRemote Deploymentで接続して開発するとその場でデバッグできるし、いざ実行時に依存パッケージがないといったエラーを回避できて良い。
+      <description>AWSの機械学習サービスSageMakerでPyTorchのモデルを学習させる。
+コード まず学習させるモデルとそれを呼び出すエントリーポイントになるコードを書く。全体のコードはGitHubにある。 実際の環境と同じSageMakerのコンテナをローカルで動かしてVSCodeのRemote Deploymentで接続して開発するとその場でデバッグできるし、いざ実行時に依存パッケージがないといったエラーを回避できて良い。
 VSCodeのRemote DeploymentでSageMakerのコンテナ環境でモデルを開発する - sambaiz-net
 モデル 以前作ったMNISTのモデルを使う。
 PyTorchでMNISTする - sambaiz-net
-$ cat model.py import torch from torch import nn, cuda import torch.nn.functional as F import torch.distributed as dist import torch.optim as optim class Model(nn.Module): def __init__(self, dropout): super(Model, self).__init__() self.conv1 = nn.Conv2d(1, 64, 5) # -&amp;gt; 24x24 self.pool1 = nn.MaxPool2d(2) # -&amp;gt; 12x12 self.conv2 = nn.Conv2d(64, 128, 5) # -&amp;gt; 8x8 self.dropout = nn.Dropout(p=dropout) self.dense = nn.Linear(128 * 8 * 8, 10) def forward(self, x): x = F.</description>
+$ cat model.py import torch from torch import nn, cuda import torch.nn.functional as F import torch.distributed as dist import torch.optim as optim class Model(nn.Module): def __init__(self, dropout): super(Model, self).__init__() self.conv1 = nn.Conv2d(1, 64, 5) # -&amp;gt; 24x24 self.pool1 = nn.MaxPool2d(2) # -&amp;gt; 12x12 self.conv2 = nn.Conv2d(64, 128, 5) # -&amp;gt; 8x8 self.dropout = nn.Dropout(p=dropout) self.dense = nn.</description>
     </item>
     
     <item>
