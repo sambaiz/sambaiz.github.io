@@ -12,17 +12,17 @@
     
     
     <item>
-      <title>SageMakerで学習したPyTorchのモデルをElastic Inferenceを有効にしてホスティングする</title>
+      <title>SageMakerで学習したPyTorchのモデルをElastic Inferenceを有効にしてデプロイする</title>
       <link>https://www.sambaiz.net/article/290/</link>
       <pubDate>Sun, 26 Jul 2020 02:43:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/290/</guid>
-      <description>学習させたモデルをSageMakerでホスティングする。
+      <description>学習させたモデルをSageMakerのホスティングサービスにデプロイする。
 SageMakerでPyTorchのモデルを学習させる - sambaiz-net
 推論時に呼ばれる関数 推論時には次の関数が呼ばれる。
- model_fn(model_dir): モデルをロードする input_fn(request_body, request_content_type): リクエストボディのデシリアライズ predict_fn(input_data, model): モデルで推論する output_fn(prediction, content_type): Content-Typeに応じたシリアライズ  input_fn() と output_fn() はJSON, CSV, NPYに対応した実装が、predict_fn() はモデルを呼び出す実装がデフォルトとして用意されていて、 model_fn() も後述するElastic Inferenceを使う場合model.ptというファイルをロードするデフォルト実装が使われる。 ただしその場合torch.jit.save()でTorchScriptとして保存してある必要がある。
+ model_fn(model_dir): モデルをロードする input_fn(request_body, request_content_type): リクエストボディのデシリアライズ predict_fn(input_data, model): モデルで推論する output_fn(prediction, content_type): Content-Typeに応じたシリアライズ  input_fn() と output_fn() はJSON, CSV, NPYに対応した実装が、predict_fn() はモデルを呼び出す実装がデフォルトとして用意されていて、 model_fn() も後述するElastic Inferenceを使う場合model.ptというファイルをロードするデフォルト実装が使われる。 ただしその場合モデルがtorch.jit.save()でTorchScriptとして保存してある必要がある。
 今回は predict_fn() のみ実装した。
-$ cat inference.py import torch def predict_fn(input_data, model): device = torch.device(&#39;cuda&#39; if torch.cuda.is_available() else &#39;cpu&#39;) model = model.to(device) input_data = input_data.to(device) model.eval() with torch.jit.optimized_execution(True, {&amp;quot;target_device&amp;quot;: &amp;quot;eia:0&amp;quot;}): output = model(input_data) return output.max(1, keepdim=True)[1] デプロイ Training jobによってモデルが保存されたS3のパスを取ってきてPyTorchModelを作る。
+$ cat inference.py import torch def predict_fn(input_data, model): device = torch.device(&#39;cuda&#39; if torch.cuda.is_available() else &#39;cpu&#39;) model = model.to(device) input_data = input_data.to(device) model.eval() with torch.jit.optimized_execution(True, {&amp;quot;target_device&amp;quot;: &amp;quot;eia:0&amp;quot;}): output = model(input_data) return output.max(1)[1] デプロイ Training jobがモデルを保存したS3のパスを取ってきてPyTorchModelを作る。
 from sagemaker.pytorch.model import PyTorchModel training_job_name = &#39;pytorch-training-2020-07-25-08-41-45-674&#39; training_job = sess.</description>
     </item>
     
@@ -50,9 +50,9 @@ $ cat model.py import torch from torch import nn, cuda import torch.nn.functiona
 そんな場合に使えるのがVS CodeのRemote Development。 これはローカルのVS CodeからリモートのVS Code Serverに接続してその環境で開発することができるエクステンションで、 Dockerコンテナのほか、SSHでリモートマシンやVMに接続したり、WindowsならWSLにも接続できる。開発環境を揃えることができて便利だ。
 SageMakerでPyTorchのモデルを学習させる - sambaiz-net
 設定 .devcontainer/に次のファイルを置く。
-Dockerfile aws/deep-learning-containersの Deep Learning Containers Imagesから選び、ECRからpullするため認証情報を登録しておく。
+PyTorch  Dockerfile  aws/deep-learning-containersの Deep Learning Containers Imagesから選び、ECRからpullするため認証情報を登録しておく。
 $ aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin https://763104351884.dkr.ecr.us-east-1.amazonaws.com これをベースに、開発用ツールを入れてVSCodeのDevelopment Container Scriptsを実行する。
-$ cat .devcontainer/Dockerfile FROM 763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:1.5.1-cpu-py36-ubuntu16.04 RUN conda install -y yapf flake8 mypy # VS Code Development Container Scripts # https://github.com/microsoft/vscode-dev-containers/tree/v0.128.0/script-library ARG INSTALL_ZSH=&amp;quot;true&amp;quot; ARG USERNAME=&amp;quot;vscode&amp;quot; ARG USER_UID=&amp;quot;1000&amp;quot; ARG USER_GID=&amp;quot;${USER_UID}&amp;quot; ARG UPGRADE_PACKAGES=&amp;quot;true&amp;quot; ARG COMMON_SCRIPT_SOURCE=&amp;quot;https://raw.githubusercontent.com/microsoft/vscode-dev-containers/master/script-library/common-debian.sh&amp;quot; ARG COMMON_SCRIPT_SHA=&amp;quot;dev-mode&amp;quot; # Configure apt and install packages RUN apt-get update \ &amp;amp;&amp;amp; export DEBIAN_FRONTEND=noninteractive \ &amp;amp;&amp;amp; apt-get -y install --no-install-recommends curl ca-certificates 2&amp;gt;&amp;amp;1 \ &amp;amp;&amp;amp; curl -sSL ${COMMON_SCRIPT_SOURCE} -o /tmp/common-setup.</description>
+$ cat .devcontainer/Dockerfile FROM 763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:1.5.1-cpu-py36-ubuntu16.04 RUN conda install -y yapf flake8 mypy # VS Code Development Container Scripts # https://github.com/microsoft/vscode-dev-containers/tree/v0.128.0/script-library ARG INSTALL_ZSH=&amp;quot;true&amp;quot; ARG USERNAME=&amp;quot;vscode&amp;quot; ARG USER_UID=&amp;quot;1000&amp;quot; ARG USER_GID=&amp;quot;${USER_UID}&amp;quot; ARG UPGRADE_PACKAGES=&amp;quot;true&amp;quot; ARG COMMON_SCRIPT_SOURCE=&amp;quot;https://raw.</description>
     </item>
     
     <item>
