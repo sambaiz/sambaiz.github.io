@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Goのnet/http.Client.Doの内部実装をたどったメモ - sambaiz-net</title>
-  <meta name="twitter:title" content="Goのnet/http.Client.Doの内部実装をたどったメモ - sambaiz-net">
-  <meta property='og:title' content="Goのnet/http.Client.Doの内部実装をたどったメモ - sambaiz-net">
+  <title>AWS Organizaionsで複数のアカウントを一元管理する - sambaiz-net</title>
+  <meta name="twitter:title" content="AWS Organizaionsで複数のアカウントを一元管理する - sambaiz-net">
+  <meta property='og:title' content="AWS Organizaionsで複数のアカウントを一元管理する - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="メモ">
-  <meta name="twitter:description" content="メモ">
+  <meta name="description" content="サービスや環境ごとにアカウントを作って一元管理する">
+  <meta name="twitter:description" content="サービスや環境ごとにアカウントを作って一元管理する">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/53/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/298/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "Goのnet\/http.Client.Doの内部実装をたどったメモ | sambaiz-net ",
-    "datePublished": "2017-01-30T20:55:00JST",
-    "dateModified": "2017-01-30T20:55:00JST",
+    "headline": "AWS Organizaionsで複数のアカウントを一元管理する | sambaiz-net ",
+    "datePublished": "2020-09-15T23:52:00JST",
+    "dateModified": "2020-09-15T23:52:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "メモ"
+    "description": "サービスや環境ごとにアカウントを作って一元管理する"
   }
 </script>
 </head>
@@ -172,234 +172,39 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Goのnet/http.Client.Doの内部実装をたどったメモ</h1>
-          <p>(2017-01-30)</p>
-          <pre><code>package main
-
-import (
-        &quot;fmt&quot;
-        &quot;net/http&quot;
-        &quot;io/ioutil&quot;
-)
-
-var client = http.Client{}
-
-func main() {
-
-        req, err := http.NewRequest(&quot;GET&quot;, &quot;http://example.com&quot;, nil)
-        if err != nil{
-                panic(err)
+          <h1>AWS Organizaionsで複数のアカウントを一元管理する</h1>
+          <p>(2020-09-15)</p>
+          <p><a href="https://aws.amazon.com/jp/organizations/">AWS Organizations</a>は複数のAWSアカウントを一元管理する機能。
+既存のアカウントを一元管理できるだけではなく新規アカウントを簡単に作成することができるので、
+セキュリティの向上やコストの分離、クォータなどアカウント全体に及ぶ影響の局所化などのためにサービスや環境ごとにアカウントを分けるハードルが下がる。
+引き続きアカウントごとのコストも確認できるが、請求は一括で行われるので支払いの管理が楽になるし、ボリュームディスカウントの使用量が合算されRIも共有できるのでコストの上でも不利にならない。</p>
+<p>また、アカウントやそれをグルーピングしたOrganizational Unit(OU)およびOrganizaion全体に対して、
+サービスやアカウントを制御する<a href="https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html">Service control policies (SCPs)</a>などのポリシーを設定することもできる。</p>
+<p>Organizationを作成したアカウントがマスターアカウントとなる。変更するにはOrganizationを削除する必要があるため管理専用のアカウントを作成するのがおすすめらしい。
+通常、新規アカウントを作成するには住所や支払い情報などを入れる必要があるが、
+Organizationだとその辺りが省略されアカウント名とルートアカウントのメールアドレスだけで済む。
+管理に用いられるIAMロール名を入れる項目もあるが何も入れなければデフォルトの<code>OrganizationAccountAccessRole</code>になる。</p>
+<p><img src="https://www.sambaiz.net/images/298.png" alt="新規アカウントの作成"></p>
+<p>新アカウントのルートユーザーのパスワードは発行されないので必要なら再発行することになるが、
+マスターアカウントのIAMユーザーにアカウント作成時に入力したロールの<code>sts:AssumeRole</code>権限を与えれば
+新アカウントの方にユーザーを作らなくてもコンソール上部のメニューからスイッチできる。</p>
+<p><a href="https://www.sambaiz.net/article/72/">AWSのAssumeRole - sambaiz-net</a></p>
+<pre><code>{
+    &quot;Version&quot;: &quot;2012-10-17&quot;,
+    &quot;Statement&quot;: [
+        {
+            &quot;Effect&quot;: &quot;Allow&quot;,
+            &quot;Action&quot;: &quot;sts:AssumeRole&quot;,
+            &quot;Resource&quot;: &quot;arn:aws:iam::&lt;new_account_id&gt;:role/&lt;role_name&gt;&quot;
         }
-
-        resp, err := client.Do(req)
-        if err != nil{
-                panic(err)
-        }
-        defer resp.Body.Close()
-
-        body, err := ioutil.ReadAll(resp.Body)
-        if err != nil{
-                panic(err)
-        }
-
-        fmt.Println(string(body))
+    ]
 }
-</code></pre><h3 id="client">Client</h3>
-<p>TransportがTCPコネクションをキャッシュするのでClientは使い回すべき。複数のgoroutineでコンカレントに使っても大丈夫。</p>
-<p><a href="https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L36">https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L36</a></p>
-<pre><code>type Client struct {
+</code></pre><p><img src="https://www.sambaiz.net/images/298-2.png" alt="Switch Role"></p>
+<p>初回はアカウントIDとロール名を入力することになる。一度入力すると履歴に残るのでそこから選べる。</p>
+<p><img src="https://www.sambaiz.net/images/298-3.png" alt="Swith Roleの入力項目"></p>
+<h2 id="参考">参考</h2>
+<p><a href="https://www.slideshare.net/AmazonWebServicesJapan/20180214-aws-blackbeltorganizations">20180214 AWS Black Belt Online Seminar AWS Organizations</a></p>
 
-        // nilならDefaultTransportが使われる        
-    	Transport RoundTripper
-
-        // nilなら10回で止まる
-        CheckRedirect func(req *Request, via []*Request) error
-
-        // nilならcookieは無視される
-        Jar CookieJar
-
-        Timeout time.Duration
-}
-</code></pre><p>MaxIdleConnsとは別に、ホストごとの制限がある。</p>
-<p><a href="https://www.sambaiz.net/article/61/">Goのnet/httpとKeep-Alive - sambaiz.net</a></p>
-<p><a href="https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L39">https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L39</a></p>
-<pre><code>var DefaultTransport RoundTripper = &amp;Transport{
-	Proxy: ProxyFromEnvironment,
-	DialContext: (&amp;net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-		DualStack: true,
-	}).DialContext,
-	MaxIdleConns:          100,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 1 * time.Second,
-}
-
-const DefaultMaxIdleConnsPerHost = 2
-</code></pre><h3 id="request">Request</h3>
-<p><a href="https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/request.go#L690">https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/request.go#L690</a></p>
-<pre><code>func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
-    ...
-    
-    u, err := url.Parse(urlStr)
-    
-    ...
-    
-    rc, ok := body.(io.ReadCloser)
-    req := &amp;Request{
-            Method:     method,
-            URL:        u,
-            Proto:      &quot;HTTP/1.1&quot;,
-            ProtoMajor: 1,
-            ProtoMinor: 1,
-            Header:     make(Header),
-            Body:       rc,
-            Host:       u.Host,
-        }
-</code></pre><h3 id="do">Do</h3>
-<p><a href="https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L181">https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L181</a></p>
-<p>Requestを渡してResponseを受け取る。</p>
-<pre><code>func (c *Client) Do(req *Request) (*Response, error) {
-    method := valueOrDefault(req.Method, &quot;GET&quot;)
-    if method == &quot;GET&quot; || method == &quot;HEAD&quot; {
-        return c.doFollowingRedirects(req, shouldRedirectGet)
-    }
-    if method == &quot;POST&quot; || method == &quot;PUT&quot; {
-        return c.doFollowingRedirects(req, shouldRedirectPost)
-    }
-    return c.send(req, c.deadline())
-}
-</code></pre><h3 id="dofollowingredirects">doFollowingRedirects</h3>
-<p>リクエストを送り、リダイレクトする場合はして、そうでない場合はレスポンスを返す。</p>
-<p><a href="https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L440">https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L440</a></p>
-<pre><code>func (c *Client) doFollowingRedirects(req *Request, shouldRedirect func(int) bool) (*Response, error) {
-    ...
-
-    for{
-
-        ...
-        
-        if resp, err = c.send(req, deadline); err != nil {
-            if !deadline.IsZero() &amp;&amp; !time.Now().Before(deadline) {
-                err = &amp;httpError{
-                    err:     err.Error() + &quot; (Client.Timeout exceeded while awaiting headers)&quot;,
-                    timeout: true,
-                }
-            }
-            return nil, uerr(err)
-        }
-
-        if !shouldRedirect(resp.StatusCode) {
-            return resp, nil
-        }
-    }
-</code></pre><h3 id="send">send</h3>
-<p>ClientのTransportのRoundTripを呼ぶ。ここからはTransport(RoundTripper)の仕事。</p>
-<p><a href="https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L140">https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L140</a></p>
-<pre><code>func (c *Client) send(req *Request, deadline time.Time) (*Response, error) {
-    
-    ...
-    
-    resp, err := send(req, c.transport(), deadline)
-</code></pre><p><a href="https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L208">https://github.com/golang/go/blob/964639cc338db650ccadeafb7424bc8ebb2c0f6c/src/net/http/client.go#L208</a></p>
-<pre><code>func send(ireq *Request, rt RoundTripper, deadline time.Time) (*Response, error) {
-   
-    ...
-    
-    resp, err := rt.RoundTrip(req)
-</code></pre><h3 id="roundtrip">RoundTrip</h3>
-<p>チャネルを通して接続先とやりとりする。</p>
-<p><a href="https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L319">https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L319</a></p>
-<pre><code>func (t *Transport) RoundTrip(req *Request) (*Response, error) {
-    
-    ...
-    
-    treq := &amp;transportRequest{Request: req, trace: trace}
-    
-    ...
-	
-    cm, err := t.connectMethodForRequest(treq)
-    pconn, err := t.getConn(treq, cm)
-   
-    ...
-    
-    resp, err = pconn.roundTrip(treq)
-</code></pre><p>writeとreadを同時に行っているのはサーバーがbodyのすべてを読む前にレスポンスを返すときのため。</p>
-<p><a href="https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L1823">https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L1823</a></p>
-<pre><code>func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err error) {
-    
-    ...
-    
-    pc.writech &lt;- writeRequest{req, writeErrCh, continueCh} // pc.writeLoopで読まれる
-
-    resc := make(chan responseAndError)
-	pc.reqch &lt;- requestAndChan{ // pc.readLoopで読まれる
-		req:        req.Request,
-		ch:         resc,
-		addedGzip:  requestedGzip,
-		continueCh: continueCh,
-		callerGone: gone,
-	}
-    var re responseAndError
-    
-    ...
-    
-    case re = &lt;-resc: // pc.readLoopで書き込まれる
-		re.err = pc.mapRoundTripErrorFromReadLoop(req.Request, startBytesWritten, re.err)
-		break WaitResponse
-</code></pre><h3 id="pconngetconndialconn">pconn.getConn/dialConn</h3>
-<p>接続し、チャネルを読むループ(readLoop, writeLoop)を回す。</p>
-<p><a href="https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L865">https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L865</a></p>
-<pre><code>func (t *Transport) getConn(treq *transportRequest, cm connectMethod) (*persistConn, error) {
-    ...
-    type dialRes struct {
-		pc  *persistConn
-		err error
-	}
-    dialc := make(chan dialRes)
-    
-    ...
-    
-    go func() {
-		pc, err := t.dialConn(ctx, cm)
-		dialc &lt;- dialRes{pc, err}
-	}()
-    
-    ...
-    
-    select {
-	case v := &lt;-dialc:
-        if v.pc != nil {
-            
-            ...
-			
-            return v.pc, nil
-        }
-</code></pre><p><a href="https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L967">https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L967</a></p>
-<pre><code>func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (*persistConn, error) {
-    pconn := &amp;persistConn{
-		t:             t,
-		cacheKey:      cm.key(),
-		reqch:         make(chan requestAndChan, 1), // roundTripで書かれて、readLoopで読まれる
-		writech:       make(chan writeRequest, 1), // roundTripで書かれて、writeLoopで読まれる
-		closech:       make(chan struct{}),
-		writeErrCh:    make(chan error, 1),
-		writeLoopDone: make(chan struct{}),
-	}
-
-    ...
-    
-    conn, err := t.dial(ctx, &quot;tcp&quot;, cm.addr())
-	pconn.conn = conn
-    
-    ...
-    
-    go pconn.readLoop()
-	go pconn.writeLoop()
-	return pconn, nil
-}
-</code></pre>
         </div>
       </article>
     </div>
