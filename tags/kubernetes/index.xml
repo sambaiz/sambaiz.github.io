@@ -6,10 +6,24 @@
     <description>Recent content in kubernetes on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Tue, 01 Oct 2019 23:25:00 +0900</lastBuildDate>
+    <lastBuildDate>Wed, 16 Sep 2020 23:55:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/tags/kubernetes/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う</title>
+      <link>https://www.sambaiz.net/article/297/</link>
+      <pubDate>Wed, 16 Sep 2020 23:55:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/297/</guid>
+      <description>以前、GKEにHelmでlocustをインストールしたが、今回はEKSで動かす。 CDKでHelmのChartもインストールできるので、cdk deployで一気にlocustの実行環境を構築できる。
+Kubernetes,Helmで負荷試験ツールLocustを立てる - sambaiz-net
+$ npm run cdk -- --version 1.62.0 (build 8c2d7fc) まずVPCとClusterを作成する。mastersRoleをユーザーもassumeできるようPrincipalにAWSアカウントも入れている。
+AWSのAssumeRole - sambaiz-net
+その後、実行するタスクを記述したスクリプトlocustfileのConfigMapを作成し、 これをChartのworker.config.configmapNameで参照する。ChartのリポジトリはHelm Hubを参照している。
+import * as cdk from &#39;@aws-cdk/core&#39;; import { Cluster, KubernetesVersion, DefaultCapacityType } from &#39;@aws-cdk/aws-eks&#39; import { Vpc, SubnetType, InstanceType } from &#39;@aws-cdk/aws-ec2&#39; import { Role, ManagedPolicy, ServicePrincipal, AccountPrincipal, CompositePrincipal } from &#39;@aws-cdk/aws-iam&#39; import * as fs from &#39;fs&#39;; export class TryEksStack extends cdk.Stack { constructor(scope: cdk.Construct, id: string, props?</description>
+    </item>
     
     <item>
       <title>K8s上でElastic APMを動かして外部のGo製APIサーバーのリクエストをトレースする</title>
@@ -166,11 +180,12 @@ resource &amp;quot;google_container_cluster&amp;quot; &amp;quot;sample&amp;quot;
       
       <guid>https://www.sambaiz.net/article/161/</guid>
       <description>OSSの負荷試験ツールLocustをK8sクラスタに立てる。 K8sならworkerの増減も簡単だし、HelmのChartもあるので立てるのも楽。
+CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net
 LocustはPython製で、以下のようなコードで処理を書くことができる。
 @task(10)のように括弧の中に数字を書いて実行される割合を偏らせることもできる。 異なるTaskSetに対応するユーザーを複数作ることもできて、こちらもweightで重みを付けられる。 ユーザー数はあとでWeb上から入力する。
-$ mkdir tasks $ cat tasks/tasks.py from locust import HttpLocust, TaskSet, task class ElbTasks(TaskSet): @task def task1(self): with client.get(&amp;quot;/&amp;quot;, catch_response=True) as response: if response.content != &amp;quot;Success&amp;quot;: response.failure(&amp;quot;Got wrong response&amp;quot;) class ElbWarmer(HttpLocust): task_set = ElbTasks min_wait = 1000 max_wait = 3000 stableにChartはあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、package して、helm repo index でこれを参照するindex.yamlを生成した。
+$ mkdir tasks $ cat tasks/tasks.py from locust import HttpLocust, TaskSet, task class ElbTasks(TaskSet): @task def task1(self): with self.client.get(&amp;quot;/&amp;quot;, catch_response=True) as response: if response.content != &amp;quot;Success&amp;quot;: response.failure(&amp;quot;Got wrong response&amp;quot;) class ElbWarmer(HttpLocust): task_set = ElbTasks min_wait = 1000 max_wait = 3000 stableにChartはあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、package して、helm repo index でこれを参照するindex.yamlを生成した。
  追記(2020-03-11): 今はConfigmapを自分で作成し --set worker.config.configmapName=*** することでforkしなくてもよくなった kubectl create configmap locust-worker-configs --from-file tasks/tasks.py
- $ helm package . $ helm repo index .</description>
+ $ helm package .</description>
     </item>
     
     <item>

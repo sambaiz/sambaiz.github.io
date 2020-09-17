@@ -22,17 +22,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>C&#43;&#43;でO(1)で読み書きできるLRUキャッシュを実装する - sambaiz-net</title>
-  <meta name="twitter:title" content="C&#43;&#43;でO(1)で読み書きできるLRUキャッシュを実装する - sambaiz-net">
-  <meta property='og:title' content="C&#43;&#43;でO(1)で読み書きできるLRUキャッシュを実装する - sambaiz-net">
+  <title>CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net</title>
+  <meta name="twitter:title" content="CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net">
+  <meta property='og:title' content="CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="mapの代わりにO(1)で読み書きできるunordered_map (hash map)を、dequeの代わりに削除もO(1)でできるlistを使う">
-  <meta name="twitter:description" content="mapの代わりにO(1)で読み書きできるunordered_map (hash map)を、dequeの代わりに削除もO(1)でできるlistを使う">
+  <meta name="description" content="1コマンドで負荷試験環境を立てる">
+  <meta name="twitter:description" content="1コマンドで負荷試験環境を立てる">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/270/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/297/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -44,9 +44,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "C\x2b\x2bでO(1)で読み書きできるLRUキャッシュを実装する | sambaiz-net ",
-    "datePublished": "2020-04-26T18:23:00JST",
-    "dateModified": "2020-04-26T18:23:00JST",
+    "headline": "CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う | sambaiz-net ",
+    "datePublished": "2020-09-16T23:55:00JST",
+    "dateModified": "2020-09-16T23:55:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "mapの代わりにO(1)で読み書きできるunordered_map (hash map)を、dequeの代わりに削除もO(1)でできるlistを使う"
+    "description": "1コマンドで負荷試験環境を立てる"
   }
 </script>
 </head>
@@ -172,85 +172,143 @@
 
       <article class="single">
         <div class="single body">
-          <h1>C&#43;&#43;でO(1)で読み書きできるLRUキャッシュを実装する</h1>
-          <p>(2020-04-26)</p>
-          <p><a href="https://leetcode.com/problems/lru-cache/">LRU Cache - LeetCode</a></p>
-<p>最初次のようなコードを書いたがタイムアウトしてしまった。
-C++のstd::mapは二分木で実装されているので各操作にO(log n)かかり、dequeの先頭への挿入はO(1)でできるが重複するキーを探して削除するのにO(n^2)かかってしまう。</p>
-<p><a href="https://www.sambaiz.net/article/253/">C++ STLのContainersとAlgorithms - sambaiz-net</a></p>
-<pre><code>class LRUCache {
-public:
-    deque&lt;int&gt; Q; // key
-    map&lt;int, int&gt; V; // &lt;key, value&gt;
-    int cap = 0;
-    LRUCache(int capacity) {
-        cap = capacity;
+          <h1>CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う</h1>
+          <p>(2020-09-16)</p>
+          <p>以前、GKEにHelmでlocustをインストールしたが、今回はEKSで動かす。
+CDKでHelmのChartもインストールできるので、<code>cdk deploy</code>で一気にlocustの実行環境を構築できる。</p>
+<p><a href="https://www.sambaiz.net/article/161/">Kubernetes,Helmで負荷試験ツールLocustを立てる - sambaiz-net</a></p>
+<pre><code>$ npm run cdk -- --version
+1.62.0 (build 8c2d7fc)
+</code></pre><p>まずVPCとClusterを作成する。mastersRoleをユーザーもassumeできるようPrincipalにAWSアカウントも入れている。</p>
+<p><a href="https://www.sambaiz.net/article/72/">AWSのAssumeRole - sambaiz-net</a></p>
+<p>その後、実行するタスクを記述したスクリプト<a href="https://docs.locust.io/en/stable/writing-a-locustfile.html">locustfile</a>のConfigMapを作成し、
+これをChartの<code>worker.config.configmapName</code>で参照する。Chartのリポジトリは<a href="https://hub.helm.sh/charts/stable/locust">Helm Hub</a>を参照している。</p>
+<pre><code>import * as cdk from '@aws-cdk/core';
+import { Cluster, KubernetesVersion, DefaultCapacityType } from '@aws-cdk/aws-eks'
+import { Vpc, SubnetType, InstanceType } from '@aws-cdk/aws-ec2'
+import { Role, ManagedPolicy, ServicePrincipal, AccountPrincipal, CompositePrincipal } from '@aws-cdk/aws-iam'
+import * as fs from 'fs';
+
+export class TryEksStack extends cdk.Stack {
+  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+    const vpc = new Vpc(this, 'vpc', {
+      cidr: '10.0.0.0/16',
+      maxAzs: 2,
+      subnetConfiguration: [
+        {
+          cidrMask: 18,
+          name: 'public',
+          subnetType: SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 18,
+          name: 'private',
+          subnetType: SubnetType.PRIVATE,
+        },
+      ]
+    })
+    cdk.Tags.of(vpc).add(&quot;Name&quot;, this.stackName)
+    const mastersRole = new Role(this, 'masters-role', {
+      assumedBy: new CompositePrincipal(
+        new ServicePrincipal('eks.amazonaws.com'),
+        new AccountPrincipal(this.account)
+      ),
+      managedPolicies: [
+        ManagedPolicy.fromAwsManagedPolicyName('AmazonEKSClusterPolicy'),
+        ManagedPolicy.fromAwsManagedPolicyName('AmazonEKSServicePolicy'),
+      ]
+    })
+    const cluster = new Cluster(this, 'cluster', {
+      vpc,
+      mastersRole,
+      clusterName: '&lt;cluster_name&gt;',
+      version: KubernetesVersion.V1_17,
+      defaultCapacity: 2,
+      defaultCapacityInstance: new InstanceType('m5.large')
+    })
+    const configmap = {
+      apiVersion: 'v1',
+      kind: 'ConfigMap',
+      metadata: {
+        name: 'locust-worker-configs',
+      },
+      data: {
+        'tasks.py': fs.readFileSync('lib/tasks.py').toString(),
+      },
     }
-    
-    int get(int key) {
-        if (V.count(key) != 0) {
-            for (int i = 0; i &lt; Q.size(); i++) {
-                if (Q[i] == key) {
-                    Q.erase(Q.begin() + i);
-                    break;
-                }
-            }
-            Q.push_front(key);
-            return V[key];
+    cluster.addManifest('locust-worker-configmap', configmap)
+    cluster.addChart('locust-chart', {
+      chart: 'locust',
+      repository: 'https://kubernetes-charts.storage.googleapis.com/',
+      version: '1.2.1',
+      wait: true,
+      values: {
+        master: {
+          config: {
+            'target-host': 'https://example.com'
+          }
+        },
+        worker: {
+          replicaCount: 2,
+          config: {
+            configmapName: configmap.metadata.name,
+          }
         }
-        return -1;
-    }
-    
-    void put(int key, int value) {
-        if (cap == 0) {
-            return;
-        }
-        if (get(key) == -1) {
-            if (Q.size() == cap) {
-                V.erase(Q.back());
-                Q.pop_back();
-            }
-            Q.push_front(key);
-        }
-        V[key] = value;
-    }
-};
-</code></pre><p>ヒントにO(1)で実装できると書いてあったので、mapの代わりにO(1)で読み書きできるunordered_map (hash map)を、dequeの代わりに削除もO(1)でできるlistを使うことにした。
-あとは普通にlistにアクセスするとO(n)になるのをどうするかだが、iteratorを持っておけばO(1)で直接アクセスできる。これで読み書き共にO(1)となり時間内に終わるようになった。</p>
-<pre><code>class LRUCache {
-public:
-    list&lt;tuple&lt;int, int&gt;&gt; Q; // {key, value}
-    unordered_map&lt;int, list&lt;tuple&lt;int, int&gt;&gt;::iterator&gt; iter; // &lt;key, iterator&gt;
-    int cap = 0;
-    LRUCache(int capacity) {
-        cap = capacity;
-    }
-    
-    int get(int key) {
-        if (iter.count(key) == 0) {
-            return -1;
-        }
-        auto it = iter[key];
-        auto [k, v] = *it;
-        Q.erase(it);
-        Q.push_front({key, v});
-        iter[key] = Q.begin();
-        return v;
-    }
-    
-    void put(int key, int value) {
-        if (iter.count(key) != 0) {
-            Q.erase(iter[key]);
-        }
-        Q.push_front({key, value});
-        iter[key] = Q.begin();
-        if (Q.size() &gt; cap) {
-            auto [k, v] = *(--Q.end());
-            iter.erase(k);
-            Q.pop_back();
-        }
-    }
-};
+      }
+    })
+  }
+}
+</code></pre><p>デプロイするとChartがインストールされLocustが起動していることが確認できる。</p>
+<pre><code>$ npm run cdk -- deploy
+...
+Outputs:
+TryEksStack.clusterConfigCommand30DB378E = aws eks update-kubeconfig --name &lt;cluster_name&gt; --region &lt;region&gt; --role-arn &lt;masters_role_arn&gt;
+TryEksStack.clusterGetTokenCommand09C244B5 = aws eks get-token --cluster-name &lt;cluster_name&gt; --region &lt;region&gt; --role-arn &lt;masters_role_arn&gt;
+
+$ aws eks update-kubeconfig --name &lt;cluster_name&gt; --region &lt;region&gt; --role-arn &lt;masters_role_arn&gt; --profile &lt;profile_name&gt;
+$ kubectl config view
+apiVersion: v1
+...
+current-context: &lt;cluster_arn&gt;
+kind: Config
+preferences: {}
+users:
+- name: &lt;cluster_arn&gt;
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1alpha1
+      args:
+      - --region
+      - &lt;region&gt;
+      - eks
+      - get-token
+      - --cluster-name
+      - &lt;cluster_name&gt;
+      - --role
+      - &lt;masters_role&gt;
+      command: aws
+      env:
+      - name: AWS_PROFILE
+        value: &lt;profile_name&gt;
+
+$ helm list
+NAME                                            NAMESPACE       REVISION        UPDATED                                 STATUS          CHART           APP VERSION     
+tryeksstackclusterchartlocustchart1abdd876      default         1               2020-09-16 07:51:53.672161109 +0000 UTC deployed        locust-1.2.1    0.9.0   
+
+$ kubectl get pod
+NAME                                                              READY   STATUS    RESTARTS   AGE
+tryeksstackclusterchartlocustchart1abdd876-master-7fd8998cn4w8z   1/1     Running   0          4m9s
+tryeksstackclusterchartlocustchart1abdd876-worker-58b74b6bsgctk   1/1     Running   1          4m9s
+tryeksstackclusterchartlocustchart1abdd876-worker-58b74b6bsltvr   1/1     Running   0          4m9s
+
+$ kubectl port-forward tryeksstackclusterchartlocustchart1abdd876-master-7fd8998cn4w8z 8089
+$ open http://localhost:8089
+</code></pre><p>次のようなエラーが出た場合、bootstrapして<code>CDKTookKit</code> stackをデプロイする。</p>
+<pre><code>Error: This stack uses assets, so the toolkit stack must be deployed to the environment
+</code></pre><pre><code>$ npm run cdk -- bootstrap
+</code></pre><p>後片付けする。</p>
+<pre><code>$ npm run cdk -- destroy
 </code></pre>
         </div>
       </article>
