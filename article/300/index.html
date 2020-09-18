@@ -22,17 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>log - sambaiz-net</title>
-  <meta name="twitter:title" content="log - sambaiz-net">
-  <meta property='og:title' content="log - sambaiz-net">
+  <title>CloudWatch Container InsightsでEKSのメトリクスを取得する - sambaiz-net</title>
+  <meta name="twitter:title" content="CloudWatch Container InsightsでEKSのメトリクスを取得する - sambaiz-net">
+  <meta property='og:title' content="CloudWatch Container InsightsでEKSのメトリクスを取得する - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="PodレベルのCPU/メモリ使用率やノードで実行されているコンテナ数などを取得できる">
+  <meta name="twitter:description" content="PodレベルのCPU/メモリ使用率やノードで実行されているコンテナ数などを取得できる">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/tags/log/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/300/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https:\/\/www.sambaiz.net\/"
+    },
+    "headline": "CloudWatch Container InsightsでEKSのメトリクスを取得する | sambaiz-net ",
+    "datePublished": "2020-09-18T19:58:00JST",
+    "dateModified": "2020-09-18T19:58:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "PodレベルのCPU\/メモリ使用率やノードで実行されているコンテナ数などを取得できる"
+  }
+</script>
 </head>
 
 <body>
@@ -128,330 +166,38 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">log</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>CloudWatch Container InsightsでEKSのメトリクスを取得する</h1>
+          <p>(2020-09-18)</p>
+          <p><a href="https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/monitoring/ContainerInsights.html">CloudWatch Container Insights</a>は
+EKS/EC2上で動くK8sクラスタおよびECSの<a href="https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/monitoring/Container-Insights-metrics.html">メトリクス</a>を取得する機能。今回はEKSで使う。</p>
+<p>CDKでクラスタを作成する場合、ECSでは<a href="https://docs.aws.amazon.com/cdk/api/latest/docs/@aws-cdk_aws-ecs.Cluster.html#containerinsights">containerInsights</a>をtrueにすることでセットアップされるが、EKSにはまだ存在しないため手動で行う。<a href="https://github.com/aws/aws-cdk/issues/7160">PR</a>は上がっている。</p>
+<p><a href="https://www.sambaiz.net/article/297/">CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net</a></p>
+<p>まずCloudWatchにログとメトリクスを送れるようにするため、ワーカーノードのIAMロールか、
+PodのServiceAccountに<a href="https://docs.aws.amazon.com/ja_jp/eks/latest/userguide/iam-roles-for-service-accounts.html">関連づけられたIAMロール</a>に
+<code>CloudWatchAgentServerPolicy</code>をアタッチする。今回はCDKで先にクラスタやロールを作るため前者の方法を取る。</p>
+<pre><code>cluster.defaultNodegroup?.role.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'))
+</code></pre><p><a href="https://docs.aws.amazon.com/ja_jp/AmazonCloudWatch/latest/monitoring/Container-Insights-setup-EKS-quickstart.html">セットアップ</a>は次のコマンドの実行で完了し、amazon-cloudwatchネームスペースにCloudWatchメトリクスを送信するエージェントとFluentdの<code>DaemonSet</code>や、
+各リソースを取得する<code>ClusterRole</code>や<code>ServiceAccount</code>などが作成される。cluster-nameとregion-nameの部分は書き換える。</p>
+<pre><code>$ curl https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container-insights/latest/k8s-deployment-manifest-templates/deployment-mode/daemonset/container-insights-monitoring/quickstart/cwagent-fluentd-quickstart.yaml | sed &quot;s/{{cluster_name}}/cluster-name/;s/{{region_name}}/cluster-region/&quot; | kubectl apply -f -
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/300/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2020-09-18</time>
-      </div>
-      <p class="article title">CloudWatch Container InsightsでEKSのメトリクスを取得する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/221/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2019-05-09</time>
-      </div>
-      <p class="article title">ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで構築する</p>
-    </div>
-  </article>
-</a>
+$ kubectl get daemonset --namespace amazon-cloudwatch
+NAME                 DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
+cloudwatch-agent     2         2         2       2            2           &lt;none&gt;          60s
+fluentd-cloudwatch   2         2         2       2            2           &lt;none&gt;          57s
+</code></pre><p>メトリクスはCloudWatchのContainerInsightsネームスペースに送られる。
+Podに割り当てられたCPUとメモリの使用率を出してみたところ、負荷をかけた際にCPUが100%に張り付いたので正しく送られていそうだ。</p>
+<p><img src="https://www.sambaiz.net/images/300.png" alt="Podに割り当てられたCPUとメモリの使用率"></p>
 
         </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/219/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2019-05-04</time>
-      </div>
-      <p class="article title">DatadogのAWS integrationとAlertの設定をTerraformで行う</p>
+      </article>
     </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/141/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-10-23</time>
-      </div>
-      <p class="article title">Redashでデータを可視化する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/116/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-07-01</time>
-      </div>
-      <p class="article title">Fluentdのout_copyのstoreのエラーは他のstoreに影響する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/113/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-06-25</time>
-      </div>
-      <p class="article title">fluentdのAggregatorをELBで負荷分散し、Blue/Green Deploymentする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/111/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-06-15</time>
-      </div>
-      <p class="article title">NorikraでログをJOINする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/109/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-06-10</time>
-      </div>
-      <p class="article title">NorikraとFluentdで流れてきたログをリアルタイムに集計する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/108/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-06-05</time>
-      </div>
-      <p class="article title">fluentdでKinesis streamsに送るときの性能確認</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/84/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-03-15</time>
-      </div>
-      <p class="article title">FluentdとKPL(Kinesis Producer Library)でログをまとめてスループットを稼ぐ</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/73/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-02-26</time>
-      </div>
-      <p class="article title">fluentdでKinesis Streamsに送ってLambdaで読んでS3に保存する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/71/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-02-24</time>
-      </div>
-      <p class="article title">ElasticsearchのCircuit Breaker</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/67/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-02-20</time>
-      </div>
-      <p class="article title">Kinesis Streams/Firehose/Analyticsを試す</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/66/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-02-19</time>
-      </div>
-      <p class="article title">fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/62/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-02-09</time>
-      </div>
-      <p class="article title">Elasticsearchのmapping</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/55/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-02-03</time>
-      </div>
-      <p class="article title">fluentdのrecord_transformerでログを加工する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/54/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-02-01</time>
-      </div>
-      <p class="article title">fluentdでElasticsearchに送る</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/52/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-01-29</time>
-      </div>
-      <p class="article title">ElasticsearchをDockerで動かしてGrafanaで可視化する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/51/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2017-01-25</time>
-      </div>
-      <p class="article title">fluentdのforward</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/33/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-11-09</time>
-      </div>
-      <p class="article title">logrotateでログをローテーションする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/32/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-11-06</time>
-      </div>
-      <p class="article title">td-agentをビルドしてfluentdのバージョンを上げる</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/19/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-08-31</time>
-      </div>
-      <p class="article title">Grafana/InfluxDB/Fluentdでログを可視化する</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-      </div>
-
-      
-
-
-    </div>
-
   </div>
-
 </div>
 
 </div> 

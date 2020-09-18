@@ -181,8 +181,9 @@ CDKでHelmのChartもインストールできるので、<code>cdk deploy</code>
 1.62.0 (build 8c2d7fc)
 </code></pre><p>まずVPCとClusterを作成する。mastersRoleをユーザーもassumeできるようPrincipalにAWSアカウントも入れている。</p>
 <p><a href="https://www.sambaiz.net/article/72/">AWSのAssumeRole - sambaiz-net</a></p>
-<p>その後、実行するタスクを記述したスクリプト<a href="https://docs.locust.io/en/stable/writing-a-locustfile.html">locustfile</a>のConfigMapを作成し、
-これをChartの<code>worker.config.configmapName</code>で参照する。Chartのリポジトリは<a href="https://hub.helm.sh/charts/stable/locust">Helm Hub</a>を参照している。</p>
+<p>その後、実行するタスクを記述したスクリプト<a href="https://docs.locust.io/en/0.14.3/writing-a-locustfile.html">locustfile</a>のConfigMapを作成し、
+これをChartの<code>worker.config.configmapName</code>で参照する。キー名を間違えがち。
+Chartのリポジトリは<a href="https://hub.helm.sh/charts/stable/locust">Helm Hub</a>のもの。</p>
 <pre><code>import * as cdk from '@aws-cdk/core';
 import { Cluster, KubernetesVersion, DefaultCapacityType } from '@aws-cdk/aws-eks'
 import { Vpc, SubnetType, InstanceType } from '@aws-cdk/aws-ec2'
@@ -259,6 +260,20 @@ export class TryEksStack extends cdk.Stack {
     })
   }
 }
+</code></pre><p>イメージのバージョンを最新の<code>1.x</code>系にしたところ、
+現状のChartが設定する <code>LOCUSTFILE_PATH</code> を読んでくれず <code>Could not find any locustfile!</code> になってしまったのでデフォルトの<code>0.9</code>で動かしている。
+locustfileの書き方が少し異なるのでバージョンを上げたい場合はChartを持ってきて編集するか自前のイメージを参照する。</p>
+<pre><code>$ cat lib/tasks.py
+from locust import HttpLocust, TaskSet, task, between
+
+class MyTaskSet(TaskSet):
+  @task
+  def index(self):
+    self.client.get(&quot;/&quot;)
+
+class MyUser(HttpLocust):
+  task_set = MyTaskSet
+  wait_time = between(5, 15)
 </code></pre><p>デプロイするとChartがインストールされLocustが起動していることが確認できる。</p>
 <pre><code>$ npm run cdk -- deploy
 ...
