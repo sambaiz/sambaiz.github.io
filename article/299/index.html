@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.69.2" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
+    crossorigin="anonymous">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+  <link rel="stylesheet" href="/css/slidebars.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+
+  <meta name="theme-color" content="#41a248">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="@sambaiz">
+  
+  <title>EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 - sambaiz-net</title>
+  <meta name="twitter:title" content="EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 - sambaiz-net">
+  <meta property='og:title' content="EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 - sambaiz-net">
+  <meta property="og:type" content="article">
+  
+  <meta name="description" content="ワーカー数とリソースの割り当て、インスタンスタイプとサイズを調整して最大RPSを上げる">
+  <meta name="twitter:description" content="ワーカー数とリソースの割り当て、インスタンスタイプとサイズを調整して最大RPSを上げる">
+  
+  
+
+  <meta property="og:url" content="https://www.sambaiz.net/article/299/">
+  <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
+  <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
+  <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https:\/\/www.sambaiz.net\/"
+    },
+    "headline": "EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 | sambaiz-net ",
+    "datePublished": "2020-09-20T16:39:00JST",
+    "dateModified": "2020-09-20T16:39:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "ワーカー数とリソースの割り当て、インスタンスタイプとサイズを調整して最大RPSを上げる"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="https://www.sambaiz.net/tags/aws">aws</a></li><li><a href="https://www.sambaiz.net/tags/golang">golang</a></li><li><a href="https://www.sambaiz.net/tags/machinelearning">machinelearning</a></li><li><a href="https://www.sambaiz.net/tags/python">python</a></li><li><a href="https://www.sambaiz.net/tags/kubernetes">kubernetes</a></li><li><a href="https://www.sambaiz.net/tags/log">log</a></li><li><a href="https://www.sambaiz.net/tags/infra">infra</a></li><li><a href="https://www.sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="https://www.sambaiz.net/tags/ios">ios</a></li><li><a href="https://www.sambaiz.net/tags/lambda">lambda</a></li><li><a href="https://www.sambaiz.net/tags/unity">unity</a></li><li><a href="https://www.sambaiz.net/tags/docker">docker</a></li><li><a href="https://www.sambaiz.net/tags/fluentd">fluentd</a></li><li><a href="https://www.sambaiz.net/tags/gcp">gcp</a></li><li><a href="https://www.sambaiz.net/tags/node.js">node.js</a></li><li><a href="https://www.sambaiz.net/tags/web">web</a></li><li><a href="https://www.sambaiz.net/tags/swift">swift</a></li><li><a href="https://www.sambaiz.net/tags/linux">linux</a></li><li><a href="https://www.sambaiz.net/tags/mysql">mysql</a></li><li><a href="https://www.sambaiz.net/tags/elasticsearch">elasticsearch</a></li><li><a href="https://www.sambaiz.net/tags/javascript">javascript</a></li><li><a href="https://www.sambaiz.net/tags/c&#43;&#43;">c&#43;&#43;</a></li><li><a href="https://www.sambaiz.net/tags/hololens">hololens</a></li><li><a href="https://www.sambaiz.net/tags/auth">auth</a></li><li><a href="https://www.sambaiz.net/tags/product">product</a></li><li><a href="https://www.sambaiz.net/tags/android">android</a></li><li><a href="https://www.sambaiz.net/tags/circleci">circleci</a></li><li><a href="https://www.sambaiz.net/tags/react">react</a></li><li><a href="https://www.sambaiz.net/tags/statistics">statistics</a></li><li><a href="https://www.sambaiz.net/tags/typescript">typescript</a></li><li><a href="https://www.sambaiz.net/tags/algorithm">algorithm</a></li><li><a href="https://www.sambaiz.net/tags/ble">ble</a></li><li><a href="https://www.sambaiz.net/tags/event">event</a></li><li><a href="https://www.sambaiz.net/tags/pytorch">pytorch</a></li><li><a href="https://www.sambaiz.net/tags/vscode">vscode</a></li><li><a href="https://www.sambaiz.net/tags/angular">angular</a></li><li><a href="https://www.sambaiz.net/tags/cron">cron</a></li><li><a href="https://www.sambaiz.net/tags/istio">istio</a></li><li><a href="https://www.sambaiz.net/tags/objective-c">objective-c</a></li><li><a href="https://www.sambaiz.net/tags/terraform">terraform</a></li><li><a href="https://www.sambaiz.net/tags/uwp">uwp</a></li><li><a href="https://www.sambaiz.net/tags/.net">.net</a></li><li><a href="https://www.sambaiz.net/tags/crypto">crypto</a></li><li><a href="https://www.sambaiz.net/tags/css">css</a></li><li><a href="https://www.sambaiz.net/tags/datadog">datadog</a></li><li><a href="https://www.sambaiz.net/tags/firebase">firebase</a></li><li><a href="https://www.sambaiz.net/tags/github">github</a></li><li><a href="https://www.sambaiz.net/tags/grpc">grpc</a></li><li><a href="https://www.sambaiz.net/tags/hadoop">hadoop</a></li><li><a href="https://www.sambaiz.net/tags/language">language</a></li><li><a href="https://www.sambaiz.net/tags/norikra">norikra</a></li><li><a href="https://www.sambaiz.net/tags/rx">rx</a></li><li><a href="https://www.sambaiz.net/tags/server">server</a></li><li><a href="https://www.sambaiz.net/tags/vr">vr</a></li><li><a href="https://www.sambaiz.net/tags/ansible">ansible</a></li><li><a href="https://www.sambaiz.net/tags/api">api</a></li><li><a href="https://www.sambaiz.net/tags/cdn">cdn</a></li><li><a href="https://www.sambaiz.net/tags/compress">compress</a></li><li><a href="https://www.sambaiz.net/tags/csharp">csharp</a></li><li><a href="https://www.sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="https://www.sambaiz.net/tags/digdag">digdag</a></li><li><a href="https://www.sambaiz.net/tags/hugo">hugo</a></li><li><a href="https://www.sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="https://www.sambaiz.net/tags/jvm">jvm</a></li><li><a href="https://www.sambaiz.net/tags/kotlin">kotlin</a></li><li><a href="https://www.sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="https://www.sambaiz.net/tags/lisp">lisp</a></li><li><a href="https://www.sambaiz.net/tags/llvm">llvm</a></li><li><a href="https://www.sambaiz.net/tags/math">math</a></li><li><a href="https://www.sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="https://www.sambaiz.net/tags/read_paper">read_paper</a></li><li><a href="https://www.sambaiz.net/tags/scikit-learn">scikit-learn</a></li><li><a href="https://www.sambaiz.net/tags/serialize">serialize</a></li><li><a href="https://www.sambaiz.net/tags/sonnet">sonnet</a></li><li><a href="https://www.sambaiz.net/tags/spark">spark</a></li><li><a href="https://www.sambaiz.net/tags/spec">spec</a></li><li><a href="https://www.sambaiz.net/tags/video">video</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="https://www.sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="https://www.sambaiz.net/">sambaiz-net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+        <style>
+          .filmarks-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .filmarks {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            background: url(/image/filmarks.svg) no-repeat;
+            background-size: 450%;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .vocabularycom-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .vocabularycom {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/vocabularycom.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .leetcode-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .leetcode {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/leetcode.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+        </style>
+        <div class="filmarks-base">
+          <a href="https://filmarks.com/users/sambaiz" class="filmarks"></a>
+        </div>
+        <div class="vocabularycom-base">
+          <a href="https://www.vocabulary.com/profiles/B0JI0K19KKMVKH" class="vocabularycom"></a>
+        </div>
+        <div class="leetcode-base">
+          <a href="https://leetcode.com/sambaiz/" class="leetcode"></a>
+        </div>
+      </div>
+    </header>
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整</h1>
+          <p>(2020-09-20)</p>
+          <p>EKS上にLocustをインストールしたのだが、ユーザーを増やしてもRPSが大して伸びない。リソースを調整してなるべく効率的に負荷をかけられるようにする。</p>
+<p><a href="https://www.sambaiz.net/article/297/">CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net</a></p>
+<h2 id="前提">前提</h2>
+<p>実行するシナリオは次のGETリクエストを送るだけのもの。Chartの都合で<code>0.x</code>系のlocustfileになっている。</p>
+<pre><code>from locust import HttpLocust, TaskSet, task
+
+class MyTaskSet(TaskSet):
+  @task
+  def index(self):
+    self.client.get(&quot;/&quot;)
+
+class MyUser(HttpLocust):
+  task_set = MyTaskSet
+  min_wait = 5
+  max_wait = 15
+</code></pre><p>ちなみに負荷をかける対象はECS+Fargateに立ち上げたAPIサーバーで、こちらが問題にならないよう余裕を持って動かしている。
+スケールするからといってAPI Gatewayなどに向けるとリクエスト数による多額の課金が発生し得るので注意だ。</p>
+<p><a href="https://www.sambaiz.net/article/259/">ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net</a></p>
+<p>なお、ファイルディスクリプタの数は元から十分大きかったため特に変更していない。</p>
+<p><a href="https://www.sambaiz.net/article/41/">ファイルディスクリプタの上限を増やす - sambaiz-net</a></p>
+<pre><code>$ kubectl exec tryeksstackclusterchartlocustchart1abdd876-worker-d5c7b85cbq6sh -- /bin/sh -c &quot;ulimit -n&quot;
+1048576
+</code></pre><h2 id="ワーカー数とリソースの割り当て">ワーカー数とリソースの割り当て</h2>
+<p><a href="https://aws.amazon.com/jp/ec2/pricing/on-demand/">m5.large (2vCPU, メモリ10GiB)</a>の2ノードに5ワーカーを立ち上げ負荷をかけたところ<code>230RPS</code>あたりで頭打ちになってしまった。</p>
+<p><img src="https://www.sambaiz.net/images/299-1.png" alt="初期のRPS"></p>
+<p>Container Insightsのメトリクスを見るとワーカーPodのCPUの使用率が100%に張り付いていることが分かる。</p>
+<p><a href="https://www.sambaiz.net/article/300/">CloudWatch Container InsightsでEKSのメトリクスを取得する - sambaiz-net</a></p>
+<p><img src="https://www.sambaiz.net/images/299-2.png" alt="PodのCPU/メモリの使用率"></p>
+<p>ノードのCPUは40%ほどしかリクエストされておらず同量のlimitsがかかっているので、ワーカーのリクエストCPUを増やすか数を増やせば簡単にRPSを増やせそうだ。</p>
+<p><img src="https://www.sambaiz.net/images/299-3.png" alt="ノードのCPU/メモリのリクエスト割合"></p>
+<p>まずはリクエストCPUを<a href="https://github.com/dellwon/charts/blob/d1553b96959c7218e0bceba4da78f6edc78c4c59/stable/locust/values.yaml#L85">100m</a>から500mに増やした。2.5倍ではないのは40%の中にはkube-systemやContainer InsightsのDaemonSetが含まれているため。リクエスト率は90%ほどになった。</p>
+<pre><code>$ kubectl describe nodes
+...
+Non-terminated Pods:         (9 in total)
+  Namespace                  Name                                                               CPU Requests  CPU Limits  Memory Requests  Memory Limits  AGE
+  ---------                  ----                                                               ------------  ----------  ---------------  -------------  ---
+  amazon-cloudwatch          cloudwatch-agent-sfz5l                                             200m (10%)    200m (10%)  200Mi (6%)       200Mi (6%)     5m49s
+  amazon-cloudwatch          fluentd-cloudwatch-5vnhg                                           100m (5%)     0 (0%)      200Mi (6%)       400Mi (13%)    5m49s
+  default                    tryeksstackclusterchartlocustchart1abdd876-master-595c44cczwmcm    100m (5%)     100m (5%)   128Mi (4%)       128Mi (4%)     4m54s
+  default                    tryeksstackclusterchartlocustchart1abdd876-worker-fddd54db4d7xr    500m (25%)    500m (25%)  128Mi (4%)       128Mi (4%)     4m54s
+  default                    tryeksstackclusterchartlocustchart1abdd876-worker-fddd54dbz2kpj    500m (25%)    500m (25%)  128Mi (4%)       128Mi (4%)     4m54s
+  kube-system                aws-node-875rb                                                     10m (0%)      0 (0%)      0 (0%)           0 (0%)         6m39s
+  kube-system                coredns-75b44cb5b4-7qpfl                                           100m (5%)     0 (0%)      70Mi (2%)        170Mi (5%)     4m54s
+  kube-system                coredns-75b44cb5b4-gc6mv                                           100m (5%)     0 (0%)      70Mi (2%)        170Mi (5%)     4m54s
+  kube-system                kube-proxy-wj8fk                                                   100m (5%)     0 (0%)      0 (0%)           0 (0%)         6m39s
+</code></pre><pre><code>worker: {
+  replicaCount: 5,
+  config: {
+    configmapName: configmap.metadata.name,
+  },
+  resources: {
+    limits: {
+      cpu: '500m',
+      memory: '128Mi'
+    },
+    requests: {
+      cpu: '500m',
+      memory: '128Mi'
+    } 
+  }
+}
+</code></pre><p>これで負荷をかけたところ<code>1150RPS</code>まで伸び、リソースを増やした分だけ増えたことになる。</p>
+<p><img src="https://www.sambaiz.net/images/299-4.png" alt="リクエストCPU500mでのRPS"></p>
+<p>次にリクエストCPUは戻してワーカー数を同じく5倍の25にしてみたところ<code>1070RPS</code>ほどに留まった。
+ワーカー数を27まで増やしたところ先ほどと同程度のRPSが出た。</p>
+<pre><code>worker: {
+  replicaCount: 25,
+  config: {
+    configmapName: configmap.metadata.name,
+  },
+  resources: {
+    limits: {
+      cpu: '100m',
+      memory: '128Mi'
+    },
+    requests: {
+      cpu: '100m',
+      memory: '128Mi'
+    } 
+  }
+}
+</code></pre><p>続いてワーカー数を2に減らしリクエストCPUを1250mにしようとしたが、1つがリソース不足で立ち上がらなかったため1100mにした。</p>
+<pre><code>worker: {
+    replicaCount: 2,
+    config: {
+      configmapName: configmap.metadata.name,
+    },
+    resources: {
+      limits: {
+        cpu: '1100m',
+        memory: '128Mi'
+      },
+      requests: {
+        cpu: '1100m',
+        memory: '128Mi'
+      } 
+    }
+  }
+}
+</code></pre><p>これで<code>1450RPS</code>まで出るようになった。
+CPUの使用率が90%までしか上がっていないのはLocustのワーカーが<a href="https://docs.locust.io/en/stable/running-locust-distributed.html">1コアしか使わない</a>ため。</p>
+<p><img src="https://www.sambaiz.net/images/299-5.png" alt="CPUを1100mにしたときのPodのCPU/メモリの使用率"></p>
+<p>以上の結果から1コア(vCPU)を刻んでワーカー数を増やすよりも集中させた方が、多少リソースを埋めきれなくてもパフォーマンスが良いことが分かったので、
+デフォルトの100mから1000mに変更しワーカー数もそれに合わせることにする。シナリオによっては併せてメモリを増やす。</p>
+<h2 id="インスタンスタイプ">インスタンスタイプ</h2>
+<p>ノードのCPUは十分使われるようになったがメモリはかなり余っている。
+メモリが足りなくなるとOOMになってしまうので切り詰めすぎるのも良くないが、少なくとも今回の場合は汎用の <a href="https://aws.amazon.com/jp/ec2/instance-types/">m5.large (2 vCPU, 最大 3.1 GHz, 0.096USD/時間) * 2</a> より、コンピューティング特化のc系インスタンスの方が無駄なくリソースを使えそうだ。なお、その点ではインスタンスではなく使ったリソース量で課金されるFargateという選択肢もあって、
+<a href="https://aws.amazon.com/jp/fargate/pricing/">コスト</a>はvCPUあたり<code>$0.04/時</code>と、ほとんどメモリを使わないなら良さそうだが、プロセッサがランダムで大抵c5のものより性能が低いので考慮しない。</p>
+<p>ということで同サイズの<code>c5.large	(2 vCPU, 最大 3.6 GHz, 0.085USD/時間) * 2</code>にしたところ<code>1570RPS</code>と、若干コストが下がりパフォーマンスが上がった。
+メモリは割り当てを上げていないがまだ余裕がある。</p>
+<p><img src="https://www.sambaiz.net/images/299-6.png" alt="c5.largeにしたときのPodのCPU/メモリの使用率"></p>
+<p>次にワーカー数を倍にして、<code>c5.large</code>で倍の4ノードに増やした場合と、ノード数はそのままサイズを<code>c5.xlarge</code>に上げた場合を比較する。
+サイズを上げるとリソースが倍になって料金も倍になるので総vCPUと料金は変わらない。
+結果、前者は<code>3130RPS</code>、後者は<code>2990RPS</code>となった。これだけだとノードを増やした方が良さそうだが、
+各ノードで走るDaemonSetの総リソースが少なくなるのと、1vCPUの確保しやすさから同量のリソースならノード数が少ない方が多くのワーカーを配置できる。
+そこで後者のノードに目一杯6ワーカー配置すると<code>3430RPS</code>となり逆転した。</p>
+<p>さらに増やすと<code>c5.large</code>16ノードで16ワーカー動かした場合は<code>12300RPS</code>、<code>c5.4xlarge</code>2ノードで30ワーカー動かした場合は<code>15200RPS</code>と、その差が大きくなる。
+ノード数が少ないとサブネットのIPアドレスやクォータの消費も抑えられるが、ネットワーク帯域幅はサイズを上げても倍になるわけではないので、そこがボトルネックになるとしたら分けた方が良い。</p>
+<h2 id="マスターのリソース">マスターのリソース</h2>
+<p>ここまでマスターのPodのリソースは変更していないが、ワーカーの数がそれほど多くないこともあってまだ余裕がある。
+CPUをデフォルトの100mに戻し、インスタンスタイプを<code>m5.4xlarge</code>に変更して増やしていったところ、900ワーカーで90%近くになった。メモリも限界だ。
+デフォルトで100mしか割り当てられていないがしばらく大丈夫そうだ。</p>
+<p><img src="https://www.sambaiz.net/images/299-7.png" alt="900ワーカーでのマスターのCPU/メモリの使用率"></p>
+<h2 id="まとめ">まとめ</h2>
+<ul>
+<li>ワーカーのcpuをデフォルトの100mから1000mに上げる</li>
+<li>インスタンスタイプは帯域幅が問題にならない限り大きくした方が有利</li>
+<li>マスターはデフォルトのリソースでもしばらく大丈夫</li>
+</ul>
+<h2 id="参考">参考</h2>
+<p><a href="http://blog.father.gedow.net/2019/12/20/fargate-cpu-model/">EKS/ECS Fargate のCPUモデルチェック | 外道父の匠</a></p>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+

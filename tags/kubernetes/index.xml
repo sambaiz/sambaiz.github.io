@@ -6,10 +6,31 @@
     <description>Recent content in kubernetes on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Fri, 18 Sep 2020 19:58:00 +0900</lastBuildDate>
+    <lastBuildDate>Sun, 20 Sep 2020 16:39:00 +0900</lastBuildDate>
     
 	<atom:link href="https://www.sambaiz.net/tags/kubernetes/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整</title>
+      <link>https://www.sambaiz.net/article/299/</link>
+      <pubDate>Sun, 20 Sep 2020 16:39:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/299/</guid>
+      <description>EKS上にLocustをインストールしたのだが、ユーザーを増やしてもRPSが大して伸びない。リソースを調整してなるべく効率的に負荷をかけられるようにする。
+CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net
+前提 実行するシナリオは次のGETリクエストを送るだけのもの。Chartの都合で0.x系のlocustfileになっている。
+from locust import HttpLocust, TaskSet, task class MyTaskSet(TaskSet): @task def index(self): self.client.get(&amp;quot;/&amp;quot;) class MyUser(HttpLocust): task_set = MyTaskSet min_wait = 5 max_wait = 15 ちなみに負荷をかける対象はECS+Fargateに立ち上げたAPIサーバーで、こちらが問題にならないよう余裕を持って動かしている。 スケールするからといってAPI Gatewayなどに向けるとリクエスト数による多額の課金が発生し得るので注意だ。
+ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net
+なお、ファイルディスクリプタの数は元から十分大きかったため特に変更していない。
+ファイルディスクリプタの上限を増やす - sambaiz-net
+$ kubectl exec tryeksstackclusterchartlocustchart1abdd876-worker-d5c7b85cbq6sh -- /bin/sh -c &amp;quot;ulimit -n&amp;quot; 1048576 ワーカー数とリソースの割り当て m5.large (2vCPU, メモリ10GiB)の2ノードに5ワーカーを立ち上げ負荷をかけたところ230RPSあたりで頭打ちになってしまった。
+Container Insightsのメトリクスを見るとワーカーPodのCPUの使用率が100%に張り付いていることが分かる。
+CloudWatch Container InsightsでEKSのメトリクスを取得する - sambaiz-net
+ノードのCPUは40%ほどしかリクエストされておらず同量のlimitsがかかっているので、ワーカーのリクエストCPUを増やすか数を増やせば簡単にRPSを増やせそうだ。
+まずはリクエストCPUを100mから500mに増やした。2.5倍ではないのは40%の中にはkube-systemやContainer InsightsのDaemonSetが含まれているため。リクエスト率は90%ほどになった。
+$ kubectl describe nodes ... Non-terminated Pods: (9 in total) Namespace Name CPU Requests CPU Limits Memory Requests Memory Limits AGE --------- ---- ------------ ---------- --------------- ------------- --- amazon-cloudwatch cloudwatch-agent-sfz5l 200m (10%) 200m (10%) 200Mi (6%) 200Mi (6%) 5m49s amazon-cloudwatch fluentd-cloudwatch-5vnhg 100m (5%) 0 (0%) 200Mi (6%) 400Mi (13%) 5m49s default tryeksstackclusterchartlocustchart1abdd876-master-595c44cczwmcm 100m (5%) 100m (5%) 128Mi (4%) 128Mi (4%) 4m54s default tryeksstackclusterchartlocustchart1abdd876-worker-fddd54db4d7xr 500m (25%) 500m (25%) 128Mi (4%) 128Mi (4%) 4m54s default tryeksstackclusterchartlocustchart1abdd876-worker-fddd54dbz2kpj 500m (25%) 500m (25%) 128Mi (4%) 128Mi (4%) 4m54s kube-system aws-node-875rb 10m (0%) 0 (0%) 0 (0%) 0 (0%) 6m39s kube-system coredns-75b44cb5b4-7qpfl 100m (5%) 0 (0%) 70Mi (2%) 170Mi (5%) 4m54s kube-system coredns-75b44cb5b4-gc6mv 100m (5%) 0 (0%) 70Mi (2%) 170Mi (5%) 4m54s kube-system kube-proxy-wj8fk 100m (5%) 0 (0%) 0 (0%) 0 (0%) 6m39s worker: { replicaCount: 5, config: { configmapName: configmap.</description>
+    </item>
     
     <item>
       <title>CloudWatch Container InsightsでEKSのメトリクスを取得する</title>
@@ -31,8 +52,8 @@ $ curl https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container
       <pubDate>Wed, 16 Sep 2020 23:55:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/297/</guid>
-      <description>以前、GKEにHelmでlocustをインストールしたが、今回はEKSで動かす。 CDKでHelmのChartもインストールできるので、cdk deployで一気にlocustの実行環境を構築できる。
-Kubernetes,Helmで負荷試験ツールLocustを立てる - sambaiz-net
+      <description>以前、Helmでlocustをインストールしたが、今回はEKSにCDKでインストールする。CDKだとクラスタの作成からできるのでcdk deployで一気に環境が整う。
+KubernetesにHelmでLocustによる分散負荷試験環境を立てる - sambaiz-net
 $ npm run cdk -- --version 1.62.0 (build 8c2d7fc) まずVPCとClusterを作成する。mastersRoleをユーザーもassumeできるようPrincipalにAWSアカウントも入れている。
 AWSのAssumeRole - sambaiz-net
 その後、実行するタスクを記述したスクリプトlocustfileのConfigMapを作成し、 これをChartのworker.config.configmapNameで参照する。キー名を間違えがち。 ChartのリポジトリはHelm Hubのもの。
@@ -188,7 +209,7 @@ resource &amp;quot;google_container_cluster&amp;quot; &amp;quot;sample&amp;quot;
     </item>
     
     <item>
-      <title>Kubernetes,Helmで負荷試験ツールLocustを立てる</title>
+      <title>KubernetesにHelmでLocustによる分散負荷試験環境を立てる</title>
       <link>https://www.sambaiz.net/article/161/</link>
       <pubDate>Sun, 18 Mar 2018 22:35:00 +0900</pubDate>
       
