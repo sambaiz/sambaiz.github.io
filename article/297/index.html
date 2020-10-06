@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="generator" content="Hugo 0.69.2" />
+  <meta name="generator" content="Hugo 0.75.1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
@@ -263,7 +263,7 @@ export class TryEksStack extends cdk.Stack {
 現状のChartが設定する <code>LOCUSTFILE_PATH</code> を読んでくれず <code>Could not find any locustfile!</code> になってしまったのでデフォルトの<code>0.9</code>で動かしている。
 locustfileの書き方が少し異なるのでバージョンを上げたい場合はChartを持ってきて編集するか自前のイメージを参照する。</p>
 <pre><code>$ cat lib/tasks.py
-from locust import HttpLocust, TaskSet, task, between
+from locust import HttpLocust, TaskSet, task
 
 class MyTaskSet(TaskSet):
   @task
@@ -272,15 +272,17 @@ class MyTaskSet(TaskSet):
 
 class MyUser(HttpLocust):
   task_set = MyTaskSet
-  wait_time = between(5, 15)
-</code></pre><p>デプロイするとChartがインストールされLocustが起動していることが確認できる。</p>
+  min_wait = 5
+  max_wait = 15
+</code></pre><p>デプロイするとupdate-kubeconfigするコマンドがOutputsに出るので実行する。ChartがインストールされLocustが起動していることが確認できる。</p>
 <pre><code>$ npm run cdk -- deploy
 ...
 Outputs:
 TryEksStack.clusterConfigCommand30DB378E = aws eks update-kubeconfig --name &lt;cluster_name&gt; --region &lt;region&gt; --role-arn &lt;masters_role_arn&gt;
 TryEksStack.clusterGetTokenCommand09C244B5 = aws eks get-token --cluster-name &lt;cluster_name&gt; --region &lt;region&gt; --role-arn &lt;masters_role_arn&gt;
 
-$ aws eks update-kubeconfig --name &lt;cluster_name&gt; --region &lt;region&gt; --role-arn &lt;masters_role_arn&gt; --profile &lt;profile_name&gt;
+$ $(aws cloudformation describe-stacks --region &lt;region&gt; --stack-name &lt;stack_name&gt; | jq -r '.Stacks | .[] | .Outputs | reduce .[] as $i ({}; .[$i.OutputKey] = $i.OutputValue) | to_entries | map(select(.key | startswith(&quot;clusterConfigCommand&quot;))) | .[0].value')
+
 $ kubectl config view
 apiVersion: v1
 ...
@@ -316,7 +318,7 @@ tryeksstackclusterchartlocustchart1abdd876-master-7fd8998cn4w8z   1/1     Runnin
 tryeksstackclusterchartlocustchart1abdd876-worker-58b74b6bsgctk   1/1     Running   1          4m9s
 tryeksstackclusterchartlocustchart1abdd876-worker-58b74b6bsltvr   1/1     Running   0          4m9s
 
-$ kubectl port-forward tryeksstackclusterchartlocustchart1abdd876-master-7fd8998cn4w8z 8089
+$ kubectl port-forward $(kubectl get pod -l &quot;component=master&quot; --template '{{(index .items 0).metadata.name}}') 8089
 $ open http://localhost:8089
 </code></pre><p>次のようなエラーが出た場合、bootstrapして<code>CDKTookKit</code> stackをデプロイする。</p>
 <pre><code>Error: This stack uses assets, so the toolkit stack must be deployed to the environment

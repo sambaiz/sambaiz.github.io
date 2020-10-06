@@ -6,10 +6,33 @@
     <description>Recent content in Articles on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sun, 20 Sep 2020 16:39:00 +0900</lastBuildDate>
+    <lastBuildDate>Tue, 06 Oct 2020 22:12:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Go CompilerのFunction Inlining</title>
+      <link>https://www.sambaiz.net/article/304/</link>
+      <pubDate>Tue, 06 Oct 2020 22:12:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/304/</guid>
+      <description>Go Compilerが行う、関数の処理をインラインに展開することで呼び出しコストを削減するFunction Inliningの話。 式の数が40未満でループやクロージャなどが含まれないシンプルな処理の関数が対象となる。
+まずは次の例で挙動を確認する。
+package main import &amp;quot;fmt&amp;quot; func myfunc(a, b int) int { return a + b } func main() { fmt.Println(myfunc(1, 2)) } -gcflags に -m を渡してビルドすると最適化の内容が確認でき、2つ渡すとより詳細な出力が得られる。
+$ go tool compile -help usage: compile [options] file.go... ... -m print optimization decisions myfunc()やfmt.Println()がInliningされたことや、myfunc()がヒープに割り当てられたことなどが分かる。 ちなみにコストの低いスタックか、高いヒープのどちらに割り当てるかはEscape analysisによって決まる。
+$ go build -gcflags &#39;-m -m&#39; main.go # command-line-arguments ./main.go:5:6: can inline myfunc with cost 4 as: func(int, int) int { return a + b } &amp;lt;---- .</description>
+    </item>
     
-	<atom:link href="https://www.sambaiz.net/article/index.xml" rel="self" type="application/rss+xml" />
-    
+    <item>
+      <title>Kinesis Data AnalyticsのSQLとLambdaとの接続</title>
+      <link>https://www.sambaiz.net/article/302/</link>
+      <pubDate>Sat, 03 Oct 2020 19:44:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/302/</guid>
+      <description>Kinesis Data AnalyticsでStreaming SQLを実行し、 Lambdaに送る。ほかの接続先としてData StreamやFirehoseがあり、フォーマットはJSONとCSVから選べる。
+Kinesis Streams/Firehose/Analyticsを試す - sambaiz-net
+STREAMとPUMP (in-application) STREAMを作成し、PUMPで他のSTREAMをSELECTした結果をINSERTすることでデータを流していく。出力先を設定する際にSTREAMを選ぶ。 STREAMはRDBのテーブルのようにカラムを持ち、JOINもできる。
+CREATE OR REPLACE STREAM &amp;quot;TEMPSTREAM&amp;quot; ( &amp;quot;column1&amp;quot; BIGINT NOT NULL, &amp;quot;column2&amp;quot; INTEGER, &amp;quot;column3&amp;quot; VARCHAR(64)); CREATE OR REPLACE PUMP &amp;quot;SAMPLEPUMP&amp;quot; AS INSERT INTO &amp;quot;TEMPSTREAM&amp;quot; (&amp;quot;column1&amp;quot;, &amp;quot;column2&amp;quot;, &amp;quot;column3&amp;quot;) SELECT STREAM inputcolumn1, inputcolumn2, inputcolumn3 FROM &amp;quot;INPUTSTREAM&amp;quot;; Windowed Queries  Tumbling Windows  固定の重複しない区間で集計するクエリ。次のように書くと60秒区切りで集計できる。
+GROUP BY STEP(&amp;quot;SOURCE_SQL_STREAM_001&amp;quot;.ROWTIME BY INTERVAL &#39;60&#39; SECOND) ROWTIMEは 最初のSTREAMにデータが入った時のタイムスタンプが格納される特別なカラム。SELECTしなくても自動で渡される。
+ Stagger Windows  固定の区間ではなく最初に対象パーティションのデータが届くとそこからINTERVALの区間のWindowが始まる。 Tumbling Windowsではデータに含まれるタイムスタンプで集計する場合、遅れて届くことで同じ区間のレコードが分かれてしまう問題があるがそれを緩和できる。</description>
+    </item>
     
     <item>
       <title>EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整</title>
@@ -332,8 +355,8 @@ class A: NSObject { var some: String // designated initializer override init() {
 これらをカレントディレクトリに置いてJupyter Notebookを立ち上げる。
 $ docker run -p 8888:8888 -v `pwd`:/home/jovyan/work jupyter/datascience-notebook start-notebook.sh ロードしてplotしてみる。
 import pandas as pd df = pd.read_csv(&#39;./wber.csv&#39;, usecols=[&#39;STORE&#39;, &#39;WEEK&#39;, &#39;UPC&#39;, &#39;MOVE&#39;, &#39;PRICE&#39;, &#39;PROFIT&#39;]) agg = df[df[&#39;STORE&#39;] == 5].groupby([&#39;WEEK&#39;]).sum().loc[:, [&#39;MOVE&#39;, &#39;PROFIT&#39;]] agg.plot() この内、中央の区間の値や差分に対してα=0.05で検定する。
-Shapiro-Wilk test 帰無仮説は&amp;quot;正規分布に従っている&amp;rdquo;。p&amp;gt;αとなり帰無仮説は棄却されず、正規分布に従うとみなせる。
-from scipy import stats W, p = stats.shapiro(agg[&#39;PROFIT&#39;].loc[230:310]) print(f&#39;p={p:.3f}&#39;) # p=0.183 runs test 帰無仮説は&amp;quot;2値の数列の値がランダムである&amp;rdquo;。runというのは数列の連続して増加/減少している部分のことで、帰無仮説が正しい場合数列に含まれるrunの数は次の平均と分散の正規分布に従う。
+Shapiro-Wilk test 帰無仮説は&amp;quot;正規分布に従っている&amp;quot;。p&amp;gt;αとなり帰無仮説は棄却されず、正規分布に従うとみなせる。
+from scipy import stats W, p = stats.shapiro(agg[&#39;PROFIT&#39;].loc[230:310]) print(f&#39;p={p:.3f}&#39;) # p=0.183 runs test 帰無仮説は&amp;quot;2値の数列の値がランダムである&amp;quot;。runというのは数列の連続して増加/減少している部分のことで、帰無仮説が正しい場合数列に含まれるrunの数は次の平均と分散の正規分布に従う。
 updown = agg[&#39;PROFIT&#39;].loc[230:310].diff().map(lambda x: x &amp;gt; 0) Np = updown.value_counts()[True] Nf = updown.</description>
     </item>
     
@@ -1348,7 +1371,7 @@ ssh -i private-key-file-path -NTL 9007:169.</description>
       
       <guid>https://www.sambaiz.net/article/202/</guid>
       <description>強化学習というのは将来に得られる報酬を最大化するような行動を学習していくもの。
-状態価値関数による学習 状態sのときに取る行動aを決定する方策(Policy)をπ(s)、次の状態s&amp;rsquo;を予測するモデルをP(s,a,s&amp;rsquo;)、直後に得られる即時報酬r_{t+1}を予測するモデルをR(s,a)とすると、将来得られる報酬の期待値である状態価値関数Vπは次の式で再帰的に表すことができ、この形式をベルマン方程式という。 同じ報酬なら早くに得られた方が良いという考えから将来の報酬rは1ステップ遅れるたびに割引率γが掛けられる。
+状態価値関数による学習 状態sのときに取る行動aを決定する方策(Policy)をπ(s)、次の状態s&amp;rsquo;を予測するモデルをP(s,a,s&#39;)、直後に得られる即時報酬r_{t+1}を予測するモデルをR(s,a)とすると、将来得られる報酬の期待値である状態価値関数Vπは次の式で再帰的に表すことができ、この形式をベルマン方程式という。 同じ報酬なら早くに得られた方が良いという考えから将来の報酬rは1ステップ遅れるたびに割引率γが掛けられる。
 どんな状態においても状態価値関数を最大化させる最適方策π*を探すにあたり、定義通り将来の報酬を待つのではなく、即時報酬Rで状態価値関数Vを更新していく。これをTD(Temporal difference)学習という。
 取り得る状態数が多いと収束するまでの時間が長くなる問題があって、これを価値関数の近似によって解消するのがDQN。
 DQN (Deep Q-Network) DNNでQ学習を行う。Q学習というのは状態sのときに行動aしたときの報酬の期待値である行動価値関数Qを最大化させるように学習させるもので、 最も良かった行動でQを更新していく。 未知の行動を探索するかどうかはバンディットアルゴリズムのε-greedyによって確率的に決定し、学習が進むにつれて確率は下がっていく。
@@ -3478,7 +3501,7 @@ BuildSettingsにあるPlayer Settingsボタンを押して Other SettingsのVirt
       <guid>https://www.sambaiz.net/article/55/</guid>
       <description>http://docs.fluentd.org/v0.12/articles/filter_record_transformer
 追加したり、編集したり、削除したりできるフィルタ。
-&amp;lt;source&amp;gt; @type forward port 24224 bind 0.0.0.0 &amp;lt;/source&amp;gt; &amp;lt;filter hoge.log&amp;gt; @type record_transformer enable_ruby auto_typecast true remove_keys b,d &amp;lt;record&amp;gt; what_is_tag ${tag} what_is_a ${record[&amp;quot;a&amp;quot;]} what_is_c_of_b_add_1 ${record[&amp;quot;b&amp;quot;][&amp;quot;c&amp;quot;] + 1} &amp;lt;/record&amp;gt; &amp;lt;/filter&amp;gt; &amp;lt;match hoge.log&amp;gt; @type stdout &amp;lt;/match&amp;gt; この例だとタグを値に持つ&amp;quot;what_is_tag&amp;rdquo;、aを値に持つ&amp;quot;what_is_a&amp;rdquo;、b.cの値に1を足す&amp;quot;what_is_c_of_b_add_1&amp;quot;が追加され、 bとdが削除される。一旦まっさらにして入れるものだけを指定することもできる。
+&amp;lt;source&amp;gt; @type forward port 24224 bind 0.0.0.0 &amp;lt;/source&amp;gt; &amp;lt;filter hoge.log&amp;gt; @type record_transformer enable_ruby auto_typecast true remove_keys b,d &amp;lt;record&amp;gt; what_is_tag ${tag} what_is_a ${record[&amp;quot;a&amp;quot;]} what_is_c_of_b_add_1 ${record[&amp;quot;b&amp;quot;][&amp;quot;c&amp;quot;] + 1} &amp;lt;/record&amp;gt; &amp;lt;/filter&amp;gt; &amp;lt;match hoge.log&amp;gt; @type stdout &amp;lt;/match&amp;gt; この例だとタグを値に持つ&amp;quot;what_is_tag&amp;quot;、aを値に持つ&amp;quot;what_is_a&amp;quot;、b.cの値に1を足す&amp;quot;what_is_c_of_b_add_1&amp;quot;が追加され、 bとdが削除される。一旦まっさらにして入れるものだけを指定することもできる。
 auto_typecastをtrueにしないと&amp;quot;what_is_c_of_b_add_1&amp;quot;の値がstringになる。
 $ echo &#39;{&amp;quot;a&amp;quot;: &amp;quot;hoge&amp;quot;, &amp;quot;b&amp;quot;: {&amp;quot;c&amp;quot;: 1}, &amp;quot;d&amp;quot;: &amp;quot;fuga&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat hoge.log $ tail /var/log/td-agent/td-agent.log hoge.log: {&amp;quot;a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_tag&amp;quot;:&amp;quot;hoge.log&amp;quot;,&amp;quot;what_is_a&amp;quot;:&amp;quot;hoge&amp;quot;,&amp;quot;what_is_c_of_b_add_1&amp;quot;:2} エラーが起きるとnullになるが、それ以外の処理はされる。
 $ echo &#39;{&amp;quot;a&amp;quot;: &amp;quot;hoge&amp;quot;, &amp;quot;b&amp;quot;: {&amp;quot;c&amp;quot;: &amp;quot;error!&amp;quot;}, &amp;quot;d&amp;quot;: &amp;quot;fuga&amp;quot;}&#39; | /opt/td-agent/embedded/bin/fluent-cat hoge.log $ tail /var/log/td-agent/td-agent.</description>
@@ -3609,8 +3632,8 @@ package cal import ( &amp;quot;math/big&amp;quot; ) var cache = map[int]*big.Int
       <description>MessagePackとは JSONのように使うことができ、速くてサイズが小さい。
 {&amp;quot;compact&amp;quot;:true,&amp;quot;スキーマ&amp;quot;:{&amp;quot;number&amp;quot;: 999, &amp;quot;string&amp;quot;: &amp;quot;aaa&amp;quot;}} のjson(61bytes)をMessagePack(45bytes)に変換したのがこれ。見やすいように改行している。
 82 a7 63 6f 6d 70 61 63 74 c3 ac e3 82 b9 e3 82 ad e3 83 bc e3 83 9e 82 a6 6e 75 6d 62 65 72 cd 03 e7 a6 73 74 72 69 6e 67 a3 61 61 61 一行目の82は要素数2のfixmap(要素数15まで)を表す。
-二行目のa7が7バイトのfixstr(31bytesまで)で、 63 6f 6d 70 61 63 74が&amp;quot;compact&amp;rdquo;。c3はtrue。
-三行目のacは12バイトのfixstrで、e3 82 b9 e3 82 ad e3 83 bc e3 83 9eが&amp;quot;スキーマ&amp;rdquo;。</description>
+二行目のa7が7バイトのfixstr(31bytesまで)で、 63 6f 6d 70 61 63 74が&amp;quot;compact&amp;quot;。c3はtrue。
+三行目のacは12バイトのfixstrで、e3 82 b9 e3 82 ad e3 83 bc e3 83 9eが&amp;quot;スキーマ&amp;quot;。</description>
     </item>
     
     <item>
@@ -4105,7 +4128,7 @@ MATCH (ee:Person) WHERE ee.name = &amp;quot;Emil&amp;quot; RETURN ee; CREATE (js
       <pubDate>Mon, 18 Jul 2016 22:22:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/9/</guid>
-      <description>Kubernetesとは Kubernetes(発音はkoo-ber-nay&amp;rsquo;-tace。 ギリシャ語で操舵手。)はGoogleによって開発が始められた、アプリケーションコンテナにおける自動デプロイ、スケーリング、操作を 自動化するOSS。K8sと略される。
+      <description>Kubernetesとは Kubernetes(発音はkoo-ber-nay&#39;-tace。 ギリシャ語で操舵手。)はGoogleによって開発が始められた、アプリケーションコンテナにおける自動デプロイ、スケーリング、操作を 自動化するOSS。K8sと略される。
 Minikube K8sをローカルで試すために、MinikubeというVMの中で単一ノードのK8sクラスターを動かすツールを入れる。
 v0.6.0
 curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.6.0/minikube-darwin-amd64 &amp;amp;&amp;amp; chmod +x minikube &amp;amp;&amp;amp; sudo mv minikube /usr/local/bin/ $ minikube start Starting local Kubernetes cluster... ... $ kubectl version Client Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;2&amp;quot;, GitVersion:&amp;quot;v1.2.4&amp;quot;, GitCommit:&amp;quot;3eed1e3be6848b877ff80a93da3785d9034d0a4f&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;} Server Version: version.Info{Major:&amp;quot;1&amp;quot;, Minor:&amp;quot;3&amp;quot;, GitVersion:&amp;quot;v1.3.0&amp;quot;, GitCommit:&amp;quot;283137936a498aed572ee22af6774b6fb6e9fd94&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;} Pods K8sではコンテナのグループをpodと呼ぶ。pod中のコンテナは共にデプロイされ、起動し、停止する。 また、グループとして複製される。

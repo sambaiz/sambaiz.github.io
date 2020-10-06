@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
+    crossorigin="anonymous">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+  <link rel="stylesheet" href="/css/slidebars.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+
+  <meta name="theme-color" content="#41a248">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="@sambaiz">
+  
+  <title>Go CompilerのFunction Inlining - sambaiz-net</title>
+  <meta name="twitter:title" content="Go CompilerのFunction Inlining - sambaiz-net">
+  <meta property='og:title' content="Go CompilerのFunction Inlining - sambaiz-net">
+  <meta property="og:type" content="article">
+  
+  <meta name="description" content="関数の処理をインラインに展開することで呼び出しコストを削減する">
+  <meta name="twitter:description" content="関数の処理をインラインに展開することで呼び出しコストを削減する">
+  
+  
+
+  <meta property="og:url" content="https://www.sambaiz.net/article/304/">
+  <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
+  <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
+  <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https:\/\/www.sambaiz.net\/"
+    },
+    "headline": "Go CompilerのFunction Inlining | sambaiz-net ",
+    "datePublished": "2020-10-06T22:12:00JST",
+    "dateModified": "2020-10-06T22:12:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "関数の処理をインラインに展開することで呼び出しコストを削減する"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="https://www.sambaiz.net/tags/aws">aws</a></li><li><a href="https://www.sambaiz.net/tags/golang">golang</a></li><li><a href="https://www.sambaiz.net/tags/machinelearning">machinelearning</a></li><li><a href="https://www.sambaiz.net/tags/python">python</a></li><li><a href="https://www.sambaiz.net/tags/kubernetes">kubernetes</a></li><li><a href="https://www.sambaiz.net/tags/log">log</a></li><li><a href="https://www.sambaiz.net/tags/infra">infra</a></li><li><a href="https://www.sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="https://www.sambaiz.net/tags/ios">ios</a></li><li><a href="https://www.sambaiz.net/tags/lambda">lambda</a></li><li><a href="https://www.sambaiz.net/tags/unity">unity</a></li><li><a href="https://www.sambaiz.net/tags/docker">docker</a></li><li><a href="https://www.sambaiz.net/tags/fluentd">fluentd</a></li><li><a href="https://www.sambaiz.net/tags/gcp">gcp</a></li><li><a href="https://www.sambaiz.net/tags/node.js">node.js</a></li><li><a href="https://www.sambaiz.net/tags/web">web</a></li><li><a href="https://www.sambaiz.net/tags/swift">swift</a></li><li><a href="https://www.sambaiz.net/tags/linux">linux</a></li><li><a href="https://www.sambaiz.net/tags/mysql">mysql</a></li><li><a href="https://www.sambaiz.net/tags/elasticsearch">elasticsearch</a></li><li><a href="https://www.sambaiz.net/tags/javascript">javascript</a></li><li><a href="https://www.sambaiz.net/tags/c&#43;&#43;">c&#43;&#43;</a></li><li><a href="https://www.sambaiz.net/tags/hololens">hololens</a></li><li><a href="https://www.sambaiz.net/tags/auth">auth</a></li><li><a href="https://www.sambaiz.net/tags/product">product</a></li><li><a href="https://www.sambaiz.net/tags/android">android</a></li><li><a href="https://www.sambaiz.net/tags/circleci">circleci</a></li><li><a href="https://www.sambaiz.net/tags/react">react</a></li><li><a href="https://www.sambaiz.net/tags/statistics">statistics</a></li><li><a href="https://www.sambaiz.net/tags/typescript">typescript</a></li><li><a href="https://www.sambaiz.net/tags/algorithm">algorithm</a></li><li><a href="https://www.sambaiz.net/tags/ble">ble</a></li><li><a href="https://www.sambaiz.net/tags/event">event</a></li><li><a href="https://www.sambaiz.net/tags/pytorch">pytorch</a></li><li><a href="https://www.sambaiz.net/tags/vscode">vscode</a></li><li><a href="https://www.sambaiz.net/tags/angular">angular</a></li><li><a href="https://www.sambaiz.net/tags/cron">cron</a></li><li><a href="https://www.sambaiz.net/tags/istio">istio</a></li><li><a href="https://www.sambaiz.net/tags/objective-c">objective-c</a></li><li><a href="https://www.sambaiz.net/tags/terraform">terraform</a></li><li><a href="https://www.sambaiz.net/tags/uwp">uwp</a></li><li><a href="https://www.sambaiz.net/tags/.net">.net</a></li><li><a href="https://www.sambaiz.net/tags/crypto">crypto</a></li><li><a href="https://www.sambaiz.net/tags/css">css</a></li><li><a href="https://www.sambaiz.net/tags/datadog">datadog</a></li><li><a href="https://www.sambaiz.net/tags/firebase">firebase</a></li><li><a href="https://www.sambaiz.net/tags/github">github</a></li><li><a href="https://www.sambaiz.net/tags/grpc">grpc</a></li><li><a href="https://www.sambaiz.net/tags/hadoop">hadoop</a></li><li><a href="https://www.sambaiz.net/tags/language">language</a></li><li><a href="https://www.sambaiz.net/tags/norikra">norikra</a></li><li><a href="https://www.sambaiz.net/tags/rx">rx</a></li><li><a href="https://www.sambaiz.net/tags/server">server</a></li><li><a href="https://www.sambaiz.net/tags/vr">vr</a></li><li><a href="https://www.sambaiz.net/tags/ansible">ansible</a></li><li><a href="https://www.sambaiz.net/tags/api">api</a></li><li><a href="https://www.sambaiz.net/tags/cdn">cdn</a></li><li><a href="https://www.sambaiz.net/tags/compress">compress</a></li><li><a href="https://www.sambaiz.net/tags/csharp">csharp</a></li><li><a href="https://www.sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="https://www.sambaiz.net/tags/digdag">digdag</a></li><li><a href="https://www.sambaiz.net/tags/hugo">hugo</a></li><li><a href="https://www.sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="https://www.sambaiz.net/tags/jvm">jvm</a></li><li><a href="https://www.sambaiz.net/tags/kotlin">kotlin</a></li><li><a href="https://www.sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="https://www.sambaiz.net/tags/lisp">lisp</a></li><li><a href="https://www.sambaiz.net/tags/llvm">llvm</a></li><li><a href="https://www.sambaiz.net/tags/math">math</a></li><li><a href="https://www.sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="https://www.sambaiz.net/tags/read_paper">read_paper</a></li><li><a href="https://www.sambaiz.net/tags/scikit-learn">scikit-learn</a></li><li><a href="https://www.sambaiz.net/tags/serialize">serialize</a></li><li><a href="https://www.sambaiz.net/tags/sonnet">sonnet</a></li><li><a href="https://www.sambaiz.net/tags/spark">spark</a></li><li><a href="https://www.sambaiz.net/tags/spec">spec</a></li><li><a href="https://www.sambaiz.net/tags/video">video</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="https://www.sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="https://www.sambaiz.net/">sambaiz-net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+        <style>
+          .filmarks-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .filmarks {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            background: url(/image/filmarks.svg) no-repeat;
+            background-size: 450%;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .vocabularycom-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .vocabularycom {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/vocabularycom.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .leetcode-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .leetcode {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/leetcode.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+        </style>
+        <div class="filmarks-base">
+          <a href="https://filmarks.com/users/sambaiz" class="filmarks"></a>
+        </div>
+        <div class="vocabularycom-base">
+          <a href="https://www.vocabulary.com/profiles/B0JI0K19KKMVKH" class="vocabularycom"></a>
+        </div>
+        <div class="leetcode-base">
+          <a href="https://leetcode.com/sambaiz/" class="leetcode"></a>
+        </div>
+      </div>
+    </header>
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>Go CompilerのFunction Inlining</h1>
+          <p>(2020-10-06)</p>
+          <p>Go Compilerが行う、関数の処理をインラインに展開することで呼び出しコストを削減する<a href="https://github.com/golang/go/wiki/CompilerOptimizations#function-inlining">Function Inlining</a>の話。
+式の数が40未満でループやクロージャなどが含まれないシンプルな処理の関数が対象となる。</p>
+<p>まずは次の例で挙動を確認する。</p>
+<pre><code>package main
+
+import &quot;fmt&quot;
+
+func myfunc(a, b int) int {
+        return a + b
+}
+
+func main() {
+        fmt.Println(myfunc(1, 2))
+}
+</code></pre><p><code>-gcflags</code> に <code>-m</code> を渡してビルドすると最適化の内容が確認でき、2つ渡すとより詳細な出力が得られる。</p>
+<pre><code>$ go tool compile -help
+usage: compile [options] file.go...
+...
+  -m    print optimization decisions
+</code></pre><p><code>myfunc()</code>や<code>fmt.Println()</code>がInliningされたことや、<code>myfunc()</code>がヒープに割り当てられたことなどが分かる。
+ちなみにコストの低いスタックか、高いヒープのどちらに割り当てるかは<a href="https://github.com/golang/go/wiki/CompilerOptimizations#escape-analysis">Escape analysis</a>によって決まる。</p>
+<pre><code>$ go build -gcflags '-m -m' main.go 
+# command-line-arguments
+./main.go:5:6: can inline myfunc with cost 4 as: func(int, int) int { return a + b }  &lt;----
+./main.go:9:6: cannot inline main: function too complex: cost 83 exceeds budget 80
+./main.go:10:20: inlining call to myfunc func(int, int) int { return a + b }
+./main.go:10:13: inlining call to fmt.Println func(...interface {}) (int, error) { var fmt..autotmp_3 int; fmt..autotmp_3 = &lt;N&gt;; var fmt..autotmp_4 error; fmt..autotmp_4 = &lt;N&gt;; fmt..autotmp_3, fmt..autotmp_4 = fmt.Fprintln(io.Writer(os.Stdout), fmt.a...); return fmt..autotmp_3, fmt..autotmp_4 }
+./main.go:10:20: myfunc(1, 2) escapes to heap:
+./main.go:10:20:   flow: ~arg0 = &amp;{storage for myfunc(1, 2)}:
+./main.go:10:20:     from myfunc(1, 2) (spill) at ./main.go:10:20
+./main.go:10:20:     from ~arg0 = &lt;N&gt; (assign-pair) at ./main.go:10:13
+./main.go:10:20:   flow: {storage for []interface {} literal} = ~arg0:
+./main.go:10:20:     from []interface {} literal (slice-literal-element) at ./main.go:10:13
+./main.go:10:20:   flow: fmt.a = &amp;{storage for []interface {} literal}:
+./main.go:10:20:     from []interface {} literal (spill) at ./main.go:10:13
+./main.go:10:20:     from fmt.a = []interface {} literal (assign) at ./main.go:10:13
+./main.go:10:20:   flow: {heap} = *fmt.a:
+./main.go:10:20:     from fmt.Fprintln(io.Writer(os.Stdout), fmt.a...) (call parameter) at ./main.go:10:13
+./main.go:10:20: myfunc(1, 2) escapes to heap
+./main.go:10:13: []interface {} literal does not escape
+&lt;autogenerated&gt;:1: .this does not escape
+</code></pre><p><a href="https://golang.org/cmd/objdump/">objdump</a>で逆アセンブルしたものを見ても関数が呼び出しされている形跡はない。
+さらに<code>1+2</code>が既に評価されている。</p>
+<pre><code>$ go tool objdump main | less
+...
+TEXT main.main(SB) /Users/sambaiz/go/src/github.com/sambaiz/hoge/main.go
+  main.go:9             0x10a6a40               65488b0c2530000000      MOVQ GS:0x30, CX                        
+  main.go:9             0x10a6a49               483b6110                CMPQ 0x10(CX), SP                       
+  main.go:9             0x10a6a4d               0f867c000000            JBE 0x10a6acf                           
+  main.go:9             0x10a6a53               4883ec58                SUBQ $0x58, SP                          
+  main.go:9             0x10a6a57               48896c2450              MOVQ BP, 0x50(SP)                       
+  main.go:9             0x10a6a5c               488d6c2450              LEAQ 0x50(SP), BP                       
+  main.go:10            0x10a6a61               48c7042403000000        MOVQ $0x3, 0(SP)  &lt;---- 1 + 2                      
+  main.go:10            0x10a6a69               e83233f6ff              CALL runtime.convT64(SB)                
+  main.go:10            0x10a6a6e               488b442408              MOVQ 0x8(SP), AX                        
+  main.go:10            0x10a6a73               0f57c0                  XORPS X0, X0                            
+  main.go:10            0x10a6a76               0f11442440              MOVUPS X0, 0x40(SP)                     
+  main.go:10            0x10a6a7b               488d0d7ea90000          LEAQ runtime.rodata+43296(SB), CX       
+  main.go:10            0x10a6a82               48894c2440              MOVQ CX, 0x40(SP)                       
+  main.go:10            0x10a6a87               4889442448              MOVQ AX, 0x48(SP) 
+</code></pre><p>次にInliningされないパターンを見るためループを入れてみる。<code>//go:noinline</code> pragmaを付けてもInliningさせなくすることができる。</p>
+<pre><code>func myfunc() int {
+	n := 0
+	for i := 0; i &lt; 10; i++ {
+		n += i
+	}
+	return n
+}
+</code></pre><p>Inliningされていないことを確認。</p>
+<pre><code>$ go build -gcflags '-m -m' main.go 
+# command-line-arguments
+./main.go:7:6: cannot inline myfunc: unhandled op FOR  &lt;----
+./main.go:15:6: cannot inline main: function too complex: cost 134 exceeds budget 80
+./main.go:16:13: inlining call to fmt.Println func(...interface {}) (int, error) { var fmt..autotmp_3 int; fmt..autotmp_3 = &lt;N&gt;; var fmt..autotmp_4 error; fmt..autotmp_4 = &lt;N&gt;; fmt..autotmp_3, fmt..autotmp_4 = fmt.Fprintln(io.Writer(os.Stdout), fmt.a...); return fmt..autotmp_3, fmt..autotmp_4 }
+./main.go:16:20: myfunc() escapes to heap:
+./main.go:16:20:   flow: ~arg0 = &amp;{storage for myfunc()}:
+./main.go:16:20:     from myfunc() (spill) at ./main.go:16:20
+./main.go:16:20:     from ~arg0 = &lt;N&gt; (assign-pair) at ./main.go:16:13
+./main.go:16:20:   flow: {storage for []interface {} literal} = ~arg0:
+./main.go:16:20:     from []interface {} literal (slice-literal-element) at ./main.go:16:13
+./main.go:16:20:   flow: fmt.a = &amp;{storage for []interface {} literal}:
+./main.go:16:20:     from []interface {} literal (spill) at ./main.go:16:13
+./main.go:16:20:     from fmt.a = []interface {} literal (assign) at ./main.go:16:13
+./main.go:16:20:   flow: {heap} = *fmt.a:
+./main.go:16:20:     from fmt.Fprintln(io.Writer(os.Stdout), fmt.a...) (call parameter) at ./main.go:16:13
+./main.go:16:20: myfunc() escapes to heap
+./main.go:16:13: []interface {} literal does not escape
+&lt;autogenerated&gt;:1: .this does not escape
+</code></pre><p><code>objdump</code> からも <code>myfunc()</code> が呼び出されていることが確認できる。</p>
+<pre><code>$ go tool objdump main | less
+...
+TEXT main.main(SB) /Users/sambaiz/go/src/github.com/sambaiz/hoge/main.go
+  main.go:15            0x10a6a60               65488b0c2530000000      MOVQ GS:0x30, CX                        
+  main.go:15            0x10a6a69               483b6110                CMPQ 0x10(CX), SP                       
+  main.go:15            0x10a6a6d               0f867c000000            JBE 0x10a6aef                           
+  main.go:15            0x10a6a73               4883ec58                SUBQ $0x58, SP                          
+  main.go:15            0x10a6a77               48896c2450              MOVQ BP, 0x50(SP)                       
+  main.go:15            0x10a6a7c               488d6c2450              LEAQ 0x50(SP), BP                       
+  main.go:16            0x10a6a81               e8baffffff              CALL main.myfunc(SB)  &lt;----
+  main.go:16            0x10a6a86               e81533f6ff              CALL runtime.convT64(SB)                
+  main.go:16            0x10a6a8b               488b442408              MOVQ 0x8(SP), AX                        
+  main.go:16            0x10a6a90               0f57c0                  XORPS X0, X0                            
+  main.go:16            0x10a6a93               0f11442440              MOVUPS X0, 0x40(SP)                     
+  main.go:16            0x10a6a98               488d0d81a90000          LEAQ runtime.types+43296(SB), CX        
+  main.go:16            0x10a6a9f               48894c2440              MOVQ CX, 0x40(SP)                       
+  main.go:16            0x10a6aa4               4889442448              MOVQ AX, 0x48(SP)                       
+</code></pre><p>無名関数も同様にInliningできる場合はされ、できない場合はされない。</p>
+<pre><code>func main() {
+	var myfunc = func() int {
+		n := 0
+		for i := 0; i &lt; 10; i++ {
+			n += i
+		}
+		return n
+	}
+	fmt.Println(myfunc())
+}
+</code></pre><pre><code>main.go:23            0x10a6a61               488b0570c30200          MOVQ go.func.*+125(SB), AX              
+main.go:23            0x10a6a68               488d1569c30200          LEAQ go.func.*+125(SB), DX              
+main.go:23            0x10a6a6f               ffd0                    CALL AX
+</code></pre><h2 id="参考">参考</h2>
+<p><a href="https://qiita.com/tutuz/items/caa5d85544c398a2da9a">Go Compilerのインライン展開についてまとめた - Qiita</a></p>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+
