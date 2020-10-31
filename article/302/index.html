@@ -22,9 +22,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Kinesis Data AnalyticsのSQLとLambdaとの接続 - sambaiz-net</title>
-  <meta name="twitter:title" content="Kinesis Data AnalyticsのSQLとLambdaとの接続 - sambaiz-net">
-  <meta property='og:title' content="Kinesis Data AnalyticsのSQLとLambdaとの接続 - sambaiz-net">
+  <title>Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成 - sambaiz-net</title>
+  <meta name="twitter:title" content="Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成 - sambaiz-net">
+  <meta property='og:title' content="Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成 - sambaiz-net">
   <meta property="og:type" content="article">
   
   <meta name="description" content="Streaming SQL">
@@ -44,7 +44,7 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "Kinesis Data AnalyticsのSQLとLambdaとの接続 | sambaiz-net ",
+    "headline": "Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成 | sambaiz-net ",
     "datePublished": "2020-10-03T19:44:00JST",
     "dateModified": "2020-10-03T19:44:00JST",
     "author": {
@@ -172,7 +172,7 @@
 
       <article class="single">
         <div class="single body">
-          <h1>Kinesis Data AnalyticsのSQLとLambdaとの接続</h1>
+          <h1>Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成</h1>
           <p>(2020-10-03)</p>
           <p>Kinesis Data Analyticsで<a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/streaming-sql-concepts.html">Streaming SQL</a>を実行し、
 Lambdaに送る。ほかの接続先としてData StreamやFirehoseがあり、フォーマットはJSONとCSVから選べる。</p>
@@ -219,8 +219,10 @@ avg(price) over last10rows
 WINDOW　
 	last2rows AS (PARTITION BY ticker_symbol ROWS 2 PRECEDING),
 	last10rows AS (PARTITION BY ticker_symbol ROWS 10 PRECEDING)
-</code></pre><h2 id="lambdaとの接続">Lambdaとの接続</h2>
-<p>データはbase64エンコードされているのでデコードして使う。</p>
+</code></pre><h2 id="lambdaへの出力httpsdocsawsamazoncomja_jpkinesisanalyticslatestdevhow-it-works-output-lambdahtml"><a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/dev/how-it-works-output-lambda.html">Lambdaへの出力</a></h2>
+<p>データはbase64エンコードされているのでデコードして使う。
+レスポンスで<code>recordId</code>と<code>result</code>を返す必要があり、失敗するとretryHintをインクリメントして再送する。
+フォーマットが正しくないと <code>OkRecords</code> にも <code>DeliveryFailedRecords</code> にもカウントされないが、その場合でも再送される。</p>
 <pre><code>package main
 
 import (
@@ -232,32 +234,233 @@ import (
 
 // https://docs.aws.amazon.com/kinesisanalytics/latest/dev/how-it-works-output-lambda.html
 type KinesisDataAnalyticsInput struct {
-	InvocationID   string                            `json: &quot;invocationId&quot;`
-	ApplicationARN string                            `json: &quot;applicationArn&quot;`
-	Records        []KinesisDataAnalyticsInputRecord `json: &quot;records&quot;`
+	InvocationID   string                            `json:&quot;invocationId&quot;`
+	ApplicationARN string                            `json:&quot;applicationArn&quot;`
+	Records        []KinesisDataAnalyticsInputRecord `json:&quot;records&quot;`
 }
 
 type KinesisDataAnalyticsInputRecord struct {
-	RecordID                     string                                  `json: &quot;recordId&quot;`
-	LambdaDeliveryRecordMetadata KinesisDataAnalyticsInputRecordMetadata `json: &quot;lambdaDeliveryRecordMetadata&quot;`
-	Data                         string                                  `json: &quot;data&quot;`
+	RecordID                     string                                  `json:&quot;recordId&quot;`
+	LambdaDeliveryRecordMetadata KinesisDataAnalyticsInputRecordMetadata `json:&quot;lambdaDeliveryRecordMetadata&quot;`
+	Data                         string                                  `json:&quot;data&quot;`
 }
 
 type KinesisDataAnalyticsInputRecordMetadata struct {
 	RetryHint int `json: &quot;retryHint&quot;`
 }
 
+
+type KinesisDataAnalyticsOutputs struct {
+	Records []KinesisAnalyticsOutput
+}
+
+type KinesisDataAnalyticsOutput struct {
+	RecordID string `json:&quot;recordId&quot;`
+	Result   string `json:&quot;result&quot;`
+}
+
 func handler(request KinesisDataAnalyticsInput) (interface{}, error) {
-	decoded, err := base64.StdEncoding.DecodeString(request.Records[0].Data)
-	if err != nil {
-		return nil, err
+	var outputs []KinesisDataAnalyticsOutput
+	for _, record := range request.Records {
+		decoded, err := base64.StdEncoding.DecodeString(request.Records[0].Data)
+		if err != nil {
+			fmt.Println(err)
+			outputs = append(outputs, KinesisDataAnalyticsOutput{
+				RecordID: record.RecordID,
+				Result:   &quot;DeliveryFailed&quot;,
+			})
+			continue
+		}
+		outputs = append(outputs, KinesisDataAnalyticsOutput{
+			RecordID: record.RecordID,
+			Result:   &quot;Ok&quot;,
+		})
 	}
-	fmt.Printf(&quot;request: %+v, body[0]: %s&quot;, request, string(decoded))
-	return &quot;ok&quot;, nil
+	return KinesisDataAnalyticsOutputs{outputs}, nil
 }
 
 func main() {
 	lambda.Start(handler)
+}
+</code></pre><h2 id="cdkによるリソースの作成">CDKによるリソースの作成</h2>
+<p>LambdaはSAMなどで別に作成している前提で、Data StreamsとAnalyticsのApplicationをCDKで作成する。
+Flinkにも対応しているV2系のリソースで作成したところ現状コンソール上からスキーマやリアルタイムのデータを見ることができなかった。</p>
+<p><img src="https://www.sambaiz.net/images/302.png" alt="コンソール非対応"></p>
+<pre><code>import * as cdk from '@aws-cdk/core';
+import { Stream } from '@aws-cdk/aws-kinesis';
+import * as analytics from '@aws-cdk/aws-kinesisanalytics';
+import { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } from '@aws-cdk/aws-iam'
+
+export class CdkStack extends cdk.Stack {
+  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    const lambdaArn = &quot;&lt;lambda_arn&gt;&quot;
+
+    const stream = new Stream(this, &quot;TestStream&quot;, {
+      streamName: &quot;test-stream&quot;,
+      shardCount: 3,
+    });
+
+    const role = new Role(this, 'TestAnalyticsRole', {
+      assumedBy: new ServicePrincipal('kinesisanalytics.amazonaws.com'),
+      inlinePolicies: {
+        'test-analytics-policy': new PolicyDocument({
+          statements: [
+            new PolicyStatement({
+              effect: Effect.ALLOW,
+              actions: [
+                &quot;kinesis:DescribeStream&quot;,
+                &quot;kinesis:GetShardIterator&quot;,
+                &quot;kinesis:GetRecords&quot;
+              ],
+              resources: [
+                stream.streamArn
+              ]
+            }),
+            new PolicyStatement({
+              effect: Effect.ALLOW,
+              actions: [
+                &quot;lambda:InvokeFunction&quot;,
+                &quot;lambda:GetFunctionConfiguration&quot;
+              ],
+              resources: [
+                lambdaArn
+              ]
+            })
+          ]
+        })
+      }
+    })
+
+    const applicationName = &quot;test-analytics-application&quot;
+    const application = new analytics.CfnApplicationV2(this, 'TestAnalyticsApplication', {
+      applicationName: applicationName,
+      applicationDescription: &quot;test&quot;,
+      runtimeEnvironment: &quot;SQL-1_0&quot;,
+      serviceExecutionRole: role.roleArn,
+      applicationConfiguration: {
+        sqlApplicationConfiguration: {
+          inputs: [{
+            namePrefix: &quot;SOURCE_SQL_STREAM&quot;,
+            inputSchema: {
+              recordColumns: [{
+                name: &quot;column1&quot;,
+                sqlType: &quot;BIGINT&quot;,
+                mapping: &quot;$.column1&quot;,
+              }],
+              recordFormat: {
+                recordFormatType: &quot;JSON&quot;,
+                mappingParameters: {
+                  jsonMappingParameters: {
+                    recordRowPath: &quot;$&quot;,
+                  }
+                }
+              } 
+            },
+            kinesisStreamsInput: {
+              resourceArn: stream.streamArn,
+            }
+          }]
+        },
+        applicationCodeConfiguration: {
+          codeContent: {
+            textContent: `
+            CREATE OR REPLACE STREAM &quot;SUM_STREAM&quot; (
+                &quot;cnt&quot; BIGINT NOT NULL
+            );
+
+            CREATE OR REPLACE PUMP &quot;SUM_PUMP&quot; AS
+                INSERT INTO &quot;SUM_STREAM&quot; (&quot;cnt&quot;)
+                SELECT STREAM count(1) AS cnt
+                FROM &quot;SOURCE_SQL_STREAM_001&quot;
+                GROUP BY STEP(&quot;SOURCE_SQL_STREAM_001&quot;.ROWTIME BY INTERVAL '10' SECOND);
+            `
+          },
+          codeContentType: &quot;PLAINTEXT&quot;
+        }
+      }
+    })
+
+    const applicationOutput = new analytics.CfnApplicationOutputV2(this, 'TestAnalyticsApplicationOutput', {
+      applicationName: applicationName,
+      output: {
+        name: 'test_analytics_output',
+        destinationSchema: {
+          recordFormatType: &quot;JSON&quot;
+        },
+        lambdaOutput: {
+          resourceArn: lambdaArn
+        }
+      }
+    })
+    applicationOutput.addDependsOn(application)
+  }
+}
+</code></pre><p>非V2の方で書くとこんな感じ。</p>
+<pre><code>import * as cdk from '@aws-cdk/core';
+import { Stream } from '@aws-cdk/aws-kinesis';
+import * as analytics from '@aws-cdk/aws-kinesisanalytics';
+import { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } from '@aws-cdk/aws-iam'
+
+export class CdkStack extends cdk.Stack {
+  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+    ...
+    const applicationName = &quot;test-analytics-application&quot;
+    const application = new analytics.CfnApplication(this, 'TestAnalyticsApplication', {
+      applicationName: applicationName,
+      applicationDescription: &quot;test&quot;,
+      applicationCode: `
+      CREATE OR REPLACE STREAM &quot;SUM_STREAM&quot; (
+          &quot;cnt&quot; BIGINT NOT NULL
+      );
+
+      CREATE OR REPLACE PUMP &quot;SUM_PUMP&quot; AS
+          INSERT INTO &quot;SUM_STREAM&quot; (&quot;cnt&quot;)
+          SELECT STREAM count(1) AS cnt
+          FROM &quot;SOURCE_SQL_STREAM_001&quot;
+          GROUP BY STEP(&quot;SOURCE_SQL_STREAM_001&quot;.ROWTIME BY INTERVAL '10' SECOND);
+      `
+      runtimeEnvironment: &quot;SQL-1_0&quot;,
+      inputs: [{
+        namePrefix: &quot;SOURCE_SQL_STREAM&quot;,
+        inputSchema: {
+          recordColumns: [{
+            name: &quot;column1&quot;,
+            sqlType: &quot;BIGINT&quot;,
+            mapping: &quot;$.column1&quot;,
+          }],
+          recordFormat: {
+            recordFormatType: &quot;JSON&quot;,
+            mappingParameters: {
+              jsonMappingParameters: {
+                recordRowPath: &quot;$&quot;,
+              }
+            }
+          } 
+        },
+        kinesisStreamsInput: {
+          resourceArn: stream.streamArn,
+          roleArn: role.roleArn
+        }
+      }]
+    })
+
+    const applicationOutput = new analytics.CfnApplicationOutput(this, 'TestAnalyticsApplicationOutput', {
+      applicationName: applicationName,
+      output: {
+        name: 'test_analytics_output',
+        destinationSchema: {
+          recordFormatType: &quot;JSON&quot;
+        },
+        lambdaOutput: {
+          resourceArn: stream.streamArn,
+          roleArn: role.roleArn
+        }
+      }
+    })
+    applicationOutput.addDependsOn(application)
+  }
 }
 </code></pre>
         </div>

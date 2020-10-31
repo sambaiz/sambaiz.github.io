@@ -18,7 +18,7 @@ VSCodeのRemote DevelopmentでSageMakerのコンテナ環境でモデルを開�
 macOSの場合ホストのKeyChainかSSH Agentに鍵を登録すると自動でExtensionが参照する。今回はSSH Agentの方で行う。
 ssh-addを-Kフラグを付けて実行するとKeychainにパスフレーズが保存される。SSH Agentは自分で起動する必要はなくコマンドを実行すると起動するようだ。
 $ ssh-add -K ~/.ssh/id_rsa $ ssh-add -l 4096 ****** ***** (RSA) Sierra以降では.ssh/configのAddKeysToAgentとUseKeychainをyesにしないと起動時に自動で登録されずKeychainも参照されない。
-Host * ... AddKeysToAgent yes UseKeychain yes devcontainerにも反映されていることを確認。
+Host * ... AddKeysToAgent yes UseKeychain yes devcontainerに反映されていることを確認。
 # ssh-add -l 4096 ****** ***** (RSA) 参考 Mac OS X以降のssh-agent事情 - Qiita</description>
     </item>
     
@@ -40,8 +40,10 @@ HomebrewとSAM CLIのインストール 手順に従ってbrewでインストー
       <pubDate>Fri, 09 Oct 2020 00:50:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/303/</guid>
-      <description>Cluster Mode 有効にすると最大90までシャードを増やせるようになる。作成後にCluster Modeを有効にはできない。
+      <description>CacheClusterとReplicationGroup コンソールでは意識することがないが、CloudFormationでElastiCacheクラスターを構築する場合は CacheClusterと ReplicationGroupという概念が存在する。 プライマリノードとリードレプリカノードは別のCacheClusterに作成され、それらをカプセル化したのがReplicationGroup。
+Cluster Mode 有効にすると最大90までシャードを増やせるようになる。作成後にCluster Modeを有効にはできない。
 シャードには1つのPrimary Nodeと0-5つのReplica Nodeが含まれる。 Replica NodeはPrimary NodeのデータをレプリケーションするRead Onlyなノード。手動でPrimary Nodeに昇格させたり、NodeやAZの障害時に自動で昇格したりする。
+CloudFormationではシャード数はReplicationGroupのNumNodeGroupsで、レプリカノードの数はReplicasPerNodeGroupで設定できる。
 リクエストはキーから計算されるハッシュスロットによって各シャードに分散され、 ClUSTER SLOTSコマンドでハッシュスロットとノードのマッピングが取れる。 go-redisのようなCluster対応クライアントは内部でこのマッピングと計算したハッシュスロットからリクエストを送るノードを決定している。
 Node Size 少なくとも総アイテムサイズをシャード数で割った分がメモリに乗るようにする。 これに加えてスナップショットを作成する際にフォークしたプロセスで実行されるBGSAVEや、フェイルオーバーで使うメモリが必要。 reserved-memory-percentパラメータ(以前のバージョンではreserved-memoryだった)でmaxmemoryの25%を予約することが推奨されており、デフォルトは25になっている。
 Subnet Group クラスタに設定するVPCのサブネットの集合。クラスタ作成後には変更できない。</description>
@@ -61,7 +63,7 @@ $ go build -gcflags &#39;-m -m&#39; main.go # command-line-arguments ./main.go:5
     </item>
     
     <item>
-      <title>Kinesis Data AnalyticsのSQLとLambdaとの接続</title>
+      <title>Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成</title>
       <link>https://www.sambaiz.net/article/302/</link>
       <pubDate>Sat, 03 Oct 2020 19:44:00 +0900</pubDate>
       
@@ -723,7 +725,7 @@ $ xcode-select --install $ xcrun --show-sdk-path /Library/Developer/CommandLineT
       <description>動的計画法(DP, Dynamic Programming)は記録した計算結果を、帰納的に求められるより大きな計算で利用するアルゴリズムの総称。 例えば、フィボナッチ数列の項f(x)を求めるのに、f(x-1)とf(x-2)の結果を記録しておけばそれらを足すだけで済む。
 いくつか問題を解いてみる。
 Longest Common Subsequence 最長共通部分列問題。
-Given two strings text1 and text2, return the length of their longest common subsequence. Example 1: Input: text1 = &amp;quot;abcde&amp;quot;, text2 = &amp;quot;ace&amp;quot; Output: 3 Explanation: The longest common subsequence is &amp;quot;ace&amp;quot; and its length is 3. 単純に毎回一から探索するとO(n^3)になるが、 ヒントにあるように、それぞれの文字列に1文字足したときに それが同じ文字ならその分伸ばした DP[i - 1][j - 1] + 1 となり 違う文字ならそのまま max(DP[i - 1][j], DP[i][j - 1]) となる ことに気付けると毎回探索しなくてよくなりO(n^2)にできる。
+Given two strings text1 and text2, return the length of their longest common subsequence. Example 1: Input: text1 = &amp;quot;abcde&amp;quot;, text2 = &amp;quot;ace&amp;quot; Output: 3 Explanation: The longest common subsequence is &amp;quot;ace&amp;quot; and its length is 3. 単純に毎回一から探索するとO(n^3)になるが、text1のi番目までとtext2のj番目までの共通部分列の長さをDP[i-1][j-1]に記録しておくと、 ヒントにあるように、それぞれの文字列に1文字足したときに それが同じ文字ならその分伸ばした DP[i - 1][j - 1] + 1 となり 違う文字ならそのまま max(DP[i - 1][j], DP[i][j - 1]) となる ことに気付けると毎回探索しなくてよくなりO(n^2)にできる。
 class Solution { public: int longestCommonSubsequence(string text1, string text2) { vector&amp;lt;vector&amp;lt;int&amp;gt;&amp;gt; DP(text1.</description>
     </item>
     

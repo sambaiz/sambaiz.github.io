@@ -186,7 +186,7 @@ Example 1:
 Input: text1 = &quot;abcde&quot;, text2 = &quot;ace&quot; 
 Output: 3  
 Explanation: The longest common subsequence is &quot;ace&quot; and its length is 3.
-</code></pre><p>単純に毎回一から探索するとO(n^3)になるが、
+</code></pre><p>単純に毎回一から探索するとO(n^3)になるが、text1のi番目までとtext2のj番目までの共通部分列の長さを<code>DP[i-1][j-1]</code>に記録しておくと、
 ヒントにあるように、それぞれの文字列に1文字足したときに
 それが同じ文字ならその分伸ばした <code>DP[i - 1][j - 1] + 1</code> となり
 違う文字ならそのまま <code>max(DP[i - 1][j], DP[i][j - 1])</code> となる
@@ -310,7 +310,7 @@ public:
         return ret;
     }
 };
-</code></pre><p>両端またぎのケースは別に扱い、最小の部分を探して総和から引くようにしたのが次の実装。これで<code>O(n)</code>になり通るようになった。</p>
+</code></pre><p>そこで両端またぎのケースは最小の部分を探して総和から引くようにしたのが次の実装。これで<code>O(n)</code>になり通るようになった。</p>
 <pre><code>class Solution {
 public:
     int maxSubarraySumCircular(vector&lt;int&gt;&amp; A) {
@@ -354,7 +354,7 @@ Example:
 Input: n = 10
 Output: 12
 Explanation: 1, 2, 3, 4, 5, 6, 8, 9, 10, 12 is the sequence of the first 10 ugly numbers.
-</code></pre><p>Nが条件を満たすなら、N<em>2, N</em>3, N*5が条件を満たすので、これらの値を重複しないように記録していく。</p>
+</code></pre><p>Nが条件を満たすなら、<code>N*2</code>, <code>N*3</code>, <code>N*5</code>も条件を満たすので、これらの値を重複しないように記録していく。</p>
 <pre><code>class Solution {
 public:
     int nthUglyNumber(int n) {
@@ -387,7 +387,7 @@ Example 1:
 Input: s1 = &quot;aabcc&quot;, s2 = &quot;dbbca&quot;, s3 = &quot;aadbbcbcac&quot;
 Output: true
 </code></pre><p>基本的な戦略としてはs1かs2の先頭一文字を取り出すのを繰り返しs3の完成を目指すというものだが、
-次のような再帰で解くと、2つの文字列が長く共通文字が多い場合にタイムアウトしてしまった。
+次のような再帰で解くと、2つの文字列が長く共通文字が多い場合にタイムアウトしてしまう。
 一見<code>O(n^2)</code>に見えるが、どちらから取っても良い場合に両方の場合を探索してしまうので、最悪の場合は<code>O(2^n)</code>になってしまう。</p>
 <pre><code>class Solution {
 public:
@@ -437,7 +437,35 @@ public:
         return table[s1.size()][s2.size()];
     }
 };
-</code></pre>
+</code></pre><h2 id="個数制限なしナップザック問題">個数制限なしナップザック問題</h2>
+<p>通常のナップザック問題は、重さ<code>w_i</code>で価値<code>v_i</code>のナップザックがN個あり、重さの和がWを超えないように選んだときの価値の和の最大値を求める問題。値は全て正の整数。
+単純に総当たりすると<code>O(2^N)</code>となりNが大きいとうまくいかない。
+DPを用いてi番目以降のナップザックから重さがWを超えないように選んだ時の価値の和の最大値を返す関数<code>f(i, W)</code>の値を<code>DP[i][W]</code>に記録しておくと、この関数は次の漸化式の値を返すだけで引数のパターンは<code>N*W</code>しかないので<code>O(NW)</code>で実行できる。</p>
+<pre><code>int f(int i, W) {
+    return max(DP[i+1][W], DP[i+1][W-w[i]] + v[i]); 
+}
+</code></pre><p>なお、Wがとても大きいとタイムアウトする可能性があるが、その場合i番目以降のナップザックから価値の和vとなるように選んだ時の重さの最小値 <code>f(i, v)</code> を記録し、<code>DP[i][v] &lt;= W</code> となる最大のvを返すようにすることでオーダーをWに依存しない <code>O(N Σv)</code> にすることができる。</p>
+<p>個数制限なしナップザック問題は同じナップザックを複数個選ぶことができるようにしたもの。
+次のようにループで個数kを探索すると、<code>w[i]=1, W=0</code>のときにW回ループするので<code>O(NW^2)</code>となってしまう。</p>
+<pre><code>int f(int i, W) {
+    int m = DP[i + 1][W];
+    int k = 0;
+    while(true) {
+        k++;
+        if (W - k * w[i] &lt; 0) {
+            break;
+        }
+        m = max(m, DP[i+1][W - k * w[i]] + k * v[i]);
+    }
+    return m;
+}
+</code></pre><p><code>f(i, W)</code>でk(&gt;=1)個選んだときに価値が最大となる場合、その値は <code>f(i, W - k * w[i]) + k * v[i]</code> と等しくなる。
+そのkを探すために結局 <code>f(i, W - 1 * w[i])</code>, <code>f(i, W - 2 * w[i])</code> &hellip; を見ていくことになりそうだが、
+<code>f(i, W - 1 * w[i])</code> で既に　<code>f(i, W - 2 * w[i])</code>, <code>f(i, W - 3 * w[i])</code>, &hellip; を見ているので、1個分Wが小さいときの値だけ見ればkの探索は不要であることが分かる。
+したがって、<code>f(i, W) = max(f(i+1, W), f(i, W - w[i]) + v[i]) (if W - w[i] &gt;= 0)</code> となり <code>O(NW)</code> にすることができる。</p>
+<h2 id="参考">参考</h2>
+<p><a href="https://book.mynavi.jp/ec/products/detail/id=22672">プログラミングコンテストチャレンジブック [第2版]</a></p>
+
         </div>
       </article>
     </div>
