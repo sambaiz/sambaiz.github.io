@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 
@@ -23,18 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>sambaiz-net</title>
-  <meta name="twitter:title" content="sambaiz-net">
-  <meta property='og:title' content="sambaiz-net">
-  <meta property="og:type" content="website">
-  <meta name="description" content="ホームページ">
-  <meta name="twitter:description" content="ホームページ">
+  <title>GoでAthenaのクエリを実行する - sambaiz-net</title>
+  <meta name="twitter:title" content="GoでAthenaのクエリを実行する - sambaiz-net">
+  <meta property='og:title' content="GoでAthenaのクエリを実行する - sambaiz-net">
+  <meta property="og:type" content="article">
+  
+  <meta name="description" content="segmentio/go-athena">
+  <meta name="twitter:description" content="segmentio/go-athena">
+  
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/309/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https:\/\/www.sambaiz.net\/"
+    },
+    "headline": "GoでAthenaのクエリを実行する | sambaiz-net ",
+    "datePublished": "2020-11-14T16:19:00JST",
+    "dateModified": "2020-11-14T16:19:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "segmentio\/go-athena"
+  }
+</script>
 </head>
 
 <body>
@@ -130,125 +166,70 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <div class="row">
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="https://www.sambaiz.net/article/7/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-15</time>
-      </div>
-      <p class="article title">Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む</p>
-    </div>
-  </article>
-</a>
+      <article class="single">
+        <div class="single body">
+          <h1>GoでAthenaのクエリを実行する</h1>
+          <p>(2020-11-14)</p>
+          <p><a href="https://github.com/segmentio/go-athena">segmentio/go-athena</a>を使う。<code>database/sql</code>のドライバーとして提供されていて、
+<a href="https://github.com/segmentio/go-athena/blob/dfa5f18189303b39c4ccc2f0c292947540214e63/conn.go#L60">StartQueryExecution()</a>と
+<a href="https://github.com/segmentio/go-athena/blob/dfa5f18189303b39c4ccc2f0c292947540214e63/conn.go#L86">stateのポーリング</a>、
+<a href="https://github.com/segmentio/go-athena/blob/dfa5f18189303b39c4ccc2f0c292947540214e63/value.go#L40">値のキャスト</a>を行う。</p>
+<pre><code>package main
 
+import (
+	&quot;database/sql&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+
+	&quot;github.com/aws/aws-sdk-go/aws/session&quot;
+	&quot;github.com/aws/aws-sdk-go/service/sts&quot;
+	_ &quot;github.com/segmentio/go-athena&quot;
+)
+
+func outputLocation() (string, error) {
+	svc := sts.New(session.Must(session.NewSession()))
+	result, err := svc.GetCallerIdentity(&amp;sts.GetCallerIdentityInput{})
+	if err != nil {
+		return &quot;&quot;, err
+	}
+	if result.Account == nil || svc.Config.Region == nil {
+		return &quot;&quot;, errors.New(&quot;account or region is nil&quot;)
+	}
+	return fmt.Sprintf(&quot;s3://aws-athena-query-results-%s-%s&quot;, *result.Account, *svc.Config.Region), nil
+}
+
+func execute(query string) (*sql.Rows, error) {
+	loc, err := outputLocation()
+	if err != nil {
+		return nil, err
+	}
+	db, err := sql.Open(&quot;athena&quot;, fmt.Sprintf(&quot;db=default&amp;output_location=%s&quot;, loc))
+	if err != nil {
+		return nil, err
+	}
+	return db.Query(query)
+}
+
+func main() {
+	rows, err := execute(&quot;SELECT 1 as v, 2 as w FROM hoge.fuga&quot;)
+	if err != nil {
+		panic(err)
+	}
+	for rows.Next() {
+		var v, w int
+		rows.Scan(&amp;v, &amp;w)
+		fmt.Println(v, w)
+	}
+}
+</code></pre>
         </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="https://www.sambaiz.net/article/6/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-12</time>
-      </div>
-      <p class="article title">TensorFlow チュートリアル2(Deep MNIST for Experts)</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="https://www.sambaiz.net/article/5/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-10</time>
-      </div>
-      <p class="article title">webpack環境でredux&amp;react-routerのページをサーバーサイドレンダリングする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="https://www.sambaiz.net/article/4/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-04</time>
-      </div>
-      <p class="article title">MySQLのUNIX_TIMESTAMPにある程度未来の日付を渡すと0になる</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="https://www.sambaiz.net/article/3/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-03</time>
-      </div>
-      <p class="article title">TensorFlow チュートリアルまで</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="https://www.sambaiz.net/article/2/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-02</time>
-      </div>
-      <p class="article title">Reactで作ったページにTwitterCardsとOGPのメタデータを埋める</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-lg-3 col-md-4 col-sm-6">
-          <a class="nl" href="https://www.sambaiz.net/article/1/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-06-29</time>
-      </div>
-      <p class="article title">ブログを作った</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-      </div>
-
-      
-<nav class="paging">
-  
-  <a href="/page/3" rel="nofollow" class="prev">PREV</a>
-  
-
-  
-</nav>
-
-
-
+      </article>
     </div>
   </div>
-
 </div>
 
 </div> 
