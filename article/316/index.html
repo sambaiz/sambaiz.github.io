@@ -22,17 +22,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Articles - sambaiz-net</title>
-  <meta name="twitter:title" content="Articles - sambaiz-net">
-  <meta property='og:title' content="Articles - sambaiz-net">
+  <title>EKSにKubeflowをインストールする - sambaiz-net</title>
+  <meta name="twitter:title" content="EKSにKubeflowをインストールする - sambaiz-net">
+  <meta property='og:title' content="EKSにKubeflowをインストールする - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="Kubernetes上で機械学習を行うためのツールキットKubeflowをEKSにインストールする">
+  <meta name="twitter:description" content="Kubernetes上で機械学習を行うためのツールキットKubeflowをEKSにインストールする">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/316/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https:\/\/www.sambaiz.net\/"
+    },
+    "headline": "EKSにKubeflowをインストールする | sambaiz-net ",
+    "datePublished": "2020-11-29T23:55:00JST",
+    "dateModified": "2020-11-29T23:55:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "Kubernetes上で機械学習を行うためのツールキットKubeflowをEKSにインストールする"
+  }
+</script>
 </head>
 
 <body>
@@ -128,226 +166,94 @@
     </header>
 
 <div class="container">
+
   <div class="row">
     <div class="col-md-12">
 
-      <h1 class="list title">Articles</h1>
+      <article class="single">
+        <div class="single body">
+          <h1>EKSにKubeflowをインストールする</h1>
+          <p>(2020-11-29)</p>
+          <p>Kubernetes上で機械学習を行うためのツールキット<a href="https://www.kubeflow.org/">Kubeflow</a>を
+EKSに<a href="https://www.kubeflow.org/docs/aws/deploy/install-kubeflow/">インストール</a>する。</p>
+<p>まずKubeflowのCLIツール<a href="https://github.com/kubeflow/kfctl">kfctl</a>をインストールする。
+内部で<code>eksctl</code>が呼ばれるがフラグでprofileを指定できないので環境変数に入れておく。</p>
+<pre><code>$ curl -L https://github.com/kubeflow/kfctl/releases/download/v1.2.0/kfctl_v1.2.0-0-gbc038f9_darwin.tar.gz &gt; kfctl.tar.gz
+$ tar -xvf kfctl.tar.gz
+$ ./kfctl version
+kfctl v1.2.0-0-gbc038f9
 
-      <div class="row">
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/14/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-08-06</time>
-      </div>
-      <p class="article title">O&#39;Reillyの「マイクロサービスアーキテクチャ」を読んだ</p>
-    </div>
-  </article>
-</a>
+$ eksctl version
+0.32.0
 
+$ export AWS_PROFILE=***
+</code></pre><p>AWS用の設定ファイルを持ってきて、RegionやRole、認証にCognitoを用いるかといったAWS固有の設定を<a href="https://github.com/kubeflow/kfctl/blob/2eedb451d98fcfd6e374d697804e20016bc74e53/pkg/apis/apps/plugins/aws/v1alpha1/types.go">KfAwsPlugin</a>に書いていく。
+AWSのサービスにアクセスするのにServiceAccountに関連づけられたRoleを用いる場合は<code>enablePodIamPolicy: true</code>にして、ワーカーノードのRoleを用いる場合は<code>roles</code>にそのロール名を書く。
+前者の方法を取る場合、<a href="https://docs.aws.amazon.com/ja_jp/eks/latest/userguide/enable-iam-roles-for-service-accounts.html">クラスタのOIDC IDプロバイダーを作成し</a>
+ServiceAccountにRoleを関連づけられるようにしておく必要がある。
+KfDefにはManifestごとのKustomizeに関する設定が並んでいるがそのままで問題ない。</p>
+<p><a href="https://www.sambaiz.net/article/311/">kustomizeでkubernetesのmanifestを環境ごとに生成する - sambaiz-net</a></p>
+<pre><code>$ mkdir &lt;cluster_name&gt; &amp;&amp; cd &lt;cluster_name&gt;
+$ curl -L https://raw.githubusercontent.com/kubeflow/manifests/v1.2.0/kfdef/kfctl_aws.v1.2.0.yaml &gt; kfctl_aws.yaml
+$ cat kfctl_aws.yaml 
+apiVersion: kfdef.apps.kubeflow.org/v1
+kind: KfDef
+metadata:
+  namespace: kubeflow
+spec:
+  applications:
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: namespaces/base
+    name: namespaces
+  ...
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: stacks/aws/application/spartakus
+    name: spartakus
+  plugins:
+  - kind: KfAwsPlugin
+    metadata:
+      name: aws
+    spec:
+      auth:
+        basicAuth:
+          password: 12341234
+          username: admin@kubeflow.org
+      region: ap-northeast-1
+      enablePodIamPolicy: true
+      # If you don't use IAM Role for Service Account, you can still use node instance roles.
+      #roles:
+      #- eksctl-kubeflow-aws-nodegroup-ng-a2-NodeInstanceRole-xxxxxxx
+  repos:
+  - name: manifests
+    uri: https://github.com/kubeflow/manifests/archive/v1.2-branch.tar.gz
+  version: v1.2-branch
+</code></pre><p>applyはクラスタと同名のディレクトリ内で行う必要があり、metadataのnameにこの名前が書き込まれる。名前が異なり<a href="https://github.com/kubeflow/kfctl/blob/88ca906518b2f01e1f1b8f550d9969fd4d0831f4/pkg/kfapp/aws/eks.go#L55">EKSクラスタが見つからないと</a><code>Service Account is not supported on non-EKS cluster</code>のエラーで失敗する。</p>
+<pre><code>$ mkdir &lt;cluster_name&gt; &amp;&amp; cd &lt;cluster_name&gt;
+$ ./kfctl apply -V -f kfctl_aws.yaml
+...
+INFO[0108] Applied the configuration Successfully!       filename=&quot;cmd/apply.go:75&quot;
+
+$ kubectl -n kubeflow get pod
+NAME                                                     READY   STATUS             RESTARTS   AGE
+admission-webhook-bootstrap-stateful-set-0               1/1     Running            2          3m4s
+admission-webhook-deployment-5bc67cb78-4876h             0/1     Pending            0          2m2s
+alb-ingress-controller-5b777c5cc7-842c6                  1/1     Running            0          2m38s
+application-controller-stateful-set-0                    1/1     Running            0          3m57s
+...
+</code></pre><p>istio-ingressにアクセスしてログインすると<a href="https://www.kubeflow.org/docs/components/multi-tenancy/getting-started/#automatic-creation-of-profiles">Kubeflowのprofileの作成</a>が始まる。profileは同名のkubernetesのnamespaceと対応し、profile ownerにはnamespaceのAdmin Roleが与えられる。
+また、他のユーザーに権限を与えることもできる。</p>
+<pre><code>$ kubectl get ingress -n istio-system
+NAME            HOSTS   ADDRESS                                                                      PORTS   AGE
+istio-ingress   *       *******.ap-northeast-1.elb.amazonaws.com   80      6m44s
+</code></pre>
         </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/13/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-08-05</time>
-      </div>
-      <p class="article title">Tensorflowの学習データを使ったAPIを作る</p>
+      </article>
     </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/12/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-29</time>
-      </div>
-      <p class="article title">Googleが作ったRPCフレームワークgRPCを使ってみた</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/11/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-24</time>
-      </div>
-      <p class="article title">MySQLで大文字小文字を区別しないのを直す</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/10/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-21</time>
-      </div>
-      <p class="article title">グラフデータベースNeo4jを触ってみた</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/9/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-18</time>
-      </div>
-      <p class="article title">Kubernetesのチュートリアルをたどる</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/8/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-15</time>
-      </div>
-      <p class="article title">Node.jsのバージョン管理</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/7/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-15</time>
-      </div>
-      <p class="article title">Docker公式ドキュメント&#34;network コマンドを使う&#34;を読む</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/6/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-12</time>
-      </div>
-      <p class="article title">TensorFlow チュートリアル2(Deep MNIST for Experts)</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/5/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-10</time>
-      </div>
-      <p class="article title">webpack環境でredux&amp;react-routerのページをサーバーサイドレンダリングする</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/4/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-04</time>
-      </div>
-      <p class="article title">MySQLのUNIX_TIMESTAMPにある程度未来の日付を渡すと0になる</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/3/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-03</time>
-      </div>
-      <p class="article title">TensorFlow チュートリアルまで</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/2/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-07-02</time>
-      </div>
-      <p class="article title">Reactで作ったページにTwitterCardsとOGPのメタデータを埋める</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-        <div class="col-sm-4">
-          <a class="nl" href="https://www.sambaiz.net/article/1/">
-  <article class="grid">
-    <div class="content">
-      <div class="date">
-        <time>2016-06-29</time>
-      </div>
-      <p class="article title">ブログを作った</p>
-    </div>
-  </article>
-</a>
-
-        </div>
-        
-      </div>
-
-      
-<nav class="paging">
-  
-  <a href="/article/page/3" rel="nofollow" class="prev">PREV</a>
-  
-
-  
-</nav>
-
-
-
-    </div>
-
   </div>
-
 </div>
 
 </div> 
