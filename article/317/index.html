@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Hugo 0.75.1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7"
+    crossorigin="anonymous">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
+  <link rel="stylesheet" href="/css/slidebars.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+
+  <meta name="theme-color" content="#41a248">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="@sambaiz">
+  
+  <title>IstioのSidecarでmTLS認証を行う - sambaiz-net</title>
+  <meta name="twitter:title" content="IstioのSidecarでmTLS認証を行う - sambaiz-net">
+  <meta property='og:title' content="IstioのSidecarでmTLS認証を行う - sambaiz-net">
+  <meta property="og:type" content="article">
+  
+  <meta name="description" content="TLSハンドシェイクの際にサーバーだけではなくクライアントも証明書を送ることで相互に認証を行う">
+  <meta name="twitter:description" content="TLSハンドシェイクの際にサーバーだけではなくクライアントも証明書を送ることで相互に認証を行う">
+  
+  
+
+  <meta property="og:url" content="https://www.sambaiz.net/article/317/">
+  <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
+  <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
+  <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id":"https:\/\/www.sambaiz.net\/"
+    },
+    "headline": "IstioのSidecarでmTLS認証を行う | sambaiz-net ",
+    "datePublished": "2020-12-04T12:30:00JST",
+    "dateModified": "2020-12-04T12:30:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "image": "https:\/\/www.sambaiz.net\/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https:\/\/www.sambaiz.net\/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "TLSハンドシェイクの際にサーバーだけではなくクライアントも証明書を送ることで相互に認証を行う"
+  }
+</script>
+</head>
+
+<body>
+  <div off-canvas="id-1 left reveal">
+  
+  <ul class="tag-list">
+    
+  </ul>
+  
+  <ul class="tag-list">
+    <li><a href="https://www.sambaiz.net/tags/aws">aws</a></li><li><a href="https://www.sambaiz.net/tags/golang">golang</a></li><li><a href="https://www.sambaiz.net/tags/machinelearning">machinelearning</a></li><li><a href="https://www.sambaiz.net/tags/python">python</a></li><li><a href="https://www.sambaiz.net/tags/kubernetes">kubernetes</a></li><li><a href="https://www.sambaiz.net/tags/log">log</a></li><li><a href="https://www.sambaiz.net/tags/infra">infra</a></li><li><a href="https://www.sambaiz.net/tags/tensorflow">tensorflow</a></li><li><a href="https://www.sambaiz.net/tags/docker">docker</a></li><li><a href="https://www.sambaiz.net/tags/gcp">gcp</a></li><li><a href="https://www.sambaiz.net/tags/ios">ios</a></li><li><a href="https://www.sambaiz.net/tags/lambda">lambda</a></li><li><a href="https://www.sambaiz.net/tags/unity">unity</a></li><li><a href="https://www.sambaiz.net/tags/fluentd">fluentd</a></li><li><a href="https://www.sambaiz.net/tags/node.js">node.js</a></li><li><a href="https://www.sambaiz.net/tags/web">web</a></li><li><a href="https://www.sambaiz.net/tags/linux">linux</a></li><li><a href="https://www.sambaiz.net/tags/swift">swift</a></li><li><a href="https://www.sambaiz.net/tags/mysql">mysql</a></li><li><a href="https://www.sambaiz.net/tags/elasticsearch">elasticsearch</a></li><li><a href="https://www.sambaiz.net/tags/javascript">javascript</a></li><li><a href="https://www.sambaiz.net/tags/auth">auth</a></li><li><a href="https://www.sambaiz.net/tags/c&#43;&#43;">c&#43;&#43;</a></li><li><a href="https://www.sambaiz.net/tags/hololens">hololens</a></li><li><a href="https://www.sambaiz.net/tags/product">product</a></li><li><a href="https://www.sambaiz.net/tags/algorithm">algorithm</a></li><li><a href="https://www.sambaiz.net/tags/android">android</a></li><li><a href="https://www.sambaiz.net/tags/circleci">circleci</a></li><li><a href="https://www.sambaiz.net/tags/github">github</a></li><li><a href="https://www.sambaiz.net/tags/react">react</a></li><li><a href="https://www.sambaiz.net/tags/statistics">statistics</a></li><li><a href="https://www.sambaiz.net/tags/typescript">typescript</a></li><li><a href="https://www.sambaiz.net/tags/vscode">vscode</a></li><li><a href="https://www.sambaiz.net/tags/ble">ble</a></li><li><a href="https://www.sambaiz.net/tags/event">event</a></li><li><a href="https://www.sambaiz.net/tags/istio">istio</a></li><li><a href="https://www.sambaiz.net/tags/pytorch">pytorch</a></li><li><a href="https://www.sambaiz.net/tags/angular">angular</a></li><li><a href="https://www.sambaiz.net/tags/cron">cron</a></li><li><a href="https://www.sambaiz.net/tags/objective-c">objective-c</a></li><li><a href="https://www.sambaiz.net/tags/terraform">terraform</a></li><li><a href="https://www.sambaiz.net/tags/uwp">uwp</a></li><li><a href="https://www.sambaiz.net/tags/.net">.net</a></li><li><a href="https://www.sambaiz.net/tags/crypto">crypto</a></li><li><a href="https://www.sambaiz.net/tags/css">css</a></li><li><a href="https://www.sambaiz.net/tags/datadog">datadog</a></li><li><a href="https://www.sambaiz.net/tags/firebase">firebase</a></li><li><a href="https://www.sambaiz.net/tags/grpc">grpc</a></li><li><a href="https://www.sambaiz.net/tags/hadoop">hadoop</a></li><li><a href="https://www.sambaiz.net/tags/language">language</a></li><li><a href="https://www.sambaiz.net/tags/math">math</a></li><li><a href="https://www.sambaiz.net/tags/norikra">norikra</a></li><li><a href="https://www.sambaiz.net/tags/rx">rx</a></li><li><a href="https://www.sambaiz.net/tags/server">server</a></li><li><a href="https://www.sambaiz.net/tags/vr">vr</a></li><li><a href="https://www.sambaiz.net/tags/ansible">ansible</a></li><li><a href="https://www.sambaiz.net/tags/api">api</a></li><li><a href="https://www.sambaiz.net/tags/cdn">cdn</a></li><li><a href="https://www.sambaiz.net/tags/compress">compress</a></li><li><a href="https://www.sambaiz.net/tags/csharp">csharp</a></li><li><a href="https://www.sambaiz.net/tags/d3.js">d3.js</a></li><li><a href="https://www.sambaiz.net/tags/digdag">digdag</a></li><li><a href="https://www.sambaiz.net/tags/git">git</a></li><li><a href="https://www.sambaiz.net/tags/hugo">hugo</a></li><li><a href="https://www.sambaiz.net/tags/jenkins">jenkins</a></li><li><a href="https://www.sambaiz.net/tags/jvm">jvm</a></li><li><a href="https://www.sambaiz.net/tags/kotlin">kotlin</a></li><li><a href="https://www.sambaiz.net/tags/leveldb">leveldb</a></li><li><a href="https://www.sambaiz.net/tags/lisp">lisp</a></li><li><a href="https://www.sambaiz.net/tags/llvm">llvm</a></li><li><a href="https://www.sambaiz.net/tags/mail">mail</a></li><li><a href="https://www.sambaiz.net/tags/neo4j">neo4j</a></li><li><a href="https://www.sambaiz.net/tags/read_paper">read_paper</a></li><li><a href="https://www.sambaiz.net/tags/redis">redis</a></li><li><a href="https://www.sambaiz.net/tags/scikit-learn">scikit-learn</a></li><li><a href="https://www.sambaiz.net/tags/serialize">serialize</a></li><li><a href="https://www.sambaiz.net/tags/sonnet">sonnet</a></li><li><a href="https://www.sambaiz.net/tags/spark">spark</a></li><li><a href="https://www.sambaiz.net/tags/spec">spec</a></li><li><a href="https://www.sambaiz.net/tags/video">video</a></li>
+  </ul>
+  
+</div>
+
+  <div canvas="container" id="container">
+    <header>
+      <button type="button" class="btn toggle-side">TAG</button>
+
+      <div class="title">
+        <img src="https://www.sambaiz.net/images/my.png" width="60px" height="60px" />
+        <a class="nl" href="https://www.sambaiz.net/">sambaiz-net</a>
+      </div>
+
+      <div class="sns">
+        <a class="nl" href="https://twitter.com/sambaiz"><i class="fa fa-2x fa-twitter"></i></a>
+        <a class="nl" href="https://github.com/sambaiz"><i class="fa fa-2x fa-github"></i></a>
+        <style>
+          .filmarks-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .filmarks {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            background: url(/image/filmarks.svg) no-repeat;
+            background-size: 450%;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .vocabularycom-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .vocabularycom {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/vocabularycom.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+
+          .leetcode-base {
+            display: inline-block;
+            width: 29px;
+            height: 29px;
+          }
+
+          .leetcode {
+            display: inline-block;
+            height: 25px;
+            width: 25px;
+            background: url(/image/leetcode.png) no-repeat;
+            background-size: contain;
+            position: relative;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+        </style>
+        <div class="filmarks-base">
+          <a href="https://filmarks.com/users/sambaiz" class="filmarks"></a>
+        </div>
+        <div class="vocabularycom-base">
+          <a href="https://www.vocabulary.com/profiles/B0JI0K19KKMVKH" class="vocabularycom"></a>
+        </div>
+        <div class="leetcode-base">
+          <a href="https://leetcode.com/sambaiz/" class="leetcode"></a>
+        </div>
+      </div>
+    </header>
+
+<div class="container">
+
+  <div class="row">
+    <div class="col-md-12">
+
+      <article class="single">
+        <div class="single body">
+          <h1>IstioのSidecarでmTLS認証を行う</h1>
+          <p>(2020-12-04)</p>
+          <p>mTLS (Mutual TLS)認証は、<a href="https://tools.ietf.org/html/rfc8705">RFC8705</a>に記載されている、TLSハンドシェイクの際にサーバーからだけではなくクライアントからも証明書を送ることで相互に認証を行う手法。クライアントは事前に自身の秘密鍵で生成したCSRをサーバーに送り、サーバーがルート認証局となって発行した証明書を取得しておく。
+KubernetesではIstioのSidecarを通すことで透過的にmTLS認証を行うことが<a href="https://istio.io/latest/docs/concepts/security/#mutual-tls-authentication">できる</a>。
+実際に試してみる。なお、証明書は定期的にEnvoy SDS(secret discovery service) APIのリクエストによってCSRがistiodに送られて<a href="https://istio.io/latest/docs/concepts/security/#pki">発行される</a>らしい。</p>
+<p>Istio OperatorでIstioを<a href="https://istio.io/latest/docs/setup/install/operator/">インストール</a>する。
+以前はHelmで入れていたが今はこれがベストプラクティスのようだ。</p>
+<p><a href="https://www.sambaiz.net/article/185/">IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net</a></p>
+<pre><code>$ curl -L https://istio.io/downloadIstio | sh -
+$ istio-1.8.0/bin/istioctl version
+no running Istio pods in &quot;istio-system&quot;
+1.8.0
+
+$ istioctl operator init
+Installing operator controller in namespace: istio-operator using image: docker.io/istio/operator:1.8.0
+Operator controller will watch namespaces: istio-system
+✔ Istio operator installed
+✔ Installation complete
+
+$ kubectl get pods --namespace istio-operator
+NAME                             READY   STATUS    RESTARTS   AGE
+istio-operator-76766bc79-lfm49   1/1     Running   0          2m32s
+
+$ kubectl create ns istio-system
+$ kubectl apply -f - &lt;&lt;EOF
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+  name: example-istiocontrolplane
+spec:
+  profile: demo
+EOF
+</code></pre><p>リクエスト先のnginxを立てる。</p>
+<pre><code>$ kubectl create ns sambaiz
+$ kubectl label namespace sambaiz istio-injection=enabled
+$ kubectl apply -f - &lt;&lt;EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-nginx
+  namespace: sambaiz
+spec:
+  selector:
+    matchLabels:
+      run: my-nginx
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: my-nginx
+    spec:
+      containers:
+      - name: my-nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-nginx
+  namespace: sambaiz
+  labels:
+    run: my-nginx
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    run: my-nginx
+EOF
+</code></pre><p>レスポンスが返ってくることを確認する。</p>
+<pre><code>$ kubectl label namespace default istio-injection=disabled --overwrite
+$ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never --  -s -o /dev/null -w '%{http_code}\n' my-nginx.sambaiz.svc.cluster.local
+200
+</code></pre><p><a href="https://istio.io/latest/docs/reference/config/security/peer_authentication/">PeerAuthentication</a>でmTLSをSTRICTにするとリクエストを受ける際にmTLSが強制される。</p>
+<pre><code>$ kubectl apply -f - &lt;&lt;EOF
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: nginx-auth
+  namespace: sambaiz
+spec:
+  selector:
+    matchLabels:
+      run: my-nginx
+  mtls:
+    mode: STRICT
+EOF
+</code></pre><p>これによりSidecarなしでは弾かれるようになった。Sidecarを入れるとトラフィックが自動で<a href="https://istio.io/latest/docs/tasks/security/authentication/authn-policy/#globally-enabling-istio-mutual-tls-in-strict-mode">mTLSにアップグレード</a>されるので通る。</p>
+<pre><code>$ kubectl label namespace default istio-injection=disabled --overwrite
+$ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never my-nginx.sambaiz.svc.cluster.local
+curl: (56) Recv failure: Connection reset by peer
+
+$ kubectl label namespace default istio-injection=enabled --overwrite
+$ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never sh
+/ $ curl -s -o /dev/null -w '%{http_code}\n' my-nginx.sambaiz.svc.cluster.local
+200
+</code></pre><p>指定したhostにリクエストを送る際に適用される<a href="https://istio.io/latest/docs/reference/config/networking/destination-rule/">DestinationRule</a>の
+<a href="https://istio.io/latest/docs/reference/config/networking/destination-rule/#ClientTLSSettings-TLSmode">TLSMode</a>を
+<code>ISTIO_MUTUAL</code>にするとIstio生成の証明書が、<code>MUTUAL</code>にすると自分で生成した証明書が送られ、<code>DISABLE</code> だとTLS通信を行わなくなる。
+hostにservice名のみを指定した場合そのRuleのnamespaceのものとして解釈されるが、ミスを防ぐために
+<code>my-svc.my-namespace.svc.cluster.local</code>のような<a href="https://kubernetes.io/ja/docs/concepts/services-networking/dns-pod-service/#services">FQDN</a>で指定することが推奨されている。</p>
+<p><code>DISABLE</code>にしてリクエストを送るとSidecarがあっても弾かれる。</p>
+<pre><code>$ kubectl apply -f - &lt;&lt;EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: sambaiz
+spec:
+  host: &quot;*.sambaiz.svc.cluster.local&quot;
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+EOF
+
+$ kubectl label namespace default istio-injection=enabled --overwrite
+$ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never sh
+/ $ curl my-nginx.sambaiz.svc.cluster.local
+upstream connect error or disconnect/reset before headers. reset reason: connection termination
+
+$ kubectl delete destinationrule sambaiz
+</code></pre><p>mTLS認証を行っていると、<a href="https://istio.io/latest/docs/reference/config/security/authorization-policy/">AuthorizationPolicy</a>でprincipalsを用いたアクセス制御ができる。</p>
+<pre><code>$ kubectl apply -f - &lt;&lt;EOF
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+ name: nginx-authn
+ namespace: sambaiz
+spec:
+ selector:
+   matchLabels:
+     run: my-nginx
+ action: ALLOW
+ rules:
+ - from:
+   - source:
+       principals: [&quot;cluster.local/ns/default/sa/test-service-account&quot;]
+   to:
+   - operation:
+       methods: [&quot;GET&quot;]
+EOF
+</code></pre><p>principalsのServiceAccountを持たないクライアントからのリクエストは弾かれるようになった。</p>
+<pre><code>$ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never sh
+/ $ curl my-nginx.sambaiz.svc.cluster.local
+RBAC: access denied/
+
+$ kubectl apply -f - &lt;&lt;EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-service-account
+automountServiceAccountToken: false
+EOF
+
+$ kubectl run  --serviceaccount=test-service-account  -it --rm=true test-client --image=curlimages/curl --restart=Never sh
+/ $ curl -s -o /dev/null -w '%{http_code}\n' my-nginx.sambaiz.svc.cluster.local
+200
+</code></pre><h2 id="参考">参考</h2>
+<p><a href="https://milestone-of-se.nesuke.com/nw-basic/tls/mutual-tls-token-binding/">【図解】mutual-TLS (mTLS, 2way TLS),クライアント認証とトークンバインディング over http | SEの道標</a></p>
+
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+
+</div> 
+<script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="/js/slidebars.min.js"></script>
+<script>
+    ( function ( $ ) {
+      
+      var controller = new slidebars();
+      controller.init();
+
+      $( '.toggle-side' ).on( 'click', function ( event ) {
+          event.stopPropagation();
+          event.preventDefault();
+
+          controller.toggle( 'id-1' );
+        } );
+
+        $( '#container' ).on( 'click', function ( event ) {
+            controller.close( 'id-1' );
+          });
+    } ) ( jQuery );
+</script>
+
+<script>hljs.initHighlightingOnLoad();</script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39190067-3', 'auto');
+ga('send', 'pageview');
+</script>
+
+
+  </body>
+</html>
+
