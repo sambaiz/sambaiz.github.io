@@ -6,14 +6,29 @@
     <description>Recent content in auth on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Fri, 04 Dec 2020 12:30:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/auth/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sun, 06 Dec 2020 18:25:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/auth/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>CDKでCognito UserPoolとClientを作成しトリガーやFederationを設定する</title>
+      <link>https://www.sambaiz.net/article/318/</link>
+      <pubDate>Sun, 06 Dec 2020 18:25:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/318/</guid>
+      <description>CloudFormationでCognito UserPoolを作成すると、以前はドメインやFederationの設定などを手作業で行う必要があったが、 去年の10月に諸々のリソースが追加され、その必要がなくなった。
+API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net
+今回はCDKの高レベルAPIを用いて、UserPoolとClientの作成、トリガーやGoogleのFederationの設定を行い、特定のGoogleアカウントでのみ登録されるようにする。 全体のコードはGitHubにある。
+Cognito UserPoolのPreSignUp時に呼ばれるLambdaで登録ユーザーを制限する - sambaiz-net
+UserPool 事前にdomainPrefixを決めておき、OAuthのclient_idとsecretをSecretsManagerに置いておく。
+standardAttributesと、ログイン時にusernameの代わりとなるsignInAliasesは後から変更できない。 変更してデプロイしてもreplaceではなくエラーになってしまう。 トリガーのruntimeはCDKと同じNodeにしても良いがバージョンのライフサイクルが早く追従するのが大変なのでGoにしている。
+private createUserPool(userPoolName: string, domainPrefix: string, signUpAllowEmails: string[]): UserPool { const userPool = new UserPool(this, &#39;UserPool&#39;, { userPoolName, standardAttributes: { email: { required: true, mutable: true }, fullname: { required: true, mutable: true }, }, signInAliases: { email: true }, lambdaTriggers: { preSignUp: new Function(this, &#39;PreSignUpFunction&#39;, { runtime: Runtime.GO_1_X, code: Code.fromAsset(path.join(__dirname, &#39;userPoolTrigger&#39;)), handler: &amp;quot;preSignUp.</description>
+    </item>
+    
     <item>
       <title>IstioのSidecarでmTLS認証を行う</title>
       <link>https://www.sambaiz.net/article/317/</link>
       <pubDate>Fri, 04 Dec 2020 12:30:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/317/</guid>
-      <description>mTLS (Mutual TLS)認証は、RFC8705に記載されている、TLSハンドシェイクの際にサーバーからだけではなくクライアントからも証明書を送ることで相互に認証を行う手法。クライアントは事前に自身の秘密鍵で生成したCSRをサーバーに送り、サーバーがルート認証局となって発行した証明書を取得しておく。 KubernetesではIstioのSidecarを通すことで透過的にmTLS認証を行うことができる。 実際に試してみる。なお、証明書は定期的にEnvoy SDS(secret discovery service) APIのリクエストによってCSRがistiodに送られて発行されるらしい。
+      <description>mTLS (Mutual TLS)認証は、RFC8705に記載されている、TLSハンドシェイクの際にサーバーからだけではなくクライアントからも証明書を送ることで相互に認証を行う手法。クライアントは事前に自身の秘密鍵で生成したCSRをサーバーに送り、サーバーがルート認証局となって発行した証明書を取得しておく。 KubernetesではIstioのSidecarを通すことで透過的にmTLS認証を行うことができる。 実際に試してみる。なお、証明書はEnvoy SDS(secret discovery service) APIのリクエストによってCSRが定期的にistiodに送られて発行、更新されるらしい。
 Istio OperatorでIstioをインストールする。 以前はHelmで入れていたが今はこれがベストプラクティスのようだ。
 IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net
 $ curl -L https://istio.io/downloadIstio | sh - $ istio-1.8.0/bin/istioctl version no running Istio pods in &amp;quot;istio-system&amp;quot; 1.8.0 $ istioctl operator init Installing operator controller in namespace: istio-operator using image: docker.io/istio/operator:1.8.0 Operator controller will watch namespaces: istio-system ✔ Istio operator installed ✔ Installation complete $ kubectl get pods --namespace istio-operator NAME READY STATUS RESTARTS AGE istio-operator-76766bc79-lfm49 1/1 Running 0 2m32s $ kubectl create ns istio-system $ kubectl apply -f - &amp;lt;&amp;lt;EOF apiVersion: install.</description>
@@ -57,10 +72,10 @@ $ cat serverless.yml service: alb-cognito-auth-example frameworkVersion: &amp;qu
 Cognito UserPoolとAPI Gatewayで認証付きAPIを立てる - sambaiz-net
 なおAPI GatewayではなくALBをLambdaの前段に挟めば今回やることが簡単に実現できる。
 LambdaとALBでCognito認証をかけて失敗したらログイン画面に飛ばす - sambaiz-net
-準備 UserPoolとClientを作成する。 CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseなのに注意。変えると作り直される。
-Resources: Userpool: Type: AWS::Cognito::UserPool Properties: AdminCreateUserConfig: AllowAdminCreateUserOnly: false Schema: - Mutable: true Name: email Required: true - Mutable: true Name: name Required: true UsernameAttributes: - email UserPoolName: testpool UserpoolClient: Type: AWS::Cognito::UserPoolClient Properties: UserPoolId: Ref: Userpool ClientName: testclient GenerateSecret: true 今回はフェデレーションでGoogleアカウントでログインできるようにする。 ややこしい用語であるがID Poolのフェデレーティッドアイデンティティとは異なる。
-UserPoolのドメインや、GoogleのOAuth Client IDの発行とAttributes Mapping、Clientの設定はCloudFormationでできないので手でやる。 Attributes Mappingで変えられるがusernameは変更不可な値なのでsubのままにしておく。
-設定が終わったら https://&amp;lt;user-pool-domain&amp;gt;/login?client_id=&amp;lt;client-id&amp;gt;&amp;amp;redirect_uri=&amp;lt;redirect-uri&amp;gt;&amp;amp;response_type=code にアクセスし、&amp;lt;redirect-uri&amp;gt;?code=&amp;lt;code&amp;gt; までリダイレクトされることを確認する。 invalid_requestとだけ出てしまった場合はClientのAuthorization code grantにチェックが入っているか確認する。</description>
+準備 UserPoolとClientを作成する。 CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseで、変えると作り直されてしまうことに注意。
+Resources: Userpool: Type: AWS::Cognito::UserPool Properties: AdminCreateUserConfig: AllowAdminCreateUserOnly: false Schema: - Mutable: true Name: email Required: true - Mutable: true Name: name Required: true UsernameAttributes: - email UserPoolName: testpool UserpoolClient: Type: AWS::Cognito::UserPoolClient Properties: UserPoolId: Ref: Userpool ClientName: testclient GenerateSecret: true その後、GoogleのOAuth Client IDを作成し、フェデレーションの設定を行ってGoogleアカウントでもログインできるようにした。 これはID Poolのフェデレーティッドアイデンティティとは異なる機能。 UserPoolのドメインや、外部IdPとのAttributes Mapping、Clientの設定はCloudFormationではできないので手で行う。
+ 追記 (2020-12-06): 今はCloudFormationで行えるようになっている。
+CDKでCognito UserPoolとClientを作成しトリガーやFederationを設定する - sambaiz-net</description>
     </item>
     
     <item>
