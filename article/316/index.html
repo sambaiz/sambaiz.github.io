@@ -116,51 +116,9 @@
             left: 50%;
             transform: translate(-50%, -50%);
           }
-
-          .vocabularycom-base {
-            display: inline-block;
-            width: 29px;
-            height: 29px;
-          }
-
-          .vocabularycom {
-            display: inline-block;
-            height: 25px;
-            width: 25px;
-            background: url(/image/vocabularycom.png) no-repeat;
-            background-size: contain;
-            position: relative;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-          }
-
-          .leetcode-base {
-            display: inline-block;
-            width: 29px;
-            height: 29px;
-          }
-
-          .leetcode {
-            display: inline-block;
-            height: 25px;
-            width: 25px;
-            background: url(/image/leetcode.png) no-repeat;
-            background-size: contain;
-            position: relative;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-          }
         </style>
         <div class="filmarks-base">
           <a href="https://filmarks.com/users/sambaiz" class="filmarks"></a>
-        </div>
-        <div class="vocabularycom-base">
-          <a href="https://www.vocabulary.com/profiles/B0JI0K19KKMVKH" class="vocabularycom"></a>
-        </div>
-        <div class="leetcode-base">
-          <a href="https://leetcode.com/sambaiz/" class="leetcode"></a>
         </div>
       </div>
     </header>
@@ -189,12 +147,13 @@ $ eksctl version
 0.32.0
 
 $ export AWS_PROFILE=***
-</code></pre><p>AWS用の設定ファイルを持ってきて、RegionやRole、認証にCognitoを用いるかといったAWS固有の設定を<a href="https://github.com/kubeflow/kfctl/blob/2eedb451d98fcfd6e374d697804e20016bc74e53/pkg/apis/apps/plugins/aws/v1alpha1/types.go">KfAwsPlugin</a>に書いていく。
-AWSのサービスにアクセスするのにServiceAccountに関連づけられたRoleを用いる場合は<code>enablePodIamPolicy: true</code>にして、ワーカーノードのRoleを用いる場合は<code>roles</code>にそのロール名を書く。
+</code></pre><p>AWS用の設定ファイルを持ってきて、RegionやRole、Cognito UserPoolあるいはusernameとpasswordによる認証の設定を<a href="https://github.com/kubeflow/kfctl/blob/2eedb451d98fcfd6e374d697804e20016bc74e53/pkg/apis/apps/plugins/aws/v1alpha1/types.go">KfAwsPlugin</a>に書く。UserPoolの作成もCDKで行える。それとACMで証明書を発行しておく。</p>
+<p><a href="https://www.sambaiz.net/article/318/">CDKでCognito UserPoolとClientを作成しトリガーやFederationを設定する - sambaiz-net</a></p>
+<p>AWSのサービスにアクセスするのにServiceAccountに関連づけられたRoleを用いる場合は<code>enablePodIamPolicy: true</code>にして、ワーカーノードのRoleを用いる場合は<code>roles</code>にそのロール名を書く。
 KfDefにはManifestごとのKustomizeに関する設定が並んでいるがそのままで問題ない。</p>
 <p><a href="https://www.sambaiz.net/article/311/">kustomizeでkubernetesのmanifestを環境ごとに生成する - sambaiz-net</a></p>
 <pre><code>$ mkdir &lt;cluster_name&gt; &amp;&amp; cd &lt;cluster_name&gt;
-$ curl -L https://raw.githubusercontent.com/kubeflow/manifests/v1.2.0/kfdef/kfctl_aws.v1.2.0.yaml &gt; kfctl_aws.yaml
+$ curl -L https://raw.githubusercontent.com/kubeflow/manifests/v1.1-branch/kfdef/kfctl_aws_cognito.v1.2.0.yaml &gt; kfctl_aws.yaml
 $ cat kfctl_aws.yaml 
 apiVersion: kfdef.apps.kubeflow.org/v1
 kind: KfDef
@@ -219,9 +178,15 @@ spec:
       name: aws
     spec:
       auth:
-        basicAuth:
-          password: 12341234
-          username: admin@kubeflow.org
+        certArn: arn:aws:acm:ap-northeast-1:******:certificate/******
+        cognitoAppClientId: *******
+        cognitoUserPoolArn: arn:aws:cognito-idp:ap-northeast-1:******:userpool/*****
+        # cognitoDomain's prefix 
+        cognitoUserPoolDomain: ********
+        # OR
+        # basicAuth:
+        #  password: 12341234
+        #  username: admin@kubeflow.org
       region: ap-northeast-1
       enablePodIamPolicy: true
       # If you don't use IAM Role for Service Account, you can still use node instance roles.
@@ -253,8 +218,24 @@ admission-webhook-deployment-5bc67cb78-4876h             0/1     Pending        
 alb-ingress-controller-5b777c5cc7-842c6                  1/1     Running            0          2m38s
 application-controller-stateful-set-0                    1/1     Running            0          3m57s
 ...
-</code></pre><p>ALBが作成されるまで数分待ってistio-ingressのアドレスにアクセスしログインすると<a href="https://www.kubeflow.org/docs/components/multi-tenancy/getting-started/#automatic-creation-of-profiles">Kubeflowのprofileの作成</a>が始まる。profileは同名のkubernetesのnamespaceと対応し、profile ownerにはnamespaceのAdmin Roleが与えられる。
-また、他のユーザーに権限を与えることもできる。</p>
+</code></pre><p>ALBが作成されるまで数分待ってistio-ingressのアドレスが出たらDNSの設定を行い、Cognitoのredirect_uriにALBの<code>/oauth2/idpresponse</code>を加える。
+いつまで経っても出ない場合、<code>alb-ingress-controller</code>のログを見てみると原因が分かるかもしれない。
+<code>CertificateNotFound</code>になっている場合はarnが間違いなく失効してないか確認する。</p>
+<pre><code>$ kubectl logs alb-ingress-controller-**** -n kubeflow
+</code></pre><pre><code>$ kubectl apply -f - &lt;&lt;EOF
+apiVersion: kubeflow.org/v1
+kind: Profile
+metadata:
+  name: sambaiz
+spec:
+  owner:
+    kind: User
+    name: godgourd@gmail.com
+EOF
+</code></pre><p>アクセスしログインすると<a href="https://www.kubeflow.org/docs/components/multi-tenancy/getting-started/#automatic-creation-of-profiles">Kubeflowのprofileの作成</a>が始まる。<code>PERMISSION_DENIED:authzadaptor-handler.handler.istio-system:</code> のようなエラーが出た場合は <code>authzadaptor</code> のログを見てみる。
+例えばEmail verifiedがfalseだと <code>Email is not verified false</code> のエラーが流れてくる。</p>
+<pre><code>$ kubectl logs -f authzadaptor-******  -n istio-system
+</code></pre><p>profileは同名のkubernetesのnamespaceと対応し、profile ownerにはnamespaceのAdmin Roleが与えられる。また、他のユーザーに権限を与えることもできる。</p>
 <pre><code>$ kubectl get ingress -n istio-system
 NAME            HOSTS   ADDRESS                                                                      PORTS   AGE
 istio-ingress   *       *******.ap-northeast-1.elb.amazonaws.com   80      6m44s

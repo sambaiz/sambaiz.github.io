@@ -15,7 +15,7 @@
       <guid>https://www.sambaiz.net/article/318/</guid>
       <description>CloudFormationでCognito UserPoolを作成すると、以前はドメインやFederationの設定などを手作業で行う必要があったが、 去年の10月に諸々のリソースが追加され、その必要がなくなった。
 API GatewayでCognitoの認証をかけて必要ならログイン画面に飛ばす処理をGoで書く - sambaiz-net
-今回はCDKの高レベルAPIを用いて、UserPoolとClientの作成、トリガーやGoogleのFederationの設定を行い、特定のGoogleアカウントでのみ登録されるようにする。 全体のコードはGitHubにある。
+今回はCDKの高レベルAPIを用いて、UserPoolとClientを作成し、トリガーやGoogleのFederationの設定を行って、特定のGoogleアカウントでのみ登録されるようにする。 全体のコードはGitHubにある。
 Cognito UserPoolのPreSignUp時に呼ばれるLambdaで登録ユーザーを制限する - sambaiz-net
 UserPool 事前にdomainPrefixを決めておき、OAuthのclient_idとsecretをSecretsManagerに置いておく。
 standardAttributesと、ログイン時にusernameの代わりとなるsignInAliasesは後から変更できない。 変更してデプロイしてもreplaceではなくエラーになってしまう。 トリガーのruntimeはCDKと同じNodeにしても良いがバージョンのライフサイクルが早く追従するのが大変なのでGoにしている。
@@ -23,7 +23,7 @@ private createUserPool(userPoolName: string, domainPrefix: string, signUpAllowEm
     </item>
     
     <item>
-      <title>IstioのSidecarでmTLS認証を行う</title>
+      <title>IstioのSidecarでmTLS認証を行いServiceAccountによるアクセス制御を行う</title>
       <link>https://www.sambaiz.net/article/317/</link>
       <pubDate>Fri, 04 Dec 2020 12:30:00 +0900</pubDate>
       
@@ -43,9 +43,11 @@ $ curl -L https://istio.io/downloadIstio | sh - $ istio-1.8.0/bin/istioctl versi
       <description>Kubernetes上で機械学習を行うためのツールキットKubeflowを EKSにインストールする。 m5.large * 4のクラスタをCDKで作成した。
 CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net
 まずKubeflowのCLIツールkfctlをインストールする。 内部でeksctlが呼ばれるがフラグでprofileを指定できないので環境変数に入れておく。
-$ curl -L https://github.com/kubeflow/kfctl/releases/download/v1.2.0/kfctl_v1.2.0-0-gbc038f9_darwin.tar.gz &amp;gt; kfctl.tar.gz $ tar -xvf kfctl.tar.gz $ ./kfctl version kfctl v1.2.0-0-gbc038f9 $ eksctl version 0.32.0 $ export AWS_PROFILE=*** AWS用の設定ファイルを持ってきて、RegionやRole、認証にCognitoを用いるかといったAWS固有の設定をKfAwsPluginに書いていく。 AWSのサービスにアクセスするのにServiceAccountに関連づけられたRoleを用いる場合はenablePodIamPolicy: trueにして、ワーカーノードのRoleを用いる場合はrolesにそのロール名を書く。 KfDefにはManifestごとのKustomizeに関する設定が並んでいるがそのままで問題ない。
+$ curl -L https://github.com/kubeflow/kfctl/releases/download/v1.2.0/kfctl_v1.2.0-0-gbc038f9_darwin.tar.gz &amp;gt; kfctl.tar.gz $ tar -xvf kfctl.tar.gz $ ./kfctl version kfctl v1.2.0-0-gbc038f9 $ eksctl version 0.32.0 $ export AWS_PROFILE=*** AWS用の設定ファイルを持ってきて、RegionやRole、Cognito UserPoolあるいはusernameとpasswordによる認証の設定をKfAwsPluginに書く。UserPoolの作成もCDKで行える。それとACMで証明書を発行しておく。
+CDKでCognito UserPoolとClientを作成しトリガーやFederationを設定する - sambaiz-net
+AWSのサービスにアクセスするのにServiceAccountに関連づけられたRoleを用いる場合はenablePodIamPolicy: trueにして、ワーカーノードのRoleを用いる場合はrolesにそのロール名を書く。 KfDefにはManifestごとのKustomizeに関する設定が並んでいるがそのままで問題ない。
 kustomizeでkubernetesのmanifestを環境ごとに生成する - sambaiz-net
-$ mkdir &amp;lt;cluster_name&amp;gt; &amp;amp;&amp;amp; cd &amp;lt;cluster_name&amp;gt; $ curl -L https://raw.githubusercontent.com/kubeflow/manifests/v1.2.0/kfdef/kfctl_aws.v1.2.0.yaml &amp;gt; kfctl_aws.yaml $ cat kfctl_aws.yaml apiVersion: kfdef.apps.kubeflow.org/v1 kind: KfDef metadata: namespace: kubeflow spec: applications: - kustomizeConfig: repoRef: name: manifests path: namespaces/base name: namespaces .</description>
+$ mkdir &amp;lt;cluster_name&amp;gt; &amp;amp;&amp;amp; cd &amp;lt;cluster_name&amp;gt; $ curl -L https://raw.githubusercontent.com/kubeflow/manifests/v1.1-branch/kfdef/kfctl_aws_cognito.v1.2.0.yaml &amp;gt; kfctl_aws.yaml $ cat kfctl_aws.yaml apiVersion: kfdef.apps.kubeflow.org/v1 kind: KfDef metadata: namespace: kubeflow spec: applications: - kustomizeConfig: repoRef: name: manifests path: namespaces/base name: namespaces .</description>
     </item>
     
     <item>
@@ -1325,10 +1327,9 @@ oh = preprocessing.OneHotEncoder() oh.fit([[d] for d in data]) print(oh.categori
       <guid>https://www.sambaiz.net/article/219/</guid>
       <description>DatadogのAWS integrationとAlertの設定をTerraformで行い、バージョン管理やレビューできるようにする。 全体のコードはGitHubに置いてある。
 AWS Integration まずdatadog_integration_awsでAWS integrationの設定を作成してExternalIDを取得し、Policy/Roleを作成する。必要な権限はドキュメントを参照。
-resource &amp;quot;datadog_integration_aws&amp;quot; &amp;quot;test&amp;quot; { account_id = &amp;quot;${var.aws_account_id}&amp;quot; role_name = &amp;quot;${var.aws_integration_role_name}&amp;quot; filter_tags = [&amp;quot;datadog:1&amp;quot;] } data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;datadog_aws_integration_assume_role&amp;quot; { statement { actions = [&amp;quot;sts:AssumeRole&amp;quot;] principals { type = &amp;quot;AWS&amp;quot; identifiers = [&amp;quot;arn:aws:iam::464622532012:root&amp;quot;] } condition { test = &amp;quot;StringEquals&amp;quot; variable = &amp;quot;sts:ExternalId&amp;quot; values = [ &amp;quot;${datadog_integration_aws.test.external_id}&amp;quot;, ] } } } Datadog providerにはないSlackなどその他のintegrationは手動で設定する必要がある。 また、Logも集める場合Serverless Application Repositoryから公式のDatadog-Log-Forwarderを入れて AWS IntegrationのところにLambdaのARNを入れるのも手動。
-Alert datadog_monitorでAlertを作成する。 今回はLambdaの実行が失敗したときと、WARNという文字列が含まれるログが一定数出力されたときにAlertを飛ばすようにしてみた。 なおinfoやwarnといったログレベルはjsonのlevelフィールドに入れればデフォルトのpipelineでマップされるので通常は文字列比較などする必要はない。
-初めに作るときは一度画面で意図通りアラートが飛ぶものを作成し、クエリなどをコピーするのが確実。
-resource &amp;quot;datadog_monitor&amp;quot; &amp;quot;lambda-error-alert&amp;quot; { name = &amp;quot;lambda-error-alert&amp;quot; type = &amp;quot;metric alert&amp;quot; message = &amp;quot;Error occurred.</description>
+resource &amp;quot;datadog_integration_aws&amp;quot; &amp;quot;test&amp;quot; { account_id = &amp;quot;${var.aws_account_id}&amp;quot; role_name = &amp;quot;${var.aws_integration_role_name}&amp;quot; filter_tags = [&amp;quot;datadog:1&amp;quot;] } data &amp;quot;aws_iam_policy_document&amp;quot; &amp;quot;datadog_aws_integration_assume_role&amp;quot; { statement { actions = [&amp;quot;sts:AssumeRole&amp;quot;] principals { type = &amp;quot;AWS&amp;quot; identifiers = [&amp;quot;arn:aws:iam::464622532012:root&amp;quot;] } condition { test = &amp;quot;StringEquals&amp;quot; variable = &amp;quot;sts:ExternalId&amp;quot; values = [ &amp;quot;${datadog_integration_aws.test.external_id}&amp;quot;, ] } } } Datadog providerにはないSlackなどその他のintegrationは手動で設定する必要がある。 また、ログを集める場合Serverless Application Repositoryから公式のDatadog-Log-Forwarderを入れて AWS IntegrationのところにLambdaのARNを入れるのも手動。
+ 追記 (2020-12-07): 今はDatadog Forwaderとなり、Serverless Application Repositoryからではなく、直接CloudFormationのスタックを上げるようになっているのでaws_cloudformation_stackでデプロイできる。ログだけではなくlambdaからのカスタムメトリクスの中継や、estimated_costなどの拡張メトリクスの送信も行う。
+ Alert datadog_monitorでAlertを作成する。 今回はLambdaの実行が失敗したときと、WARNという文字列が含まれるログが一定数出力されたときにAlertを飛ばすようにしてみた。 なおinfoやwarnといったログレベルはjsonのlevelフィールドに入れればデフォルトのpipelineでマップされるので通常は文字列比較などする必要はない。</description>
     </item>
     
     <item>
@@ -2290,7 +2291,8 @@ $ cat schema.sql CREATE TABLE table1 ( n_tinyint TINYINT, n_int INT, n_int_unsig
       <guid>https://www.sambaiz.net/article/152/</guid>
       <description>最近朝が寒くて布団から出るのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。 そこで、無料から使える気象API OpenWeatherMapのデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。
 インスタンスが立っていたらDataDog AgentのDogStatsD経由で送ることができ、 そうでなければ通常はAPIを呼ぶことになるんだけど、Lambdaでは、AWS Integrationを設定すると有効になるLambda Integrationによって MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。
-const axios = require(&#39;axios&#39;); const CITY = &#39;Shibuya&#39;; const API_KEY = &#39;*****&#39;; const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`; const METRIC_COUNTER = &#39;counter&#39;; const METRIC_GAUGE = &#39;gauge&#39;; const monitor = (metricName, metricType, value, tags) =&amp;gt; { const unixEpochTimestamp = Math.floor(new Date().getTime()); console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&#39;,&#39;)}`); }; exports.handler = async (event, context, callback) =&amp;gt; { const data = (await axios.get(WEATHER_API)).data const namePrefix = &#39;livinginfo.weather&#39; monitor(`${namePrefix}.temperature`, METRIC_GAUGE, data.main.temp, []) monitor(`${namePrefix}.</description>
+ 追記 (2020-12-07): 今はDatadog Forwaderを通して送ることができる。
+ const axios = require(&#39;axios&#39;); const CITY = &#39;Shibuya&#39;; const API_KEY = &#39;*****&#39;; const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`; const METRIC_COUNTER = &#39;counter&#39;; const METRIC_GAUGE = &#39;gauge&#39;; const monitor = (metricName, metricType, value, tags) =&amp;gt; { const unixEpochTimestamp = Math.floor(new Date().getTime()); console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&#39;,&#39;)}`); }; exports.handler = async (event, context, callback) =&amp;gt; { const data = (await axios.get(WEATHER_API)).data const namePrefix = &#39;livinginfo.</description>
     </item>
     
     <item>
