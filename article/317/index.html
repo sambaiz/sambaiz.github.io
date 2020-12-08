@@ -27,8 +27,8 @@
   <meta property='og:title' content="IstioのSidecarでmTLS認証を行いServiceAccountによるアクセス制御を行う - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="TLSハンドシェイクの際にサーバーだけではなくクライアントも証明書を送ることで相互に認証を行う">
-  <meta name="twitter:description" content="TLSハンドシェイクの際にサーバーだけではなくクライアントも証明書を送ることで相互に認証を行う">
+  <meta name="description" content="TLSハンドシェイクの際にクライアントも証明書を送って認証し、SANのSPIFFE IDに書かれているServiceAccountを見る">
+  <meta name="twitter:description" content="TLSハンドシェイクの際にクライアントも証明書を送って認証し、SANのSPIFFE IDに書かれているServiceAccountを見る">
   
   
 
@@ -68,7 +68,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "TLSハンドシェイクの際にサーバーだけではなくクライアントも証明書を送ることで相互に認証を行う"
+    "description": "TLSハンドシェイクの際にクライアントも証明書を送って認証し、SANのSPIFFE IDに書かれているServiceAccountを見る"
   }
 </script>
 </head>
@@ -220,7 +220,7 @@ spec:
   mtls:
     mode: STRICT
 EOF
-</code></pre><p>これによりSidecarなしでは弾かれるようになった。Sidecarを入れるとトラフィックが自動で<a href="https://istio.io/latest/docs/tasks/security/authentication/authn-policy/#globally-enabling-istio-mutual-tls-in-strict-mode">mTLSにアップグレード</a>されるので通る。</p>
+</code></pre><p>Sidecarなしでは弾かれるようになった。Sidecarを入れるとトラフィックが自動で<a href="https://istio.io/latest/docs/tasks/security/authentication/authn-policy/#globally-enabling-istio-mutual-tls-in-strict-mode">mTLSにアップグレード</a>されるので通る。</p>
 <pre><code>$ kubectl label namespace default istio-injection=disabled --overwrite
 $ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never my-nginx.sambaiz.svc.cluster.local
 curl: (56) Recv failure: Connection reset by peer
@@ -253,7 +253,7 @@ $ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never 
 upstream connect error or disconnect/reset before headers. reset reason: connection termination
 
 $ kubectl delete destinationrule sambaiz
-</code></pre><p>mTLS認証を行っていると、<a href="https://istio.io/latest/docs/reference/config/security/authorization-policy/">AuthorizationPolicy</a>でprincipalsを用いたアクセス制御ができる。</p>
+</code></pre><p>mTLS認証を行うと証明書のSAN(Subject Alternative Name)に書かれている<a href="https://spiffe.io/">SPIFFE</a> IDが <code>&quot;By=spiffe://cluster.local/ns/foo/sa/httpbin;Hash=&lt;redacted&gt;;Subject=\&quot;\&quot;;URI=spiffe://cluster.local/ns/foo/sa/sleep&quot;</code> のような形式の <code>X-Forwarded-Client-Cert</code> headerで<a href="https://istio.io/latest/docs/tasks/security/authentication/authn-policy/#auto-mutual-tls">渡る</a>。これにより<a href="https://istio.io/latest/docs/reference/config/security/authorization-policy/">AuthorizationPolicy</a>でprincipalsを用いたアクセス制御ができる。</p>
 <pre><code>$ kubectl apply -f - &lt;&lt;EOF
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
@@ -291,6 +291,7 @@ $ kubectl run  --serviceaccount=test-service-account  -it --rm=true test-client 
 200
 </code></pre><h2 id="参考">参考</h2>
 <p><a href="https://milestone-of-se.nesuke.com/nw-basic/tls/mutual-tls-token-binding/">【図解】mutual-TLS (mTLS, 2way TLS),クライアント認証とトークンバインディング over http | SEの道標</a></p>
+<p><a href="https://thinkit.co.jp/article/17919">注目のSPIFFE、その概要とKubernetesへの導入方法 | Think IT（シンクイット）</a></p>
 
         </div>
       </article>
