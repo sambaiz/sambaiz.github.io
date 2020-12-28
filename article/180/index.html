@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -140,7 +138,7 @@
 <p>Goの<a href="https://github.com/GoogleCloudPlatform/google-cloud-go">クライアントライブラリ</a>で動かしてみる。
 まずTopicを作成して50件Publishした後、Subsriptionを作成して、再び50件Publishする。
 Publishできるデータは<a href="https://cloud.google.com/pubsub/docs/publisher#header_1">10MB未満</a>。</p>
-<pre><code>topic, err := client.CreateTopic(ctx, topicName)
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">topic, err := client.CreateTopic(ctx, topicName)
 if err != nil {
   panic(err)
 }
@@ -150,40 +148,40 @@ for i := 0; i &lt; 50; i++ {
   wg.Add(1)
   go func() {
     if _, err := topic.Publish(ctx, &amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != nil {
-      log.Fatalf(&quot;Publish error: %s&quot;, err.Error())
+      log.Fatalf(&#34;Publish error: %s&#34;, err.Error())
     } else {
-      log.Printf(&quot;Publish successful: %d&quot;, i)
+      log.Printf(&#34;Publish successful: %d&#34;, i)
     }
     wg.Done()
   }()
   wg.Wait()
 }
 
-log.Printf(&quot;Create Subscription&quot;)
+log.Printf(&#34;Create Subscription&#34;)
 sub := createSubscription(ctx, client, topic, subscriptionName)
 
 for i := 50; i &lt; 100; i++ {
   wg.Add(1)
   go func() {
     if _, err := topic.Publish(ctx, &amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != nil {
-      log.Fatalf(&quot;Publish error: %s&quot;, err.Error())
+      log.Fatalf(&#34;Publish error: %s&#34;, err.Error())
     } else {
-      log.Printf(&quot;Publish successful: %d&quot;, i)
+      log.Printf(&#34;Publish successful: %d&#34;, i)
     }
     wg.Done()
   }()
   wg.Wait()
 }
-</code></pre><pre><code>2018/07/26 21:42:51 Publish successful: 47
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">2018/07/26 21:42:51 Publish successful: 47
 2018/07/26 21:42:51 Publish successful: 48
 2018/07/26 21:42:51 Publish successful: 49
 2018/07/26 21:42:51 Create Subscription
 2018/07/26 21:42:58 Publish successful: 50
 2018/07/26 21:42:58 Publish successful: 51
 2018/07/26 21:42:58 Publish successful: 52
-</code></pre><p>Pull時のHandlerとしてAckを呼ぶackHandlerと、Nackを呼ぶnackHandler、何もしないnothingHandlerを用意した。
+</code></pre></div><p>Pull時のHandlerとしてAckを呼ぶackHandlerと、Nackを呼ぶnackHandler、何もしないnothingHandlerを用意した。
 AckするとPub/Subからメッセージが消え、Nackまたはタイムアウトするとリトライされる。</p>
-<pre><code>type GotData struct {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">type GotData struct {
 	sync.Mutex
 	gotData []string
 }
@@ -197,7 +195,7 @@ func ackHandler(done func()) func(ctx context.Context, m *pubsub.Message) {
 		sort.Slice(g.gotData, func(i, j int) bool {
 			return g.gotData[i] &lt; g.gotData[j]
 		})
-		log.Printf(&quot;ackHandler got message: %s %#v&quot;, m.Data, g.gotData)
+		log.Printf(&#34;ackHandler got message: %s %#v&#34;, m.Data, g.gotData)
 		if len(g.gotData) == 50 {
 			done()
 		}
@@ -207,18 +205,18 @@ func ackHandler(done func()) func(ctx context.Context, m *pubsub.Message) {
 }
 
 func nackHandler(ctx context.Context, m *pubsub.Message) {
-	log.Printf(&quot;nackHandler got message: %s&quot;, m.Data)
+	log.Printf(&#34;nackHandler got message: %s&#34;, m.Data)
 	m.Nack()
 }
 
 func nothingHandler(ctx context.Context, m *pubsub.Message) {
-	log.Printf(&quot;nothingHandler got message: %s&quot;, m.Data)
+	log.Printf(&#34;nothingHandler got message: %s&#34;, m.Data)
 }
-</code></pre><p>一つのSubscriptionを複数のSubscriberで使うことでメッセージを分散処理することができる。
+</code></pre></div><p>一つのSubscriptionを複数のSubscriberで使うことでメッセージを分散処理することができる。
 ただし同じstructを使うとエラーになるのでそれぞれ生成している。</p>
 <p>nothingHandlerではSubscriptionの<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L210">MaxExtension</a>を<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L240">デフォルト</a>の10分から10秒にすることでリトライを早めている。<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L136">AckDeadline</a>というのもあるがPullの場合、結局MaxExtensionまで延長してしまうので意味がないようだ。</p>
 <p>ReceiveSettingsにはほかに<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L217">MaxOutstandingMessages</a>というのもあり、一度に処理されるメッセージの量を制限することができる。</p>
-<pre><code>go func() {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">go func() {
   sub := client.Subscription(subscriptionName)
   if err := sub.Receive(ctx, ackHandler(cancel)); err != nil {
     panic(err)
@@ -237,14 +235,14 @@ go func() {
 		panic(err)
   }
 }()
-</code></pre><p>nack/nothingHandlerによっていくつかリトライされた後、ackHandlerにSubscription作成後のメッセージが全て届いた。
+</code></pre></div><p>nack/nothingHandlerによっていくつかリトライされた後、ackHandlerにSubscription作成後のメッセージが全て届いた。
 データは<a href="https://cloud.google.com/pubsub/faq#persistent">7日間</a>保持される。
 メッセージの順序は<a href="https://cloud.google.com/pubsub/docs/ordering">保証されず</a>、今回は1件ずつになっているが重複することがある。</p>
-<pre><code>2018/07/26 21:43:49 nothingHandler got message: 91
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">2018/07/26 21:43:49 nothingHandler got message: 91
 2018/07/26 21:44:28 nackHandler got message: 91
-2018/07/26 21:44:30 ackHandler got message: 91 []string{&quot;50&quot;, &quot;51&quot;, &quot;52&quot;, &quot;53&quot;, &quot;54&quot;, &quot;55&quot;, &quot;56&quot;, &quot;57&quot;, &quot;58&quot;, &quot;59&quot;, &quot;60&quot;, &quot;61&quot;, &quot;62&quot;, &quot;63&quot;, &quot;64&quot;, &quot;65&quot;, &quot;66&quot;, &quot;67&quot;, &quot;68&quot;, &quot;69&quot;, &quot;70&quot;, &quot;71&quot;, &quot;72&quot;, &quot;73&quot;, &quot;74&quot;, &quot;75&quot;, &quot;76&quot;, &quot;77&quot;, &quot;78&quot;, &quot;79&quot;, &quot;80&quot;, &quot;81&quot;, &quot;82&quot;, &quot;83&quot;, &quot;84&quot;, &quot;85&quot;, &quot;86&quot;, &quot;87&quot;, &quot;88&quot;, &quot;89&quot;, &quot;90&quot;, &quot;91&quot;, &quot;92&quot;, &quot;93&quot;, &quot;94&quot;, &quot;95&quot;, &quot;96&quot;, &quot;97&quot;, &quot;98&quot;, &quot;99&quot;}
+2018/07/26 21:44:30 ackHandler got message: 91 []string{&#34;50&#34;, &#34;51&#34;, &#34;52&#34;, &#34;53&#34;, &#34;54&#34;, &#34;55&#34;, &#34;56&#34;, &#34;57&#34;, &#34;58&#34;, &#34;59&#34;, &#34;60&#34;, &#34;61&#34;, &#34;62&#34;, &#34;63&#34;, &#34;64&#34;, &#34;65&#34;, &#34;66&#34;, &#34;67&#34;, &#34;68&#34;, &#34;69&#34;, &#34;70&#34;, &#34;71&#34;, &#34;72&#34;, &#34;73&#34;, &#34;74&#34;, &#34;75&#34;, &#34;76&#34;, &#34;77&#34;, &#34;78&#34;, &#34;79&#34;, &#34;80&#34;, &#34;81&#34;, &#34;82&#34;, &#34;83&#34;, &#34;84&#34;, &#34;85&#34;, &#34;86&#34;, &#34;87&#34;, &#34;88&#34;, &#34;89&#34;, &#34;90&#34;, &#34;91&#34;, &#34;92&#34;, &#34;93&#34;, &#34;94&#34;, &#34;95&#34;, &#34;96&#34;, &#34;97&#34;, &#34;98&#34;, &#34;99&#34;}
 2018/07/26 21:44:30 Finished!
-</code></pre><p>スケールし、複数コンシューマーがそれぞれのタイミングでPullできるログの一時的な貯め先などとしてAWSのKinesis Data Streamsと同じようなユースケースで使われるが、Kinesisでは順序が保証されていたり、シャードの指定やデータの取り出し方といった扱いなど異なる点もある。</p>
+</code></pre></div><p>スケールし、複数コンシューマーがそれぞれのタイミングでPullできるログの一時的な貯め先などとしてAWSのKinesis Data Streamsと同じようなユースケースで使われるが、Kinesisでは順序が保証されていたり、シャードの指定やデータの取り出し方といった扱いなど異なる点もある。</p>
 <p><a href="https://www.sambaiz.net/article/67/">Kinesis Streams/Firehose/Analyticsを試す - sambaiz-net</a></p>
 
         </div>
@@ -255,41 +253,41 @@ go func() {
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

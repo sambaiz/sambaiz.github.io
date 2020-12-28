@@ -17,9 +17,9 @@
 適当なログを出すコードを書いた。
 sambaiz/lottery-log
 これは以下のようなlottery.logを出力し続け、数秒後に一定確率で同じuidのreceived.logを出力するもの。 広告的に言えば、lotteryがimpで、receivedがclickといった感じかな。
-// lottery.log {&amp;quot;ts&amp;quot;:1497453504.6818597,&amp;quot;uid&amp;quot;:&amp;quot;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&amp;quot;,&amp;quot;prize&amp;quot;:855,&amp;quot;isWin&amp;quot;:true} // received.log {&amp;quot;ts&amp;quot;:1497453515.932101,&amp;quot;uid&amp;quot;:&amp;quot;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&amp;quot;} クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、 received_rateの計算にはサブクエリも使っている。 received_rateの計算で分母に小さな値を足しているのはNaNやInfinityにならないようにするため。 receivedログは最大30秒遅れて出力されるため、40秒前までのreceivedログをwin:timeで見ている。 これをtime_batchにしてしまうと期待通りの結果にならないので注意。
+// lottery.log {&amp;#34;ts&amp;#34;:1497453504.6818597,&amp;#34;uid&amp;#34;:&amp;#34;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&amp;#34;,&amp;#34;prize&amp;#34;:855,&amp;#34;isWin&amp;#34;:true} // received.log {&amp;#34;ts&amp;#34;:1497453515.932101,&amp;#34;uid&amp;#34;:&amp;#34;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&amp;#34;} クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、 received_rateの計算にはサブクエリも使っている。 received_rateの計算で分母に小さな値を足しているのはNaNやInfinityにならないようにするため。 receivedログは最大30秒遅れて出力されるため、40秒前までのreceivedログをwin:timeで見ている。 これをtime_batchにしてしまうと期待通りの結果にならないので注意。
 もう一つはJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。
-$ docker exec norikra norikra-client query add lottery_agg &#39; SELECT COUNT(*) as received_count, (COUNT(*) / (SELECT COUNT(*) + 0.00001 FROM lottery.win:time_batch(1 sec, 0).std:unique(uid))) as received_rate, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time(40 sec).std:unique(uid) as a, received.win:time_batch(1 sec, 0).std:unique(uid) as b WHERE a.uid = b.uid&#39; $ docker exec norikra norikra-client query add lottery_win_rate &#39;SELECT avg(Boolean.</description>
+$ docker exec norikra norikra-client query add lottery_agg &amp;#39; SELECT COUNT(*) as received_count, (COUNT(*) / (SELECT COUNT(*) + 0.00001 FROM lottery.win:time_batch(1 sec, 0).std:unique(uid))) as received_rate, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time(40 sec).std:unique(uid) as a, received.win:time_batch(1 sec, 0).std:unique(uid) as b WHERE a.uid = b.uid&amp;#39; $ docker exec norikra norikra-client query add lottery_win_rate &amp;#39;SELECT avg(Boolean.</description>
     </item>
     
     <item>
@@ -31,12 +31,12 @@ $ docker exec norikra norikra-client query add lottery_agg &#39; SELECT COUNT(*)
       <description>NorikraはTD社のtagomoris氏が作った、 スキーマレスのストリーミングデータを処理するOSS。
 モチベーションとしてはfluentdでElasticsearchにログを送って可視化していたのだけど、 流量が増えてきてピーク帯に耐えられなくなってしまったため、前もって集計してから送ることで流量を減らそうというもの。
 Norikraを立ち上げてクエリを実行する 公式で紹介されているDockerイメージがあったのでこれで動かしてみる。
-$ docker run -e &amp;quot;TZ=Asia/Tokyo&amp;quot; -p 26578:26578 -p 26571:26571 -v `pwd`:/var/tmp/norikra:rw -d myfinder/docker-norikra norikra start --stats /var/tmp/norikra/stats.json -l /var/tmp/norikra ほかのオプションとして-Xmsや-XmxでJVMのヒープメモリの量を設定したり、Experimentalではあるけど--shutoffでヒープメモリが一杯になる前に弾いて OutOfMemoryを防ぐことができる。 また、Norikraのコアエンジンで使われているOSSの CEP (Complex event processing)エンジン、 Esper のパフォーマンスチューニングとして--microや--smallなどを渡すこともできるけど試していない。
+$ docker run -e &amp;#34;TZ=Asia/Tokyo&amp;#34; -p 26578:26578 -p 26571:26571 -v `pwd`:/var/tmp/norikra:rw -d myfinder/docker-norikra norikra start --stats /var/tmp/norikra/stats.json -l /var/tmp/norikra ほかのオプションとして-Xmsや-XmxでJVMのヒープメモリの量を設定したり、Experimentalではあるけど--shutoffでヒープメモリが一杯になる前に弾いて OutOfMemoryを防ぐことができる。 また、Norikraのコアエンジンで使われているOSSの CEP (Complex event processing)エンジン、 Esper のパフォーマンスチューニングとして--microや--smallなどを渡すこともできるけど試していない。
 公式サイトの例に従ってクライアントからデータを入れてクエリを実行してみる。
 まずはtargetをopenする。targetというのはスキーマレスのイベントストリームのこと。 ここで定義したフィールドは必須になる。
 $ norikra-client target open www path:string status:integer referer:string agent:string userid:integer $ norikra-client target list TARGET	AUTO_FIELD www	true 次にクエリを追加する。一見普通のSQLのように見えるけど、EsperのクエリであるEPL(Event Processing Language)。 ただしSELECTしか使えないのも含めてクエリにいくらかの制限がある。
 このクエリではwin:time_batchで10秒のWindowを定義し、eventをgroup byして、その数をeventとして出力する。
-$ norikra-client query add www.toppageviews &#39;SELECT count(*) AS cnt FROM www.</description>
+$ norikra-client query add www.toppageviews &amp;#39;SELECT count(*) AS cnt FROM www.</description>
     </item>
     
   </channel>

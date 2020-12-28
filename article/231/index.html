@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -147,21 +145,21 @@ PermissionsはPull requestsではなくIssueのRead &amp; Writeが必要で、
 さらにそうすると表示されるようになるSubscribe to eventsのIssue commentにチェックを入れる。</p>
 <p>作成すると秘密鍵がダウンロードできるのでSecretsmanagerに上げておき、LambdaのRoleにもこれを取得できるRoleを付ける。</p>
 <p><a href="https://www.sambaiz.net/article/204/">AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net</a></p>
-<pre><code>$ aws secretsmanager create-secret --name GitHubCdkAppSecretKey --secret-string $(cat private-key.pem)
-</code></pre><pre><code>Policies:
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ aws secretsmanager create-secret --name GitHubCdkAppSecretKey --secret-string $(cat private-key.pem)
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Policies:
   - PolicyName: read-cdk-github-app-secret-key
     PolicyDocument:
-    Version: &quot;2012-10-17&quot;
+    Version: &#34;2012-10-17&#34;
     Statement:
       - Effect: Allow
         Action: secretsmanager:GetSecretValue
         Resource: &lt;secret-key arn&gt;
-</code></pre><h2 id="webhooksのリクエスト内容httpsdevelopergithubcomwebhooksexample-delivery"><a href="https://developer.github.com/webhooks/#example-delivery">Webhooksのリクエスト内容</a></h2>
+</code></pre></div><h2 id="webhooksのリクエスト内容httpsdevelopergithubcomwebhooksexample-delivery"><a href="https://developer.github.com/webhooks/#example-delivery">Webhooksのリクエスト内容</a></h2>
 <p>設定でチェックを入れたeventが起きると次のようなリクエストが送られてくる。
 Headerの <code>X-GitHub-Event</code> によってbodyの中身が決まり、
 <code>X-Hub-Signature</code> と、bodyと設定したWebhook secretから生成したHMACのMAC値を比較することで
 リクエストを<a href="https://developer.github.com/webhooks/securing/#validating-payloads-from-github">検証する</a>ことができる。</p>
-<pre><code>POST /payload HTTP/1.1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">POST /payload HTTP/1.1
 Host: localhost:4567
 X-GitHub-Delivery: 72d3162e-cc78-11e3-81ab-4c9367dc0958
 X-Hub-Signature: sha1=7d38cdd689735b008b3c702edd92eea23791c5f6
@@ -170,61 +168,61 @@ Content-Type: application/json
 Content-Length: 6615
 X-GitHub-Event: issues
 {
-  &quot;action&quot;: &quot;opened&quot;,
-  &quot;issue&quot;: {
-    &quot;url&quot;: &quot;https://api.github.com/repos/octocat/Hello-World/issues/1347&quot;,
-    &quot;number&quot;: 1347,
+  &#34;action&#34;: &#34;opened&#34;,
+  &#34;issue&#34;: {
+    &#34;url&#34;: &#34;https://api.github.com/repos/octocat/Hello-World/issues/1347&#34;,
+    &#34;number&#34;: 1347,
     ...
   },
-  &quot;repository&quot; : {
-    &quot;id&quot;: 1296269,
-    &quot;full_name&quot;: &quot;octocat/Hello-World&quot;,
-    &quot;owner&quot;: {
-      &quot;login&quot;: &quot;octocat&quot;,
-      &quot;id&quot;: 1,
+  &#34;repository&#34; : {
+    &#34;id&#34;: 1296269,
+    &#34;full_name&#34;: &#34;octocat/Hello-World&#34;,
+    &#34;owner&#34;: {
+      &#34;login&#34;: &#34;octocat&#34;,
+      &#34;id&#34;: 1,
       ...
     },
     ...
   },
-  &quot;sender&quot;: {
-    &quot;login&quot;: &quot;octocat&quot;,
-    &quot;id&quot;: 1,
+  &#34;sender&#34;: {
+    &#34;login&#34;: &#34;octocat&#34;,
+    &#34;id&#34;: 1,
     ...
   }
 }
-</code></pre><h2 id="実装">実装</h2>
+</code></pre></div><h2 id="実装">実装</h2>
 <p>Signatureを検証し、対応するEventのstructにパースして処理を行う流れ。</p>
-<pre><code>import (
-	&quot;context&quot;
-	&quot;errors&quot;
-	&quot;fmt&quot;
-	&quot;net/http&quot;
-	&quot;os&quot;
-	&quot;time&quot;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import (
+	&#34;context&#34;
+	&#34;errors&#34;
+	&#34;fmt&#34;
+	&#34;net/http&#34;
+	&#34;os&#34;
+	&#34;time&#34;
 
-	&quot;github.com/aws/aws-lambda-go/events&quot;
-	&quot;github.com/aws/aws-lambda-go/lambda&quot;
-	&quot;github.com/aws/aws-sdk-go/aws&quot;
-	&quot;github.com/aws/aws-sdk-go/aws/awserr&quot;
-	&quot;github.com/aws/aws-sdk-go/aws/session&quot;
-	&quot;github.com/aws/aws-sdk-go/service/secretsmanager&quot;
-	jwt &quot;github.com/dgrijalva/jwt-go&quot;
-	&quot;github.com/google/go-github/v26/github&quot;
-	&quot;go.uber.org/zap&quot;
-	&quot;golang.org/x/oauth2&quot;
+	&#34;github.com/aws/aws-lambda-go/events&#34;
+	&#34;github.com/aws/aws-lambda-go/lambda&#34;
+	&#34;github.com/aws/aws-sdk-go/aws&#34;
+	&#34;github.com/aws/aws-sdk-go/aws/awserr&#34;
+	&#34;github.com/aws/aws-sdk-go/aws/session&#34;
+	&#34;github.com/aws/aws-sdk-go/service/secretsmanager&#34;
+	jwt &#34;github.com/dgrijalva/jwt-go&#34;
+	&#34;github.com/google/go-github/v26/github&#34;
+	&#34;go.uber.org/zap&#34;
+	&#34;golang.org/x/oauth2&#34;
 )
 
 func handler(event events.APIGatewayProxyRequest) (Response, error) {
 	ctx := context.Background()
-	if err := github.ValidateSignature(event.Headers[&quot;X-Hub-Signature&quot;], []byte(event.Body), []byte(webhookSecret)); err != nil {
-		logger.Info(&quot;Signature is invalid&quot;, zap.Error(err))
+	if err := github.ValidateSignature(event.Headers[&#34;X-Hub-Signature&#34;], []byte(event.Body), []byte(webhookSecret)); err != nil {
+		logger.Info(&#34;Signature is invalid&#34;, zap.Error(err))
 		return Response{
 			StatusCode: http.StatusBadRequest,
 		}, nil
 	}
-	hook, err := github.ParseWebHook(event.Headers[&quot;X-GitHub-Event&quot;], []byte(event.Body))
+	hook, err := github.ParseWebHook(event.Headers[&#34;X-GitHub-Event&#34;], []byte(event.Body))
 	if err != nil {
-		logger.Error(&quot;Failed to parse hook&quot;, zap.Error(err))
+		logger.Error(&#34;Failed to parse hook&#34;, zap.Error(err))
 		return Response{
 			StatusCode: http.StatusBadRequest,
 		}, nil
@@ -234,7 +232,7 @@ func handler(event events.APIGatewayProxyRequest) (Response, error) {
 		err = processIssueCommentEvent(ctx, hook)
 	}
 	if err != nil {
-		logger.Error(&quot;Failed to process an event&quot;, zap.Error(err))
+		logger.Error(&#34;Failed to process an event&#34;, zap.Error(err))
 		return Response{
 			StatusCode: http.StatusInternalServerError,
 		}, err
@@ -247,7 +245,7 @@ func handler(event events.APIGatewayProxyRequest) (Response, error) {
 func processIssueCommentEvent(
 	ctx context.Context,
 	hook *github.IssueCommentEvent) error {
-	if hook.GetComment().GetBody() != &quot;ping&quot; {
+	if hook.GetComment().GetBody() != &#34;ping&#34; {
 		return nil
 	}
 	client, err := newGitHubClient(ctx, hook.GetInstallation().GetID())
@@ -260,21 +258,21 @@ func processIssueCommentEvent(
 		hook.GetRepo().GetName(),
 		hook.GetIssue().GetNumber(),
 		&amp;github.IssueComment{
-			Body: &amp;[]string{&quot;pong&quot;}[0],
+			Body: &amp;[]string{&#34;pong&#34;}[0],
 		},
 	)
 	return err
 }
-</code></pre><p>なお無条件に返すようにするとbotの投稿でさらにeventが発火して無限ループしてしまう。</p>
+</code></pre></div><p>なお無条件に返すようにするとbotの投稿でさらにeventが発火して無限ループしてしまう。</p>
 <p><img src="https://www.sambaiz.net/images/231-2.png" alt="無限ループ"></p>
 <h3 id="クライアントの生成httpsdevelopergithubcomappsbuilding-github-appsauthenticating-with-github-apps"><a href="https://developer.github.com/apps/building-github-apps/authenticating-with-github-apps/">クライアントの生成</a></h3>
 <p>リポジトリに対してAPIを呼ぶには、まずダウンロードした秘密鍵でJWTを作り、これでInstallationTokenを取得してHeaderに乗せる必要がある。</p>
-<pre><code>func newGitHubClient(ctx context.Context, installationID int64) (*github.Client, error) {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func newGitHubClient(ctx context.Context, installationID int64) (*github.Client, error) {
 	now := time.Now()
 	payload := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		&quot;iat&quot;: now.Unix(),
-		&quot;exp&quot;: now.Add(10 * time.Minute).Unix(),
-		&quot;iss&quot;: appID,
+		&#34;iat&#34;: now.Unix(),
+		&#34;exp&#34;: now.Add(10 * time.Minute).Unix(),
+		&#34;iss&#34;: appID,
 	})
 	pem, err := getSecret(privateKeyArn)
 	if err != nil {
@@ -295,8 +293,8 @@ func processIssueCommentEvent(
 	client := github.NewClient(tc)
 
 	installationToken, _, err := client.Apps.CreateInstallationToken(ctx, installationID)
-	if _, _, err := client.Apps.Get(ctx, &quot;&quot;); err != nil {
-		return nil, fmt.Errorf(&quot;Failed to create installation token: %s&quot;, err.Error())
+	if _, _, err := client.Apps.Get(ctx, &#34;&#34;); err != nil {
+		return nil, fmt.Errorf(&#34;Failed to create installation token: %s&#34;, err.Error())
 	}
 	ts = oauth2.StaticTokenSource(
 		&amp;oauth2.Token{AccessToken: installationToken.GetToken()},
@@ -305,7 +303,7 @@ func processIssueCommentEvent(
 	client = github.NewClient(tc)
 	return client, nil
 }
-</code></pre><h2 id="動作確認">動作確認</h2>
+</code></pre></div><h2 id="動作確認">動作確認</h2>
 <p>実際動かしてみるとなかなかうまくいかない。
 <code>GitHub Apps &gt; Advanced</code> から送られたイベントとそれに対するレスポンスが確認でき、再送することもできて便利。</p>
 <p><img src="https://www.sambaiz.net/images/231-3.png" alt="送られたイベント"></p>
@@ -318,41 +316,41 @@ func processIssueCommentEvent(
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

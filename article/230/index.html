@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -135,25 +133,25 @@
           <p>(2019-07-09)</p>
           <p>以前TitanicをやったXGBoostでHome Prices Competitionに挑戦する。</p>
 <p><a href="https://www.sambaiz.net/article/168/">KaggleのTitanicのチュートリアルをXGBoostで解く - sambaiz-net</a></p>
-<pre><code>import pandas as pd
-df_train = pd.read_csv('house-prices/train.csv')
-df_test= pd.read_csv('house-prices/test.csv')
-</code></pre><h2 id="前処理">前処理</h2>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import pandas as pd
+df_train = pd.read_csv(&#39;house-prices/train.csv&#39;)
+df_test= pd.read_csv(&#39;house-prices/test.csv&#39;)
+</code></pre></div><h2 id="前処理">前処理</h2>
 <p>目的変数であるSalePriceと相関のある変数を抽出する。XGBoostは欠損値をそのまま扱うことができるので特に何もしていない。</p>
 <p><a href="https://www.sambaiz.net/article/216/">KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net</a></p>
-<pre><code>use_columns = df_train.corr()['SalePrice'].drop('SalePrice').where(lambda x: abs(x) &gt; 0.5).dropna().keys()
-# Index(['OverallQual', 'YearBuilt', 'YearRemodAdd', 'TotalBsmtSF', '1stFlrSF', 'GrLivArea', 'FullBath', 'TotRmsAbvGrd', 'GarageCars', 'GarageArea'], dtype='object')
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">use_columns = df_train.corr()[&#39;SalePrice&#39;].drop(&#39;SalePrice&#39;).where(lambda x: abs(x) &gt; 0.5).dropna().keys()
+# Index([&#39;OverallQual&#39;, &#39;YearBuilt&#39;, &#39;YearRemodAdd&#39;, &#39;TotalBsmtSF&#39;, &#39;1stFlrSF&#39;, &#39;GrLivArea&#39;, &#39;FullBath&#39;, &#39;TotRmsAbvGrd&#39;, &#39;GarageCars&#39;, &#39;GarageArea&#39;], dtype=&#39;object&#39;)
 def preprocess(df):
   return df[use_columns].copy()
 
 df_train_p = preprocess(df_train)
-df_train_p['SalePrice'] = df_train['SalePrice']
+df_train_p[&#39;SalePrice&#39;] = df_train[&#39;SalePrice&#39;]
 df_test_p = preprocess(df_test)
-</code></pre><h2 id="ハイパーパラメータの最適化">ハイパーパラメータの最適化</h2>
+</code></pre></div><h2 id="ハイパーパラメータの最適化">ハイパーパラメータの最適化</h2>
 <p>ベイズ最適化でハイパーパラメータを決める。
 他にもいろいろなパラメータがあるが、やみくもに増やしても提出した後のスコアが良くならなかった。</p>
 <p><a href="https://www.sambaiz.net/article/169/">ベイズ最適化でランダムフォレストとXGBoostの良いハイパーパラメータを探す - sambaiz-net</a></p>
-<pre><code>! pip install bayesian-optimization
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">! pip install bayesian-optimization
 
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
@@ -167,14 +165,14 @@ def optimize_params(df):
       learning_rate, 
       colsample_bytree,
       sub_sample):
-    train_x = df.drop('SalePrice', axis=1)
+    train_x = df.drop(&#39;SalePrice&#39;, axis=1)
     train_y = df.SalePrice
     (train_x, test_x ,train_y, test_y) = train_test_split(train_x, train_y, test_size = 0.3)
     dtrain = xgb.DMatrix(train_x, label=train_y)
     param = {
-        'learning_rate': learning_rate, 
-        'colsample_bytree': colsample_bytree,
-        'sub_sample': sub_sample}
+        &#39;learning_rate&#39;: learning_rate, 
+        &#39;colsample_bytree&#39;: colsample_bytree,
+        &#39;sub_sample&#39;: sub_sample}
     bst = xgb.train(param, dtrain, num_boost_round)
     preds = bst.predict(xgb.DMatrix(test_x))
     # Root-Mean-Squared-Error (RMSE) between the logarithm of the predicted value and the logarithm of the observed sales price
@@ -184,28 +182,28 @@ def optimize_params(df):
     ))
   bo = BayesianOptimization(
     train,
-    {'learning_rate': (0.01, 0.5), # default=0.3
-     'colsample_bytree': (0.1, 1.0),  # default=1
-     'sub_sample': (0.1, 1.0), # default=1
+    {&#39;learning_rate&#39;: (0.01, 0.5), # default=0.3
+     &#39;colsample_bytree&#39;: (0.1, 1.0),  # default=1
+     &#39;sub_sample&#39;: (0.1, 1.0), # default=1
     })
   bo.maximize(n_iter=50, alpha=1e-5)
-  return bo.max['params']
+  return bo.max[&#39;params&#39;]
 
 params = optimize_params(df_train_p)
-</code></pre><p>結果こんな感じ。</p>
-<pre><code>print(params)
-# =&gt; {'colsample_bytree': 1.0, 'learning_rate': 0.01, 'sub_sample': 0.28979827351242066}
-</code></pre><h2 id="実行">実行</h2>
+</code></pre></div><p>結果こんな感じ。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">print(params)
+# =&gt; {&#39;colsample_bytree&#39;: 1.0, &#39;learning_rate&#39;: 0.01, &#39;sub_sample&#39;: 0.28979827351242066}
+</code></pre></div><h2 id="実行">実行</h2>
 <p>学習して予測結果を出力する。</p>
-<pre><code>bst = xgb.train(
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">bst = xgb.train(
     params, 
-    xgb.DMatrix(df_train_p.drop('SalePrice', axis=1).values, label=df_train_p.SalePrice),
+    xgb.DMatrix(df_train_p.drop(&#39;SalePrice&#39;, axis=1).values, label=df_train_p.SalePrice),
     num_boost_round)
 
 preds = bst.predict(xgb.DMatrix(df_test_p.values))
-submit_data = pd.Series(preds, name='SalePrice', index=df_test['Id'])
-submit_data.to_csv('submit.csv', header=True)
-</code></pre><p>スコアは <code>0.15509</code> だった。</p>
+submit_data = pd.Series(preds, name=&#39;SalePrice&#39;, index=df_test[&#39;Id&#39;])
+submit_data.to_csv(&#39;submit.csv&#39;, header=True)
+</code></pre></div><p>スコアは <code>0.15509</code> だった。</p>
 
         </div>
       </article>
@@ -215,41 +213,41 @@ submit_data.to_csv('submit.csv', header=True)
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

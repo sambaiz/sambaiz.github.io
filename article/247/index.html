@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -138,42 +136,42 @@
 <p>EC2で動かす場合、自分でリソースが不足しないようにインスタンスのスケールを気遣うことになるが、VPC外での実行や<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/task_definition_parameters.html#variablelist">privilegedをtrueにする</a>などEC2でしかできないことがある。あと同リソースで比較すると安い。</p>
 <p>まずはEC2インスタンス以外のリソースを書く。LaunchType以外はFargateのときとほぼ同じ。
 LBなしでバッチのようなものを動かすことを想定した最小構成。</p>
-<pre><code>ECSCluster:
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">ECSCluster:
   Type: AWS::ECS::Cluster
   Properties:
-    ClusterName: 'test-cluster'
+    ClusterName: &#39;test-cluster&#39;
 LogGroup:
   Type: AWS::Logs::LogGroup
   Properties: 
-    LogGroupName: 'test-task-log-group'
+    LogGroupName: &#39;test-task-log-group&#39;
     RetentionInDays: 1
 TaskDefinition:
   Type: AWS::ECS::TaskDefinition
   Properties: 
     RequiresCompatibilities:
       - EC2
-    Cpu: '256'
-    Memory: '512'
+    Cpu: &#39;256&#39;
+    Memory: &#39;512&#39;
     ContainerDefinitions: 
-      - Name: 'app'
-        Image: 'busybox'
+      - Name: &#39;app&#39;
+        Image: &#39;busybox&#39;
         EntryPoint: 
-          - 'sh'
-          - '-c'
+          - &#39;sh&#39;
+          - &#39;-c&#39;
         Command: 
-          - 'while true; do echo &quot;{\&quot;foo\&quot;:1000,\&quot;time\&quot;:\&quot;2019-05-09T20:00:00+09:00\&quot;}&quot;; sleep 10; done'
-        Essential: 'true'
+          - &#39;while true; do echo &#34;{\&#34;foo\&#34;:1000,\&#34;time\&#34;:\&#34;2019-05-09T20:00:00+09:00\&#34;}&#34;; sleep 10; done&#39;
+        Essential: &#39;true&#39;
         LogConfiguration:
-          LogDriver: 'awslogs'
+          LogDriver: &#39;awslogs&#39;
           Options:
             awslogs-group: !Ref LogGroup
-            awslogs-region: 'ap-northeast-1'
-            awslogs-stream-prefix: 'app'
+            awslogs-region: &#39;ap-northeast-1&#39;
+            awslogs-stream-prefix: &#39;app&#39;
         Environment:
-          - Name: 'TZ'
-            Value: 'Asia/Tokyo'
+          - Name: &#39;TZ&#39;
+            Value: &#39;Asia/Tokyo&#39;
     Volumes: 
-      - Name: 'varlog'
+      - Name: &#39;varlog&#39;
 ECSService:
   Type: AWS::ECS::Service
   Properties:
@@ -181,26 +179,26 @@ ECSService:
     LaunchType: EC2
     DesiredCount: 1
     TaskDefinition: !Ref TaskDefinition
-    ServiceName: 'test-service'
-</code></pre><p>EC2インスタンスとECSクラスタの紐付きはAssociationのようなリソースがあるわけではなく、
+    ServiceName: &#39;test-service&#39;
+</code></pre></div><p>EC2インスタンスとECSクラスタの紐付きはAssociationのようなリソースがあるわけではなく、
 <a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/ecs-optimized_AMI.html">ECS-optimized AMI</a>から<code>echo ECS_CLUSTER=&lt;cluster name&gt; &gt;&gt; /etc/ecs/ecs.config</code>で指定したクラスタにインスタンスを登録する。そのために必要なroleを付ける。</p>
 <p>各リージョンごとのAMI IDをMappingsで書き並べてもいいが、次のように書くとParameter Storeから最新のAMI IDを<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/retrieve-ecs-optimized_AMI.html">取得できる</a>。</p>
-<pre><code>Parameters:
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Parameters:
   ECSAMI:
     Description: AMI ID
     Type: AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;
     Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
-</code></pre><p>なお、amazon-linux2ルートデバイスは<code>/dev/sda1</code>ではなく<code>/dev/xvda</code>なので
+</code></pre></div><p>なお、amazon-linux2ルートデバイスは<code>/dev/sda1</code>ではなく<code>/dev/xvda</code>なので
 間違えると <code>Client.InstanceInitiatedShutdown: Instance initiated shutdown</code>
 でインスタンスが落ち続けてServiceがstableにならず失敗する。</p>
-<pre><code>ECSAutoScalingGroup: 
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">ECSAutoScalingGroup: 
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties: 
       AvailabilityZones: 
-        !GetAZs &quot;&quot;
+        !GetAZs &#34;&#34;
       LaunchConfigurationName: !Ref LaunchConfig
-      MinSize: &quot;1&quot;
-      MaxSize: &quot;1&quot;
+      MinSize: &#34;1&#34;
+      MaxSize: &#34;1&#34;
 EC2Role:
   Type: AWS::IAM::Role
   Properties:
@@ -208,8 +206,8 @@ EC2Role:
       Statement:
       - Effect: Allow
         Principal:
-          Service: ['ec2.amazonaws.com']
-        Action: ['sts:AssumeRole']
+          Service: [&#39;ec2.amazonaws.com&#39;]
+        Action: [&#39;sts:AssumeRole&#39;]
     Path: /
     Policies:
     - PolicyName: ecs-service
@@ -217,22 +215,22 @@ EC2Role:
         Statement:
         - Effect: Allow
           Action: 
-            - 'ecs:CreateCluster'
-            - 'ecs:DeregisterContainerInstance'
-            - 'ecs:DiscoverPollEndpoint'
-            - 'ecs:Poll'
-            - 'ecs:RegisterContainerInstance'
-            - 'ecs:StartTelemetrySession'
-            - 'ecs:Submit*'
-            - 'logs:CreateLogStream'
-            - 'logs:PutLogEvents'
-          Resource: '*'
+            - &#39;ecs:CreateCluster&#39;
+            - &#39;ecs:DeregisterContainerInstance&#39;
+            - &#39;ecs:DiscoverPollEndpoint&#39;
+            - &#39;ecs:Poll&#39;
+            - &#39;ecs:RegisterContainerInstance&#39;
+            - &#39;ecs:StartTelemetrySession&#39;
+            - &#39;ecs:Submit*&#39;
+            - &#39;logs:CreateLogStream&#39;
+            - &#39;logs:PutLogEvents&#39;
+          Resource: &#39;*&#39;
 EC2InstanceProfile:
   Type: AWS::IAM::InstanceProfile
   Properties:
     Path: /
     Roles: 
-      - !Ref 'EC2Role'
+      - !Ref &#39;EC2Role&#39;
 LaunchConfig: 
   Type: AWS::AutoScaling::LaunchConfiguration
   Properties:
@@ -242,13 +240,13 @@ LaunchConfig:
       Fn::Base64: !Sub |
         #!/bin/bash -xe
         echo ECS_CLUSTER=${ECSCluster} &gt;&gt; /etc/ecs/ecs.config          
-    InstanceType: &quot;t2.small&quot;
+    InstanceType: &#34;t2.small&#34;
     BlockDeviceMappings: 
-      - DeviceName: &quot;/dev/xvda&quot;
+      - DeviceName: &#34;/dev/xvda&#34;
         Ebs: 
-          VolumeSize: &quot;30&quot;
-          VolumeType: &quot;gp2&quot;
-</code></pre>
+          VolumeSize: &#34;30&#34;
+          VolumeType: &#34;gp2&#34;
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -257,41 +255,41 @@ LaunchConfig:
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

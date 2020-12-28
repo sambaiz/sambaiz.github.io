@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -170,45 +168,45 @@ Route53で割合で解決されるようにしたが、これはうまく流れ�
 以前作ったBoilerplateベースで、コードは<a href="https://github.com/sambaiz/dax-test">ここ</a>。</p>
 <p><a href="https://www.sambaiz.net/article/259/">ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net</a></p>
 <p>TableとDAXのClusterを作成。</p>
-<pre><code>createDynamoTable() {
-  return new dynamodb.Table(this, 'DynamoTable', {
-    tableName: &quot;dax-test-table&quot;,
-    partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">createDynamoTable() {
+  return new dynamodb.Table(this, &#39;DynamoTable&#39;, {
+    tableName: &#34;dax-test-table&#34;,
+    partitionKey: { name: &#39;id&#39;, type: dynamodb.AttributeType.STRING },
     readCapacity: 50,
     writeCapacity: 50,
   });
 }
 
 createDaxCluster(subnetIds: string[]) {
-  const subnetGroup = new dax.CfnSubnetGroup(this, 'DaxSubnetGroup', {
-    subnetGroupName: &quot;dax-test-subntgroup&quot;,
-    description: &quot;for dax test&quot;,
+  const subnetGroup = new dax.CfnSubnetGroup(this, &#39;DaxSubnetGroup&#39;, {
+    subnetGroupName: &#34;dax-test-subntgroup&#34;,
+    description: &#34;for dax test&#34;,
     subnetIds: subnetIds,
   })
-  const daxRole = new iam.Role(this, 'DaxRole', {
-    assumedBy: new iam.ServicePrincipal('dax.amazonaws.com'),
+  const daxRole = new iam.Role(this, &#39;DaxRole&#39;, {
+    assumedBy: new iam.ServicePrincipal(&#39;dax.amazonaws.com&#39;),
     managedPolicies: [
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonDynamoDBFullAccess')
+      iam.ManagedPolicy.fromAwsManagedPolicyName(&#39;AmazonDynamoDBFullAccess&#39;)
     ]
   })
-  return new dax.CfnCluster(this, 'DaxCluster', {
-    clusterName: &quot;dax-test&quot;,
-    nodeType: &quot;dax.r4.large&quot;,
+  return new dax.CfnCluster(this, &#39;DaxCluster&#39;, {
+    clusterName: &#34;dax-test&#34;,
+    nodeType: &#34;dax.r4.large&#34;,
     replicationFactor: 1,
     iamRoleArn: daxRole.roleArn,
     subnetGroupName: subnetGroup.subnetGroupName,
   })
 }
-</code></pre><p>DynamoDBとinterfaceが同じなので<a href="https://github.com/guregu/dynamo">guregu/dynamo</a>もそのまま使えた。</p>
-<pre><code>func newDynamoClient(tableName string, throughDax bool) (*dynamo.DB, error) {
+</code></pre></div><p>DynamoDBとinterfaceが同じなので<a href="https://github.com/guregu/dynamo">guregu/dynamo</a>もそのまま使えた。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func newDynamoClient(tableName string, throughDax bool) (*dynamo.DB, error) {
 	var (
 		client dynamodbiface.DynamoDBAPI
 		err    error
 	)
 	if throughDax {
 		cfg := dax.DefaultConfig()
-		cfg.HostPorts = []string{os.Getenv(&quot;DAX_CLUSTER_URL&quot;)}
-		cfg.Region = os.Getenv(&quot;AWS_REGION&quot;)
+		cfg.HostPorts = []string{os.Getenv(&#34;DAX_CLUSTER_URL&#34;)}
+		cfg.Region = os.Getenv(&#34;AWS_REGION&#34;)
 		client, err = dax.New(cfg)
 		if err != nil {
 			return nil, err
@@ -218,67 +216,67 @@ createDaxCluster(subnetIds: string[]) {
 	}
 	return dynamo.NewFromIface(client), nil
 }
-</code></pre><p>DAXを通したときと通さなかった時の差を確認するため、クエリパラメータで振り分けるようにした。</p>
-<pre><code>func handleItem(db *dynamo.DB, dax *dynamo.DB) func(w http.ResponseWriter, r *http.Request) {
+</code></pre></div><p>DAXを通したときと通さなかった時の差を確認するため、クエリパラメータで振り分けるようにした。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func handleItem(db *dynamo.DB, dax *dynamo.DB) func(w http.ResponseWriter, r *http.Request) {
 	return auth(func(w http.ResponseWriter, r *http.Request) {
 		client := db
-		if r.URL.Query().Get(&quot;dax&quot;) == &quot;1&quot; {
+		if r.URL.Query().Get(&#34;dax&#34;) == &#34;1&#34; {
 			client = dax
 		}
 		switch r.Method {
 		case http.MethodGet:
 			var item item
 			before := time.Now()
-			if err := client.Table(tableName).Get(&quot;id&quot;, r.URL.Query().Get(&quot;id&quot;)).One(&amp;item); err != nil {
+			if err := client.Table(tableName).Get(&#34;id&#34;, r.URL.Query().Get(&#34;id&#34;)).One(&amp;item); err != nil {
 				if err != dynamo.ErrNotFound {
-					log.Printf(&quot;failed to get an item: %v&quot;, err)
-					http.Error(w, &quot;Internal Server Error&quot;, http.StatusInternalServerError)
+					log.Printf(&#34;failed to get an item: %v&#34;, err)
+					http.Error(w, &#34;Internal Server Error&#34;, http.StatusInternalServerError)
 				}
 				return
 			}
 			fmt.Fprintln(w, response{
-				Message:      r.URL.Query().Get(&quot;message&quot;),
+				Message:      r.URL.Query().Get(&#34;message&#34;),
 				TimeMicrosec: time.Now().Sub(before).Nanoseconds() / 1000,
 			})
 		...
 		}
 	})
 }
-</code></pre><p>初期データを挿入する。</p>
-<pre><code>$ BASE_URL=http://***
+</code></pre></div><p>初期データを挿入する。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ BASE_URL=http://***
 $ TOKEN=DAXTEST
-$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/initialize&quot;
+$ curl -X POST -H &#34;Authorization: token ${TOKEN}&#34; &#34;${BASE_URL}/initialize&#34;
 ok
-</code></pre><h3 id="read速度の向上">Read速度の向上</h3>
+</code></pre></div><h3 id="read速度の向上">Read速度の向上</h3>
 <p>DynamoDBとDAXにそれぞれ<code>GetItem</code>すると、DynamoDBは5ms前後かかるところ、DAXはキャッシュされてからは500-1000μs前後で返ってきた。</p>
-<pre><code>$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&quot;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl -H &#34;Authorization: token ${TOKEN}&#34; &#34;${BASE_URL}/item?id=1&#34;
 { 4768}
 
-$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
+$ curl -H &#34;Authorization: token ${TOKEN}&#34; &#34;${BASE_URL}/item?id=1&amp;dax=1&#34;
 { 30628}
 
-$ curl -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
+$ curl -H &#34;Authorization: token ${TOKEN}&#34; &#34;${BASE_URL}/item?id=1&amp;dax=1&#34;
 { 593}
-</code></pre><p>一方書き込みは前述したように遅くなる。思いの外差があった。</p>
-<pre><code>$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item&quot; --data '{&quot;id&quot;: &quot;AAA&quot;, &quot;title&quot;: &quot;aaa&quot;}'
+</code></pre></div><p>一方書き込みは前述したように遅くなる。思いの外差があった。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl -X POST -H &#34;Authorization: token ${TOKEN}&#34; &#34;${BASE_URL}/item&#34; --data &#39;{&#34;id&#34;: &#34;AAA&#34;, &#34;title&#34;: &#34;aaa&#34;}&#39;
 { 6135}
 
-$ curl -X POST -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?dax=1&quot; --data '{&quot;id&quot;: &quot;BBB&quot;, &quot;title&quot;: &quot;bbb&quot;}'
+$ curl -X POST -H &#34;Authorization: token ${TOKEN}&#34; &#34;${BASE_URL}/item?dax=1&#34; --data &#39;{&#34;id&#34;: &#34;BBB&#34;, &#34;title&#34;: &#34;bbb&#34;}&#39;
 { 39011}
-</code></pre><h3 id="read-capacityの節約">Read capacityの節約</h3>
+</code></pre></div><h3 id="read-capacityの節約">Read capacityの節約</h3>
 <p>全てキャッシュヒットするパターンで負荷をかけてみる。</p>
-<pre><code>$ ulimit -n 2000
-$ ab -n 10000 -c 1000 -r -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
-</code></pre><p>裏側のTableのキャパシティが全く使われないことを確認できた。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ulimit -n 2000
+$ ab -n 10000 -c 1000 -r -H &#34;Authorization: token ${TOKEN}&#34; &#34;${BASE_URL}/item?id=1&amp;dax=1&#34;
+</code></pre></div><p>裏側のTableのキャパシティが全く使われないことを確認できた。</p>
 <h3 id="ノードが落ちたときの挙動">ノードが落ちたときの挙動</h3>
 <p>ノードを1台にして再起動するとnetwork errorになった。</p>
-<pre><code>failed to get an item: InternalServerError: network error
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">failed to get an item: InternalServerError: network error
 caused by: dial tcp 172.31.34.26:8111: connect: connection refused
-</code></pre><p>ノードを2台に増やし、
+</code></pre></div><p>ノードを2台に増やし、
 負荷をかけている途中にプライマリーノードを落としてみる。
 フェイルオーバー中にいくらかエラーが返ることを想定していたが、そんなこともなく全て200で返った。</p>
-<pre><code>$ ab -n 20000 -c 10 -r -H &quot;Authorization: token ${TOKEN}&quot; &quot;${BASE_URL}/item?id=1&amp;dax=1&quot;
-</code></pre>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ab -n 20000 -c 10 -r -H &#34;Authorization: token ${TOKEN}&#34; &#34;${BASE_URL}/item?id=1&amp;dax=1&#34;
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -287,41 +285,41 @@ caused by: dial tcp 172.31.34.26:8111: connect: connection refused
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

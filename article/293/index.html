@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -143,7 +141,7 @@
 <p><a href="https://www.tensorflow.org/api_docs/python/tf/data/experimental/make_csv_dataset">make_csv_dataset()</a>は<code>batch_size</code>が必須になっているが、
 これをそのまま<code>filter()</code>しようとすると、<code>ValueError: predicate return type must be convertible to a scalar boolean tensor.</code>になってしまうので<code>unbatch()</code>している。
 SageMakerのServing containerを用いる場合は<code>save_format=&quot;tf&quot;</code>にして<a href="https://www.tensorflow.org/guide/saved_model">SavedModel</a>形式で保存する必要がある。</p>
-<pre><code>$ cat model.py
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat model.py
 import tensorflow as tf
 import logging
 
@@ -157,13 +155,13 @@ class Model:
             tf.keras.layers.Dense(128, activation=tf.nn.relu),
             tf.keras.layers.Dense(2, activation=tf.nn.sigmoid),
         ])
-        self.model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        self.model.compile(optimizer=&#39;adam&#39;, loss=&#39;binary_crossentropy&#39;, metrics=[&#39;accuracy&#39;])
 
     def _feature_columns(self):
         return [
-            tf.feature_column.numeric_column('age'),
-            tf.feature_column.indicator_column(tf.feature_column.categorical_column_with_identity('sex', 2)),
-            tf.feature_column.numeric_column('fare')
+            tf.feature_column.numeric_column(&#39;age&#39;),
+            tf.feature_column.indicator_column(tf.feature_column.categorical_column_with_identity(&#39;sex&#39;, 2)),
+            tf.feature_column.numeric_column(&#39;fare&#39;)
         ]
 
     def _fill(self, feature: str, value):
@@ -175,23 +173,23 @@ class Model:
         return __fill
 
     def _preprocess(self, ds: tf.data.Dataset):
-        ds_size = len(list(ds.filter(lambda x: x['age'] != -1.0)))
-        avg_age = ds.filter(lambda x: x['age'] != -1.0).reduce(0.0, lambda x, y: x + y['age']) / ds_size
-        ds = ds.map(self._fill('age', avg_age))
+        ds_size = len(list(ds.filter(lambda x: x[&#39;age&#39;] != -1.0)))
+        avg_age = ds.filter(lambda x: x[&#39;age&#39;] != -1.0).reduce(0.0, lambda x, y: x + y[&#39;age&#39;]) / ds_size
+        ds = ds.map(self._fill(&#39;age&#39;, avg_age))
         return ds.shuffle(1000).batch(100).prefetch(5)
 
     def train(self, data_path: str):
         ds = tf.data.experimental.make_csv_dataset(data_path, num_epochs=1, batch_size=1).unbatch()
         for features in self._preprocess(ds):
-            self.model.fit(features, tf.one_hot(features['survived'], 2))
-            loss, accuracy = self.model.evaluate(features, tf.one_hot(features['survived'], 2), verbose=0)
-            self.logger.info(f'train accuracy: {accuracy}, train loss: {loss};')
+            self.model.fit(features, tf.one_hot(features[&#39;survived&#39;], 2))
+            loss, accuracy = self.model.evaluate(features, tf.one_hot(features[&#39;survived&#39;], 2), verbose=0)
+            self.logger.info(f&#39;train accuracy: {accuracy}, train loss: {loss};&#39;)
 
     def save(self, path: str):
-        self.model.save(path, save_format=&quot;tf&quot;)
-</code></pre><h2 id="エントリーポイント">エントリーポイント</h2>
+        self.model.save(path, save_format=&#34;tf&#34;)
+</code></pre></div><h2 id="エントリーポイント">エントリーポイント</h2>
 <p><a href="https://aws.amazon.com/jp/blogs/news/using-tensorflow-eager-execution-with-amazon-sagemaker-script-mode/">スクリプトモード</a>で動かす。</p>
-<pre><code>$ cat training.py
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat training.py
 import argparse
 import os
 from model import Model
@@ -211,61 +209,61 @@ def _parse_args():
     parser = argparse.ArgumentParser()
 
     # model params
-    parser.add_argument('--dropout', type=float, default=0.2, metavar='DROP', help='dropout rate (default: 0.2)')
+    parser.add_argument(&#39;--dropout&#39;, type=float, default=0.2, metavar=&#39;DROP&#39;, help=&#39;dropout rate (default: 0.2)&#39;)
 
     # Container environment
-    parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR', 'model'))
-    parser.add_argument('--hosts', type=str, default=os.environ.get('SM_HOSTS', '[]'))
-    parser.add_argument('--current-host', type=str, default=os.environ.get('SM_CURRENT_HOST'))
+    parser.add_argument(&#39;--model_dir&#39;, type=str, default=os.environ.get(&#39;SM_MODEL_DIR&#39;, &#39;model&#39;))
+    parser.add_argument(&#39;--hosts&#39;, type=str, default=os.environ.get(&#39;SM_HOSTS&#39;, &#39;[]&#39;))
+    parser.add_argument(&#39;--current-host&#39;, type=str, default=os.environ.get(&#39;SM_CURRENT_HOST&#39;))
 
     # fit() inputs (SM_CHANNEL_XXXX)
-    parser.add_argument('--data-dir', type=str, default=os.environ.get('SM_CHANNEL_TRAINING', 'dataset'))
+    parser.add_argument(&#39;--data-dir&#39;, type=str, default=os.environ.get(&#39;SM_CHANNEL_TRAINING&#39;, &#39;dataset&#39;))
     args = parser.parse_args()
     args.hosts = json.loads(args.hosts)
     return args
 
 
-if __name__ == &quot;__main__&quot;:
+if __name__ == &#34;__main__&#34;:
     args = _parse_args()
     logger = _make_logger()
     m = Model(logger, args.dropout)
-    m.train(os.path.join(args.data_dir, 'titanic.csv'))
+    m.train(os.path.join(args.data_dir, &#39;titanic.csv&#39;))
     if len(args.hosts) == 0 or args.current_host == args.hosts[0]:
         m.save(args.model_dir)
-</code></pre><h2 id="実行">実行</h2>
+</code></pre></div><h2 id="実行">実行</h2>
 <p><code>distributions</code> に分散学習でパラメータを共有するためのパラメータサーバーかHorovodの設定を書くと<a href="https://aws.amazon.com/jp/blogs/news/launching-tensorflow-distributed-training-easily-with-horovod-or-parameter-servers-in-amazon-sagemaker/">クラスタを作ってくれる</a>。
 今回はパラメータサーバーを有効にしている。</p>
 <p><a href="https://www.sambaiz.net/article/179/">Destributed TensorFlowの流れとSavedModelの出力 - sambaiz-net</a></p>
-<pre><code>from sagemaker.tensorflow import TensorFlow
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">from sagemaker.tensorflow import TensorFlow
 import sagemaker
 
 estimator = TensorFlow(
-    source_dir='/root/sagemaker-tensorflow-titanic',
-    entry_point='training.py',
-    model_dir='/opt/ml/model', # =&gt; SM_MODEL_DIR
-    output_path=f's3://{os.environ[&quot;DATASETS_BUCKET&quot;]}/artifacts',
+    source_dir=&#39;/root/sagemaker-tensorflow-titanic&#39;,
+    entry_point=&#39;training.py&#39;,
+    model_dir=&#39;/opt/ml/model&#39;, # =&gt; SM_MODEL_DIR
+    output_path=f&#39;s3://{os.environ[&#34;DATASETS_BUCKET&#34;]}/artifacts&#39;,
     role=sagemaker.get_execution_role(),
-    framework_version='2.2.0',
-    py_version='py37',
+    framework_version=&#39;2.2.0&#39;,
+    py_version=&#39;py37&#39;,
     train_instance_count=2,
-    train_instance_type='ml.g4dn.xlarge',
+    train_instance_type=&#39;ml.g4dn.xlarge&#39;,
     distributions={
-        'parameter_server': { 'enabled': True }
+        &#39;parameter_server&#39;: { &#39;enabled&#39;: True }
     },
     hyperparameters={
-        'dropout': 0.2,
+        &#39;dropout&#39;: 0.2,
     },
     metric_definitions=[
-        {'Name':'test:accuracy', 'Regex':'train accuracy: (.*?),'},
-        {'Name':'test:loss', 'Regex':'train loss: (.*?);'}
+        {&#39;Name&#39;:&#39;test:accuracy&#39;, &#39;Regex&#39;:&#39;train accuracy: (.*?),&#39;},
+        {&#39;Name&#39;:&#39;test:loss&#39;, &#39;Regex&#39;:&#39;train loss: (.*?);&#39;}
     ],
     enable_sagemaker_metrics=True,
 )
 
-inputs = sagemaker.inputs.s3_input(f's3://{os.environ[&quot;DATASETS_BUCKET&quot;]}/{os.environ[&quot;DATASETS_KEY_PREFIX&quot;]}')
+inputs = sagemaker.inputs.s3_input(f&#39;s3://{os.environ[&#34;DATASETS_BUCKET&#34;]}/{os.environ[&#34;DATASETS_KEY_PREFIX&#34;]}&#39;)
 
-estimator.fit(inputs={'training': inputs})
-</code></pre><p>学習が終わると<code>output_path</code>にモデルが保存される。</p>
+estimator.fit(inputs={&#39;training&#39;: inputs})
+</code></pre></div><p>学習が終わると<code>output_path</code>にモデルが保存される。</p>
 
         </div>
       </article>
@@ -275,41 +273,41 @@ estimator.fit(inputs={'training': inputs})
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -153,9 +151,9 @@ ActionとしてCognito認証を入れて認証に失敗したらログイン画�
 <h2 id="ruleの作成">Ruleの作成</h2>
 <p>Serverless FrameworkではALBの<a href="https://serverless.com/framework/docs/providers/aws/events/alb/">enent</a>を付けるだけでLambdaに向くRuleが作成されるが、そこにはCognitoを追加できなさそうなので使っていない。OnUnauthenticatedRequestで認証失敗時の挙動を選択できる。UserPoolとSecretありのClientはあらかじめ作っておく。コールバックURLには<code>https://&lt;domain&gt;/oauth2/idpresponse</code>を追加する。</p>
 <p>API Gatewayだとタイムアウトの上限が<a href="https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/limits.html">30秒</a>なのに対してALBはLambdaの上限まで待てる。</p>
-<pre><code>$ cat serverless.yml
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat serverless.yml
 service: alb-cognito-auth-example
-frameworkVersion: &quot;&gt;=1.28.0 &lt;2.0.0&quot;
+frameworkVersion: &#34;&gt;=1.28.0 &lt;2.0.0&#34;
 
 provider:
   name: aws
@@ -179,40 +177,40 @@ resources:
       DependsOn: InvokeLambdaPermissionForALB
       Type: AWS::ElasticLoadBalancingV2::TargetGroup
       Properties:
-        Name: &quot;private-lambda-target-group&quot;
-        TargetType: &quot;lambda&quot;
+        Name: &#34;private-lambda-target-group&#34;
+        TargetType: &#34;lambda&#34;
         Targets:
           - Id: !GetAtt PrivateapiLambdaFunction.Arn # Reference functions.privateapi
     InvokeLambdaPermissionForALB:
       Type: AWS::Lambda::Permission
       Properties: 
-        Action: &quot;lambda:InvokeFunction&quot;
+        Action: &#34;lambda:InvokeFunction&#34;
         FunctionName: !Ref PrivateapiLambdaFunction
-        Principal: &quot;elasticloadbalancing.amazonaws.com&quot;
+        Principal: &#34;elasticloadbalancing.amazonaws.com&#34;
     ALB: 
-      Type: &quot;AWS::ElasticLoadBalancingV2::LoadBalancer&quot;
+      Type: &#34;AWS::ElasticLoadBalancingV2::LoadBalancer&#34;
       Properties: 
-        Name: &quot;serverless-auth-example-alb&quot;
-        Scheme: &quot;internet-facing&quot;
+        Name: &#34;serverless-auth-example-alb&#34;
+        Scheme: &#34;internet-facing&#34;
         LoadBalancerAttributes: 
-          - Key: &quot;idle_timeout.timeout_seconds&quot;
+          - Key: &#34;idle_timeout.timeout_seconds&#34;
             Value: 30
         SecurityGroups:
-          - &quot;sg-*****&quot;
+          - &#34;sg-*****&#34;
         Subnets:
-          - &quot;subnet-*****&quot;
-          - &quot;subnet-*****&quot;
+          - &#34;subnet-*****&#34;
+          - &#34;subnet-*****&#34;
     ALBListener: 
-      Type: &quot;AWS::ElasticLoadBalancingV2::Listener&quot;
+      Type: &#34;AWS::ElasticLoadBalancingV2::Listener&#34;
       Properties: 
         DefaultActions: 
           - Type: authenticate-cognito
             Order: 1
             AuthenticateCognitoConfig: 
               OnUnauthenticatedRequest: authenticate
-              UserPoolArn: &quot;arn:aws:cognito-idp:ap-northeast-1:*****&quot;
-              UserPoolClientId: &quot;*****&quot;
-              UserPoolDomain: &quot;*****.auth.ap-northeast-1.amazoncognito.com&quot;
+              UserPoolArn: &#34;arn:aws:cognito-idp:ap-northeast-1:*****&#34;
+              UserPoolClientId: &#34;*****&#34;
+              UserPoolDomain: &#34;*****.auth.ap-northeast-1.amazoncognito.com&#34;
           - Type: forward
             Order: 2
             TargetGroupArn: !Ref ALBTargetGroup
@@ -220,26 +218,26 @@ resources:
         Port: 443
         Protocol: HTTPS
         Certificates: 
-          - CertificateArn: &quot;arn:aws:acm:ap-northeast-1:*****:certificate/*****&quot;
+          - CertificateArn: &#34;arn:aws:acm:ap-northeast-1:*****:certificate/*****&#34;
     RecordSet:
       Type: AWS::Route53::RecordSet
       Properties: 
-        Type: &quot;A&quot; # or AAAA (IPv6)
-        HostedZoneName: &quot;foo.example.com.&quot;
-        Name: &quot;auth-example.foo.example.com.&quot;
+        Type: &#34;A&#34; # or AAAA (IPv6)
+        HostedZoneName: &#34;foo.example.com.&#34;
+        Name: &#34;auth-example.foo.example.com.&#34;
         AliasTarget: 
           HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
           DNSName: !GetAtt ALB.DNSName
-        Comment: &quot;Added by servereless-alb-cognito-auth-example&quot;
-</code></pre><p><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-authenticate-users.html#user-claims-encoding">x-amzn-oidc-data</a> HeaderにALBが署名したJWTトークンが入っているので、
+        Comment: &#34;Added by servereless-alb-cognito-auth-example&#34;
+</code></pre></div><p><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-authenticate-users.html#user-claims-encoding">x-amzn-oidc-data</a> HeaderにALBが署名したJWTトークンが入っているので、
 それがALBから来ているものかを検証しclaimを参照できる。リクエストはAPI Gatewayと同じような形式。</p>
-<pre><code>func ParseToken(tokenString string) (jwt.MapClaims, error) {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func ParseToken(tokenString string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// ES256
 		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
-			return nil, fmt.Errorf(&quot;unexpected signing method: %v&quot;, token.Header[&quot;alg&quot;])
+			return nil, fmt.Errorf(&#34;unexpected signing method: %v&#34;, token.Header[&#34;alg&#34;])
 		}
-		url := fmt.Sprintf(&quot;https://public-keys.auth.elb.ap-northeast-1.amazonaws.com/%s&quot;, token.Header[&quot;kid&quot;])
+		url := fmt.Sprintf(&#34;https://public-keys.auth.elb.ap-northeast-1.amazonaws.com/%s&#34;, token.Header[&#34;kid&#34;])
 		resp, err := http.Get(url)
 		if err != nil {
 			return nil, err
@@ -253,7 +251,7 @@ resources:
 	if claims, ok := token.Claims.(jwt.MapClaims); ok &amp;&amp; token.Valid {
 		return claims, nil
 	} else {
-		return nil, errors.New(&quot;token is invalid&quot;)
+		return nil, errors.New(&#34;token is invalid&#34;)
 	}
 }
 
@@ -262,19 +260,19 @@ type Response events.APIGatewayProxyResponse
 func Handler(request events.APIGatewayProxyRequest) (Response, error) {
 	var buf bytes.Buffer
 
-	_, err := ParseToken(request.Headers[&quot;x-amzn-oidc-data&quot;])
+	_, err := ParseToken(request.Headers[&#34;x-amzn-oidc-data&#34;])
 	if err != nil {
 		return Response{StatusCode: http.StatusUnauthorizeds}, err
 	}
 
 	resp := Response{
 		StatusCode:      http.StatusOK,
-		Body:            &quot;ok&quot;,
+		Body:            &#34;ok&#34;,
 	}
 
 	return resp, nil
 }
-</code></pre><h2 id="参考">参考</h2>
+</code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://tech.gunosy.io/entry/alb-login">まだログイン認証で消耗してるの？ ~ALBで簡単認証機構~ - Gunosy Tech Blog</a></p>
 
         </div>
@@ -285,41 +283,41 @@ func Handler(request events.APIGatewayProxyRequest) (Response, error) {
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

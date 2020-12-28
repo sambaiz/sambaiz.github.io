@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -144,46 +142,46 @@
 <p>まずcdkコマンドを実行するためのCI Userを作成する。これはCDK管理外のスタックで、AWSコンソール上から手動で上げる。</p>
 <p><a href="https://www.sambaiz.net/article/72/">AWSのAssumeRole - sambaiz-net</a></p>
 <p>AssumeRoleしかできないCIUserからCIAssumeRoleをassumeすることにした。</p>
-<pre><code>AWSTemplateFormatVersion: '2010-09-09'
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">AWSTemplateFormatVersion: &#39;2010-09-09&#39;
 Resources:
   CIAssumeRole:
-    Type: 'AWS::IAM::Role'
+    Type: &#39;AWS::IAM::Role&#39;
     Properties:
-      RoleName: 'CIAssumeRole'
+      RoleName: &#39;CIAssumeRole&#39;
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AdministratorAccess'
+        - &#39;arn:aws:iam::aws:policy/AdministratorAccess&#39;
       AssumeRolePolicyDocument: 
-        Version: '2012-10-17'
+        Version: &#39;2012-10-17&#39;
         Statement: 
-          - Effect: 'Allow'
+          - Effect: &#39;Allow&#39;
             Principal: 
               AWS: 
                 - !Ref AWS::AccountId
             Action: 
-              - 'sts:AssumeRole'
+              - &#39;sts:AssumeRole&#39;
   CIGroup:
-    Type: 'AWS::IAM::Group'
+    Type: &#39;AWS::IAM::Group&#39;
     Properties:
-      GroupName: 'CI'
+      GroupName: &#39;CI&#39;
   CIPolicies:
-    Type: 'AWS::IAM::Policy'
+    Type: &#39;AWS::IAM::Policy&#39;
     Properties:
-      PolicyName: 'CI'
+      PolicyName: &#39;CI&#39;
       PolicyDocument:
         Statement:
           - Effect: Allow
-            Action: 'sts:AssumeRole'
+            Action: &#39;sts:AssumeRole&#39;
             Resource: !GetAtt CIAssumeRole.Arn
       Groups:
         - !Ref CIGroup
   CIUser:
-    Type: 'AWS::IAM::User'
+    Type: &#39;AWS::IAM::User&#39;
     Properties:
-      UserName: 'CI'
+      UserName: &#39;CI&#39;
       Groups:
         - !Ref CIGroup
   CIUserKeys:
-    Type: 'AWS::IAM::AccessKey'
+    Type: &#39;AWS::IAM::AccessKey&#39;
     Properties:
       UserName: !Ref CIUser
 Outputs:
@@ -191,93 +189,93 @@ Outputs:
     Value: !Ref CIUserKeys
   SecretKey:
     Value: !GetAtt CIUserKeys.SecretAccessKey
-</code></pre><p>アップロードするとAccessKeyがOutputされるので、これに加え、SlackのWebhook URLとGitHubの<a href="https://github.com/settings/tokens">Token</a>を作成しCircleCIのEnvironment Variablesに追加する。また、PR作成時にビルドが走るようにビルド設定のOnly build pull requestsをオンにする。</p>
+</code></pre></div><p>アップロードするとAccessKeyがOutputされるので、これに加え、SlackのWebhook URLとGitHubの<a href="https://github.com/settings/tokens">Token</a>を作成しCircleCIのEnvironment Variablesに追加する。また、PR作成時にビルドが走るようにビルド設定のOnly build pull requestsをオンにする。</p>
 <p><img src="https://www.sambaiz.net/images/223-1.png" alt="Environment Variables"></p>
 <h2 id="circleciの設定">CircleCIの設定</h2>
 <p><code>.circleci/config.yml</code>はこんな感じ。PRが立っていればdiffと、develop/masterにmergeするとstg/prd環境へのdeployを行う。
 ただ、Only build pull requestsをオンにすると、PR以外ではdefault branchにしているmasterへのpushでしかjobが走らなくなってしまうので、
 stg環境へのデプロイはdevelop-&gt;masterへのPRが存在していなければPRを作成したときに行われる。</p>
 <p><a href="https://www.sambaiz.net/article/217/">CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる - sambaiz-net</a></p>
-<pre><code>version: 2.1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">version: 2.1
 orbs:
   slack: circleci/slack@3.2.0
 executors:
   default:
     docker:
-      - image: 'circleci/node:12.2.0'
+      - image: &#39;circleci/node:12.2.0&#39;
     environment:
-      AWS_REGION: 'ap-northeast-1'
+      AWS_REGION: &#39;ap-northeast-1&#39;
 jobs:
   build:
-    executor: 'default'
+    executor: &#39;default&#39;
     steps:
       - run:
-          name: 'assume_role'
+          name: &#39;assume_role&#39;
           command: |
             sudo apt-get install awscli
             unset AWS_SESSION_TOKEN
             echo $ASSUME_ROLE_ARN
             temp_role=$(aws sts assume-role --role-arn $ASSUME_ROLE_ARN --role-session-name $CIRCLE_PROJECT_REPONAME)
-            echo &quot;export AWS_ACCESS_KEY_ID=$(echo $temp_role | jq .Credentials.AccessKeyId | xargs)&quot; &gt;&gt; $BASH_ENV
-            echo &quot;export AWS_SECRET_ACCESS_KEY=$(echo $temp_role | jq .Credentials.SecretAccessKey | xargs)&quot; &gt;&gt; $BASH_ENV
-            echo &quot;export AWS_SESSION_TOKEN=$(echo $temp_role | jq .Credentials.SessionToken | xargs)&quot; &gt;&gt; $BASH_ENV
+            echo &#34;export AWS_ACCESS_KEY_ID=$(echo $temp_role | jq .Credentials.AccessKeyId | xargs)&#34; &gt;&gt; $BASH_ENV
+            echo &#34;export AWS_SECRET_ACCESS_KEY=$(echo $temp_role | jq .Credentials.SecretAccessKey | xargs)&#34; &gt;&gt; $BASH_ENV
+            echo &#34;export AWS_SESSION_TOKEN=$(echo $temp_role | jq .Credentials.SessionToken | xargs)&#34; &gt;&gt; $BASH_ENV
       - checkout
       - run:
-          name: 'build'
+          name: &#39;build&#39;
           command: |
             npm install
             npm run build
       - run:
-          name: 'cdk_diff'
+          name: &#39;cdk_diff&#39;
           command: |
-            if [ -n &quot;$CIRCLE_PULL_REQUEST&quot; ]; then
+            if [ -n &#34;$CIRCLE_PULL_REQUEST&#34; ]; then
               export ENV=stg
-              if [ &quot;${CIRCLE_BRANCH}&quot; == &quot;develop&quot; ]; then
+              if [ &#34;${CIRCLE_BRANCH}&#34; == &#34;develop&#34; ]; then
                 export ENV=prd
               fi 
               pr_number=${CIRCLE_PULL_REQUEST##*/}
-              block='```'
-              diff=$(echo -e &quot;cdk diff (env=${ENV})\n${block}\n$(npm run --silent ci_diff)\n${block}&quot;)
-              data=$(jq -n --arg body &quot;$diff&quot; '{ body: $body }') # escape
-              curl -X POST -H 'Content-Type:application/json' \
-                -H 'Accept: application/vnd.github.v3+json' \
-                -H &quot;Authorization: token ${GITHUB_TOKEN}&quot; \
-                -d &quot;$data&quot; \
-                &quot;https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/issues/${pr_number}/comments&quot;
+              block=&#39;```&#39;
+              diff=$(echo -e &#34;cdk diff (env=${ENV})\n${block}\n$(npm run --silent ci_diff)\n${block}&#34;)
+              data=$(jq -n --arg body &#34;$diff&#34; &#39;{ body: $body }&#39;) # escape
+              curl -X POST -H &#39;Content-Type:application/json&#39; \
+                -H &#39;Accept: application/vnd.github.v3+json&#39; \
+                -H &#34;Authorization: token ${GITHUB_TOKEN}&#34; \
+                -d &#34;$data&#34; \
+                &#34;https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/issues/${pr_number}/comments&#34;
             fi
       - run:
-          name: 'cdk_deploy'
+          name: &#39;cdk_deploy&#39;
           command: |
-            if [ &quot;${CIRCLE_BRANCH}&quot; == &quot;master&quot; ]; then
+            if [ &#34;${CIRCLE_BRANCH}&#34; == &#34;master&#34; ]; then
               ENV=prd npm run ci_deploy
-            elif [ &quot;${CIRCLE_BRANCH}&quot; == &quot;develop&quot; ]; then
+            elif [ &#34;${CIRCLE_BRANCH}&#34; == &#34;develop&#34; ]; then
               ENV=stg npm run ci_deploy
             fi 
       - slack/status:
-          success_message: &quot;cdk build/deploy (${CIRCLE_BRANCH}) has succeeded :tada:&quot;
-          failure_message: &quot;cdk build/deploy (${CIRCLE_BRANCH}) has failed :crying_cat_face:&quot;
+          success_message: &#34;cdk build/deploy (${CIRCLE_BRANCH}) has succeeded :tada:&#34;
+          failure_message: &#34;cdk build/deploy (${CIRCLE_BRANCH}) has failed :crying_cat_face:&#34;
           webhook: $SLACK_WEBHOOK
-          only_for_branches: &quot;develop,master&quot;
-</code></pre><p>Assumeしたkeyは<code>$BASH_ENV</code>でexportされるようにして以後のstepでも<a href="https://circleci.com/docs/2.0/env-vars/#using-bash_env-to-set-environment-variables">自動で読み込まれる</a>ようにする。
+          only_for_branches: &#34;develop,master&#34;
+</code></pre></div><p>Assumeしたkeyは<code>$BASH_ENV</code>でexportされるようにして以後のstepでも<a href="https://circleci.com/docs/2.0/env-vars/#using-bash_env-to-set-environment-variables">自動で読み込まれる</a>ようにする。
 GitHubの<a href="https://developer.github.com/v3/issues/comments/#create-a-comment">コメント作成API</a>を呼ぶのにPR番号が必要で<code>$CIRCLE_PR_NUMBER</code>を使おうとしたが、folkされたPRでしか<a href="https://circleci.com/docs/2.0/env-vars/#built-in-environment-variables">入らない</a>ので<code>$CIRCLE_PULL_REQUEST</code>のURLから/末尾を取り出して使っている。</p>
 <p><code>cdk diff</code>は差分があるとstderrに出力し終了ステータスを1で<a href="https://github.com/awslabs/aws-cdk/issues/2111">返してしまい</a>、ビルドが中断してしまうのでstderrをstdoutに向けて<code>||true</code>で強制的に成功させている。sedでは色を付けるためのescape sequenceを取り除いている。<code>-c</code>でenvの値をcontextとして渡して各環境のStackが作られるようにしていて、deploy時に<code>--require-approval never</code>を付けているのはsgへのルール追加時などに確認が入ってCIが止まらないようにするため。</p>
 <p><a href="https://github.com/typicode/husky">husky</a>でcommit時に<a href="https://github.com/prettier/prettier">prettier</a>を走らせている。</p>
-<pre><code>$ cat package.json | jq &quot;.scripts&quot;
-&quot;scripts&quot;: {
-  &quot;build&quot;: &quot;tsc&quot;,
-  &quot;watch&quot;: &quot;tsc -w&quot;,
-  &quot;format&quot;: &quot;prettier --write \&quot;lib/**/*.ts\&quot;&quot;,
-  &quot;ci_diff&quot;: &quot;cdk diff -c env=${ENV:-stg} 2&gt;&amp;1 | sed -r 's/\\x1B\\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g' || true&quot;,
-  &quot;ci_deploy&quot;: &quot;cdk deploy -c env=${ENV:-stg} --require-approval never&quot;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat package.json | jq &#34;.scripts&#34;
+&#34;scripts&#34;: {
+  &#34;build&#34;: &#34;tsc&#34;,
+  &#34;watch&#34;: &#34;tsc -w&#34;,
+  &#34;format&#34;: &#34;prettier --write \&#34;lib/**/*.ts\&#34;&#34;,
+  &#34;ci_diff&#34;: &#34;cdk diff -c env=${ENV:-stg} 2&gt;&amp;1 | sed -r &#39;s/\\x1B\\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g&#39; || true&#34;,
+  &#34;ci_deploy&#34;: &#34;cdk deploy -c env=${ENV:-stg} --require-approval never&#34;
 }
 
 $ cat .huskyrc.json 
 {
-  &quot;hooks&quot;: {
-    &quot;pre-commit&quot;: &quot;npm run format &amp;&amp; git add .&quot;
+  &#34;hooks&#34;: {
+    &#34;pre-commit&#34;: &#34;npm run format &amp;&amp; git add .&#34;
   }
 }
-</code></pre><p>PRを作成すると<code>cdk diff</code>の結果が表示される。</p>
+</code></pre></div><p>PRを作成すると<code>cdk diff</code>の結果が表示される。</p>
 <p><img src="https://www.sambaiz.net/images/223-2.png" alt="PRに投げられたcdk diffの結果"></p>
 <p>deployが完了するとSlackに通知が飛ぶ。</p>
 <p><img src="https://www.sambaiz.net/images/223-3.png" alt="Slackの通知"></p>
@@ -290,41 +288,41 @@ $ cat .huskyrc.json
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

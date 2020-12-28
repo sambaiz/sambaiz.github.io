@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -141,7 +139,7 @@
 <h3 id="モデル">モデル</h3>
 <p>以前作ったMNISTのモデルを使う。</p>
 <p><a href="https://www.sambaiz.net/article/205/">PyTorchでMNISTする - sambaiz-net</a></p>
-<pre><code>$ cat model.py
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat model.py
 import torch
 from torch import nn, cuda
 import torch.nn.functional as F
@@ -198,19 +196,19 @@ def test(model, test_loader, device):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            loss_sum += F.nll_loss(output, target, reduction='sum').cpu().data  # sum up batch loss
+            loss_sum += F.nll_loss(output, target, reduction=&#39;sum&#39;).cpu().data  # sum up batch loss
             pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
     accuracy = correct / len(test_loader.dataset)
     loss = loss_sum / len(test_loader.dataset)
     return accuracy, loss
-</code></pre><h3 id="エントリーポイント">エントリーポイント</h3>
+</code></pre></div><h3 id="エントリーポイント">エントリーポイント</h3>
 <p><a href="https://github.com/awslabs/amazon-sagemaker-examples/blob/b01821341caf3d6af351e852b0dd9955db0e4515/sagemaker-python-sdk/pytorch_mnist/mnist.py">サンプルコード</a>をベースに
 環境変数や引数でパラメータを受け取り、GPUや分散学習のための準備を行う。
 <code>fit()</code>のinputで渡したS3のファイルは<code>${SM_CHANNEL_XXXX}</code>のパスにダウンロードされていて、<code>${SM_MODEL_DIR}</code>に置いたファイルが保存される。
 ホスティング時にEIを用いる場合<code>model.pt</code>という名前のTorchScriptとして保存する必要がある。</p>
 <p><a href="https://www.sambaiz.net/article/290/">SageMakerで学習したPyTorchのモデルをElastic Inferenceを有効にしてデプロイする - sambaiz-net</a></p>
-<pre><code>import logging
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import logging
 import torch
 from torchvision import datasets, transforms
 import torch.distributed as dist
@@ -239,15 +237,15 @@ def _make_test_loader(batch_size, data_dir, **kwargs):
 def train(args):
     is_distributed = len(args.hosts) &gt; 1 and args.backend is not None
     use_cuda = args.num_gpus &gt; 0
-    kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    device = torch.device(&quot;cuda&quot; if use_cuda else &quot;cpu&quot;)
+    kwargs = {&#39;num_workers&#39;: 1, &#39;pin_memory&#39;: True} if use_cuda else {}
+    device = torch.device(&#34;cuda&#34; if use_cuda else &#34;cpu&#34;)
 
     if is_distributed:
         # Initialize the distributed environment.
         world_size = len(args.hosts)
-        os.environ['WORLD_SIZE'] = str(world_size)
+        os.environ[&#39;WORLD_SIZE&#39;] = str(world_size)
         host_rank = args.hosts.index(args.current_host)
-        os.environ['RANK'] = str(host_rank)
+        os.environ[&#39;RANK&#39;] = str(host_rank)
         dist.init_process_group(backend=args.backend, rank=host_rank, world_size=world_size)
 
     # set the seed for generating random numbers
@@ -267,49 +265,49 @@ def train(args):
     test_loader = _make_test_loader(args.test_batch_size, args.data_dir, **kwargs)
 
     for epoch in range(1, args.epochs + 1):
-        logger.info(f'epoch: {epoch}/{args.epochs}')
+        logger.info(f&#39;epoch: {epoch}/{args.epochs}&#39;)
         md.train(model, train_loader, device, is_distributed, args.lr, args.momentum)
         test_accuracy, test_loss = md.test(model, test_loader, device)
-        logger.info(f'test accuracy: {test_accuracy}, test loss: {test_loss};')
+        logger.info(f&#39;test accuracy: {test_accuracy}, test loss: {test_loss};&#39;)
     save_model(model, args.model_dir)
 
 
 def save_model(model, model_dir):
-    path = os.path.join(model_dir, 'model.pt')
+    path = os.path.join(model_dir, &#39;model.pt&#39;)
     torch.jit.save(torch.jit.script(model.module), path)
 
 
-if __name__ == '__main__':
+if __name__ == &#39;__main__&#39;:
     parser = argparse.ArgumentParser()
 
     # hyperparameters
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N', help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N', help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
-    parser.add_argument('--backend', type=str, default=None, help='backend for distributed training (tcp, gloo on cpu and gloo, nccl on gpu)')
+    parser.add_argument(&#39;--batch-size&#39;, type=int, default=64, metavar=&#39;N&#39;, help=&#39;input batch size for training (default: 64)&#39;)
+    parser.add_argument(&#39;--test-batch-size&#39;, type=int, default=1000, metavar=&#39;N&#39;, help=&#39;input batch size for testing (default: 1000)&#39;)
+    parser.add_argument(&#39;--epochs&#39;, type=int, default=10, metavar=&#39;N&#39;, help=&#39;number of epochs to train (default: 10)&#39;)
+    parser.add_argument(&#39;--seed&#39;, type=int, default=1, metavar=&#39;S&#39;, help=&#39;random seed (default: 1)&#39;)
+    parser.add_argument(&#39;--backend&#39;, type=str, default=None, help=&#39;backend for distributed training (tcp, gloo on cpu and gloo, nccl on gpu)&#39;)
     # model params
-    parser.add_argument('--dropout', type=float, default=0.5, metavar='DROP', help='dropout rate (default: 0.5)')
+    parser.add_argument(&#39;--dropout&#39;, type=float, default=0.5, metavar=&#39;DROP&#39;, help=&#39;dropout rate (default: 0.5)&#39;)
     # optimizer params
-    parser.add_argument('--lr', type=float, default=0.01, metavar='LR', help='learning rate (default: 0.01)')
-    parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
+    parser.add_argument(&#39;--lr&#39;, type=float, default=0.01, metavar=&#39;LR&#39;, help=&#39;learning rate (default: 0.01)&#39;)
+    parser.add_argument(&#39;--momentum&#39;, type=float, default=0.5, metavar=&#39;M&#39;, help=&#39;SGD momentum (default: 0.5)&#39;)
 
     # Container environment
-    parser.add_argument('--hosts', type=str, default=os.environ.get('SM_HOSTS', '[]'))
-    parser.add_argument('--current-host', type=str, default=os.environ.get('SM_CURRENT_HOST'))
-    parser.add_argument('--model-dir', type=str, default=os.environ.get('SM_MODEL_DIR', '.'))
-    parser.add_argument('--num-gpus', type=int, default=os.environ.get('SM_NUM_GPUS', 0))
+    parser.add_argument(&#39;--hosts&#39;, type=str, default=os.environ.get(&#39;SM_HOSTS&#39;, &#39;[]&#39;))
+    parser.add_argument(&#39;--current-host&#39;, type=str, default=os.environ.get(&#39;SM_CURRENT_HOST&#39;))
+    parser.add_argument(&#39;--model-dir&#39;, type=str, default=os.environ.get(&#39;SM_MODEL_DIR&#39;, &#39;.&#39;))
+    parser.add_argument(&#39;--num-gpus&#39;, type=int, default=os.environ.get(&#39;SM_NUM_GPUS&#39;, 0))
 
     # fit() inputs (SM_CHANNEL_XXXX)
-    parser.add_argument('--data-dir', type=str, default=os.environ.get('SM_CHANNEL_TRAINING', 'mnist'))
+    parser.add_argument(&#39;--data-dir&#39;, type=str, default=os.environ.get(&#39;SM_CHANNEL_TRAINING&#39;, &#39;mnist&#39;))
 
     args = parser.parse_args()
     args.hosts = json.loads(args.hosts)
 
     train(args)
-</code></pre><h3 id="ローカル実行">ローカル実行</h3>
+</code></pre></div><h3 id="ローカル実行">ローカル実行</h3>
 <p>ローカルで実行できることを確認する。</p>
-<pre><code>$ cat Makefile
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat Makefile
 download_datasets:
 	python download_datasets.py
 
@@ -319,14 +317,14 @@ local_run: download_datasets
 $ cat download_datasets.py
 from torchvision import datasets
 
-if __name__ == '__main__':
-    dataset = datasets.MNIST('.', train=True, download=True)
-    dataset = datasets.MNIST('.', train=False, download=True)
-</code></pre><pre><code>$ make local_run
+if __name__ == &#39;__main__&#39;:
+    dataset = datasets.MNIST(&#39;.&#39;, train=True, download=True)
+    dataset = datasets.MNIST(&#39;.&#39;, train=False, download=True)
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ make local_run
 epoch: 1/10
 test_accuracy: 0.9593, test_loss_avg: -10.719537734985352
 ...
-</code></pre><h2 id="実行">実行</h2>
+</code></pre></div><h2 id="実行">実行</h2>
 <p>SageMaker Studioから実行した。</p>
 <h3 id="sagemaker-studioへのオンボードhttpsdocsawsamazoncomja_jpsagemakerlatestdggs-studio-onboardhtml"><a href="https://docs.aws.amazon.com/ja_jp/sagemaker/latest/dg/gs-studio-onboard.html">SageMaker Studioへのオンボード</a></h3>
 <p>SageMaker Studioを初めて使う場合はユーザー名とS3などにアクセスするためのExecution roleなどを設定する必要がある。QuickstartではIAM認証になるが、Standard setupでSSO認証にすることもできる。</p>
@@ -335,7 +333,7 @@ test_accuracy: 0.9593, test_loss_avg: -10.719537734985352
 <p><img src="https://www.sambaiz.net/images/287-studio.png" alt="Onboard"></p>
 <h3 id="前準備">前準備</h3>
 <p>必要なパッケージをインストールし、データセットをS3に上げる。</p>
-<pre><code>import sys
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import sys
 !{sys.executable} -m pip install sagemaker-experiments
 !{sys.executable} -m pip install torch
 !{sys.executable} -m pip install torchvision
@@ -343,41 +341,41 @@ test_accuracy: 0.9593, test_loss_avg: -10.719537734985352
 
 import os
 sess = boto3.Session()
-account_id = sess.client('sts').get_caller_identity()[&quot;Account&quot;]
-os.environ['DATASETS_BUCKET'] = f'sagemaker-test-mnist-{sess.region_name}-{account_id}'
-os.environ['DATASETS_KEY_PREFIX'] = 'mnist'
+account_id = sess.client(&#39;sts&#39;).get_caller_identity()[&#34;Account&#34;]
+os.environ[&#39;DATASETS_BUCKET&#39;] = f&#39;sagemaker-test-mnist-{sess.region_name}-{account_id}&#39;
+os.environ[&#39;DATASETS_KEY_PREFIX&#39;] = &#39;mnist&#39;
 !make upload_datasets
-</code></pre><h3 id="学習">学習</h3>
+</code></pre></div><h3 id="学習">学習</h3>
 <p>PyTorchの<a href="https://sagemaker.readthedocs.io/en/stable/api/training/estimators.html">Estimator</a>を作成し、<code>fit()</code>でTraining jobsを開始する。</p>
 <p><img src="https://www.sambaiz.net/images/287-trainingjobs.png" alt="Training jobs"></p>
-<pre><code>from sagemaker.pytorch import PyTorch
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">from sagemaker.pytorch import PyTorch
 import sagemaker
 
 estimator = PyTorch(
-    source_dir='/root/sagemaker-pytorch-mnist',
-    entry_point='main.py',
-    output_path=f's3://{os.environ[&quot;DATASETS_BUCKET&quot;]}/artifacts',
+    source_dir=&#39;/root/sagemaker-pytorch-mnist&#39;,
+    entry_point=&#39;main.py&#39;,
+    output_path=f&#39;s3://{os.environ[&#34;DATASETS_BUCKET&#34;]}/artifacts&#39;,
     role=sagemaker.get_execution_role(),
-    framework_version='1.3.1',
-    py_version='py3',
+    framework_version=&#39;1.3.1&#39;,
+    py_version=&#39;py3&#39;,
     train_instance_count=2,
-    train_instance_type='ml.g4dn.xlarge',
+    train_instance_type=&#39;ml.g4dn.xlarge&#39;,
     hyperparameters={
-        'epochs': 10,
-        'backend': 'gloo',
-        'dropout': 0.2,
+        &#39;epochs&#39;: 10,
+        &#39;backend&#39;: &#39;gloo&#39;,
+        &#39;dropout&#39;: 0.2,
     },
     metric_definitions=[
-        {'Name':'test:accuracy', 'Regex':'test accuracy: (.*?),'},
-        {'Name':'test:loss', 'Regex':'test loss: (.*?);'}
+        {&#39;Name&#39;:&#39;test:accuracy&#39;, &#39;Regex&#39;:&#39;test accuracy: (.*?),&#39;},
+        {&#39;Name&#39;:&#39;test:loss&#39;, &#39;Regex&#39;:&#39;test loss: (.*?);&#39;}
     ],
     enable_sagemaker_metrics=True,
 )
 
-inputs = sagemaker.inputs.s3_input(f's3://{os.environ[&quot;DATASETS_BUCKET&quot;]}/{os.environ[&quot;DATASETS_KEY_PREFIX&quot;]}')
+inputs = sagemaker.inputs.s3_input(f&#39;s3://{os.environ[&#34;DATASETS_BUCKET&#34;]}/{os.environ[&#34;DATASETS_KEY_PREFIX&#34;]}&#39;)
 
-estimator.fit(inputs={'training': inputs})
-</code></pre><p>出力したログの正規表現で一致した部分の値がメトリクスとしてCloudWatchに送られる。</p>
+estimator.fit(inputs={&#39;training&#39;: inputs})
+</code></pre></div><p>出力したログの正規表現で一致した部分の値がメトリクスとしてCloudWatchに送られる。</p>
 <p><img src="https://www.sambaiz.net/images/287-metrics.png" alt="メトリクス"></p>
 <p>学習が終わると<code>output_path</code>にモデルが保存される。</p>
 
@@ -389,41 +387,41 @@ estimator.fit(inputs={'training': inputs})
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

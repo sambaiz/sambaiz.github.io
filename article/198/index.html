@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -146,20 +144,20 @@
 <p>以下のCNNで学習率を高めに設定しBNありなしの結果を比較する。学習データはmnist。MonitoredSessionでcostをsummaryとして出力しTensorBoardで見られるようにしている。</p>
 <p><a href="https://www.sambaiz.net/article/147/">TensorBoardでsummaryやグラフを見る - sambaiz-net</a></p>
 <p><a href="https://www.sambaiz.net/article/175/">TensorFlowのMonitoredSessionとSessionRunHookとsummaryのエラー - sambaiz-net</a></p>
-<pre><code>import pandas as pd
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import pandas as pd
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sklearn.metrics import accuracy_score
 
-train = pd.read_csv('./train.csv')
+train = pd.read_csv(&#39;./train.csv&#39;)
 (x_train, x_valid ,y_train, y_valid) = train_test_split(
-    train.drop('label', axis=1).values.reshape((-1, 28, 28, 1)), 
-    np.identity(10)[train['label']], 
+    train.drop(&#39;label&#39;, axis=1).values.reshape((-1, 28, 28, 1)), 
+    np.identity(10)[train[&#39;label&#39;]], 
     test_size = 0.1, random_state = 100)
 
-print(&quot;data shape: {}, label shape {}&quot;.format(x_train.shape, y_train.shape))
+print(&#34;data shape: {}, label shape {}&#34;.format(x_train.shape, y_train.shape))
 
 tf.reset_default_graph()
 
@@ -182,11 +180,11 @@ use_bn = tf.placeholder(tf.bool, shape=())
 x = tf.placeholder(shape=[None, 28, 28, 1], dtype=tf.float32)
 t = tf.placeholder(tf.float32, [None, 10])
 
-with tf.name_scope(&quot;Conv1&quot;):
+with tf.name_scope(&#34;Conv1&#34;):
     h = ConvBnRelu(filters=32, kernel_size= [3, 3])(x, use_bn, is_training)
     h = tf.layers.MaxPooling2D(pool_size=[2, 2], strides=2)(h)
 
-with tf.name_scope(&quot;Conv2&quot;):
+with tf.name_scope(&#34;Conv2&#34;):
     h = ConvBnRelu(filters= 64, kernel_size= [3, 3])(h, use_bn, is_training)
     h = tf.layers.MaxPooling2D(pool_size=[2, 2], strides=2)(h)
 
@@ -195,7 +193,7 @@ y = tf.layers.Dense(units=10, activation=tf.nn.softmax)(h)
 
 global_step=tf.train.get_or_create_global_step()
 cost = - tf.reduce_mean(tf.reduce_sum(t * tf.log(tf.clip_by_value(y, 1e-10, y)), axis=1))
-summary_cost = tf.summary.scalar('cost', cost)
+summary_cost = tf.summary.scalar(&#39;cost&#39;, cost)
 optimizer = tf.train.AdamOptimizer(0.01).minimize(cost, global_step=global_step)
 
 EPOCH_NUM = 5
@@ -209,23 +207,23 @@ init = tf.global_variables_initializer()
 
 for bn in [False, True]:
     epoch = -1
-    print(&quot;--- use binary norm: {} ---&quot;.format(bn))
+    print(&#34;--- use binary norm: {} ---&#34;.format(bn))
     with tf.train.MonitoredTrainingSession(
         hooks=hooks, 
-        summary_dir=&quot;/home/jovyan/summary&quot;,
+        summary_dir=&#34;/home/jovyan/summary&#34;,
         save_summaries_steps=100) as sess:    
         sess.run(init, feed_dict={x: x_valid, t: y_valid, is_training: False, use_bn: bn})
         while not sess.should_stop():
             epoch += 1
             y_pred, cost_valid, _ = sess.run([y, cost, summary_cost], feed_dict={x: x_valid, t: y_valid, is_training: False, use_bn: bn})
-            print(&quot;epoch: {:2d}, cost: {:.4f}, accuracy: {:.4f}&quot;.format(
+            print(&#34;epoch: {:2d}, cost: {:.4f}, accuracy: {:.4f}&#34;.format(
                 epoch, cost_valid, accuracy_score(y_pred.argmax(axis=1), y_valid.argmax(axis=1))))
             x_train, y_train = shuffle(x_train, y_train, random_state=100)
             for batch in range(len(x_train) // BATCH_SIZE):
                 start = batch * BATCH_SIZE
                 end = start + BATCH_SIZE
                 sess.run(optimizer, feed_dict={x: x_train[start:end], t: y_train[start:end], is_training: True, use_bn: bn})
-</code></pre><p>BNを行わなかったときの結果。コストを下げられていない。ちなみに学習率を0.01から0.001にしたら下げられるようになった。</p>
+</code></pre></div><p>BNを行わなかったときの結果。コストを下げられていない。ちなみに学習率を0.01から0.001にしたら下げられるようになった。</p>
 <p><img src="https://www.sambaiz.net/images/198-2.png" alt="BNしない場合のコスト"></p>
 <p>一方、BNを行ったときの結果がこれ。学習率はそのままで順調にコストを下げることができている。</p>
 <p><img src="https://www.sambaiz.net/images/198-3.png" alt="BNした場合のコスト"></p>
@@ -238,41 +236,41 @@ for bn in [False, True]:
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

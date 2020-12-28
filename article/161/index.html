@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -140,66 +138,66 @@ K8sならworkerの増減も簡単だし、HelmのChartもあるので立てる�
 <p><code>@task(10)</code>のように括弧の中に数字を書いて実行される割合を偏らせることもできる。
 異なるTaskSetに対応するユーザーを複数作ることもできて、こちらもweightで重みを付けられる。
 ユーザー数はあとでWeb上から入力する。</p>
-<pre><code>$ mkdir tasks
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ mkdir tasks
 $ cat tasks/tasks.py
 from locust import HttpLocust, TaskSet, task
 
 class ElbTasks(TaskSet):
   @task
   def task1(self):
-    with self.client.get(&quot;/&quot;, catch_response=True) as response:
-      if response.content != &quot;Success&quot;:
-        response.failure(&quot;Got wrong response&quot;)
+    with self.client.get(&#34;/&#34;, catch_response=True) as response:
+      if response.content != &#34;Success&#34;:
+        response.failure(&#34;Got wrong response&#34;)
 
 class ElbWarmer(HttpLocust):
   task_set = ElbTasks
   min_wait = 1000
   max_wait = 3000
-</code></pre><p>stableに<a href="https://github.com/kubernetes/charts/tree/master/stable/locust">Chart</a>はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、<code>package</code> して、<code>helm repo index</code> でこれを参照する<code>index.yaml</code>を生成した。</p>
+</code></pre></div><p>stableに<a href="https://github.com/kubernetes/charts/tree/master/stable/locust">Chart</a>はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、<code>package</code> して、<code>helm repo index</code> でこれを参照する<code>index.yaml</code>を生成した。</p>
 <blockquote>
 <p>追記(2020-03-11): 今はConfigmapを自分で作成し <code>--set worker.config.configmapName=***</code> することでforkしなくてもよく<a href="https://github.com/helm/charts/commit/0ab53c795720882f3f9630c12f8ecf96ba881638">なった</a>
 <code>kubectl create configmap locust-worker-configs --from-file tasks/tasks.py</code></p>
 </blockquote>
-<pre><code>$ helm package .
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">$ helm <span style="color:#ff79c6">package</span> .
 $ helm repo index .
 $ ls
-index.yaml		locust-0.1.2.tgz		...
+index.yaml		locust<span style="color:#ff79c6">-</span><span style="color:#bd93f9">0.1.2</span>.tgz		<span style="color:#ff79c6">...</span>
 $ cat index.yaml
 apiVersion: v1
 entries:
   locust:
-    ...
+    <span style="color:#ff79c6">...</span>
     urls:
-    - locust-0.1.2.tgz
-    version: 0.1.2
-</code></pre><pre><code>$ helm repo add my-locust 'https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust'
+    <span style="color:#ff79c6">-</span> locust<span style="color:#ff79c6">-</span><span style="color:#bd93f9">0.1.2</span>.tgz
+    version: <span style="color:#bd93f9">0.1.2</span>
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm repo add my-locust &#39;https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust&#39;
 $ helm repo list
 NAME     	URL                                                                     
 stable   	https://kubernetes-charts.storage.googleapis.com
 local    	http://127.0.0.1:8879/charts    
 my-locust	https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust
-</code></pre><p>GKEのようなRBACが有効な環境でHelmを使う場合、TillerにServiceAccountを設定しておく。</p>
+</code></pre></div><p>GKEのようなRBACが有効な環境でHelmを使う場合、TillerにServiceAccountを設定しておく。</p>
 <p><a href="https://www.sambaiz.net/article/160/">RBACが有効なGKEでHelmを使う - sambaiz-net</a></p>
 <p>addしたrepoからinstallする。</p>
-<pre><code>$ helm install -n my-locust --set master.config.target-host=**** my-locust/locust 
-</code></pre><p>masterとworker(デフォルトで2つ)が立った。</p>
-<pre><code>$ kubectl get pods
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm install -n my-locust --set master.config.target-host=**** my-locust/locust 
+</code></pre></div><p>masterとworker(デフォルトで2つ)が立った。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl get pods
 NAME                                READY     STATUS    RESTARTS   AGE
 my-locust-master-7f7d57f5dc-k966s   1/1       Running   0          1m
 my-locust-worker-66cc964748-7ff5w   1/1       Running   0          1m
 my-locust-worker-66cc964748-wx5hf   1/1       Running   0          1m
 ...
-</code></pre><p>port-forwardしてweb-uiにアクセスしてみる。</p>
-<pre><code>$ kubectl port-forward $POD_NAME 8089
+</code></pre></div><p>port-forwardしてweb-uiにアクセスしてみる。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl port-forward $POD_NAME 8089
 $ open localhost:8089
-</code></pre><p><img src="https://www.sambaiz.net/images/161.png" alt="User数と生成速度の設定"></p>
+</code></pre></div><p><img src="https://www.sambaiz.net/images/161.png" alt="User数と生成速度の設定"></p>
 <p>実行開始するとRPSなどがリアルタイムで表示される。
 1000Users、50spawned/sで始めてみたところ、200Userにも到達せずにリクエスト自体が止まってしまった。</p>
 <p><img src="https://www.sambaiz.net/images/161-2.png" alt="実行結果"></p>
 <p>少なく再設定してもUsersはそのままでよく分からない。
 一旦立ち上げ直して100,10で実行してみたら100Userまで行くことは確認できた。</p>
 <p>再び止まるまで上げてみたところ、途中でOOMになっていることが分かった。</p>
-<pre><code>$ kubectl describe pod my-locust-worker-****
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl describe pod my-locust-worker-****
 Containers:
   locust:
     ...
@@ -207,15 +205,15 @@ Containers:
       Reason:       OOMKilled
       Exit Code:    137
 ...
-</code></pre><p>メモリ(割り当て128mi)だけではなく、CPU(割り当て100<a href="https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu">millicores</a>)もそれなりに使われていて、単純にreplica数を増やせばよさそう。</p>
-<pre><code>$ watch kubectl top node
+</code></pre></div><p>メモリ(割り当て128mi)だけではなく、CPU(割り当て100<a href="https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu">millicores</a>)もそれなりに使われていて、単純にreplica数を増やせばよさそう。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ watch kubectl top node
 NAME                                CPU(cores)   MEMORY(bytes)
 my-locust-master-7f7d57f5dc-h9mvt   1m           19Mi
 my-locust-worker-66cc964748-9dp8n   72m          112Mi
 my-locust-worker-66cc964748-h94v9   61m          114Mi
-</code></pre><p>ということでworkerを2から5に増やしてみたところUser数を増やしても止まらなくなった。</p>
-<pre><code>$ kubectl scale deployment my-locust-worker --replicas=5
-</code></pre><p><a href="https://www.sambaiz.net/article/299/">EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 - sambaiz-net</a></p>
+</code></pre></div><p>ということでworkerを2から5に増やしてみたところUser数を増やしても止まらなくなった。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl scale deployment my-locust-worker --replicas=5
+</code></pre></div><p><a href="https://www.sambaiz.net/article/299/">EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 - sambaiz-net</a></p>
 
         </div>
       </article>
@@ -225,41 +223,41 @@ my-locust-worker-66cc964748-h94v9   61m          114Mi
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

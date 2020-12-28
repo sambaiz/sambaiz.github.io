@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -139,139 +137,139 @@ Lambdaに送る。ほかの接続先としてData StreamやFirehoseがあり、�
 <h2 id="streamとpumphttpsdocsawsamazoncomkinesisanalyticslatestdevstreams-pumpshtml"><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/streams-pumps.html">STREAMとPUMP</a></h2>
 <p>(in-application) STREAMを作成し、PUMPで他のSTREAMをSELECTした結果をINSERTすることでデータを流していく。出力先を設定する際にSTREAMを選ぶ。
 STREAMはRDBのテーブルのようにカラムを持ち、<a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/stream-joins-concepts.html">JOIN</a>もできる。</p>
-<pre><code>CREATE OR REPLACE STREAM &quot;TEMPSTREAM&quot; ( 
-   &quot;column1&quot; BIGINT NOT NULL, 
-   &quot;column2&quot; INTEGER, 
-   &quot;column3&quot; VARCHAR(64));
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CREATE OR REPLACE STREAM &#34;TEMPSTREAM&#34; ( 
+   &#34;column1&#34; BIGINT NOT NULL, 
+   &#34;column2&#34; INTEGER, 
+   &#34;column3&#34; VARCHAR(64));
 
-CREATE OR REPLACE PUMP &quot;SAMPLEPUMP&quot; AS 
-INSERT INTO &quot;TEMPSTREAM&quot; (&quot;column1&quot;, 
-                          &quot;column2&quot;, 
-                          &quot;column3&quot;) 
+CREATE OR REPLACE PUMP &#34;SAMPLEPUMP&#34; AS 
+INSERT INTO &#34;TEMPSTREAM&#34; (&#34;column1&#34;, 
+                          &#34;column2&#34;, 
+                          &#34;column3&#34;) 
 SELECT STREAM inputcolumn1, 
               inputcolumn2, 
               inputcolumn3
-FROM &quot;INPUTSTREAM&quot;;
-</code></pre><h2 id="windowed-queries">Windowed Queries</h2>
+FROM &#34;INPUTSTREAM&#34;;
+</code></pre></div><h2 id="windowed-queries">Windowed Queries</h2>
 <ul>
 <li><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/tumbling-window-concepts.html">Tumbling Windows</a></li>
 </ul>
 <p>固定の重複しない区間で集計するクエリ。次のように書くと60秒区切りで集計できる。</p>
-<pre><code>GROUP BY STEP(&quot;SOURCE_SQL_STREAM_001&quot;.ROWTIME BY INTERVAL '60' SECOND)
-</code></pre><p><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/timestamps-rowtime-concepts.html">ROWTIME</a>は
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">GROUP BY STEP(&#34;SOURCE_SQL_STREAM_001&#34;.ROWTIME BY INTERVAL &#39;60&#39; SECOND)
+</code></pre></div><p><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/timestamps-rowtime-concepts.html">ROWTIME</a>は
 最初のSTREAMにデータが入った時のタイムスタンプが格納される特別なカラム。SELECTしなくても自動で渡される。</p>
 <ul>
 <li><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/stagger-window-concepts.html">Stagger Windows</a></li>
 </ul>
 <p>固定の区間ではなく最初に対象パーティションのデータが届くとそこからINTERVALの区間のWindowが始まる。
 Tumbling Windowsではデータに含まれるタイムスタンプで集計する場合、遅れて届くことで同じ区間のレコードが分かれてしまう問題があるがそれを緩和できる。</p>
-<pre><code>WINDOWED BY STAGGER (
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">WINDOWED BY STAGGER (
 	PARTITION BY FLOOR(EVENT_TIME TO MINUTE), TICKER_SYMBOL 
-	RANGE INTERVAL '1' MINUTE);
-</code></pre><ul>
+	RANGE INTERVAL &#39;1&#39; MINUTE);
+</code></pre></div><ul>
 <li><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/sliding-window-concepts.html">Sliding Windows</a></li>
 </ul>
 <p>区間をずらしながら集計するクエリ。次のように書くと{2|10}個のデータの移動平均を出せる。</p>
-<pre><code>avg(price) over last2rows
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">avg(price) over last2rows
 avg(price) over last10rows
 ...
 WINDOW　
 	last2rows AS (PARTITION BY ticker_symbol ROWS 2 PRECEDING),
 	last10rows AS (PARTITION BY ticker_symbol ROWS 10 PRECEDING)
-</code></pre><h2 id="lambdaへの出力httpsdocsawsamazoncomja_jpkinesisanalyticslatestdevhow-it-works-output-lambdahtml"><a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/dev/how-it-works-output-lambda.html">Lambdaへの出力</a></h2>
+</code></pre></div><h2 id="lambdaへの出力httpsdocsawsamazoncomja_jpkinesisanalyticslatestdevhow-it-works-output-lambdahtml"><a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/dev/how-it-works-output-lambda.html">Lambdaへの出力</a></h2>
 <p>データはbase64エンコードされているのでデコードして使う。
 レスポンスで<code>recordId</code>と<code>result</code>を返す必要があり、失敗するとretryHintをインクリメントして再送する。
 フォーマットが正しくないと <code>OkRecords</code> にも <code>DeliveryFailedRecords</code> にもカウントされないが、その場合でも再送される。</p>
-<pre><code>package main
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
 
-import (
-	&quot;encoding/base64&quot;
-	&quot;fmt&quot;
+<span style="color:#ff79c6">import</span> (
+	<span style="color:#f1fa8c">&#34;encoding/base64&#34;</span>
+	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
 
-	&quot;github.com/aws/aws-lambda-go/lambda&quot;
+	<span style="color:#f1fa8c">&#34;github.com/aws/aws-lambda-go/lambda&#34;</span>
 )
 
-// https://docs.aws.amazon.com/kinesisanalytics/latest/dev/how-it-works-output-lambda.html
-type KinesisDataAnalyticsInput struct {
-	InvocationID   string                            `json:&quot;invocationId&quot;`
-	ApplicationARN string                            `json:&quot;applicationArn&quot;`
-	Records        []KinesisDataAnalyticsInputRecord `json:&quot;records&quot;`
+<span style="color:#6272a4">// https://docs.aws.amazon.com/kinesisanalytics/latest/dev/how-it-works-output-lambda.html
+</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">type</span> KinesisDataAnalyticsInput <span style="color:#8be9fd;font-style:italic">struct</span> {
+	InvocationID   <span style="color:#8be9fd">string</span>                            <span style="color:#f1fa8c">`json:&#34;invocationId&#34;`</span>
+	ApplicationARN <span style="color:#8be9fd">string</span>                            <span style="color:#f1fa8c">`json:&#34;applicationArn&#34;`</span>
+	Records        []KinesisDataAnalyticsInputRecord <span style="color:#f1fa8c">`json:&#34;records&#34;`</span>
 }
 
-type KinesisDataAnalyticsInputRecord struct {
-	RecordID                     string                                  `json:&quot;recordId&quot;`
-	LambdaDeliveryRecordMetadata KinesisDataAnalyticsInputRecordMetadata `json:&quot;lambdaDeliveryRecordMetadata&quot;`
-	Data                         string                                  `json:&quot;data&quot;`
+<span style="color:#8be9fd;font-style:italic">type</span> KinesisDataAnalyticsInputRecord <span style="color:#8be9fd;font-style:italic">struct</span> {
+	RecordID                     <span style="color:#8be9fd">string</span>                                  <span style="color:#f1fa8c">`json:&#34;recordId&#34;`</span>
+	LambdaDeliveryRecordMetadata KinesisDataAnalyticsInputRecordMetadata <span style="color:#f1fa8c">`json:&#34;lambdaDeliveryRecordMetadata&#34;`</span>
+	Data                         <span style="color:#8be9fd">string</span>                                  <span style="color:#f1fa8c">`json:&#34;data&#34;`</span>
 }
 
-type KinesisDataAnalyticsInputRecordMetadata struct {
-	RetryHint int `json: &quot;retryHint&quot;`
+<span style="color:#8be9fd;font-style:italic">type</span> KinesisDataAnalyticsInputRecordMetadata <span style="color:#8be9fd;font-style:italic">struct</span> {
+	RetryHint <span style="color:#8be9fd">int</span> <span style="color:#f1fa8c">`json: &#34;retryHint&#34;`</span>
 }
 
 
-type KinesisDataAnalyticsOutputs struct {
+<span style="color:#8be9fd;font-style:italic">type</span> KinesisDataAnalyticsOutputs <span style="color:#8be9fd;font-style:italic">struct</span> {
 	Records []KinesisAnalyticsOutput
 }
 
-type KinesisDataAnalyticsOutput struct {
-	RecordID string `json:&quot;recordId&quot;`
-	Result   string `json:&quot;result&quot;`
+<span style="color:#8be9fd;font-style:italic">type</span> KinesisDataAnalyticsOutput <span style="color:#8be9fd;font-style:italic">struct</span> {
+	RecordID <span style="color:#8be9fd">string</span> <span style="color:#f1fa8c">`json:&#34;recordId&#34;`</span>
+	Result   <span style="color:#8be9fd">string</span> <span style="color:#f1fa8c">`json:&#34;result&#34;`</span>
 }
 
-func handler(request KinesisDataAnalyticsInput) (interface{}, error) {
-	var outputs []KinesisDataAnalyticsOutput
-	for _, record := range request.Records {
-		decoded, err := base64.StdEncoding.DecodeString(request.Records[0].Data)
-		if err != nil {
-			fmt.Println(err)
-			outputs = append(outputs, KinesisDataAnalyticsOutput{
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">handler</span>(request KinesisDataAnalyticsInput) (<span style="color:#8be9fd;font-style:italic">interface</span>{}, <span style="color:#8be9fd">error</span>) {
+	<span style="color:#8be9fd;font-style:italic">var</span> outputs []KinesisDataAnalyticsOutput
+	<span style="color:#ff79c6">for</span> _, record <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> request.Records {
+		decoded, err <span style="color:#ff79c6">:=</span> base64.StdEncoding.<span style="color:#50fa7b">DecodeString</span>(request.Records[<span style="color:#bd93f9">0</span>].Data)
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			fmt.<span style="color:#50fa7b">Println</span>(err)
+			outputs = <span style="color:#8be9fd;font-style:italic">append</span>(outputs, KinesisDataAnalyticsOutput{
 				RecordID: record.RecordID,
-				Result:   &quot;DeliveryFailed&quot;,
+				Result:   <span style="color:#f1fa8c">&#34;DeliveryFailed&#34;</span>,
 			})
-			continue
+			<span style="color:#ff79c6">continue</span>
 		}
-		outputs = append(outputs, KinesisDataAnalyticsOutput{
+		outputs = <span style="color:#8be9fd;font-style:italic">append</span>(outputs, KinesisDataAnalyticsOutput{
 			RecordID: record.RecordID,
-			Result:   &quot;Ok&quot;,
+			Result:   <span style="color:#f1fa8c">&#34;Ok&#34;</span>,
 		})
 	}
-	return KinesisDataAnalyticsOutputs{outputs}, nil
+	<span style="color:#ff79c6">return</span> KinesisDataAnalyticsOutputs{outputs}, <span style="color:#ff79c6">nil</span>
 }
 
-func main() {
-	lambda.Start(handler)
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+	lambda.<span style="color:#50fa7b">Start</span>(handler)
 }
-</code></pre><h2 id="cdkによるリソースの作成">CDKによるリソースの作成</h2>
+</code></pre></div><h2 id="cdkによるリソースの作成">CDKによるリソースの作成</h2>
 <p>LambdaはSAMなどで別に作成している前提で、Data StreamsとAnalyticsのApplicationをCDKで作成する。
 Flinkにも対応しているV2系のリソースで作成したところ現状コンソール上からスキーマやリアルタイムのデータを見ることができなかった。</p>
 <p><img src="https://www.sambaiz.net/images/302.png" alt="コンソール非対応"></p>
-<pre><code>import * as cdk from '@aws-cdk/core';
-import { Stream } from '@aws-cdk/aws-kinesis';
-import * as analytics from '@aws-cdk/aws-kinesisanalytics';
-import { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } from '@aws-cdk/aws-iam'
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import * as cdk from &#39;@aws-cdk/core&#39;;
+import { Stream } from &#39;@aws-cdk/aws-kinesis&#39;;
+import * as analytics from &#39;@aws-cdk/aws-kinesisanalytics&#39;;
+import { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } from &#39;@aws-cdk/aws-iam&#39;
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const lambdaArn = &quot;&lt;lambda_arn&gt;&quot;
+    const lambdaArn = &#34;&lt;lambda_arn&gt;&#34;
 
-    const stream = new Stream(this, &quot;TestStream&quot;, {
-      streamName: &quot;test-stream&quot;,
+    const stream = new Stream(this, &#34;TestStream&#34;, {
+      streamName: &#34;test-stream&#34;,
       shardCount: 3,
     });
 
-    const role = new Role(this, 'TestAnalyticsRole', {
-      assumedBy: new ServicePrincipal('kinesisanalytics.amazonaws.com'),
+    const role = new Role(this, &#39;TestAnalyticsRole&#39;, {
+      assumedBy: new ServicePrincipal(&#39;kinesisanalytics.amazonaws.com&#39;),
       inlinePolicies: {
-        'test-analytics-policy': new PolicyDocument({
+        &#39;test-analytics-policy&#39;: new PolicyDocument({
           statements: [
             new PolicyStatement({
               effect: Effect.ALLOW,
               actions: [
-                &quot;kinesis:DescribeStream&quot;,
-                &quot;kinesis:GetShardIterator&quot;,
-                &quot;kinesis:GetRecords&quot;
+                &#34;kinesis:DescribeStream&#34;,
+                &#34;kinesis:GetShardIterator&#34;,
+                &#34;kinesis:GetRecords&#34;
               ],
               resources: [
                 stream.streamArn
@@ -280,8 +278,8 @@ export class CdkStack extends cdk.Stack {
             new PolicyStatement({
               effect: Effect.ALLOW,
               actions: [
-                &quot;lambda:InvokeFunction&quot;,
-                &quot;lambda:GetFunctionConfiguration&quot;
+                &#34;lambda:InvokeFunction&#34;,
+                &#34;lambda:GetFunctionConfiguration&#34;
               ],
               resources: [
                 lambdaArn
@@ -292,27 +290,27 @@ export class CdkStack extends cdk.Stack {
       }
     })
 
-    const applicationName = &quot;test-analytics-application&quot;
-    const application = new analytics.CfnApplicationV2(this, 'TestAnalyticsApplication', {
+    const applicationName = &#34;test-analytics-application&#34;
+    const application = new analytics.CfnApplicationV2(this, &#39;TestAnalyticsApplication&#39;, {
       applicationName: applicationName,
-      applicationDescription: &quot;test&quot;,
-      runtimeEnvironment: &quot;SQL-1_0&quot;,
+      applicationDescription: &#34;test&#34;,
+      runtimeEnvironment: &#34;SQL-1_0&#34;,
       serviceExecutionRole: role.roleArn,
       applicationConfiguration: {
         sqlApplicationConfiguration: {
           inputs: [{
-            namePrefix: &quot;SOURCE_SQL_STREAM&quot;,
+            namePrefix: &#34;SOURCE_SQL_STREAM&#34;,
             inputSchema: {
               recordColumns: [{
-                name: &quot;column1&quot;,
-                sqlType: &quot;BIGINT&quot;,
-                mapping: &quot;$.column1&quot;,
+                name: &#34;column1&#34;,
+                sqlType: &#34;BIGINT&#34;,
+                mapping: &#34;$.column1&#34;,
               }],
               recordFormat: {
-                recordFormatType: &quot;JSON&quot;,
+                recordFormatType: &#34;JSON&#34;,
                 mappingParameters: {
                   jsonMappingParameters: {
-                    recordRowPath: &quot;$&quot;,
+                    recordRowPath: &#34;$&#34;,
                   }
                 }
               } 
@@ -325,28 +323,28 @@ export class CdkStack extends cdk.Stack {
         applicationCodeConfiguration: {
           codeContent: {
             textContent: `
-            CREATE OR REPLACE STREAM &quot;SUM_STREAM&quot; (
-                &quot;cnt&quot; BIGINT NOT NULL
+            CREATE OR REPLACE STREAM &#34;SUM_STREAM&#34; (
+                &#34;cnt&#34; BIGINT NOT NULL
             );
 
-            CREATE OR REPLACE PUMP &quot;SUM_PUMP&quot; AS
-                INSERT INTO &quot;SUM_STREAM&quot; (&quot;cnt&quot;)
+            CREATE OR REPLACE PUMP &#34;SUM_PUMP&#34; AS
+                INSERT INTO &#34;SUM_STREAM&#34; (&#34;cnt&#34;)
                 SELECT STREAM count(1) AS cnt
-                FROM &quot;SOURCE_SQL_STREAM_001&quot;
-                GROUP BY STEP(&quot;SOURCE_SQL_STREAM_001&quot;.ROWTIME BY INTERVAL '10' SECOND);
+                FROM &#34;SOURCE_SQL_STREAM_001&#34;
+                GROUP BY STEP(&#34;SOURCE_SQL_STREAM_001&#34;.ROWTIME BY INTERVAL &#39;10&#39; SECOND);
             `
           },
-          codeContentType: &quot;PLAINTEXT&quot;
+          codeContentType: &#34;PLAINTEXT&#34;
         }
       }
     })
 
-    const applicationOutput = new analytics.CfnApplicationOutputV2(this, 'TestAnalyticsApplicationOutput', {
+    const applicationOutput = new analytics.CfnApplicationOutputV2(this, &#39;TestAnalyticsApplicationOutput&#39;, {
       applicationName: applicationName,
       output: {
-        name: 'test_analytics_output',
+        name: &#39;test_analytics_output&#39;,
         destinationSchema: {
-          recordFormatType: &quot;JSON&quot;
+          recordFormatType: &#34;JSON&#34;
         },
         lambdaOutput: {
           resourceArn: lambdaArn
@@ -356,44 +354,44 @@ export class CdkStack extends cdk.Stack {
     applicationOutput.addDependsOn(application)
   }
 }
-</code></pre><p>非V2の方で書くとこんな感じ。</p>
-<pre><code>import * as cdk from '@aws-cdk/core';
-import { Stream } from '@aws-cdk/aws-kinesis';
-import * as analytics from '@aws-cdk/aws-kinesisanalytics';
-import { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } from '@aws-cdk/aws-iam'
+</code></pre></div><p>非V2の方で書くとこんな感じ。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import * as cdk from &#39;@aws-cdk/core&#39;;
+import { Stream } from &#39;@aws-cdk/aws-kinesis&#39;;
+import * as analytics from &#39;@aws-cdk/aws-kinesisanalytics&#39;;
+import { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } from &#39;@aws-cdk/aws-iam&#39;
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     ...
-    const applicationName = &quot;test-analytics-application&quot;
-    const application = new analytics.CfnApplication(this, 'TestAnalyticsApplication', {
+    const applicationName = &#34;test-analytics-application&#34;
+    const application = new analytics.CfnApplication(this, &#39;TestAnalyticsApplication&#39;, {
       applicationName: applicationName,
-      applicationDescription: &quot;test&quot;,
+      applicationDescription: &#34;test&#34;,
       applicationCode: `
-      CREATE OR REPLACE STREAM &quot;SUM_STREAM&quot; (
-          &quot;cnt&quot; BIGINT NOT NULL
+      CREATE OR REPLACE STREAM &#34;SUM_STREAM&#34; (
+          &#34;cnt&#34; BIGINT NOT NULL
       );
 
-      CREATE OR REPLACE PUMP &quot;SUM_PUMP&quot; AS
-          INSERT INTO &quot;SUM_STREAM&quot; (&quot;cnt&quot;)
+      CREATE OR REPLACE PUMP &#34;SUM_PUMP&#34; AS
+          INSERT INTO &#34;SUM_STREAM&#34; (&#34;cnt&#34;)
           SELECT STREAM count(1) AS cnt
-          FROM &quot;SOURCE_SQL_STREAM_001&quot;
-          GROUP BY STEP(&quot;SOURCE_SQL_STREAM_001&quot;.ROWTIME BY INTERVAL '10' SECOND);
+          FROM &#34;SOURCE_SQL_STREAM_001&#34;
+          GROUP BY STEP(&#34;SOURCE_SQL_STREAM_001&#34;.ROWTIME BY INTERVAL &#39;10&#39; SECOND);
       `
-      runtimeEnvironment: &quot;SQL-1_0&quot;,
+      runtimeEnvironment: &#34;SQL-1_0&#34;,
       inputs: [{
-        namePrefix: &quot;SOURCE_SQL_STREAM&quot;,
+        namePrefix: &#34;SOURCE_SQL_STREAM&#34;,
         inputSchema: {
           recordColumns: [{
-            name: &quot;column1&quot;,
-            sqlType: &quot;BIGINT&quot;,
-            mapping: &quot;$.column1&quot;,
+            name: &#34;column1&#34;,
+            sqlType: &#34;BIGINT&#34;,
+            mapping: &#34;$.column1&#34;,
           }],
           recordFormat: {
-            recordFormatType: &quot;JSON&quot;,
+            recordFormatType: &#34;JSON&#34;,
             mappingParameters: {
               jsonMappingParameters: {
-                recordRowPath: &quot;$&quot;,
+                recordRowPath: &#34;$&#34;,
               }
             }
           } 
@@ -405,12 +403,12 @@ export class CdkStack extends cdk.Stack {
       }]
     })
 
-    const applicationOutput = new analytics.CfnApplicationOutput(this, 'TestAnalyticsApplicationOutput', {
+    const applicationOutput = new analytics.CfnApplicationOutput(this, &#39;TestAnalyticsApplicationOutput&#39;, {
       applicationName: applicationName,
       output: {
-        name: 'test_analytics_output',
+        name: &#39;test_analytics_output&#39;,
         destinationSchema: {
-          recordFormatType: &quot;JSON&quot;
+          recordFormatType: &#34;JSON&#34;
         },
         lambdaOutput: {
           resourceArn: stream.streamArn,
@@ -421,7 +419,7 @@ export class CdkStack extends cdk.Stack {
     applicationOutput.addDependsOn(application)
   }
 }
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -430,41 +428,41 @@ export class CdkStack extends cdk.Stack {
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

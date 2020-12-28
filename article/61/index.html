@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -144,103 +142,103 @@ Goの<code>net/http</code>ではデフォルトでKeep-Aliveが
 <li><a href="https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L148">MaxIdleConnsPerHost</a>: <a href="https://github.com/golang/go/blob/d986daec1375527ef78cd59d81d42be7406a9803/src/net/http/transport.go#L54">デフォルト値は2</a>。0にするとデフォルト値が使われる。</li>
 </ul>
 <p>同一のホストに同時にたくさんリクエストする場合、2だとほとんど意味を持たない。これを増やして比較してみた。</p>
-<pre><code>package main
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
 
-import (
-	&quot;fmt&quot;
-	&quot;io/ioutil&quot;
-	&quot;net/http&quot;
-	&quot;time&quot;
+<span style="color:#ff79c6">import</span> (
+	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+	<span style="color:#f1fa8c">&#34;io/ioutil&#34;</span>
+	<span style="color:#f1fa8c">&#34;net/http&#34;</span>
+	<span style="color:#f1fa8c">&#34;time&#34;</span>
 )
 
-var client = http.Client{
-	Timeout: time.Millisecond * 100,
+<span style="color:#8be9fd;font-style:italic">var</span> client = http.Client{
+	Timeout: time.Millisecond <span style="color:#ff79c6">*</span> <span style="color:#bd93f9">100</span>,
 }
 
-const TOTAL_REQUEST_NUM = 3000
-const TARGET_URL = &quot;*****&quot;
+<span style="color:#8be9fd;font-style:italic">const</span> TOTAL_REQUEST_NUM = <span style="color:#bd93f9">3000</span>
+<span style="color:#8be9fd;font-style:italic">const</span> TARGET_URL = <span style="color:#f1fa8c">&#34;*****&#34;</span>
 
-func main() {
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
 
-	http.DefaultTransport.(*http.Transport).MaxIdleConns = 0
-	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 3000
+	http.DefaultTransport.(<span style="color:#ff79c6">*</span>http.Transport).MaxIdleConns = <span style="color:#bd93f9">0</span>
+	http.DefaultTransport.(<span style="color:#ff79c6">*</span>http.Transport).MaxIdleConnsPerHost = <span style="color:#bd93f9">3000</span>
 
-	okChan := make(chan int, TOTAL_REQUEST_NUM)
-	ngChan := make(chan int, TOTAL_REQUEST_NUM)
+	okChan <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">int</span>, TOTAL_REQUEST_NUM)
+	ngChan <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">int</span>, TOTAL_REQUEST_NUM)
 
-	var okCount = 0
-	var ngCount = 0
+	<span style="color:#8be9fd;font-style:italic">var</span> okCount = <span style="color:#bd93f9">0</span>
+	<span style="color:#8be9fd;font-style:italic">var</span> ngCount = <span style="color:#bd93f9">0</span>
 
-	// connect and keep-alive
-	for i := 0; i &lt; TOTAL_REQUEST_NUM; i++ {
-		go request(okChan, ngChan)
+	<span style="color:#6272a4">// connect and keep-alive
+</span><span style="color:#6272a4"></span>	<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; TOTAL_REQUEST_NUM; i<span style="color:#ff79c6">++</span> {
+		<span style="color:#ff79c6">go</span> <span style="color:#50fa7b">request</span>(okChan, ngChan)
 	}
 
-	for {
-		select {
-		case &lt;-okChan:
-			okCount++
-		case &lt;-ngChan:
-			ngCount++
+	<span style="color:#ff79c6">for</span> {
+		<span style="color:#ff79c6">select</span> {
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>okChan:
+			okCount<span style="color:#ff79c6">++</span>
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ngChan:
+			ngCount<span style="color:#ff79c6">++</span>
 		}
 
-		if okCount+ngCount == TOTAL_REQUEST_NUM {
-			break
-		}
-	}
-
-	okCount = 0
-	ngCount = 0
-
-	startNs := time.Now().UnixNano()
-
-	for i := 0; i &lt; TOTAL_REQUEST_NUM; i++ {
-		go request(okChan, ngChan)
-	}
-
-	for {
-		select {
-		case &lt;-okChan:
-			okCount++
-		case &lt;-ngChan:
-			ngCount++
-		}
-
-		if okCount+ngCount == TOTAL_REQUEST_NUM {
-			break
+		<span style="color:#ff79c6">if</span> okCount<span style="color:#ff79c6">+</span>ngCount <span style="color:#ff79c6">==</span> TOTAL_REQUEST_NUM {
+			<span style="color:#ff79c6">break</span>
 		}
 	}
 
-	endNs := time.Now().UnixNano()
+	okCount = <span style="color:#bd93f9">0</span>
+	ngCount = <span style="color:#bd93f9">0</span>
 
-	fmt.Printf(&quot;[RESULT] request: %d, ok: %d, ng: %d, time(ms) %d\n&quot;,
-		TOTAL_REQUEST_NUM, okCount, ngCount, (endNs-startNs)/(1000*1000))
+	startNs <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>().<span style="color:#50fa7b">UnixNano</span>()
+
+	<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; TOTAL_REQUEST_NUM; i<span style="color:#ff79c6">++</span> {
+		<span style="color:#ff79c6">go</span> <span style="color:#50fa7b">request</span>(okChan, ngChan)
+	}
+
+	<span style="color:#ff79c6">for</span> {
+		<span style="color:#ff79c6">select</span> {
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>okChan:
+			okCount<span style="color:#ff79c6">++</span>
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ngChan:
+			ngCount<span style="color:#ff79c6">++</span>
+		}
+
+		<span style="color:#ff79c6">if</span> okCount<span style="color:#ff79c6">+</span>ngCount <span style="color:#ff79c6">==</span> TOTAL_REQUEST_NUM {
+			<span style="color:#ff79c6">break</span>
+		}
+	}
+
+	endNs <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>().<span style="color:#50fa7b">UnixNano</span>()
+
+	fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;[RESULT] request: %d, ok: %d, ng: %d, time(ms) %d\n&#34;</span>,
+		TOTAL_REQUEST_NUM, okCount, ngCount, (endNs<span style="color:#ff79c6">-</span>startNs)<span style="color:#ff79c6">/</span>(<span style="color:#bd93f9">1000</span><span style="color:#ff79c6">*</span><span style="color:#bd93f9">1000</span>))
 }
 
-func request(okch chan int, ngch chan int) {
-	req, err := http.NewRequest(&quot;GET&quot;, TARGET_URL, nil)
-	if err != nil {
-		panic(err.Error())
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">request</span>(okch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">int</span>, ngch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">int</span>) {
+	req, err <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">NewRequest</span>(<span style="color:#f1fa8c">&#34;GET&#34;</span>, TARGET_URL, <span style="color:#ff79c6">nil</span>)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err.<span style="color:#50fa7b">Error</span>())
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println(err.Error())
-		ngch &lt;- 1
-		return
+	resp, err <span style="color:#ff79c6">:=</span> client.<span style="color:#50fa7b">Do</span>(req)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		fmt.<span style="color:#50fa7b">Println</span>(err.<span style="color:#50fa7b">Error</span>())
+		ngch <span style="color:#ff79c6">&lt;-</span> <span style="color:#bd93f9">1</span>
+		<span style="color:#ff79c6">return</span>
 	}
-	defer resp.Body.Close()
+	<span style="color:#ff79c6">defer</span> resp.Body.<span style="color:#50fa7b">Close</span>()
 
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println(err.Error())
-		ngch &lt;- 1
-		return
+	_, err = ioutil.<span style="color:#50fa7b">ReadAll</span>(resp.Body)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		fmt.<span style="color:#50fa7b">Println</span>(err.<span style="color:#50fa7b">Error</span>())
+		ngch <span style="color:#ff79c6">&lt;-</span> <span style="color:#bd93f9">1</span>
+		<span style="color:#ff79c6">return</span>
 	}
 
-	okch &lt;- 1
+	okch <span style="color:#ff79c6">&lt;-</span> <span style="color:#bd93f9">1</span>
 }
-</code></pre><ul>
+</code></pre></div><ul>
 <li>
 <p>デフォルト設定: <code>[RESULT] request: 3000, ok: 530, ng: 2470, time(ms) 173</code></p>
 </li>
@@ -252,7 +250,7 @@ func request(okch chan int, ngch chan int) {
 <p>ただ、このコードのようにgoroutineを無尽蔵に生成すると、限界を超えたときにタイムアウトが頻発してしまうので注意。</p>
 <p><a href="https://www.sambaiz.net/article/74">Goroutineの数をworkerで抑制する - sambaiz.net</a></p>
 <p>ちなみに、<a href="https://github.com/tcnksm/go-httpstat">tcnksm/go-httpstat</a>でnet/http/httptraceすると各処理にかかっている時間が分かる。</p>
-<pre><code>req, err := http.NewRequest(&quot;GET&quot;, TARGET_URL, nil)
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">req, err := http.NewRequest(&#34;GET&#34;, TARGET_URL, nil)
 if err != nil {
 	panic(err.Error())
 }
@@ -277,8 +275,8 @@ if err != nil {
 }
 
 result.End(time.Now())
-fmt.Printf(&quot;%+v\n&quot;, result)
-</code></pre><pre><code>Start Transfer:   85 ms
+fmt.Printf(&#34;%+v\n&#34;, result)
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Start Transfer:   85 ms
 Total:            86 ms
 
 DNS lookup:           0 ms
@@ -292,7 +290,7 @@ Connect:           0 ms
 Pre Transfer:      0 ms
 Start Transfer:   64 ms
 Total:            65 ms
-</code></pre><h2 id="参考">参考</h2>
+</code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://shogo82148.github.io/blog/2017/01/14/re-golang-dns-cache/">Re:golang の http.Client を速くする - Shogo&rsquo;s Blog</a></p>
 
         </div>
@@ -303,41 +301,41 @@ Total:            65 ms
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

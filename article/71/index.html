@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -136,53 +134,53 @@
           <p><a href="https://www.sambaiz.net/article/52/">ElasticsearchをDockerで動かしてGrafanaで可視化する - sambaiz.net</a></p>
 <p>ESに送られるデータの量が増えてくるとGrafanaのDashboardにグラフが表示されなくなってしまった。
 表示されたエラーはこういうの。</p>
-<pre><code>&quot;root_cause&quot;: [
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&#34;root_cause&#34;: [
     {
-        &quot;type&quot;: &quot;circuit_breaking_exception&quot;,
-        &quot;reason&quot;: &quot;[request] Data too large, data for [] would be larger than limit of [8998512230/8.3gb]&quot;,
-        &quot;bytes_wanted&quot;: 10464007168,
-        &quot;bytes_limit&quot;: 8998512230
+        &#34;type&#34;: &#34;circuit_breaking_exception&#34;,
+        &#34;reason&#34;: &#34;[request] Data too large, data for [] would be larger than limit of [8998512230/8.3gb]&#34;,
+        &#34;bytes_wanted&#34;: 10464007168,
+        &#34;bytes_limit&#34;: 8998512230
     }
 ],
-</code></pre><p>これは1リクエストの集計などで使うメモリ量がしきい値をこえて
+</code></pre></div><p>これは1リクエストの集計などで使うメモリ量がしきい値をこえて
 <a href="https://www.elastic.co/guide/en/elasticsearch/reference/5.2/circuit-breaker.html">Circuit Breaker</a>が発動したということ。
 メモリを食いつぶしてOutOfMemoryになる前に焼き切れるようになっている。</p>
 <p>情報は<a href="https://www.elastic.co/guide/en/elasticsearch/reference/5.2/cluster-nodes-stats.html">stats</a>のapiでも取得できる。</p>
-<pre><code>$ curl localhost:9200/_nodes/stats | jq .nodes[].breakers.request
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl localhost:9200/_nodes/stats | jq .nodes[].breakers.request
 {
-  &quot;limit_size_in_bytes&quot;: 8998512230,
-  &quot;limit_size&quot;: &quot;8.3gb&quot;,
-  &quot;estimated_size_in_bytes&quot;: 10348347504,
-  &quot;estimated_size&quot;: &quot;9.6gb&quot;,
-  &quot;overhead&quot;: 1,
-  &quot;tripped&quot;: 470
+  &#34;limit_size_in_bytes&#34;: 8998512230,
+  &#34;limit_size&#34;: &#34;8.3gb&#34;,
+  &#34;estimated_size_in_bytes&#34;: 10348347504,
+  &#34;estimated_size&#34;: &#34;9.6gb&#34;,
+  &#34;overhead&#34;: 1,
+  &#34;tripped&#34;: 470
 }
-</code></pre><p>今回ひっかかったのは<code>indices.breaker.request.limit</code>。デフォルトではJVMのヒープメモリの60%になっているが、
+</code></pre></div><p>今回ひっかかったのは<code>indices.breaker.request.limit</code>。デフォルトではJVMのヒープメモリの60%になっているが、
 これを80%にまで緩和する。併せてparent-levelのbreakerも上げる。</p>
-<pre><code>$ curl -XPUT localhost:9200/_cluster/settings -d '{
-    &quot;persistent&quot; : {
-        &quot;indices.breaker.request.limit&quot;: &quot;80%&quot;,
-        &quot;indices.breaker.total.limit&quot;: &quot;80%&quot;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl -XPUT localhost:9200/_cluster/settings -d &#39;{
+    &#34;persistent&#34; : {
+        &#34;indices.breaker.request.limit&#34;: &#34;80%&#34;,
+        &#34;indices.breaker.total.limit&#34;: &#34;80%&#34;
     }
-}'
-</code></pre><pre><code>$ curl -XPUT localhost:9200/_cluster/settings -d '{
-    &quot;persistent&quot; : {
-        &quot;indices.breaker.request.limit&quot;: &quot;80%&quot;,
-        &quot;indices.breaker.total.limit&quot;: &quot;80%&quot;
+}&#39;
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl -XPUT localhost:9200/_cluster/settings -d &#39;{
+    &#34;persistent&#34; : {
+        &#34;indices.breaker.request.limit&#34;: &#34;80%&#34;,
+        &#34;indices.breaker.total.limit&#34;: &#34;80%&#34;
     }
-}'
-</code></pre><p>必要なメモリ量を上回ったのでひとまずは返せるようになった。
+}&#39;
+</code></pre></div><p>必要なメモリ量を上回ったのでひとまずは返せるようになった。
 これは一時しのぎで、定常的に大量にメモリが必要なリクエストを処理する必要があるなら、そもそもメモリが足りないので増やさなければならない。</p>
-<pre><code>$ curl localhost:9200/_nodes/stats | jq .nodes[].breakers.request
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl localhost:9200/_nodes/stats | jq .nodes[].breakers.request
 {
-  &quot;limit_size_in_bytes&quot;: 11998016307,
-  &quot;limit_size&quot;: &quot;11.1gb&quot;,
-  &quot;estimated_size_in_bytes&quot;: 10473078896,
-  &quot;estimated_size&quot;: &quot;9.7gb&quot;,
-  &quot;overhead&quot;: 1,
-  &quot;tripped&quot;: 470
+  &#34;limit_size_in_bytes&#34;: 11998016307,
+  &#34;limit_size&#34;: &#34;11.1gb&#34;,
+  &#34;estimated_size_in_bytes&#34;: 10473078896,
+  &#34;estimated_size&#34;: &#34;9.7gb&#34;,
+  &#34;overhead&#34;: 1,
+  &#34;tripped&#34;: 470
 }
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -191,41 +189,41 @@
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

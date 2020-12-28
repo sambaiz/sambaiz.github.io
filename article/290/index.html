@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -147,48 +145,48 @@
 <code>model_fn()</code> も後述するElastic Inferenceを使う場合<code>model.pt</code>というファイルをロードするデフォルト実装が使われる。
 ただしその場合モデルが<code>torch.jit.save()</code>で<a href="https://pytorch.org/docs/stable/jit.html">TorchScript</a>として保存してある<a href="https://sagemaker.readthedocs.io/en/stable/frameworks/pytorch/using_pytorch.html#save-the-model">必要がある</a>。</p>
 <p>今回は <code>predict_fn()</code> のみ実装した。</p>
-<pre><code>$ cat inference.py
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat inference.py
 import torch
 
 
 def predict_fn(input_data, model):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device(&#39;cuda&#39; if torch.cuda.is_available() else &#39;cpu&#39;)
     model = model.to(device)
     input_data = input_data.to(device)
     model.eval()
-    with torch.jit.optimized_execution(True, {&quot;target_device&quot;: &quot;eia:0&quot;}):
+    with torch.jit.optimized_execution(True, {&#34;target_device&#34;: &#34;eia:0&#34;}):
         output = model(input_data)
         return output.max(1)[1]
-</code></pre><h2 id="デプロイ">デプロイ</h2>
+</code></pre></div><h2 id="デプロイ">デプロイ</h2>
 <p>Training jobがモデルを保存したS3のパスを取ってきて<a href="https://sagemaker.readthedocs.io/en/stable/frameworks/pytorch/sagemaker.pytorch.html#pytorch-model">PyTorchModel</a>を作る。</p>
-<pre><code>from sagemaker.pytorch.model import PyTorchModel
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">from sagemaker.pytorch.model import PyTorchModel
 
-training_job_name = 'pytorch-training-2020-07-25-08-41-45-674'
-training_job = sess.client('sagemaker').describe_training_job(TrainingJobName=training_job_name)
-model = PyTorchModel(model_data=training_job['ModelArtifacts']['S3ModelArtifacts'], 
+training_job_name = &#39;pytorch-training-2020-07-25-08-41-45-674&#39;
+training_job = sess.client(&#39;sagemaker&#39;).describe_training_job(TrainingJobName=training_job_name)
+model = PyTorchModel(model_data=training_job[&#39;ModelArtifacts&#39;][&#39;S3ModelArtifacts&#39;], 
                      role=sagemaker.get_execution_role(),
-                     framework_version='1.3.1',
-                     py_version='py3',
-                     source_dir='/root/sagemaker-pytorch-mnist',
-                     entry_point='inference.py')
-</code></pre><p><code>deploy()</code>するとModelsとEndpoint configurations、Endpointsが作成される。結構時間がかかる。</p>
+                     framework_version=&#39;1.3.1&#39;,
+                     py_version=&#39;py3&#39;,
+                     source_dir=&#39;/root/sagemaker-pytorch-mnist&#39;,
+                     entry_point=&#39;inference.py&#39;)
+</code></pre></div><p><code>deploy()</code>するとModelsとEndpoint configurations、Endpointsが作成される。結構時間がかかる。</p>
 <p><img src="https://www.sambaiz.net/images/290.png" alt="Endpoints"></p>
 <p><code>accelerator_type</code>に指定している<a href="https://docs.aws.amazon.com/ja_jp/sagemaker/latest/dg/ei.html">Elastic Inference</a>というのは、適した量のGPUリソースを各CPUインスタンスにアタッチしてくれるもので、GPUインスタンスのリソースを十分使えていない場合コストを下げることができる。ただEI用のイメージのPyTorchのバージョンが古くバージョンを下げる必要があった。</p>
-<pre><code>model.deploy(instance_type='ml.c4.xlarge', initial_instance_count=1, endpoint_name='pytorch-mnist-test', accelerator_type='ml.eia2.medium')
-</code></pre><p>呼び出してみる。</p>
-<pre><code>from torchvision import datasets, transforms
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">model.deploy(instance_type=&#39;ml.c4.xlarge&#39;, initial_instance_count=1, endpoint_name=&#39;pytorch-mnist-test&#39;, accelerator_type=&#39;ml.eia2.medium&#39;)
+</code></pre></div><p>呼び出してみる。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">from torchvision import datasets, transforms
 
-dataset = datasets.MNIST('mnist', train=False, transform=transforms.ToTensor(), download=False)
+dataset = datasets.MNIST(&#39;mnist&#39;, train=False, transform=transforms.ToTensor(), download=False)
 result = predictor.predict(dataset[0][0].view(-1, 1, 28, 28))
 print(result) # [7]
 print(dataset[0][1]) # 7
-</code></pre><p>shapeの不一致などでエラーを起こすとタイムアウトし、ログにも <code>EI Error Description: Internal error</code> と表示されるだけでトラブルシューティングが難しかった。
+</code></pre></div><p>shapeの不一致などでエラーを起こすとタイムアウトし、ログにも <code>EI Error Description: Internal error</code> と表示されるだけでトラブルシューティングが難しかった。
 例外をcatchしてログを出したり入力のバリデーションを行うと良いと思う。</p>
 <h2 id="後片付け">後片付け</h2>
 <p>デプロイしたリソースを削除する。</p>
-<pre><code>predictor.delete_endpoint()
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">predictor.delete_endpoint()
 predictor.delete_model()
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -197,41 +195,41 @@ predictor.delete_model()
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

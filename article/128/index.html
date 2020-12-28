@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -148,13 +146,13 @@ SQLを拡張したHiveQLを書くとデータを処理するMapReduceやSpark、
 <li><a href="https://www.cloudera.com/documentation/enterprise/latest/topics/cloudera_manager.html">Cloudera Manager</a>: CDHクラスタを管理する。無料のExpressと有料のEnterpriseで使える機能に<a href="https://www.cloudera.com/content/dam/www/static/documents/datasheets/cloudera-enterprise-datasheet.pdf">差がある</a>。</li>
 </ul>
 <p>が含まれていて、これを起動すると諸々立ち上がる。CDHクラスタを組むのはサポートされていないようなのでテスト用らしい。</p>
-<pre><code>$ docker pull cloudera/quickstart:latest
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker pull cloudera/quickstart:latest
 $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 7180 -p 80 cloudera/quickstart /usr/bin/docker-quickstart
-</code></pre><p>80がチュートリアルで、8888がHadoopのWeb UIの<a href="https://github.com/cloudera/hue">Hue</a>、7180がCloudera Manager。Dockerに割り当てるメモリが2GBだと<code>Failed to contact an active Resource Manager</code>になってしまったので4GBにした。</p>
+</code></pre></div><p>80がチュートリアルで、8888がHadoopのWeb UIの<a href="https://github.com/cloudera/hue">Hue</a>、7180がCloudera Manager。Dockerに割り当てるメモリが2GBだと<code>Failed to contact an active Resource Manager</code>になってしまったので4GBにした。</p>
 <h2 id="hiveのテーブルを作成して実行する">Hiveのテーブルを作成して実行する</h2>
 <p>チュートリアルでは<a href="http://sqoop.apache.org/">Sqoop</a>を使ってDBから取り込んでいるんだけど、
 今回はjsonのログのテーブルを作成する。</p>
-<pre><code>$ sqoop import-all-tables \
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sqoop import-all-tables \
     -m 1 \
     --connect jdbc:mysql://localhost:3306/retail_db \
     --username=retail_dba \
@@ -163,7 +161,7 @@ $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 71
     --as-parquetfile \
     --warehouse-dir=/user/hive/warehouse \
     --hive-import
-</code></pre><p>JSONを扱うにはStringから<code>LATERAL VIEW json_tuple(json_str, &quot;field1&quot;, &quot;field2&quot;) j AS field1, field2</code>のように実行時にパースする方法と、<a href="https://github.com/rcongiu/Hive-JSON-Serde">JSON SerDe</a>で最初から別カラムにいれる方法があるが、今回はSerDeでやる。</p>
+</code></pre></div><p>JSONを扱うにはStringから<code>LATERAL VIEW json_tuple(json_str, &quot;field1&quot;, &quot;field2&quot;) j AS field1, field2</code>のように実行時にパースする方法と、<a href="https://github.com/rcongiu/Hive-JSON-Serde">JSON SerDe</a>で最初から別カラムにいれる方法があるが、今回はSerDeでやる。</p>
 <hr>
 <p>json_tupleを使う場合、配列はStringになってしまうのでこれをArrayにするには便利なUDF(User-Defined Functions)をまとめた<a href="https://github.com/klout/brickhouse">brickhouse</a>のjson_splitが使える。例えば、<code>SELECT col1 FROM table LATERAL VIEW explode(json_split('[&quot;a&quot;,&quot;b&quot;,&quot;c&quot; ]')) a as ja</code>のようにするとArrayになったStringがexplodeしてtableの各列に3種のカラムjaが並ぶ。</p>
 <table>
@@ -201,29 +199,29 @@ $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 71
 </tbody>
 </table>
 <p>Arrayが空の場合にexplodeすると消滅してしまうので、LEFT JOINのように残すにはarray(null)に加工してやるとよい。</p>
-<pre><code>CASE WHEN size(json_split(arr)) &gt; 0 THEN json_split(arr) ELSE array(null) END AS arr
-</code></pre><hr>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CASE WHEN size(json_split(arr)) &gt; 0 THEN json_split(arr) ELSE array(null) END AS arr
+</code></pre></div><hr>
 <p>JSON SerDeのjarを持ってくる。</p>
-<pre><code>$ curl http://www.congiu.net/hive-json-serde/1.3.8/cdh5/json-serde-1.3.8-jar-with-dependencies.jar &gt; /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar
-</code></pre><p>クエリはHueから実行できて、初期ユーザー名とパスワードはどちらもcloudera。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl http://www.congiu.net/hive-json-serde/1.3.8/cdh5/json-serde-1.3.8-jar-with-dependencies.jar &gt; /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar
+</code></pre></div><p>クエリはHueから実行できて、初期ユーザー名とパスワードはどちらもcloudera。</p>
 <p>CREATE TABLEはこんな感じ。スキーマ情報はmetastoreに入る。</p>
-<pre><code>ADD JAR /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">ADD JAR /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar;
 
 CREATE EXTERNAL TABLE jinrou (
         participant ARRAY&lt;STRUCT&lt;user_id:INT,role:STRING,team:STRING&gt;&gt;,
         win_team    STRING,
         ts          STRING
       )
-      ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
-      WITH SERDEPROPERTIES ( &quot;mapping.ts&quot; = &quot;timestamp&quot; )
-      LOCATION '/user/cloudera/jinrou';
+      ROW FORMAT SERDE &#39;org.openx.data.jsonserde.JsonSerDe&#39;
+      WITH SERDEPROPERTIES ( &#34;mapping.ts&#34; = &#34;timestamp&#34; )
+      LOCATION &#39;/user/cloudera/jinrou&#39;;
       
 ADD JAR /usr/lib/hive/lib/hive-contrib.jar;
-</code></pre><p>指定したLOCATIONにログをアップロードする。これもHueからできる。</p>
-<pre><code>{&quot;participant&quot;:[{&quot;user_id&quot;:1,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:2,&quot;role&quot;:&quot;wolf&quot;,&quot;team&quot;:&quot;wolf&quot;},{&quot;user_id&quot;:3,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:4,&quot;role&quot;:&quot;medium&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:5,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:6,&quot;role&quot;:&quot;fortune-teller&quot;,&quot;team&quot;:&quot;villager&quot;}],&quot;win_team&quot;:&quot;wolf&quot;,&quot;timestamp&quot;:&quot;2017-08-21T01:23:45.678+0900&quot;}
-{&quot;participant&quot;:[{&quot;user_id&quot;:3,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:4,&quot;role&quot;:&quot;wolf&quot;,&quot;team&quot;:&quot;wolf&quot;},{&quot;user_id&quot;:1,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:2,&quot;role&quot;:&quot;medium&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:6,&quot;role&quot;:&quot;villager&quot;,&quot;team&quot;:&quot;villager&quot;},{&quot;user_id&quot;:5,&quot;role&quot;:&quot;fortune-teller&quot;,&quot;team&quot;:&quot;villager&quot;}],&quot;win_team&quot;:&quot;villager&quot;,&quot;timestamp&quot;:&quot;2017-08-21T02:34:56.789+0900&quot;}
-</code></pre><p>SELECT文を実行すると</p>
-<pre><code>SELECT user_id, role, SUM(is_win)/COUNT(1) AS wp FROM (
+</code></pre></div><p>指定したLOCATIONにログをアップロードする。これもHueからできる。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">{&#34;participant&#34;:[{&#34;user_id&#34;:1,&#34;role&#34;:&#34;villager&#34;,&#34;team&#34;:&#34;villager&#34;},{&#34;user_id&#34;:2,&#34;role&#34;:&#34;wolf&#34;,&#34;team&#34;:&#34;wolf&#34;},{&#34;user_id&#34;:3,&#34;role&#34;:&#34;villager&#34;,&#34;team&#34;:&#34;villager&#34;},{&#34;user_id&#34;:4,&#34;role&#34;:&#34;medium&#34;,&#34;team&#34;:&#34;villager&#34;},{&#34;user_id&#34;:5,&#34;role&#34;:&#34;villager&#34;,&#34;team&#34;:&#34;villager&#34;},{&#34;user_id&#34;:6,&#34;role&#34;:&#34;fortune-teller&#34;,&#34;team&#34;:&#34;villager&#34;}],&#34;win_team&#34;:&#34;wolf&#34;,&#34;timestamp&#34;:&#34;2017-08-21T01:23:45.678+0900&#34;}
+{&#34;participant&#34;:[{&#34;user_id&#34;:3,&#34;role&#34;:&#34;villager&#34;,&#34;team&#34;:&#34;villager&#34;},{&#34;user_id&#34;:4,&#34;role&#34;:&#34;wolf&#34;,&#34;team&#34;:&#34;wolf&#34;},{&#34;user_id&#34;:1,&#34;role&#34;:&#34;villager&#34;,&#34;team&#34;:&#34;villager&#34;},{&#34;user_id&#34;:2,&#34;role&#34;:&#34;medium&#34;,&#34;team&#34;:&#34;villager&#34;},{&#34;user_id&#34;:6,&#34;role&#34;:&#34;villager&#34;,&#34;team&#34;:&#34;villager&#34;},{&#34;user_id&#34;:5,&#34;role&#34;:&#34;fortune-teller&#34;,&#34;team&#34;:&#34;villager&#34;}],&#34;win_team&#34;:&#34;villager&#34;,&#34;timestamp&#34;:&#34;2017-08-21T02:34:56.789+0900&#34;}
+</code></pre></div><p>SELECT文を実行すると</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">SELECT user_id, role, SUM(is_win)/COUNT(1) AS wp FROM (
   SELECT 
     par.user_id,
     par.role, 
@@ -231,8 +229,8 @@ ADD JAR /usr/lib/hive/lib/hive-contrib.jar;
     FROM jinrou
   LATERAL VIEW explode(participant) p AS par
 ) j GROUP BY user_id, role;
-</code></pre><p>参照できている。</p>
-<pre><code>user_id,role,wp
+</code></pre></div><p>参照できている。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">user_id,role,wp
 1,villager,0.5
 2,medium,0.0
 2,wolf,1.0
@@ -243,7 +241,7 @@ ADD JAR /usr/lib/hive/lib/hive-contrib.jar;
 5,villager,0.0
 6,fortune-teller,0.0
 6,villager,1.0
-</code></pre><p>テーブルの定義よりjsonのフィールドが多いと無視されて、ないものはNULLになる。</p>
+</code></pre></div><p>テーブルの定義よりjsonのフィールドが多いと無視されて、ないものはNULLになる。</p>
 <h2 id="参考">参考</h2>
 <p><a href="http://blog-jp.treasuredata.com/entry/2014/07/10/150250">『Prestoとは何か，Prestoで何ができるか』 - トレジャーデータ（Treasure Data）公式ブログ</a></p>
 <p><a href="http://recruit.gmo.jp/engineer/jisedai/blog/presto_spark_hive/">スケールアウト可能なSQLエンジンのベンチマークテスト：Presto vs Spark SQL vs Hive on Tez | GMOインターネット 次世代システム研究室</a></p>
@@ -256,41 +254,41 @@ ADD JAR /usr/lib/hive/lib/hive-contrib.jar;
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

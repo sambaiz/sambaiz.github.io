@@ -18,8 +18,8 @@
 function doGet(e) { return ContentService.createTextOutput(JSON.stringify(e.parameter)) } function doPost(e) { return ContentService.createTextOutput(e.postData.contents) } claspでデプロイする際は一度画面上でウェブアプリとして公開した後、そのDeplymentsを更新するとそのまま反映できる。ただしDeploymentsに紐づくVersionに限りがあるので一旦undeployしている。
 claspでGoogle Apps Scriptをローカルで開発しデプロイする - sambaiz-net
 $ clasp push &amp;amp;&amp;amp; clasp undeploy --all &amp;amp;&amp;amp; clasp deploy -V 1 ウェブアプリのURLにリクエストを送ると https://script.googleusercontent.com/macros/echo?user_content_key=**** にリダイレクトするので、curlでリクエストする際は-Lフラグを付ける必要がある。 また、POSTする際は-X POSTを付けるとステータスコードに関わらずリダイレクト先にPOSTでリクエストし、Not Foundとなってしまうので付けない。
-$ curl -L https://script.google.com/macros/s/*****/exec?aaa=bbb {&amp;quot;aaa&amp;quot;:&amp;quot;bbb&amp;quot;} $ $ curl -d &#39;aaaa&#39; -L https://script.google.com/macros/s/*****/exec &amp;quot;aaaa&amp;quot; GETとPOSTしか対応してないということは、OPTIONSメソッドによるCORSのpreflightリクエストも送れないということになる。 したがって、preflightリクエストが送られないように、余分なHeaderを付けずに Content-Typeをapplication/x-www-form-urlencoded、multipart/form-data、text/plainのいずれかで送る必要がある。 Request.modeをno-corsにすると送られるHeaderが制限されてエラーにはならなくなるが、レスポンスをスクリプトから取ることができない。
-$ cat test.html &amp;lt;script&amp;gt; (async () =&amp;gt; { const resp = await fetch(&#39;https://script.</description>
+$ curl -L https://script.google.com/macros/s/*****/exec?aaa=bbb {&amp;#34;aaa&amp;#34;:&amp;#34;bbb&amp;#34;} $ $ curl -d &amp;#39;aaaa&amp;#39; -L https://script.google.com/macros/s/*****/exec &amp;#34;aaaa&amp;#34; GETとPOSTしか対応してないということは、OPTIONSメソッドによるCORSのpreflightリクエストも送れないということになる。 したがって、preflightリクエストが送られないように、余分なHeaderを付けずに Content-Typeをapplication/x-www-form-urlencoded、multipart/form-data、text/plainのいずれかで送る必要がある。 Request.modeをno-corsにすると送られるHeaderが制限されてエラーにはならなくなるが、レスポンスをスクリプトから取ることができない。
+$ cat test.html &amp;lt;script&amp;gt; (async () =&amp;gt; { const resp = await fetch(&amp;#39;https://script.</description>
     </item>
     
     <item>
@@ -30,8 +30,8 @@ $ cat test.html &amp;lt;script&amp;gt; (async () =&amp;gt; { const resp = await 
       <guid>https://www.sambaiz.net/article/315/</guid>
       <description>claspはGASをローカルで開発するための公式のツール。
 $ npm install -g @google/clasp $ clasp --version 2.3.0 設定でGASのAPIを有効にしてログインし、必要な権限を許可する。
-$ clasp login $ cat ~/.clasprc.json {&amp;quot;token&amp;quot;:{&amp;quot;access_token&amp;quot;:&amp;quot;... clasp createでプロジェクトを作成する。typeを指定するとドキュメントが作られ、スクリプトがそれに紐づく。 紐づいているスクリプトからはSpreadsheetApp.getActiveSpreadsheet()のようにIDを指定することなくドキュメントを参照できる。
-$ clasp create --type sheets --title &amp;quot;clasp test&amp;quot; Created new Google Sheet: https://drive.google.com/open?id=***** Created new Google Sheets Add-on script: https://script.google.com/d/*****/edit Warning: files in subfolder are not accounted for unless you set a &#39;.claspignore&#39; file. Cloned 1 file. └─ appsscript.json $ tree -a . ├── .clasp.json └── appsscript.json $ cat .</description>
+$ clasp login $ cat ~/.clasprc.json {&amp;#34;token&amp;#34;:{&amp;#34;access_token&amp;#34;:&amp;#34;... clasp createでプロジェクトを作成する。typeを指定するとドキュメントが作られ、スクリプトがそれに紐づく。 紐づいているスクリプトからはSpreadsheetApp.getActiveSpreadsheet()のようにIDを指定することなくドキュメントを参照できる。
+$ clasp create --type sheets --title &amp;#34;clasp test&amp;#34; Created new Google Sheet: https://drive.google.com/open?id=***** Created new Google Sheets Add-on script: https://script.google.com/d/*****/edit Warning: files in subfolder are not accounted for unless you set a &amp;#39;.claspignore&amp;#39; file. Cloned 1 file. └─ appsscript.json $ tree -a . ├── .clasp.json └── appsscript.json $ cat .</description>
     </item>
     
     <item>
@@ -46,7 +46,7 @@ OpenID ConnectのIDトークンの内容と検証 - sambaiz-net
 全体のコードはGitHubにある。
 クライアントの準備 サービスアカウントでアクセストークンを取得するにはJWTを認可サーバーに送る必要があるが、JWTをアクセストークンの代わりに用いることができるのでそうしている。
 SpreadsheetIDはURLから得られる。
-package main import ( &amp;quot;context&amp;quot; &amp;quot;fmt&amp;quot; &amp;quot;io/ioutil&amp;quot; &amp;quot;os&amp;quot; &amp;quot;golang.org/x/oauth2/google&amp;quot; &amp;quot;google.golang.org/api/sheets/v4&amp;quot; ) type SheetClient struct { srv *sheets.Service spreadsheetID string } func NewSheetClient(ctx context.Context, spreadsheetID string) (*SheetClient, error) { b, err := ioutil.ReadFile(&amp;quot;secret.json&amp;quot;) if err != nil { return nil, err } // read &amp;amp; write permission jwt, err := google.JWTConfigFromJSON(b, &amp;quot;https://www.googleapis.com/auth/spreadsheets&amp;quot;) if err != nil { return nil, err } srv, err := sheets.</description>
+package main import ( &amp;#34;context&amp;#34; &amp;#34;fmt&amp;#34; &amp;#34;io/ioutil&amp;#34; &amp;#34;os&amp;#34; &amp;#34;golang.org/x/oauth2/google&amp;#34; &amp;#34;google.golang.org/api/sheets/v4&amp;#34; ) type SheetClient struct { srv *sheets.Service spreadsheetID string } func NewSheetClient(ctx context.Context, spreadsheetID string) (*SheetClient, error) { b, err := ioutil.ReadFile(&amp;#34;secret.json&amp;#34;) if err != nil { return nil, err } // read &amp;amp; write permission 	jwt, err := google.JWTConfigFromJSON(b, &amp;#34;https://www.googleapis.com/auth/spreadsheets&amp;#34;) if err != nil { return nil, err } srv, err := sheets.</description>
     </item>
     
     <item>
@@ -99,7 +99,7 @@ apiVersion: apiextensions.k8s.io/v1beta1 kind: CustomResourceDefinition metadata
 PodのトラフィックをラベルやIPアドレスで許可するためのResource。AWSのセキュリティグループやGCPのファイアウォールルールのようなもの。 GKEでは今のところデフォルトでオフになっているので--enable-network-policyを付けてクラスタを作成する必要がある。
 以前作成したmulti podのアプリケーションで挙動を確認する。
 GKEでのService(ClusterIP/NodePort/LoadBalancer)とIngress - sambaiz-net
-$ kubectl get service NAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE clusterip-app ClusterIP 10.23.247.54 &amp;lt;none&amp;gt; 80/TCP 48m loadbalancer-app LoadBalancer 10.23.244.137 35.224.130.196 80:31508/TCP 48m nodeport-app NodePort 10.23.246.215 &amp;lt;none&amp;gt; 80:32181/TCP 48m ... $ curl -d &#39;{&amp;quot;url&amp;quot;: &amp;quot;http://nodeport-app&amp;quot;}&#39; http://35.224.130.196/ 200 作成するNetworkPolicyは以下の二つで、いずれも対象はapp: nodeport-appのラベルが付いたPod。 一つ目は対象Podへのリクエストを一旦全て拒否する。 二つ目はnodeport-access: &amp;quot;true&amp;quot;のラベルが付いたPodから対象Podへの8080ポートのリクエストを許可するもの。 今回は設定しないがegressも設定できる。
+$ kubectl get service NAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE clusterip-app ClusterIP 10.23.247.54 &amp;lt;none&amp;gt; 80/TCP 48m loadbalancer-app LoadBalancer 10.23.244.137 35.224.130.196 80:31508/TCP 48m nodeport-app NodePort 10.23.246.215 &amp;lt;none&amp;gt; 80:32181/TCP 48m ... $ curl -d &amp;#39;{&amp;#34;url&amp;#34;: &amp;#34;http://nodeport-app&amp;#34;}&amp;#39; http://35.224.130.196/ 200 作成するNetworkPolicyは以下の二つで、いずれも対象はapp: nodeport-appのラベルが付いたPod。 一つ目は対象Podへのリクエストを一旦全て拒否する。 二つ目はnodeport-access: &amp;quot;true&amp;quot;のラベルが付いたPodから対象Podへの8080ポートのリクエストを許可するもの。 今回は設定しないがegressも設定できる。
 $ cat networkPolicies.yaml --- # Default deny all ingress traffic apiVersion: networking.k8s.io/v1 kind: NetworkPolicy metadata: name: default-deny spec: podSelector: matchLabels: app: nodeport-app --- apiVersion: networking.</description>
     </item>
     
@@ -113,7 +113,7 @@ $ cat networkPolicies.yaml --- # Default deny all ingress traffic apiVersion: ne
 GAEのTaskQueue - sambaiz-net
 料金はPublish/Pull/Pushしたデータ容量による。1TB送ると$60くらい。
 Goのクライアントライブラリで動かしてみる。 まずTopicを作成して50件Publishした後、Subsriptionを作成して、再び50件Publishする。 Publishできるデータは10MB未満。
-topic, err := client.CreateTopic(ctx, topicName) if err != nil { panic(err) } var wg sync.WaitGroup for i := 0; i &amp;lt; 50; i++ { wg.Add(1) go func() { if _, err := topic.Publish(ctx, &amp;amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != nil { log.Fatalf(&amp;quot;Publish error: %s&amp;quot;, err.Error()) } else { log.Printf(&amp;quot;Publish successful: %d&amp;quot;, i) } wg.Done() }() wg.Wait() } log.Printf(&amp;quot;Create Subscription&amp;quot;) sub := createSubscription(ctx, client, topic, subscriptionName) for i := 50; i &amp;lt; 100; i++ { wg.</description>
+topic, err := client.CreateTopic(ctx, topicName) if err != nil { panic(err) } var wg sync.WaitGroup for i := 0; i &amp;lt; 50; i++ { wg.Add(1) go func() { if _, err := topic.Publish(ctx, &amp;amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != nil { log.Fatalf(&amp;#34;Publish error: %s&amp;#34;, err.Error()) } else { log.Printf(&amp;#34;Publish successful: %d&amp;#34;, i) } wg.Done() }() wg.Wait() } log.Printf(&amp;#34;Create Subscription&amp;#34;) sub := createSubscription(ctx, client, topic, subscriptionName) for i := 50; i &amp;lt; 100; i++ { wg.</description>
     </item>
     
     <item>
@@ -127,7 +127,7 @@ topic, err := client.CreateTopic(ctx, topicName) if err != nil { panic(err) } va
 queue: - name: default rate: 10/m bucket_size: 5 retry_parameters: min_backoff_seconds: 10 max_backoff_seconds: 300 bucket_sizeの最大は500なのでこれ以上の性能が必要な場合は複数のQueueに分けるか Cloud Pub/Subを使うことになる。ただし、At-Least-Onceなのでレコードが重複しても問題ないように作る必要がある。SQSも同じ。
 GCPのCloud Pub/Sub - sambaiz-net
 アプリケーション /にアクセスすると2つのTaskをdefaultのTaskQueueにDelay25秒でPOSTする。 Taskによるリクエストは/workerで受け、30%の確率で500エラーを返すようにしている。
-package main import ( &amp;quot;fmt&amp;quot; &amp;quot;io/ioutil&amp;quot; &amp;quot;math/rand&amp;quot; &amp;quot;net/http&amp;quot; &amp;quot;net/url&amp;quot; &amp;quot;strconv&amp;quot; &amp;quot;time&amp;quot; &amp;quot;google.golang.org/appengine&amp;quot; &amp;quot;google.golang.org/appengine/log&amp;quot; &amp;quot;google.golang.org/appengine/taskqueue&amp;quot; ) func main() { http.HandleFunc(&amp;quot;/&amp;quot;, handler) http.HandleFunc(&amp;quot;/worker&amp;quot;, handlerQueue) appengine.Main() } func handler(w http.ResponseWriter, r *http.Request) { ctx := appengine.NewContext(r) // POST body: name=a%26&amp;amp;value=20 t := taskqueue.NewPOSTTask(&amp;quot;/worker&amp;quot;, map[string][]string{&amp;quot;name&amp;quot;: {&amp;quot;a&amp;amp;&amp;quot;}, &amp;quot;time&amp;quot;: {strconv.</description>
+package main import ( &amp;#34;fmt&amp;#34; &amp;#34;io/ioutil&amp;#34; &amp;#34;math/rand&amp;#34; &amp;#34;net/http&amp;#34; &amp;#34;net/url&amp;#34; &amp;#34;strconv&amp;#34; &amp;#34;time&amp;#34; &amp;#34;google.golang.org/appengine&amp;#34; &amp;#34;google.golang.org/appengine/log&amp;#34; &amp;#34;google.golang.org/appengine/taskqueue&amp;#34; ) func main() { http.HandleFunc(&amp;#34;/&amp;#34;, handler) http.HandleFunc(&amp;#34;/worker&amp;#34;, handlerQueue) appengine.Main() } func handler(w http.ResponseWriter, r *http.Request) { ctx := appengine.NewContext(r) // POST body: name=a%26&amp;amp;value=20 	t := taskqueue.NewPOSTTask(&amp;#34;/worker&amp;#34;, map[string][]string{&amp;#34;name&amp;#34;: {&amp;#34;a&amp;amp;&amp;#34;}, &amp;#34;time&amp;#34;: {strconv.</description>
     </item>
     
     <item>
@@ -137,7 +137,7 @@ package main import ( &amp;quot;fmt&amp;quot; &amp;quot;io/ioutil&amp;quot; &amp
       
       <guid>https://www.sambaiz.net/article/173/</guid>
       <description>疎通確認用アプリケーション GETでは200を返し、POSTではURLにGETリクエストを送ってステータスコードを返す。
-package main import ( &amp;quot;encoding/json&amp;quot; &amp;quot;fmt&amp;quot; &amp;quot;io/ioutil&amp;quot; &amp;quot;net/http&amp;quot; ) type PostBody struct { URL string `json:&amp;quot;url&amp;quot;` } func handler(w http.ResponseWriter, r *http.Request) { if r.Method == http.MethodGet { fmt.Fprintln(w, &amp;quot;ok&amp;quot;) } else if r.Method == http.MethodPost { data, err := ioutil.ReadAll(r.Body) if err != nil { w.WriteHeader(http.StatusInternalServerError) fmt.Fprintln(w, err.Error()) return } p := PostBody{} if err := json.Unmarshal(data, &amp;amp;p); err != nil { w.WriteHeader(http.StatusBadRequest) fmt.Fprintln(w, err.Error()) return } resp, err := http.</description>
+package main import ( &amp;#34;encoding/json&amp;#34; &amp;#34;fmt&amp;#34; &amp;#34;io/ioutil&amp;#34; &amp;#34;net/http&amp;#34; ) type PostBody struct { URL string `json:&amp;#34;url&amp;#34;` } func handler(w http.ResponseWriter, r *http.Request) { if r.Method == http.MethodGet { fmt.Fprintln(w, &amp;#34;ok&amp;#34;) } else if r.Method == http.MethodPost { data, err := ioutil.ReadAll(r.Body) if err != nil { w.WriteHeader(http.StatusInternalServerError) fmt.Fprintln(w, err.Error()) return } p := PostBody{} if err := json.Unmarshal(data, &amp;amp;p); err != nil { w.WriteHeader(http.StatusBadRequest) fmt.Fprintln(w, err.Error()) return } resp, err := http.</description>
     </item>
     
     <item>
@@ -150,7 +150,7 @@ package main import ( &amp;quot;encoding/json&amp;quot; &amp;quot;fmt&amp;quot; 
 TerraformでVPCを管理するmoduleを作る - sambaiz-net
 Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る - sambaiz-net
 GKE  google_container_cluster  oauth_scopeにbigqueryを付けている。
-resource &amp;quot;google_container_cluster&amp;quot; &amp;quot;sample&amp;quot; { name = &amp;quot;${var.cluster_name}&amp;quot; description = &amp;quot;sample k8s cluster&amp;quot; zone = &amp;quot;${var.gcp_zone}&amp;quot; initial_node_count = &amp;quot;${var.initial_node_count}&amp;quot; master_auth { username = &amp;quot;${var.master_username}&amp;quot; password = &amp;quot;${var.master_password}&amp;quot; } node_config { machine_type = &amp;quot;${var.node_machine_type}&amp;quot; disk_size_gb = &amp;quot;${var.node_disk_size}&amp;quot; oauth_scopes = [ &amp;quot;https://www.googleapis.com/auth/compute&amp;quot;, &amp;quot;https://www.googleapis.com/auth/devstorage.read_only&amp;quot;, &amp;quot;https://www.googleapis.com/auth/logging.write&amp;quot;, &amp;quot;https://www.googleapis.com/auth/monitoring&amp;quot;, &amp;quot;https://www.googleapis.com/auth/bigquery&amp;quot;, ] } } variable &amp;quot;env&amp;quot; { description = &amp;quot;system env&amp;quot; } variable &amp;quot;gcp_zone&amp;quot; { description = &amp;quot;GCP zone, e.</description>
+resource &amp;#34;google_container_cluster&amp;#34; &amp;#34;sample&amp;#34; { name = &amp;#34;${var.cluster_name}&amp;#34; description = &amp;#34;sample k8s cluster&amp;#34; zone = &amp;#34;${var.gcp_zone}&amp;#34; initial_node_count = &amp;#34;${var.initial_node_count}&amp;#34; master_auth { username = &amp;#34;${var.master_username}&amp;#34; password = &amp;#34;${var.master_password}&amp;#34; } node_config { machine_type = &amp;#34;${var.node_machine_type}&amp;#34; disk_size_gb = &amp;#34;${var.node_disk_size}&amp;#34; oauth_scopes = [ &amp;#34;https://www.googleapis.com/auth/compute&amp;#34;, &amp;#34;https://www.googleapis.com/auth/devstorage.read_only&amp;#34;, &amp;#34;https://www.googleapis.com/auth/logging.write&amp;#34;, &amp;#34;https://www.googleapis.com/auth/monitoring&amp;#34;, &amp;#34;https://www.googleapis.com/auth/bigquery&amp;#34;, ] } } variable &amp;#34;env&amp;#34; { description = &amp;#34;system env&amp;#34; } variable &amp;#34;gcp_zone&amp;#34; { description = &amp;#34;GCP zone, e.</description>
     </item>
     
     <item>
@@ -161,7 +161,7 @@ resource &amp;quot;google_container_cluster&amp;quot; &amp;quot;sample&amp;quot;
       <guid>https://www.sambaiz.net/article/163/</guid>
       <description>新しいMBPを買ったので開発環境の構築でやったことを残しておく
 設定  アクセシビリティから3本指スクロールを有効にする ホットコーナーの左上にLaunchPad、右上にデスクトップを割り当てている 画面をなるべく広く使うためにDockは左に置いて自動的に隠す  bash_profile パッケージマネージャ以外で持ってきたバイナリは${HOME}/binに置くことにする。
-touch ~/.bash_profile mkdir ${HOME}/bin echo &amp;quot;export PATH=\$PATH:${HOME}/bin&amp;quot; &amp;gt;&amp;gt; ~/.bash_profile HomeBrew &amp;amp; Cask /usr/bin/ruby -e &amp;quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)&amp;quot; brew tap caskroom/cask 一般的なアプリケーション/コマンドのインストール XcodeとUnityとLINEは手動で入れる。
+touch ~/.bash_profile mkdir ${HOME}/bin echo &amp;#34;export PATH=\$PATH:${HOME}/bin&amp;#34; &amp;gt;&amp;gt; ~/.bash_profile HomeBrew &amp;amp; Cask /usr/bin/ruby -e &amp;#34;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)&amp;#34; brew tap caskroom/cask 一般的なアプリケーション/コマンドのインストール XcodeとUnityとLINEは手動で入れる。
 brew cask install google-chrome kap visual-studio-code slack kindle brew install jq gibo mysql wget Git git config --global user.name sambaiz git config --global user.email godgourd@gmail.com Docker &amp;amp; K8s brew cask install docker virtualbox minikube brew install docker kubernetes-helm fish bash前提で書かれたスクリプトも多いので、デフォルトシェルにはしない。</description>
     </item>
     
@@ -175,7 +175,7 @@ brew cask install google-chrome kap visual-studio-code slack kindle brew install
 CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net
 LocustはPython製で、以下のようなコードで処理を書くことができる。
 @task(10)のように括弧の中に数字を書いて実行される割合を偏らせることもできる。 異なるTaskSetに対応するユーザーを複数作ることもできて、こちらもweightで重みを付けられる。 ユーザー数はあとでWeb上から入力する。
-$ mkdir tasks $ cat tasks/tasks.py from locust import HttpLocust, TaskSet, task class ElbTasks(TaskSet): @task def task1(self): with self.client.get(&amp;quot;/&amp;quot;, catch_response=True) as response: if response.content != &amp;quot;Success&amp;quot;: response.failure(&amp;quot;Got wrong response&amp;quot;) class ElbWarmer(HttpLocust): task_set = ElbTasks min_wait = 1000 max_wait = 3000 stableにChartはあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、package して、helm repo index でこれを参照するindex.yamlを生成した。
+$ mkdir tasks $ cat tasks/tasks.py from locust import HttpLocust, TaskSet, task class ElbTasks(TaskSet): @task def task1(self): with self.client.get(&amp;#34;/&amp;#34;, catch_response=True) as response: if response.content != &amp;#34;Success&amp;#34;: response.failure(&amp;#34;Got wrong response&amp;#34;) class ElbWarmer(HttpLocust): task_set = ElbTasks min_wait = 1000 max_wait = 3000 stableにChartはあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、package して、helm repo index でこれを参照するindex.yamlを生成した。
  追記(2020-03-11): 今はConfigmapを自分で作成し --set worker.config.configmapName=*** することでforkしなくてもよくなった kubectl create configmap locust-worker-configs --from-file tasks/tasks.py
  $ helm package .</description>
     </item>
@@ -187,10 +187,10 @@ $ mkdir tasks $ cat tasks/tasks.py from locust import HttpLocust, TaskSet, task 
       
       <guid>https://www.sambaiz.net/article/160/</guid>
       <description>k8sのパッケージマネージャーHelmを使う - sambaiz-net
-$ helm version Client: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;} Server: &amp;amp;version.Version{SemVer:&amp;quot;v2.8.2&amp;quot;, GitCommit:&amp;quot;a80231648a1473929271764b920a8e346f6de844&amp;quot;, GitTreeState:&amp;quot;clean&amp;quot;} GKEでhelm initしてhelm installしたところ以下のエラーが返ってきた。
-Error: release my-locust failed: namespaces &amp;quot;default&amp;quot; is forbidden: User &amp;quot;system:serviceaccount:kube-system:default&amp;quot; cannot get namespaces in the namespace &amp;quot;default&amp;quot;: Unknown user &amp;quot;system:serviceaccount:kube-system:default&amp;quot; GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が有効になっているため、Tillerインスタンスに権限を与える必要がある。
+$ helm version Client: &amp;amp;version.Version{SemVer:&amp;#34;v2.8.2&amp;#34;, GitCommit:&amp;#34;a80231648a1473929271764b920a8e346f6de844&amp;#34;, GitTreeState:&amp;#34;clean&amp;#34;} Server: &amp;amp;version.Version{SemVer:&amp;#34;v2.8.2&amp;#34;, GitCommit:&amp;#34;a80231648a1473929271764b920a8e346f6de844&amp;#34;, GitTreeState:&amp;#34;clean&amp;#34;} GKEでhelm initしてhelm installしたところ以下のエラーが返ってきた。
+Error: release my-locust failed: namespaces &amp;#34;default&amp;#34; is forbidden: User &amp;#34;system:serviceaccount:kube-system:default&amp;#34; cannot get namespaces in the namespace &amp;#34;default&amp;#34;: Unknown user &amp;#34;system:serviceaccount:kube-system:default&amp;#34; GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が有効になっているため、Tillerインスタンスに権限を与える必要がある。
 ということでTiller用にnamespaceを切って、その中では好きにできるRoleと、Tillerが使うServiceAccountを作成し、RoleBindingで紐づける。
-kind: Role apiVersion: rbac.authorization.k8s.io/v1beta1 metadata: name: tiller-manager namespace: tiller-world rules: - apiGroups: [&amp;quot;&amp;quot;, &amp;quot;extensions&amp;quot;, &amp;quot;apps&amp;quot;] resources: [&amp;quot;*&amp;quot;] verbs: [&amp;quot;*&amp;quot;] --- apiVersion: v1 kind: ServiceAccount metadata: name: tiller namespace: tiller-world --- kind: RoleBinding apiVersion: rbac.</description>
+kind: Role apiVersion: rbac.authorization.k8s.io/v1beta1 metadata: name: tiller-manager namespace: tiller-world rules: - apiGroups: [&amp;#34;&amp;#34;, &amp;#34;extensions&amp;#34;, &amp;#34;apps&amp;#34;] resources: [&amp;#34;*&amp;#34;] verbs: [&amp;#34;*&amp;#34;] --- apiVersion: v1 kind: ServiceAccount metadata: name: tiller namespace: tiller-world --- kind: RoleBinding apiVersion: rbac.</description>
     </item>
     
     <item>
@@ -217,7 +217,7 @@ apiVersion: v1 kind: ConfigMap metadata: name: fluentd-config data: fluent.conf:
       
       <guid>https://www.sambaiz.net/article/66/</guid>
       <description>fluentdのmonitor_agent メトリクスをjsonで返すAPIを提供する。
-&amp;lt;source&amp;gt; @type monitor_agent bind 0.0.0.0 port 24220 &amp;lt;/source&amp;gt; $ curl localhost:24220/api/plugins.json | jq { &amp;quot;plugins&amp;quot;: [ { &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590d8c250&amp;quot;, &amp;quot;plugin_category&amp;quot;: &amp;quot;input&amp;quot;, &amp;quot;type&amp;quot;: &amp;quot;forward&amp;quot;, &amp;quot;config&amp;quot;: { &amp;quot;@type&amp;quot;: &amp;quot;forward&amp;quot;, &amp;quot;port&amp;quot;: &amp;quot;24222&amp;quot;, &amp;quot;bind&amp;quot;: &amp;quot;0.0.0.0&amp;quot; }, &amp;quot;output_plugin&amp;quot;: false, &amp;quot;retry_count&amp;quot;: null }, { &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590d894c4&amp;quot;, &amp;quot;plugin_category&amp;quot;: &amp;quot;input&amp;quot;, &amp;quot;type&amp;quot;: &amp;quot;monitor_agent&amp;quot;, &amp;quot;config&amp;quot;: { &amp;quot;@type&amp;quot;: &amp;quot;monitor_agent&amp;quot;, &amp;quot;bind&amp;quot;: &amp;quot;0.0.0.0&amp;quot;, &amp;quot;port&amp;quot;: &amp;quot;24220&amp;quot; }, &amp;quot;output_plugin&amp;quot;: false, &amp;quot;retry_count&amp;quot;: null }, { &amp;quot;plugin_id&amp;quot;: &amp;quot;object:3f8590dc1f2c&amp;quot;, &amp;quot;plugin_category&amp;quot;: &amp;quot;output&amp;quot;, &amp;quot;type&amp;quot;: &amp;quot;file&amp;quot;, &amp;quot;config&amp;quot;: { &amp;quot;@type&amp;quot;: &amp;quot;file&amp;quot;, &amp;quot;path&amp;quot;: &amp;quot;/var/log/td-agent/hoge.</description>
+&amp;lt;source&amp;gt; @type monitor_agent bind 0.0.0.0 port 24220 &amp;lt;/source&amp;gt; $ curl localhost:24220/api/plugins.json | jq { &amp;#34;plugins&amp;#34;: [ { &amp;#34;plugin_id&amp;#34;: &amp;#34;object:3f8590d8c250&amp;#34;, &amp;#34;plugin_category&amp;#34;: &amp;#34;input&amp;#34;, &amp;#34;type&amp;#34;: &amp;#34;forward&amp;#34;, &amp;#34;config&amp;#34;: { &amp;#34;@type&amp;#34;: &amp;#34;forward&amp;#34;, &amp;#34;port&amp;#34;: &amp;#34;24222&amp;#34;, &amp;#34;bind&amp;#34;: &amp;#34;0.0.0.0&amp;#34; }, &amp;#34;output_plugin&amp;#34;: false, &amp;#34;retry_count&amp;#34;: null }, { &amp;#34;plugin_id&amp;#34;: &amp;#34;object:3f8590d894c4&amp;#34;, &amp;#34;plugin_category&amp;#34;: &amp;#34;input&amp;#34;, &amp;#34;type&amp;#34;: &amp;#34;monitor_agent&amp;#34;, &amp;#34;config&amp;#34;: { &amp;#34;@type&amp;#34;: &amp;#34;monitor_agent&amp;#34;, &amp;#34;bind&amp;#34;: &amp;#34;0.0.0.0&amp;#34;, &amp;#34;port&amp;#34;: &amp;#34;24220&amp;#34; }, &amp;#34;output_plugin&amp;#34;: false, &amp;#34;retry_count&amp;#34;: null }, { &amp;#34;plugin_id&amp;#34;: &amp;#34;object:3f8590dc1f2c&amp;#34;, &amp;#34;plugin_category&amp;#34;: &amp;#34;output&amp;#34;, &amp;#34;type&amp;#34;: &amp;#34;file&amp;#34;, &amp;#34;config&amp;#34;: { &amp;#34;@type&amp;#34;: &amp;#34;file&amp;#34;, &amp;#34;path&amp;#34;: &amp;#34;/var/log/td-agent/hoge.</description>
     </item>
     
     <item>
@@ -239,7 +239,7 @@ $ gcloud config configurations create &amp;lt;name&amp;gt; $ gcloud config confi
       <guid>https://www.sambaiz.net/article/18/</guid>
       <description>前回は単一コンテナのアプリケーションを動かしたが、今回はコンテナ間でやり取りが発生するものを動かす。 流れとしては、クライアントからのリクエストをGATEWAYサーバーで受け取り、SERVICEサーバーにリクエストし、その結果を返すまで。
 プログラムは以下の通り、環境変数TYPEの値によって挙動を変えていて、同じイメージを使い回す。コードはここ。
-var http = require(&#39;http&#39;); var handleRequest = function(request, response) { if(process.env.TYPE == &amp;quot;GATEWAY&amp;quot;){ console.log(&#39;Passed.&#39;); var options = { host: &#39;service&#39;, port: 8080, method: &#39;GET&#39; }; var req = http.request(options, function(res) { data = &amp;quot;&amp;quot; res.on(&#39;data&#39;, function (chunk) { data+=chunk; }); res.on(&#39;end&#39;, () =&amp;gt; { response.writeHead(200); response.end(data); }); }); req.on(&#39;error&#39;, function(e) { response.writeHead(500) response.end(e.message); }); req.end(); }else{ console.log(&#39;Received.&#39;); response.writeHead(200); response.end(&#39;ok&#39;); } }; var www = http.createServer(handleRequest); www.listen(8080); これをContainer RegistryにPushする。</description>
+var http = require(&amp;#39;http&amp;#39;); var handleRequest = function(request, response) { if(process.env.TYPE == &amp;#34;GATEWAY&amp;#34;){ console.log(&amp;#39;Passed.&amp;#39;); var options = { host: &amp;#39;service&amp;#39;, port: 8080, method: &amp;#39;GET&amp;#39; }; var req = http.request(options, function(res) { data = &amp;#34;&amp;#34; res.on(&amp;#39;data&amp;#39;, function (chunk) { data+=chunk; }); res.on(&amp;#39;end&amp;#39;, () =&amp;gt; { response.writeHead(200); response.end(data); }); }); req.on(&amp;#39;error&amp;#39;, function(e) { response.writeHead(500) response.end(e.message); }); req.end(); }else{ console.log(&amp;#39;Received.&amp;#39;); response.writeHead(200); response.end(&amp;#39;ok&amp;#39;); } }; var www = http.createServer(handleRequest); www.listen(8080); これをContainer RegistryにPushする。</description>
     </item>
     
     <item>
@@ -250,7 +250,7 @@ var http = require(&#39;http&#39;); var handleRequest = function(request, respon
       <guid>https://www.sambaiz.net/article/17/</guid>
       <description>Kubernetes - Hello World Walkthrough
 CloudSDKとkubectlのインストール Cloud SDKをインストールしてgloudコマンドを使えるようにする。
-$ gcloud --version Google Cloud SDK 122.0.0 $ gcloud components install kubectl Google Container RegistryにPush $ export PROJECT_ID=&amp;quot;******&amp;quot; $ docker build -t gcr.io/$PROJECT_ID/test:v1 . $ gcloud docker push gcr.io/$PROJECT_ID/test:v1 プロジェクトの課金を有効にしていないとこんなエラーメッセージが出る。
+$ gcloud --version Google Cloud SDK 122.0.0 $ gcloud components install kubectl Google Container RegistryにPush $ export PROJECT_ID=&amp;#34;******&amp;#34; $ docker build -t gcr.io/$PROJECT_ID/test:v1 . $ gcloud docker push gcr.io/$PROJECT_ID/test:v1 プロジェクトの課金を有効にしていないとこんなエラーメッセージが出る。
 denied: Unable to create the repository, please check that you have access to do so. Clusterの作成 $ gcloud config set core/project $PROJECT_ID $ gcloud config set compute/zone asia-east1-b $ gcloud container clusters create test-cluster $ gcloud config set container/cluster test-cluster Container Engine APIが有効になっていない場合はこうなる。 一度コンソールからContainer Engineを選ぶと、サービスの準備が始まって有効になる。</description>
     </item>
     

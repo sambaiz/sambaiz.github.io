@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -151,13 +149,13 @@ Cloud TPUを直に使うとVMから接続して使うことになるので、TPU
 <p>初めは比較的低レベルのAPIを使おうとしていたが、XLA(Accelerated Linear Algebra)によるコンパイルがうまくいかないなど様々な問題にあたって大変だったので使っておくと良いと思う。
 それでもトライアンドエラーの繰り返しで、典型的なものは<a href="https://cloud.google.com/tpu/docs/troubleshooting">Troubleshooting</a>にあるが、ないものは調べるなりしてなんとかやっていくしかない。</p>
 <p>定数などの定義。BATCH_SIZEはCloud TPUのシャード数の8で割り切れる値にする必要がある。</p>
-<pre><code>import pandas as pd
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import pandas as pd
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 import numpy as np
 flags = tf.app.flags
-flags.DEFINE_boolean('use_tpu', True, 'use tpu or not')
-tf.app.flags.DEFINE_string('f', '', 'kernel')
+flags.DEFINE_boolean(&#39;use_tpu&#39;, True, &#39;use tpu or not&#39;)
+tf.app.flags.DEFINE_string(&#39;f&#39;, &#39;&#39;, &#39;kernel&#39;)
 FLAGS = flags.FLAGS
 
 EPOCH_NUM = 100
@@ -165,70 +163,70 @@ BATCH_SIZE = 800 # must be divisible by number of replicas 8
 EVAL_BATCH_SIZE = 800
 SHARD_NUM = 8 # A single Cloud TPU has 8 shards.
 ITERATION_NUM = 100 # Number of training steps to run on the Cloud TPU before returning control.
-</code></pre><h3 id="入力データの準備">入力データの準備</h3>
+</code></pre></div><h3 id="入力データの準備">入力データの準備</h3>
 <p>入力は関数で渡し、tf.data APIのdatasetを返せばイテレートしてくれる。</p>
 <p><a href="https://www.sambaiz.net/article/195/">TensorFlowのtf.data API - sambaiz-net</a></p>
 <p>batch()でdrop_remainderをTrueにして端数を切り捨てないと、shapeが確定せずコンパイルできない。</p>
-<pre><code>from google.colab import auth
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">from google.colab import auth
 from googleapiclient.discovery import build
 from io import BytesIO
 
 auth.authenticate_user()
-bucket = &quot;&lt;bucket_name&gt;&quot;
-gcs_service = build('storage', 'v1')
-train_data = gcs_service.objects().get_media(bucket=bucket, object='train.csv').execute()
+bucket = &#34;&lt;bucket_name&gt;&#34;
+gcs_service = build(&#39;storage&#39;, &#39;v1&#39;)
+train_data = gcs_service.objects().get_media(bucket=bucket, object=&#39;train.csv&#39;).execute()
 train = pd.read_csv(BytesIO(train_data))
 
-MODEL_DIR = 'gs://{}/model/tpu'.format(bucket)
+MODEL_DIR = &#39;gs://{}/model/tpu&#39;.format(bucket)
 
 (x_train, x_valid, y_train, y_valid) = train_test_split(
-    train.drop('label', axis=1).values.reshape((-1, 28, 28, 1)).astype(np.float32), 
-    np.identity(10)[train['label']].astype(np.float32), 
+    train.drop(&#39;label&#39;, axis=1).values.reshape((-1, 28, 28, 1)).astype(np.float32), 
+    np.identity(10)[train[&#39;label&#39;]].astype(np.float32), 
     test_size = 0.1, random_state = 100)
 
 def train_input_fn(params):
-    dataset = tf.data.Dataset.from_tensor_slices(({'x': x_train}, y_train)) # (features, labels)
+    dataset = tf.data.Dataset.from_tensor_slices(({&#39;x&#39;: x_train}, y_train)) # (features, labels)
     dataset = dataset.shuffle(buffer_size=1000)
-    dataset = dataset.batch(params['batch_size'], drop_remainder=True)
+    dataset = dataset.batch(params[&#39;batch_size&#39;], drop_remainder=True)
     return dataset
 
 def valid_input_fn(params):
-    dataset = tf.data.Dataset.from_tensor_slices(({'x': x_valid}, y_valid))
-    dataset = dataset.batch(params['batch_size'], drop_remainder=True)
+    dataset = tf.data.Dataset.from_tensor_slices(({&#39;x&#39;: x_valid}, y_valid))
+    dataset = dataset.batch(params[&#39;batch_size&#39;], drop_remainder=True)
     return dataset
-</code></pre><p>入出力するファイルはローカルではなくGCSなどに置く必要があるのでCloud TPUからも読み書きできるようにする。</p>
-<pre><code>{
-    &quot;domain&quot;: &quot;global&quot;,
-    &quot;reason&quot;: &quot;forbidden&quot;,
-    &quot;message&quot;: &quot;service-******@cloud-tpu.iam.gserviceaccount.com does not have storage.objects.create access to &lt;bucket_name&gt;.&quot;
+</code></pre></div><p>入出力するファイルはローカルではなくGCSなどに置く必要があるのでCloud TPUからも読み書きできるようにする。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">{
+    &#34;domain&#34;: &#34;global&#34;,
+    &#34;reason&#34;: &#34;forbidden&#34;,
+    &#34;message&#34;: &#34;service-******@cloud-tpu.iam.gserviceaccount.com does not have storage.objects.create access to &lt;bucket_name&gt;.&#34;
 }
-</code></pre><pre><code>!gsutil acl ch -u service-*****@cloud-tpu.iam.gserviceaccount.com:WRITER gs://&lt;bucket_name&gt;
-</code></pre><h3 id="モデルの作成">モデルの作成</h3>
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">!gsutil acl ch -u service-*****@cloud-tpu.iam.gserviceaccount.com:WRITER gs://&lt;bucket_name&gt;
+</code></pre></div><h3 id="モデルの作成">モデルの作成</h3>
 <p>Estimatorには次のシグネチャのmodel_fnを渡す。
 引数のfeaturesとlabelsはinput_fnの返り値で、
 modeは<a href="https://www.tensorflow.org/api_docs/python/tf/estimator/ModeKeys">tf.estimator.ModeKeys</a>の<code>TRAIN</code>、<code>EVAL</code>、<code>PREDICT</code>で、
 paramsはEstimator生成時に渡せるパラメータ。
 optimizerは<a href="https://www.tensorflow.org/api_docs/python/tf/contrib/tpu/CrossShardOptimizer">CrossShardOptimizer</a>で<a href="https://www.tensorflow.org/guide/using_tpu#optimizer">wrapする</a>。</p>
 <p>TPUに対応している<a href="https://cloud.google.com/tpu/docs/tensorflow-ops">op</a>で作る必要がある。</p>
-<pre><code>def model_fn(features, labels, mode, params):
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">def model_fn(features, labels, mode, params):
     def metric_fn(labels, logits):
         return {
-            'accuracy': tf.metrics.accuracy(
+            &#39;accuracy&#39;: tf.metrics.accuracy(
                 labels=tf.argmax(labels, axis=1), predictions=tf.argmax(logits, axis=1))
          }
     is_training = tf.equal(mode, tf.estimator.ModeKeys.TRAIN)
     conv1 = tf.layers.conv2d(
-        inputs=features['x'],
+        inputs=features[&#39;x&#39;],
         filters=32, 
         kernel_size=[5, 5], 
-        padding=&quot;same&quot;, 
+        padding=&#34;same&#34;, 
         activation=tf.nn.relu)
     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
     conv2 = tf.layers.conv2d(
         inputs=pool1, 
         filters=64, 
         kernel_size=[5, 5],
-        padding=&quot;same&quot;, 
+        padding=&#34;same&#34;, 
         activation=tf.nn.relu)
     pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
     pool2_flat = tf.layers.flatten(pool2)
@@ -252,13 +250,13 @@ optimizerは<a href="https://www.tensorflow.org/api_docs/python/tf/contrib/tpu/C
         mode=mode,
         loss=loss,
         predictions={
-            'pred': tf.argmax(logits, axis=1)
+            &#39;pred&#39;: tf.argmax(logits, axis=1)
         },
         train_op=optimizer.minimize(loss, tf.train.get_or_create_global_step()))
-</code></pre><h3 id="tpuestimatorの生成">TPUEstimatorの生成</h3>
+</code></pre></div><h3 id="tpuestimatorの生成">TPUEstimatorの生成</h3>
 <p>TPUのアドレスが環境変数COLAB_TPU_ADDRに入るのでこれをmasterとする。</p>
-<pre><code>if FLAGS.use_tpu:
-    master = 'grpc://' + os.environ['COLAB_TPU_ADDR']
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">if FLAGS.use_tpu:
+    master = &#39;grpc://&#39; + os.environ[&#39;COLAB_TPU_ADDR&#39;]
     run_config = tf.contrib.tpu.RunConfig(
         master=master,
         session_config=tf.ConfigProto(
@@ -276,8 +274,8 @@ classifier = tf.contrib.tpu.TPUEstimator(
     eval_batch_size=EVAL_BATCH_SIZE,
     predict_batch_size=BATCH_SIZE,
     use_tpu=FLAGS.use_tpu)
-</code></pre><h3 id="学習">学習</h3>
-<pre><code>for epoch in range(EPOCH_NUM):
+</code></pre></div><h3 id="学習">学習</h3>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">for epoch in range(EPOCH_NUM):
   max_steps = len(x_train)*(epoch+1)//BATCH_SIZE
   valid_steps = len(x_valid)//EVAL_BATCH_SIZE
   if FLAGS.use_tpu: 
@@ -286,45 +284,45 @@ classifier = tf.contrib.tpu.TPUEstimator(
   eval_spec = tf.estimator.EvalSpec(input_fn=valid_input_fn, steps=valid_steps)
   result = tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
   if result[0] is not None:
-    print('epoch: {}, loss: {} accuracy: {}'.format(epoch+1, result[0]['loss'], result[0]['accuracy']))
+    print(&#39;epoch: {}, loss: {} accuracy: {}&#39;.format(epoch+1, result[0][&#39;loss&#39;], result[0][&#39;accuracy&#39;]))
   else:
-    print('epoch: {} is already trained'.format(epoch+1))
-</code></pre><h3 id="colabでtensorboardを開く">ColabでTensorBoardを開く</h3>
+    print(&#39;epoch: {} is already trained&#39;.format(epoch+1))
+</code></pre></div><h3 id="colabでtensorboardを開く">ColabでTensorBoardを開く</h3>
 <p>このスクリプトを実行するとTensorBoardを立ち上げてngrokで外に開いてくれる。</p>
 <p><a href="https://github.com/mixuala/colab_utils">mixuala/colab_utils</a></p>
-<pre><code>!git clone https://github.com/mixuala/colab_utils
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">!git clone https://github.com/mixuala/colab_utils
 import os
 import colab_utils.tboard
 
 # set paths
 ROOT = %pwd
 colab_utils.tboard.launch_tensorboard(bin_dir=ROOT, log_dir=MODEL_DIR)
-</code></pre><h2 id="結果">結果</h2>
+</code></pre></div><h2 id="結果">結果</h2>
 <p>学習させて実行時間を計測する。計測はセルの頭に<code>%%time</code>を付けるとできる。</p>
 <h3 id="cpu">CPU</h3>
 <p>ベースライン。</p>
-<pre><code>CPU times: user 18min 28s, sys: 32.8 s, total: 19min 1s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 18min 28s, sys: 32.8 s, total: 19min 1s
 Wall time: 14min 33s
-</code></pre><h3 id="gpu">GPU</h3>
+</code></pre></div><h3 id="gpu">GPU</h3>
 <p>ランタイムからアクセラレータをGPUに設定。使われるGPUはNVIDIAの<a href="https://www.nvidia.co.jp/object/tesla-k80-jp.html">Tesla K80</a>。</p>
-<pre><code>from tensorflow.python.client import device_lib
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">from tensorflow.python.client import device_lib
 device_lib.list_local_devices()
 # ...
-# physical_device_desc: &quot;device: 0, name: Tesla K80, pci bus id: 0000:00:04.0, compute capability: 3.7&quot;]
-</code></pre><p>結果。</p>
-<pre><code>CPU times: user 3min 2s, sys: 24.2 s, total: 3min 26s
+# physical_device_desc: &#34;device: 0, name: Tesla K80, pci bus id: 0000:00:04.0, compute capability: 3.7&#34;]
+</code></pre></div><p>結果。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min 2s, sys: 24.2 s, total: 3min 26s
 Wall time: 8min 6s
-</code></pre><h3 id="tpu">TPU</h3>
+</code></pre></div><h3 id="tpu">TPU</h3>
 <p>アクセラレータをTPUに変更。
 GPUより速くなることを期待したが、むしろCPUよりも遅くなってしまった。その上精度の伸びも遅くて良いところがない。</p>
-<pre><code>CPU times: user 3min, sys: 23.8 s, total: 3min 24s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min, sys: 23.8 s, total: 3min 24s
 Wall time: 15min
-</code></pre><h2 id="再チャレンジ">再チャレンジ</h2>
+</code></pre></div><h2 id="再チャレンジ">再チャレンジ</h2>
 <p>エポックの立ち上がりが遅いので学習を切らずに続けて行わせてみる。</p>
-<pre><code>def train_input_fn(params):
-    dataset = tf.data.Dataset.from_tensor_slices(({'x': x_train}, y_train)) # (features, labels)
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">def train_input_fn(params):
+    dataset = tf.data.Dataset.from_tensor_slices(({&#39;x&#39;: x_train}, y_train)) # (features, labels)
     dataset = dataset.shuffle(buffer_size=1000)
-    dataset = dataset.batch(params['batch_size'], drop_remainder=True)
+    dataset = dataset.batch(params[&#39;batch_size&#39;], drop_remainder=True)
     dataset = dataset.repeat(EPOCH_NUM)
     return dataset
 
@@ -337,28 +335,28 @@ train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=max_steps
 eval_spec = tf.estimator.EvalSpec(input_fn=valid_input_fn, steps=valid_steps)
 result = tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
 if result[0] is not None:
-  print('epoch: {}, loss: {} accuracy: {}'.format(epoch+1, result[0]['loss'],  result[0]['accuracy']))
+  print(&#39;epoch: {}, loss: {} accuracy: {}&#39;.format(epoch+1, result[0][&#39;loss&#39;],  result[0][&#39;accuracy&#39;]))
 else:
-  print('epoch: {} is already trained'.format(epoch+1))
-</code></pre><p>これを実行したところGPUと同程度には速くなった。</p>
-<pre><code># GPU
+  print(&#39;epoch: {} is already trained&#39;.format(epoch+1))
+</code></pre></div><p>これを実行したところGPUと同程度には速くなった。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback"># GPU
 CPU times: user 40.9 s, sys: 7.8 s, total: 48.7 s
 Wall time: 1min 43s
 
 # TPU
 CPU times: user 35.2 s, sys: 4.46 s, total: 39.7 s
 Wall time: 1min 34s
-</code></pre><p>さらにEPOCH_NUMを5から100にして再計測する。</p>
+</code></pre></div><p>さらにEPOCH_NUMを5から100にして再計測する。</p>
 <h2 id="結果-1">結果</h2>
 <h3 id="gpu-1">GPU</h3>
-<pre><code>CPU times: user 3min 27s, sys: 2min, total: 5min 28s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min 27s, sys: 2min, total: 5min 28s
 Wall time: 6min 5s
-</code></pre><h3 id="tpu-1">TPU</h3>
+</code></pre></div><h3 id="tpu-1">TPU</h3>
 <p>エポック数を大幅に増やしたのにも関わらずほとんど実行時間が変わらずとても速い。
 CPU時間も変わっていないので演算がTPUで完結していてCPU-TPU間のデータの受け渡しが最小限で済んでいるのかもしれない。</p>
-<pre><code>CPU times: user 34.5 s, sys: 7.32 s, total: 41.8 s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 34.5 s, sys: 7.32 s, total: 41.8 s
 Wall time: 1min 38s
-</code></pre><h2 id="参考">参考</h2>
+</code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://medium.com/deep-learning-turkey/google-colab-free-gpu-tutorial-e113627b9f5d">Google Colab Free GPU Tutorial – Deep Learning Turkey – Medium</a></p>
 <p><a href="https://qiita.com/koshian2/items/fb989cebe0266d1b32fc">Google ColabのTPUで対GPUの最速に挑戦する - Qiita</a></p>
 
@@ -370,41 +368,41 @@ Wall time: 1min 38s
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

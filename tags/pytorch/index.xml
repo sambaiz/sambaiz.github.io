@@ -18,8 +18,8 @@ SageMakerでPyTorchのモデルを学習させる - sambaiz-net
 推論時に呼ばれる関数 推論時には次の関数が呼ばれる。
  model_fn(model_dir): モデルをロードする input_fn(request_body, request_content_type): リクエストボディのデシリアライズ predict_fn(input_data, model): モデルで推論する output_fn(prediction, content_type): Content-Typeに応じたシリアライズ  input_fn() と output_fn() はJSON, CSV, NPYに対応した実装が、predict_fn() はモデルを呼び出す実装がデフォルトとして用意されていて、 model_fn() も後述するElastic Inferenceを使う場合model.ptというファイルをロードするデフォルト実装が使われる。 ただしその場合モデルがtorch.jit.save()でTorchScriptとして保存してある必要がある。
 今回は predict_fn() のみ実装した。
-$ cat inference.py import torch def predict_fn(input_data, model): device = torch.device(&#39;cuda&#39; if torch.cuda.is_available() else &#39;cpu&#39;) model = model.to(device) input_data = input_data.to(device) model.eval() with torch.jit.optimized_execution(True, {&amp;quot;target_device&amp;quot;: &amp;quot;eia:0&amp;quot;}): output = model(input_data) return output.max(1)[1] デプロイ Training jobがモデルを保存したS3のパスを取ってきてPyTorchModelを作る。
-from sagemaker.pytorch.model import PyTorchModel training_job_name = &#39;pytorch-training-2020-07-25-08-41-45-674&#39; training_job = sess.</description>
+$ cat inference.py import torch def predict_fn(input_data, model): device = torch.device(&amp;#39;cuda&amp;#39; if torch.cuda.is_available() else &amp;#39;cpu&amp;#39;) model = model.to(device) input_data = input_data.to(device) model.eval() with torch.jit.optimized_execution(True, {&amp;#34;target_device&amp;#34;: &amp;#34;eia:0&amp;#34;}): output = model(input_data) return output.max(1)[1] デプロイ Training jobがモデルを保存したS3のパスを取ってきてPyTorchModelを作る。
+from sagemaker.pytorch.model import PyTorchModel training_job_name = &amp;#39;pytorch-training-2020-07-25-08-41-45-674&amp;#39; training_job = sess.</description>
     </item>
     
     <item>
@@ -45,8 +45,8 @@ $ cat model.py import torch from torch import nn, cuda import torch.nn.functiona
       <description>PyTorchでVAEを実装しMNISTの画像を生成する。
 生成モデルVAE(Variational Autoencoder) - sambaiz-net
 学習データ datasetsのMNIST画像を使う。
-from torchvision import datasets, transforms transform = transforms.Compose([ transforms.ToTensor(), transforms.Lambda(lambda x: x.view(-1))]) dataset_train = datasets.MNIST( &#39;~/mnist&#39;, train=True, download=True, transform=transform) dataset_valid = datasets.MNIST( &#39;~/mnist&#39;, train=False, download=True, transform=transform) dataloader_train = utils.data.DataLoader(dataset_train, batch_size=1000, shuffle=True, num_workers=4) dataloader_valid = utils.data.DataLoader(dataset_valid, batch_size=1000, shuffle=True, num_workers=4) VAE それぞれ3層のEncoderとDecoder。
-import torch import torch.nn as nn import torch.nn.functional as F device = &#39;cuda&#39; class VAE(nn.Module): def __init__(self, z_dim): super(VAE, self).__init__() self.dense_enc1 = nn.Linear(28*28, 200) self.</description>
+from torchvision import datasets, transforms transform = transforms.Compose([ transforms.ToTensor(), transforms.Lambda(lambda x: x.view(-1))]) dataset_train = datasets.MNIST( &amp;#39;~/mnist&amp;#39;, train=True, download=True, transform=transform) dataset_valid = datasets.MNIST( &amp;#39;~/mnist&amp;#39;, train=False, download=True, transform=transform) dataloader_train = utils.data.DataLoader(dataset_train, batch_size=1000, shuffle=True, num_workers=4) dataloader_valid = utils.data.DataLoader(dataset_valid, batch_size=1000, shuffle=True, num_workers=4) VAE それぞれ3層のEncoderとDecoder。
+import torch import torch.nn as nn import torch.nn.functional as F device = &amp;#39;cuda&amp;#39; class VAE(nn.Module): def __init__(self, z_dim): super(VAE, self).__init__() self.dense_enc1 = nn.Linear(28*28, 200) self.</description>
     </item>
     
     <item>

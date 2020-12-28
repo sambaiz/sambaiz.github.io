@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -135,15 +133,15 @@
           <p>(2018-03-03)</p>
           <p><a href="https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html">https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html</a></p>
 <p>トランザクション分離レベルはデフォルトの<code>REPEATABLE-READ</code>。</p>
-<pre><code>&gt; SELECT @@GLOBAL.tx_isolation, @@tx_isolation;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&gt; SELECT @@GLOBAL.tx_isolation, @@tx_isolation;
 +-----------------------+-----------------+
 | @@GLOBAL.tx_isolation | @@tx_isolation  |
 +-----------------------+-----------------+
 | REPEATABLE-READ       | REPEATABLE-READ |
 +-----------------------+-----------------+
-</code></pre><h2 id="準備">準備</h2>
+</code></pre></div><h2 id="準備">準備</h2>
 <p>DBを立ち上げてテーブルとレコードを入れる。</p>
-<pre><code>$ cat schema_and_data.sql
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat schema_and_data.sql
 CREATE TABLE a (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(128) NOT NULL
@@ -155,35 +153,35 @@ CREATE TABLE b (
     FOREIGN KEY (a_id) REFERENCES a (id)
 );
 
-INSERT INTO a (id, name) VALUES (1, '1');
-INSERT INTO a (id, name) VALUES (2, '2');
-INSERT INTO a (id, name) VALUES (3, '3');
-INSERT INTO a (id, name) VALUES (8, '8');
-INSERT INTO a (id, name) VALUES (9, '9');
-INSERT INTO a (id, name) VALUES (10, '10');
+INSERT INTO a (id, name) VALUES (1, &#39;1&#39;);
+INSERT INTO a (id, name) VALUES (2, &#39;2&#39;);
+INSERT INTO a (id, name) VALUES (3, &#39;3&#39;);
+INSERT INTO a (id, name) VALUES (8, &#39;8&#39;);
+INSERT INTO a (id, name) VALUES (9, &#39;9&#39;);
+INSERT INTO a (id, name) VALUES (10, &#39;10&#39;);
 
 $ cat start.sh
 docker rm -f try-mysql-lock
-docker run --name try-mysql-lock -p 4306:3306 -e &quot;MYSQL_ALLOW_EMPTY_PASSWORD=yes&quot; -e &quot;MYSQL_DATABASE=try-mysql-lock&quot; -e &quot;TZ=Asia/Tokyo&quot; --health-cmd='mysqladmin ping --silent' -d mysql:5.6 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-while [[ $(docker inspect --format &quot;{{.State.Health.Status}}&quot; try-mysql-lock) != &quot;healthy&quot; ]]; do printf &quot;.&quot;; sleep 1; done
+docker run --name try-mysql-lock -p 4306:3306 -e &#34;MYSQL_ALLOW_EMPTY_PASSWORD=yes&#34; -e &#34;MYSQL_DATABASE=try-mysql-lock&#34; -e &#34;TZ=Asia/Tokyo&#34; --health-cmd=&#39;mysqladmin ping --silent&#39; -d mysql:5.6 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+while [[ $(docker inspect --format &#34;{{.State.Health.Status}}&#34; try-mysql-lock) != &#34;healthy&#34; ]]; do printf &#34;.&#34;; sleep 1; done
 mysql -u root -h 0.0.0.0 -P 4306 -D try-mysql-lock &lt; schema_and_data.sql
-</code></pre><h2 id="共有sharedロック">共有(Shared)ロック</h2>
+</code></pre></div><h2 id="共有sharedロック">共有(Shared)ロック</h2>
 <p>その行を他がSELECTしたり共有ロックを取ることは許す。</p>
-<pre><code>-- Tx1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx1
 &gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE;
-</code></pre><pre><code>-- Tx2
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx2
 &gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE; -- 他も共有ロックは取れる
-&gt; UPDATE a SET name='b' WHERE id = 3; -- これは通る。ロックは行単位なのでid=2だけロックされている。
-&gt; UPDATE a SET name='a' WHERE id = 2; -- これは止まる
-</code></pre><p>たしかに1行ロックされている。</p>
-<pre><code>&gt; SHOW ENGINE INNODB STATUS \G;
+&gt; UPDATE a SET name=&#39;b&#39; WHERE id = 3; -- これは通る。ロックは行単位なのでid=2だけロックされている。
+&gt; UPDATE a SET name=&#39;a&#39; WHERE id = 2; -- これは止まる
+</code></pre></div><p>たしかに1行ロックされている。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&gt; SHOW ENGINE INNODB STATUS \G;
 ...
 ---TRANSACTION 2345, ACTIVE 40 sec
 2 lock struct(s), heap size 360, 1 row lock(s)
 MySQL thread id 4, OS thread handle 0x7f5de21d8700, query id 147 172.17.0.1 root init
 SHOW ENGINE INNODB STATUS
 ...
-</code></pre><p>ただのSELECTは分離レベルが<code>SERIALIZABLE</code>でない限りロックをとらない。
+</code></pre></div><p>ただのSELECTは分離レベルが<code>SERIALIZABLE</code>でない限りロックをとらない。
 ロックしないと、他のトランザクションのCOMMITで
 追加されたデータ(ファントム)を読んでしまったりするかというと、
 MySQLの<code>REPEATABLE-READ</code>ではそうはならず、最初にSELECTしたときのスナップショットを返すようになっている。
@@ -191,60 +189,60 @@ MySQLの<code>REPEATABLE-READ</code>ではそうはならず、最初にSELECT�
 <p><a href="http://nippondanji.blogspot.jp/2013/12/innodbrepeatable-readlocking-read.html">漢(オトコ)のコンピュータ道: InnoDBのREPEATABLE READにおけるLocking Readについての注意点</a></p>
 <h2 id="排他exclusiveロック">排他(eXclusive)ロック</h2>
 <p>その行に対して他がロックを取ることを許さない。SELECTできるかは分離レベルにより、<code>REPEATABLE READ</code>では<a href="https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_exclusive_lock">できる</a>。</p>
-<pre><code>-- Tx1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx1
 &gt; SELECT * FROM a WHERE id = 2 FOR UPDATE;
-</code></pre><pre><code>-- Tx2
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx2
 &gt; SELECT * FROM a WHERE id = 2 FOR UPDATE; -- 止まる。同じ行の排他ロックは取れない
 &gt; SELECT * FROM a WHERE id = 2 LOCK IN SHARE MODE; -- 止まる。共有ロックも取れない
-</code></pre><p>逆に、共有ロックが取られている行に排他ロックも取れない。
+</code></pre></div><p>逆に、共有ロックが取られている行に排他ロックも取れない。
 ロックを取る順番によってはDeadlockになる。</p>
 <h2 id="ギャップロック">ギャップロック</h2>
 <p>存在しない範囲のindexのレコードを一部でもロックすると、行ではなく範囲がロックされる。</p>
-<pre><code>-- Tx1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx1
 &gt; SELECT * FROM a WHERE id &gt; 5 FOR UPDATE;
-</code></pre><pre><code>-- Tx2
-&gt; INSERT a (id, name) VALUE (6, 'a'); -- 止まる。
-&gt; INSERT a (id, name) VALUE (4, 'a'); -- WHEREには含まれないがこれも止まる。
-</code></pre><p>ギャップロックの場合、同じ範囲を排他ロックできてしまう。</p>
-<pre><code>-- Tx1
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx2
+&gt; INSERT a (id, name) VALUE (6, &#39;a&#39;); -- 止まる。
+&gt; INSERT a (id, name) VALUE (4, &#39;a&#39;); -- WHEREには含まれないがこれも止まる。
+</code></pre></div><p>ギャップロックの場合、同じ範囲を排他ロックできてしまう。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx1
 &gt; SELECT * FROM a WHERE id = 5 FOR UPDATE;
-</code></pre><pre><code>-- Tx2
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx2
 &gt; SELECT * FROM a WHERE id = 5 FOR UPDATE; -- 止まらない
-&gt; INSERT a (id, name) VALUE (5, 'a'); -- 止まる(Tx1でも同じことをやるとDeadlock)
-</code></pre><h2 id="ネクストキーロック">ネクストキーロック</h2>
+&gt; INSERT a (id, name) VALUE (5, &#39;a&#39;); -- 止まる(Tx1でも同じことをやるとDeadlock)
+</code></pre></div><h2 id="ネクストキーロック">ネクストキーロック</h2>
 <p>範囲でロックすると一つ先のキーまでロックされる。
 ギャップにファントムを発生させないためのもの。</p>
-<pre><code>-- Tx1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx1
 &gt; SELECT * FROM a WHERE id &lt; 6 FOR UPDATE; -- ギャップロック(id=4~7)
-</code></pre><pre><code>-- Tx2
-&gt; UPDATE a SET name = 'b' WHERE id = 8; -- 止まる
-</code></pre><h2 id="更新系クエリでかかるロックhttpsdevmysqlcomdocrefman56jainnodb-locks-sethtml"><a href="https://dev.mysql.com/doc/refman/5.6/ja/innodb-locks-set.html">更新系クエリでかかるロック</a></h2>
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx2
+&gt; UPDATE a SET name = &#39;b&#39; WHERE id = 8; -- 止まる
+</code></pre></div><h2 id="更新系クエリでかかるロックhttpsdevmysqlcomdocrefman56jainnodb-locks-sethtml"><a href="https://dev.mysql.com/doc/refman/5.6/ja/innodb-locks-set.html">更新系クエリでかかるロック</a></h2>
 <h3 id="insert">INSERT</h3>
 <p>排他ロックがかかる。重複キーエラーになった場合は共有ロックがかかる。</p>
-<pre><code>-- Tx1
-&gt; INSERT INTO a (id, name) VALUE (5, 'b'); 
-&gt; INSERT INTO a (id, name) VALUE (3, 'd'); -- 重複キーエラー
-</code></pre><pre><code>-- Tx2
-&gt; INSERT INTO a (id, name) VALUE (5, 'c'); -- 止まる
-&gt; UPDATE a SET name = 'e' WHERE id = 3; -- 止まる
-</code></pre><p><code>INSERT IGNORE</code>しても同じ。そもそもこれは重複キー以外のエラーも無視した結果、変なデータが入ってしまうことがあるため、使わない方がよい。</p>
-<pre><code>&gt; INSERT INTO a (name) VALUE (NULL);  -- Column 'name' cannot be null
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx1
+&gt; INSERT INTO a (id, name) VALUE (5, &#39;b&#39;); 
+&gt; INSERT INTO a (id, name) VALUE (3, &#39;d&#39;); -- 重複キーエラー
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx2
+&gt; INSERT INTO a (id, name) VALUE (5, &#39;c&#39;); -- 止まる
+&gt; UPDATE a SET name = &#39;e&#39; WHERE id = 3; -- 止まる
+</code></pre></div><p><code>INSERT IGNORE</code>しても同じ。そもそもこれは重複キー以外のエラーも無視した結果、変なデータが入ってしまうことがあるため、使わない方がよい。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&gt; INSERT INTO a (name) VALUE (NULL);  -- Column &#39;name&#39; cannot be null
 &gt; INSERT IGNORE INTO a (name) VALUE (NULL); -- Query OKで空文字が入ってしまう
-</code></pre><h3 id="update-delete">UPDATE, DELETE</h3>
+</code></pre></div><h3 id="update-delete">UPDATE, DELETE</h3>
 <p>排他ネクストキーロックがかかる。INSERTでの<code>ON DUPLICATE KEY UPDATE</code>も同様。</p>
-<pre><code>-- Tx1
-&gt; UPDATE a SET name='a' WHERE id BETWEEN 8 AND 9; 
-</code></pre><pre><code>-- Tx2
-&gt; UPDATE a SET name='a' WHERE id = 9; -- 止まる
-&gt; UPDATE a SET name='a' WHERE id = 10; -- これも止まる
-</code></pre><h3 id="外部キー制約">外部キー制約</h3>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx1
+&gt; UPDATE a SET name=&#39;a&#39; WHERE id BETWEEN 8 AND 9; 
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx2
+&gt; UPDATE a SET name=&#39;a&#39; WHERE id = 9; -- 止まる
+&gt; UPDATE a SET name=&#39;a&#39; WHERE id = 10; -- これも止まる
+</code></pre></div><h3 id="外部キー制約">外部キー制約</h3>
 <p>さらに外部キー制約がかかるレコードを追加/更新/削除すると、参照するレコードも共有ロックされる。</p>
-<pre><code>-- Tx1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx1
 &gt; INSERT INTO b (a_id) VALUES (1);
-</code></pre><pre><code>-- Tx2
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">-- Tx2
 &gt; SELECT * FROM a WHERE id = 1 LOCK IN SHARE MODE; -- 通る
 &gt; SELECT * FROM a WHERE id = 1 FOR UPDATE; -- 止まる
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -253,41 +251,41 @@ MySQLの<code>REPEATABLE-READ</code>ではそうはならず、最初にSELECT�
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

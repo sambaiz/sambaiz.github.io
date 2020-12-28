@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -143,9 +141,9 @@
 <p><img src="https://www.sambaiz.net/images/268-ecb.png" alt="ECBによる暗号化/復号"></p>
 <h2 id="goのcryptocipher-packageに実装されている暗号化利用モード">Goのcrypto/cipher packageに実装されている暗号化利用モード</h2>
 <p>Goの<a href="https://golang.org/pkg/crypto/cipher/">crypto/cipher</a> packageには次の暗号化利用モードが実装されている。</p>
-<pre><code>$ go version
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go version
 go version go1.14 darwin/amd64
-</code></pre><h3 id="cipher-block-chaining-cbc">Cipher Block Chaining (CBC)</h3>
+</code></pre></div><h3 id="cipher-block-chaining-cbc">Cipher Block Chaining (CBC)</h3>
 <p>メッセージをブロックに分割し、前段の暗号文(最初はランダムなIV)と入力ブロックのXORを取ったものが暗号文で、
 これを復号関数にかけて前段の暗号文とのXORを取って復号する。IVは平文のまま暗号文の前に付けるなどする。
 IVがないと最初のブロックが復号できず、暗号文の一部が破損すると次のブロックまで復号できない。
@@ -155,15 +153,15 @@ ECBと同様パディングが必要。最も広く使われているらしい�
 Length extension attackが成立する。そのためメッセージを固定長にするかメッセージ長を先頭に入れるなどの対策が必要。</p>
 <p><img src="https://www.sambaiz.net/images/268-cbc.png" alt="CBCによる暗号化/復号"></p>
 <p>Goではパディングは自分でやる必要がある。</p>
-<pre><code>func (x *cbcEncrypter) CryptBlocks(dst, src []byte) {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func (x *cbcEncrypter) CryptBlocks(dst, src []byte) {
     if len(src)%x.blockSize != 0 {
-        panic(&quot;crypto/cipher: input not full blocks&quot;)
+        panic(&#34;crypto/cipher: input not full blocks&#34;)
     }
     if len(dst) &lt; len(src) {
-        panic(&quot;crypto/cipher: output smaller than input&quot;)
+        panic(&#34;crypto/cipher: output smaller than input&#34;)
     }
     if subtle.InexactOverlap(dst[:len(src)], src) {
-        panic(&quot;crypto/cipher: invalid buffer overlap&quot;)
+        panic(&#34;crypto/cipher: invalid buffer overlap&#34;)
     }
 
     iv := x.iv
@@ -182,8 +180,8 @@ Length extension attackが成立する。そのためメッセージを固定長
     // Save the iv for the next CryptBlocks call.
     copy(x.iv, iv)
 }
-</code></pre><p>足りないバイト数の値でパディングする<a href="https://tools.ietf.org/html/rfc5652#section-6.3">PKCS#7</a>の方式はこんな感じ。</p>
-<pre><code>func pad(data []byte, blockSize int) []byte {
+</code></pre></div><p>足りないバイト数の値でパディングする<a href="https://tools.ietf.org/html/rfc5652#section-6.3">PKCS#7</a>の方式はこんな感じ。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func pad(data []byte, blockSize int) []byte {
     padSize := blockSize - len(data) % blockSize
     ret := make([]byte, len(data) + padSize)
     copy(ret, data)
@@ -198,18 +196,18 @@ func unpad(data []byte) []byte {
     }
     return data[:len(data)-padSize]
 }
-</code></pre><h3 id="cipher-feedback-cfb">Cipher Feedback (CFB)</h3>
+</code></pre></div><h3 id="cipher-feedback-cfb">Cipher Feedback (CFB)</h3>
 <p>ブロック暗号を使ってはいるがブロックに分割不要なストリーム暗号になった。したがってパディングする必要もない。
 前段の暗号文(最初はランダムなIV)を暗号関数にかけたものをストリーム暗号のKeystreamとし、これとメッセージのXORを取ったものが暗号文で、XORを再度取って復号する。
 暗号化/復号共に暗号関数を用いる。IVや暗号文が破損した場合それ以降の復号はできない。</p>
 <p><img src="https://www.sambaiz.net/images/268-cfb.png" alt="CFBによる暗号化/復号"></p>
 <p><code>xorBytes()</code> はサイズが小さい方に合わせてXORを取る。</p>
-<pre><code>func (x *cfb) XORKeyStream(dst, src []byte) {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func (x *cfb) XORKeyStream(dst, src []byte) {
     if len(dst) &lt; len(src) {
-        panic(&quot;crypto/cipher: output smaller than input&quot;)
+        panic(&#34;crypto/cipher: output smaller than input&#34;)
     }
     if subtle.InexactOverlap(dst[:len(src)], src) {
-        panic(&quot;crypto/cipher: invalid buffer overlap&quot;)
+        panic(&#34;crypto/cipher: invalid buffer overlap&#34;)
     }
     for len(src) &gt; 0 {
         if x.outUsed == len(x.out) {
@@ -233,13 +231,13 @@ func unpad(data []byte) []byte {
         x.outUsed += n
     }
 }
-</code></pre><h3 id="output-feedback-ofb">Output Feedback (OFB)</h3>
+</code></pre></div><h3 id="output-feedback-ofb">Output Feedback (OFB)</h3>
 <p>同じくストリーミング暗号。
 CFBが暗号文を次にフィードバックしていたのに対し、OFBは暗号関数の出力をXORを取って暗号文にする前にフィードバックする。
 したがってKeystreamはIVがn回暗号関数を通ったものとなりメッセージに依存しないため先に計算することもできる。
 それらとXORを取ったものが暗号文になるため復号も全く同じ処理になる。</p>
 <p><img src="https://www.sambaiz.net/images/268-ofb.png" alt="OFBによる暗号化/復号"></p>
-<pre><code>func (x *ofb) refill() {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func (x *ofb) refill() {
     bs := x.b.BlockSize()
     remain := len(x.out) - x.outUsed
     if remain &gt; x.outUsed {
@@ -258,10 +256,10 @@ CFBが暗号文を次にフィードバックしていたのに対し、OFBは�
 
 func (x *ofb) XORKeyStream(dst, src []byte) {
     if len(dst) &lt; len(src) {
-        panic(&quot;crypto/cipher: output smaller than input&quot;)
+        panic(&#34;crypto/cipher: output smaller than input&#34;)
     }
     if subtle.InexactOverlap(dst[:len(src)], src) {
-        panic(&quot;crypto/cipher: invalid buffer overlap&quot;)
+        panic(&#34;crypto/cipher: invalid buffer overlap&#34;)
     }
     for len(src) &gt; 0 {
         if x.outUsed &gt;= len(x.out)-x.b.BlockSize() {
@@ -273,16 +271,16 @@ func (x *ofb) XORKeyStream(dst, src []byte) {
         x.outUsed += n
     }
 }
-</code></pre><h3 id="counter-ctr">Counter (CTR)</h3>
+</code></pre></div><h3 id="counter-ctr">Counter (CTR)</h3>
 <p>同じくストリーミング暗号。IV相当のNonceと重複しないCounterを合わせて暗号関数に通したCounter blockをKeystreamとする。</p>
 <p><img src="https://www.sambaiz.net/images/268-ctr.png" alt="CTRによる暗号化/復号"></p>
 <p>前段に依存しないため並列に暗号化できるがGoではしていない。</p>
-<pre><code>func NewCTR(block Block, iv []byte) Stream {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func NewCTR(block Block, iv []byte) Stream {
     if ctr, ok := block.(ctrAble); ok {
         return ctr.NewCTR(iv)
     }
     if len(iv) != block.BlockSize() {
-        panic(&quot;cipher.NewCTR: IV length must equal block size&quot;)
+        panic(&#34;cipher.NewCTR: IV length must equal block size&#34;)
     }
     bufSize := streamBufferSize
     if bufSize &lt; block.BlockSize() {
@@ -319,10 +317,10 @@ func (x *ctr) refill() {
 
 func (x *ctr) XORKeyStream(dst, src []byte) {
     if len(dst) &lt; len(src) {
-        panic(&quot;crypto/cipher: output smaller than input&quot;)
+        panic(&#34;crypto/cipher: output smaller than input&#34;)
     }
     if subtle.InexactOverlap(dst[:len(src)], src) {
-        panic(&quot;crypto/cipher: invalid buffer overlap&quot;)
+        panic(&#34;crypto/cipher: invalid buffer overlap&#34;)
     }
     for len(src) &gt; 0 {
         if x.outUsed &gt;= len(x.out)-x.b.BlockSize() {
@@ -334,79 +332,79 @@ func (x *ctr) XORKeyStream(dst, src []byte) {
         x.outUsed += n
     }
 }
-</code></pre><h2 id="ベンチマーク">ベンチマーク</h2>
+</code></pre></div><h2 id="ベンチマーク">ベンチマーク</h2>
 <p>それぞれの暗号利用モードで暗号化/復号する際のベンチマークを取る。コードは<a href="https://github.com/sambaiz/go-cipher-benchmark">GitHub</a>にある。
 CBCはパディング込み。OFBとCTRは暗号化/復号処理が同じなのでまとめている。</p>
-<pre><code>package sandbox
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> sandbox
 
-import (
-    &quot;bytes&quot;
-    &quot;crypto/cipher&quot;
+<span style="color:#ff79c6">import</span> (
+    <span style="color:#f1fa8c">&#34;bytes&#34;</span>
+    <span style="color:#f1fa8c">&#34;crypto/cipher&#34;</span>
 )
 
-func pad(data []byte, blockSize int) []byte {
-    padSize := blockSize - len(data) % blockSize
-    ret := make([]byte, len(data) + padSize)
-    copy(ret, data)
-    copy(ret[len(data):], bytes.Repeat([]byte{byte(padSize)}, padSize))
-    return ret
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">pad</span>(data []<span style="color:#8be9fd">byte</span>, blockSize <span style="color:#8be9fd">int</span>) []<span style="color:#8be9fd">byte</span> {
+    padSize <span style="color:#ff79c6">:=</span> blockSize <span style="color:#ff79c6">-</span> <span style="color:#8be9fd;font-style:italic">len</span>(data) <span style="color:#ff79c6">%</span> blockSize
+    ret <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data) <span style="color:#ff79c6">+</span> padSize)
+    <span style="color:#8be9fd;font-style:italic">copy</span>(ret, data)
+    <span style="color:#8be9fd;font-style:italic">copy</span>(ret[<span style="color:#8be9fd;font-style:italic">len</span>(data):], bytes.<span style="color:#50fa7b">Repeat</span>([]<span style="color:#8be9fd">byte</span>{<span style="color:#8be9fd;font-style:italic">byte</span>(padSize)}, padSize))
+    <span style="color:#ff79c6">return</span> ret
 }
 
-func unpad(data []byte) []byte {
-    padSize := int(data[len(data)-1])
-    if padSize &gt; len(data) {
-        return nil
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">unpad</span>(data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
+    padSize <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">int</span>(data[<span style="color:#8be9fd;font-style:italic">len</span>(data)<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>])
+    <span style="color:#ff79c6">if</span> padSize &gt; <span style="color:#8be9fd;font-style:italic">len</span>(data) {
+        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
     }
-    return data[:len(data)-padSize]
+    <span style="color:#ff79c6">return</span> data[:<span style="color:#8be9fd;font-style:italic">len</span>(data)<span style="color:#ff79c6">-</span>padSize]
 }
 
-func EncryptWithCBC(block cipher.Block, iv []byte, data []byte) []byte {
-    data = pad(data, block.BlockSize())
-    enc := cipher.NewCBCEncrypter(block, iv)
-    encrypted := make([]byte, len(data))
-    enc.CryptBlocks(encrypted, data)
-    return encrypted
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">EncryptWithCBC</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
+    data = <span style="color:#50fa7b">pad</span>(data, block.<span style="color:#50fa7b">BlockSize</span>())
+    enc <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCBCEncrypter</span>(block, iv)
+    encrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
+    enc.<span style="color:#50fa7b">CryptBlocks</span>(encrypted, data)
+    <span style="color:#ff79c6">return</span> encrypted
 }
 
-func DecryptWithCBC(block cipher.Block, iv []byte, data []byte) []byte {
-    dec := cipher.NewCBCDecrypter(block, iv)
-    decrypted := make([]byte, len(data))
-    dec.CryptBlocks(decrypted, data)
-    return decrypted
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">DecryptWithCBC</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
+    dec <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCBCDecrypter</span>(block, iv)
+    decrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
+    dec.<span style="color:#50fa7b">CryptBlocks</span>(decrypted, data)
+    <span style="color:#ff79c6">return</span> decrypted
 }
 
-func EncryptWithCFB(block cipher.Block, iv []byte, data []byte) []byte {
-    enc := cipher.NewCFBEncrypter(block, iv)
-    encrypted := make([]byte, len(data))
-    enc.XORKeyStream(encrypted, data)
-    return encrypted
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">EncryptWithCFB</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
+    enc <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCFBEncrypter</span>(block, iv)
+    encrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
+    enc.<span style="color:#50fa7b">XORKeyStream</span>(encrypted, data)
+    <span style="color:#ff79c6">return</span> encrypted
 }
 
-func DecryptWithCFB(block cipher.Block, iv []byte, data []byte) []byte {
-    dec := cipher.NewCFBDecrypter(block, iv)
-    decrypted := make([]byte, len(data))
-    dec.XORKeyStream(decrypted, data)
-    return decrypted
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">DecryptWithCFB</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
+    dec <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCFBDecrypter</span>(block, iv)
+    decrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
+    dec.<span style="color:#50fa7b">XORKeyStream</span>(decrypted, data)
+    <span style="color:#ff79c6">return</span> decrypted
 }
 
-func EncryptDecryptWithOFB(block cipher.Block, iv []byte, data []byte) []byte {
-    enc := cipher.NewOFB(block, iv)
-    encrypted := make([]byte, len(data))
-    enc.XORKeyStream(encrypted, data)
-    return encrypted
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">EncryptDecryptWithOFB</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
+    enc <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewOFB</span>(block, iv)
+    encrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
+    enc.<span style="color:#50fa7b">XORKeyStream</span>(encrypted, data)
+    <span style="color:#ff79c6">return</span> encrypted
 }
 
 
-func EncryptDecryptWithCTR(block cipher.Block, iv []byte, data []byte) []byte {
-    enc := cipher.NewCTR(block, iv)
-    encrypted := make([]byte, len(data))
-    enc.XORKeyStream(encrypted, data)
-    return encrypted
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">EncryptDecryptWithCTR</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
+    enc <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCTR</span>(block, iv)
+    encrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
+    enc.<span style="color:#50fa7b">XORKeyStream</span>(encrypted, data)
+    <span style="color:#ff79c6">return</span> encrypted
 }
-</code></pre><p>入力は128 bytesと12800 bytesのランダムなバイト列。
+</code></pre></div><p>入力は128 bytesと12800 bytesのランダムなバイト列。
 128 bytesではCFBが最速でCBCがそれに次ぎ、OFBとCTRのパフォーマンスが悪く、
 12800 bytesではOFBが最速でCBCとCTRが同じくらい、CFBのパフォーマンスが悪いという結果になった。</p>
-<pre><code>$ go test -bench &quot;.*&quot; -benchmem main_test.go  main.go
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go test -bench &#34;.*&#34; -benchmem main_test.go  main.go
 goos: darwin
 goarch: amd64
 BenchmarkShortEncryptWithCBC-4                    852924              1323 ns/op             416 B/op          6 allocs/op
@@ -421,7 +419,7 @@ BenchmarkLongEncryptWithCFB-4                      34948             30435 ns/op
 BenchmarkLongDecryptWithCFB-4                      38904             28475 ns/op           13680 B/op          4 allocs/op
 BenchmarkLongEncryptDecryptWithOFB-4               59216             20488 ns/op           14176 B/op          4 allocs/op
 BenchmarkLongEncryptDecryptWithCTR-4               50810             23594 ns/op           14176 B/op          4 allocs/op
-</code></pre><h2 id="参考">参考</h2>
+</code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://ja.wikipedia.org/wiki/%E6%9A%97%E5%8F%B7%E5%88%A9%E7%94%A8%E3%83%A2%E3%83%BC%E3%83%89">暗号利用モード - Wikipedia</a></p>
 <p><a href="https://kiririmode.hatenablog.jp/entry/20181014/1539473020">golang で AES/CBC/PKCS#7Padding の暗号化・復号化 - 理系学生日記</a></p>
 <p><a href="https://en.wikipedia.org/wiki/Padding_(cryptography)">Padding (cryptography) - Wikipedia</a></p>
@@ -434,41 +432,41 @@ BenchmarkLongEncryptDecryptWithCTR-4               50810             23594 ns/op
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

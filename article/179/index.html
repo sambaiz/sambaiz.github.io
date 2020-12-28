@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -151,46 +149,46 @@
 <p>各jobとURLのmapを<a href="https://www.tensorflow.org/api_docs/python/tf/train/ClusterSpec">ClusterSpec</a>にして
 jobとindexと併せて<a href="https://www.tensorflow.org/api_docs/python/tf/train/ServerDef">ServerDef</a>を作って
 <a href="https://www.tensorflow.org/api_docs/python/tf/train/Server">Server</a>を立てる。</p>
-<pre><code>{
-    &quot;master&quot;: [
-        &quot;check-tf-config-master-34z8-0:2222&quot;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">{
+    &#34;master&#34;: [
+        &#34;check-tf-config-master-34z8-0:2222&#34;
     ],
-    &quot;ps&quot;: [
-        &quot;check-tf-config-ps-34z8-0:2222&quot;,
-        &quot;check-tf-config-ps-34z8-1:2222&quot;
+    &#34;ps&#34;: [
+        &#34;check-tf-config-ps-34z8-0:2222&#34;,
+        &#34;check-tf-config-ps-34z8-1:2222&#34;
     ],
-    &quot;worker&quot;: [
-        &quot;check-tf-config-worker-34z8-0:2222&quot;,
-        &quot;check-tf-config-worker-34z8-1:2222&quot;
+    &#34;worker&#34;: [
+        &#34;check-tf-config-worker-34z8-0:2222&#34;,
+        &#34;check-tf-config-worker-34z8-1:2222&#34;
     ]
 }
-</code></pre><pre><code>cluster_spec_object = tf.train.ClusterSpec(cluster_spec)
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">cluster_spec_object = tf.train.ClusterSpec(cluster_spec)
 server_def = tf.train.ServerDef(
     cluster=cluster_spec_object.as_cluster_def(),
-    protocol=&quot;grpc&quot;,
+    protocol=&#34;grpc&#34;,
     job_name=job_name, # worker, master, ps 
     task_index=0)
 server = tf.train.Server(server_def)
-</code></pre><p>psのjobでは<code>server.join()</code>して待ち構える。</p>
-<pre><code>if job_name == &quot;ps&quot;:
+</code></pre></div><p>psのjobでは<code>server.join()</code>して待ち構える。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">if job_name == &#34;ps&#34;:
     server.join()
 else:
     # build model
-</code></pre><h2 id="workerにgraphを割り当てる">WorkerにGraphを割り当てる</h2>
+</code></pre></div><h2 id="workerにgraphを割り当てる">WorkerにGraphを割り当てる</h2>
 <p>workerの<a href="https://www.tensorflow.org/api_docs/python/tf/device">device</a>にGraphを割り当てる。
 deviceは<code>/job:worker/replica:0/task:0/device:GPU:0</code>
 のような<a href="https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/framework/device.py#L130">フォーマット</a>で表される。</p>
 <p>Graphの持ち方には一つのGraphの異なる計算箇所をそれぞれのworkerが持つIn-graph replicationと、
 それぞれGraphを持つBetween-graph replicationがある。これは後者の例で、<a href="https://www.tensorflow.org/api_docs/python/tf/train/replica_device_setter">replica_device_setter</a>によってラウンドロビンで各psに変数を配置する。</p>
-<pre><code>with tf.device(tf.train.replica_device_setter(
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">with tf.device(tf.train.replica_device_setter(
     cluster=cluster_spec,
     worker_device=device
 )):
     # graph
-</code></pre><h2 id="syncreplicasoptimizerのhookを追加">SyncReplicasOptimizerのhookを追加</h2>
+</code></pre></div><h2 id="syncreplicasoptimizerのhookを追加">SyncReplicasOptimizerのhookを追加</h2>
 <p>同期して変数を更新する場合、<a href="https://www.tensorflow.org/api_docs/python/tf/train/SyncReplicasOptimizer">SyncReplicasOptimizer</a>を使い、make_session_run_hookで作られるhookをMonitoredTrainingSessionに渡す。</p>
 <p><a href="https://www.sambaiz.net/article/175/">TensorFlowのMonitoredSessionとSessionRunHookとsummaryのエラー - sambaiz-net</a></p>
-<pre><code>train_op = tf.train.SyncReplicasOptimizer(
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">train_op = tf.train.SyncReplicasOptimizer(
     tf.train.AdamOptimizer(self.learning_rate),
     replicas_to_aggregate=self.worker_num,
     total_num_replicas=self.worker_num)
@@ -198,7 +196,7 @@ deviceは<code>/job:worker/replica:0/task:0/device:GPU:0</code>
 hooks = [
     tf.train.StopAtStepHook(last_step=args.last_step),
     tf.train.CheckpointSaverHook(
-        './ckpt',
+        &#39;./ckpt&#39;,
         save_steps=args.save_steps,
         saver=saver),
     train_op.make_session_run_hook(self.is_chief)
@@ -210,23 +208,23 @@ with tf.train.MonitoredTrainingSession(
 ) as sess:
     while not sess.should_stop():
     # sess.run()
-</code></pre><h2 id="savedmodelの出力">SavedModelの出力</h2>
+</code></pre></div><h2 id="savedmodelの出力">SavedModelの出力</h2>
 <p>実行後、SavedModelを出力する。</p>
 <p><a href="https://www.sambaiz.net/article/172/">TensorFlowのモデルをsave/loadする - sambaiz-net</a></p>
 <p>MonitoredTrainingSessionのsessは<code>should_stop()</code>がtrueになったあとは使えなくなるため、
 新しいsessionを作るかhookのendでする必要がある。</p>
 <p>新しいsessionでする例。そのままrestoreするとすでにworkerが終了している場合に、そのdeviceの変数もrestoreしようとして失敗するので
 <a href="https://www.tensorflow.org/api_docs/python/tf/train/import_meta_graph">import_meta_graph</a>のclear_devicesをTrueにしている。</p>
-<pre><code>with tf.Graph().as_default():
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">with tf.Graph().as_default():
     with tf.Session() as sess:
-        ckpt = tf.train.get_checkpoint_state(&quot;ckpt&quot;)
+        ckpt = tf.train.get_checkpoint_state(&#34;ckpt&#34;)
         saver = tf.train.import_meta_graph(
-            '{}.meta'.format(ckpt.model_checkpoint_path),
+            &#39;{}.meta&#39;.format(ckpt.model_checkpoint_path),
             clear_devices=True)
         saver.restore(sess, ckpt.model_checkpoint_path)
-        save.save(sess, &quot;saved&quot;, signature_def_map)
-</code></pre><p>hookでする例。restoreする必要がなくて良い。</p>
-<pre><code>class SavedModelBuilderHook(session_run_hook.SessionRunHook):
+        save.save(sess, &#34;saved&#34;, signature_def_map)
+</code></pre></div><p>hookでする例。restoreする必要がなくて良い。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">class SavedModelBuilderHook(session_run_hook.SessionRunHook):
     def __init__(self, export_dir, signature_def_map, tags):
         self.export_dir = export_dir
         self.signature_def_map = signature_def_map
@@ -241,7 +239,7 @@ with tf.train.MonitoredTrainingSession(
             signature_def_map=self.signature_def_map
         )
         builder.save()
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -250,41 +248,41 @@ with tf.train.MonitoredTrainingSession(
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

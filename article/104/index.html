@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -134,9 +132,9 @@
           <h1>Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる</h1>
           <p>(2017-05-27)</p>
           <p><a href="https://github.com/uber-go/zap">https://github.com/uber-go/zap</a></p>
-<pre><code>$ go get -u go.uber.org/zap
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go get -u go.uber.org/zap
 $ go get -u gopkg.in/natefinch/lumberjack.v2
-</code></pre><h2 id="速さの秘訣">速さの秘訣</h2>
+</code></pre></div><h2 id="速さの秘訣">速さの秘訣</h2>
 <p><a href="https://techblog.ca-reward.co.jp/2016/06/post-33.html">Go言語のLogger「zap」は何故高速に構造化されたログを出力する事が出来るのか｜株式会社CAリワード</a></p>
 <p>reflectionとallocationの回避。</p>
 <p>一度allocateしたBufferやEncoderは
@@ -144,65 +142,65 @@ $ go get -u gopkg.in/natefinch/lumberjack.v2
 このPoolはまさにallocateされたアイテムを再利用するためのもので、GCの負担を緩和させることができる。
 Poolのアイテムは勝手に削除されることがあり、もし参照しか持っていなかったらそのままdeallocateされる。</p>
 <p><a href="https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34">https://github.com/uber-go/zap/blob/v1.4.0/buffer/pool.go#L34</a></p>
-<pre><code>func NewPool() Pool {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">func NewPool() Pool {
 	return Pool{p: &amp;sync.Pool{
 		New: func() interface{} {
 			return &amp;Buffer{bs: make([]byte, 0, _size)}
 		},
 	}}
 }
-</code></pre><h2 id="使い方">使い方</h2>
+</code></pre></div><h2 id="使い方">使い方</h2>
 <p>現状ドキュメントが乏しいのでコードから探っていく必要がある。
 まずはQuick Startから。</p>
 <p><code>zap.NewProduction()</code>は<code>NewProductionConfig().Build(options...)</code>の<a href="https://github.com/uber-go/zap/blob/master/logger.go#L87">ショートカット</a>。
 ConfigをBuildしてLoggerを取得し、InfoやErrorで書く流れ。</p>
-<pre><code>logger, _ := zap.NewProduction()
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">logger, _ := zap.NewProduction()
 defer logger.Sync()
-logger.Info(&quot;Hoge&quot;,
+logger.Info(&#34;Hoge&#34;,
   // Structured context as strongly-typed Field values.
-  zap.Int(&quot;attempt&quot;, 3),
-  zap.Duration(&quot;backoff&quot;, time.Second),
+  zap.Int(&#34;attempt&#34;, 3),
+  zap.Duration(&#34;backoff&#34;, time.Second),
 )
-</code></pre><pre><code>{&quot;level&quot;:&quot;info&quot;,&quot;ts&quot;:1495870212.3378785,&quot;caller&quot;:&quot;zap-log/main.go:36&quot;,&quot;msg&quot;:&quot;Hoge&quot;,&quot;attempt&quot;:3,&quot;backoff&quot;:1}
-</code></pre><p><code>NewProductionConfig()</code>の内容はこんな感じ。ここからOutputPathを書き換えるとファイルに出力されるようにできる。</p>
-<pre><code>config := zap.Config{
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">{&#34;level&#34;:&#34;info&#34;,&#34;ts&#34;:1495870212.3378785,&#34;caller&#34;:&#34;zap-log/main.go:36&#34;,&#34;msg&#34;:&#34;Hoge&#34;,&#34;attempt&#34;:3,&#34;backoff&#34;:1}
+</code></pre></div><p><code>NewProductionConfig()</code>の内容はこんな感じ。ここからOutputPathを書き換えるとファイルに出力されるようにできる。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">config := zap.Config{
     Level:       zap.NewAtomicLevelAt(zap.ErrorLevel),
     Development: false,
     Sampling: &amp;zap.SamplingConfig{
         Initial:    100,
         Thereafter: 100,
     },
-    Encoding: &quot;json&quot;,
+    Encoding: &#34;json&#34;,
     EncoderConfig: zapcore.EncoderConfig{
-        TimeKey:        &quot;ts&quot;,
-        LevelKey:       &quot;level&quot;,
-        NameKey:        &quot;logger&quot;,
-        CallerKey:      &quot;caller&quot;,
-        MessageKey:     &quot;msg&quot;,
-        StacktraceKey:  &quot;stacktrace&quot;,
+        TimeKey:        &#34;ts&#34;,
+        LevelKey:       &#34;level&#34;,
+        NameKey:        &#34;logger&#34;,
+        CallerKey:      &#34;caller&#34;,
+        MessageKey:     &#34;msg&#34;,
+        StacktraceKey:  &#34;stacktrace&#34;,
         LineEnding:     zapcore.DefaultLineEnding,
         EncodeLevel:    zapcore.LowercaseLevelEncoder,
         EncodeTime:     zapcore.EpochTimeEncoder,
         EncodeDuration: zapcore.SecondsDurationEncoder,
         EncodeCaller:   zapcore.ShortCallerEncoder,
     },
-    OutputPaths:      []string{&quot;stderr&quot;},
-    ErrorOutputPaths: []string{&quot;stderr&quot;},
+    OutputPaths:      []string{&#34;stderr&#34;},
+    ErrorOutputPaths: []string{&#34;stderr&#34;},
 }
-config.OutputPaths = []string{&quot;./aaaa.log&quot;}
+config.OutputPaths = []string{&#34;./aaaa.log&#34;}
 logger, _ = config.Build()
 defer logger.Sync()
-</code></pre><p>Buildの引数にも渡せるOptionというのは<code>apply(logger)</code>でloggerを操作するインタフェース。
+</code></pre></div><p>Buildの引数にも渡せるOptionというのは<code>apply(logger)</code>でloggerを操作するインタフェース。
 <a href="https://github.com/uber-go/zap/blob/74ca5ef91c08e5eafb5ab9739df05d66f1b5d8da/options.go#L55">zap.Fields</a>は
 フィールドを追加するもの。</p>
-<pre><code>logger = logger.WithOptions(zap.Fields(zap.String(&quot;hoge&quot;, &quot;fuga&quot;)))
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">logger = logger.WithOptions(zap.Fields(zap.String(&#34;hoge&#34;, &#34;fuga&#34;)))
 defer logger.Sync()
-logger.Error(&quot;aaa&quot;,
-    zap.String(&quot;eee&quot;, &quot;eee&quot;),
+logger.Error(&#34;aaa&#34;,
+    zap.String(&#34;eee&#34;, &#34;eee&#34;),
 )
-</code></pre><p><a href="https://github.com/uber-go/zap/blob/v1.4.0/config.go#L154">Build</a>の実装をみると、
+</code></pre></div><p><a href="https://github.com/uber-go/zap/blob/v1.4.0/config.go#L154">Build</a>の実装をみると、
 中では<code>zapcore.NewCore(enc, sink, cfg.Level)</code>とOptionを引数として取る<code>New()</code>でloggerを生成している。</p>
-<pre><code>enc, err := cfg.buildEncoder()
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">enc, err := cfg.buildEncoder()
 if err != nil {
     return nil, err
 }
@@ -216,14 +214,14 @@ log := New(
     zapcore.NewCore(enc, sink, cfg.Level),
     cfg.buildOptions(errSink)...,
 )
-</code></pre><p>このsinkは<code>io.Writer</code>をwrapした<a href="https://github.com/uber-go/zap/blob/179e456766f6ba6d1006f432f90d52ecb6296e84/zapcore/write_syncer.go#L32">WriteSyncer</a>
+</code></pre></div><p>このsinkは<code>io.Writer</code>をwrapした<a href="https://github.com/uber-go/zap/blob/179e456766f6ba6d1006f432f90d52ecb6296e84/zapcore/write_syncer.go#L32">WriteSyncer</a>
 で、<code>AddSync(w io.Writer)</code>で変換できる。
 これに<a href="https://github.com/natefinch/lumberjack">lumberjack</a>を渡してやるとrotateできる。</p>
-<pre><code>config := zap.NewProductionConfig()
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">config := zap.NewProductionConfig()
 enc := zapcore.NewJSONEncoder(config.EncoderConfig)
 sink := zapcore.AddSync(
     &amp;lumberjack.Logger{
-        Filename:   &quot;./aaaa.log&quot;,
+        Filename:   &#34;./aaaa.log&#34;,
         MaxSize:    500, // megabytes
         MaxBackups: 3,
         MaxAge:     28, //days
@@ -233,10 +231,10 @@ logger := zap.New(
     zapcore.NewCore(enc, sink, config.Level),
 )
 defer logger.Sync()
-logger.Error(&quot;aaa&quot;,
-    zap.String(&quot;eeef&quot;, &quot;eefe&quot;),
+logger.Error(&#34;aaa&#34;,
+    zap.String(&#34;eeef&#34;, &#34;eefe&#34;),
 )
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -245,41 +243,41 @@ logger.Error(&quot;aaa&quot;,
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

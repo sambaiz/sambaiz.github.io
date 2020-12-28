@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -137,71 +135,71 @@
 前者は認証が走り実行者の権限で動くが、後者は認証を行わずデプロイユーザーの権限で動かすこともできるのでパブリックなAPIとして使うことができる。
 当然、不正な操作が行われないように注意する必要があり、GASの<a href="https://developers.google.com/apps-script/guides/services/quotas">Quotaやhard limit</a>も気にする必要がある。無料で運用することができるが、レイテンシやエラーハンドリング、監視などの上で本番環境で動かすイメージはあまり湧いていない。</p>
 <p>ウェブアプリでは<code>doGet(e)</code>と<code>doPost(e)</code>を実装することでそれぞれのメソッドのリクエストをハンドリングできる。これ以外のメソッドには対応していない。</p>
-<pre><code>function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify(e.parameter))
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js"><span style="color:#8be9fd;font-style:italic">function</span> doGet(e) {
+  <span style="color:#ff79c6">return</span> ContentService.createTextOutput(JSON.stringify(e.parameter))
 }
 
-function doPost(e) {
-  return ContentService.createTextOutput(e.postData.contents)
+<span style="color:#8be9fd;font-style:italic">function</span> doPost(e) {
+  <span style="color:#ff79c6">return</span> ContentService.createTextOutput(e.postData.contents)
 }
-</code></pre><p>claspでデプロイする際は一度画面上でウェブアプリとして公開した後、そのDeplymentsを更新するとそのまま反映できる。ただしDeploymentsに紐づくVersionに限りがあるので一旦undeployしている。</p>
+</code></pre></div><p>claspでデプロイする際は一度画面上でウェブアプリとして公開した後、そのDeplymentsを更新するとそのまま反映できる。ただしDeploymentsに紐づくVersionに限りがあるので一旦undeployしている。</p>
 <p><a href="https://www.sambaiz.net/article/315/">claspでGoogle Apps Scriptをローカルで開発しデプロイする - sambaiz-net</a></p>
-<pre><code>$ clasp push &amp;&amp; clasp undeploy --all &amp;&amp; clasp deploy -V 1
-</code></pre><p>ウェブアプリのURLにリクエストを送ると <code>https://script.googleusercontent.com/macros/echo?user_content_key=****</code> にリダイレクトするので、curlでリクエストする際は<code>-L</code>フラグを付ける必要がある。
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ clasp push <span style="color:#ff79c6">&amp;&amp;</span> clasp undeploy --all <span style="color:#ff79c6">&amp;&amp;</span> clasp deploy -V <span style="color:#bd93f9">1</span>
+</code></pre></div><p>ウェブアプリのURLにリクエストを送ると <code>https://script.googleusercontent.com/macros/echo?user_content_key=****</code> にリダイレクトするので、curlでリクエストする際は<code>-L</code>フラグを付ける必要がある。
 また、POSTする際は<code>-X POST</code>を付けると<a href="https://developer.mozilla.org/ja/docs/Web/HTTP/Redirections">ステータスコードに関わらず</a>リダイレクト先に<a href="https://stackoverflow.com/a/41890653">POSTでリクエストし</a>、Not Foundとなってしまうので付けない。</p>
-<pre><code>$ curl -L https://script.google.com/macros/s/*****/exec?aaa=bbb
-{&quot;aaa&quot;:&quot;bbb&quot;}
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ curl -L https://script.google.com/macros/s/*****/exec?aaa<span style="color:#ff79c6">=</span>bbb
+<span style="color:#ff79c6">{</span><span style="color:#f1fa8c">&#34;aaa&#34;</span>:<span style="color:#f1fa8c">&#34;bbb&#34;</span><span style="color:#ff79c6">}</span>
 
-$ $ curl -d 'aaaa' -L https://script.google.com/macros/s/*****/exec
-&quot;aaaa&quot;
-</code></pre><p>GETとPOSTしか対応してないということは、OPTIONSメソッドによるCORSのpreflightリクエストも送れないということになる。
+$ $ curl -d <span style="color:#f1fa8c">&#39;aaaa&#39;</span> -L https://script.google.com/macros/s/*****/exec
+<span style="color:#f1fa8c">&#34;aaaa&#34;</span>
+</code></pre></div><p>GETとPOSTしか対応してないということは、OPTIONSメソッドによるCORSのpreflightリクエストも送れないということになる。
 したがって、preflightリクエストが<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#Simple_requests">送られないように</a>、余分なHeaderを付けずに <code>Content-Type</code>を<code>application/x-www-form-urlencoded</code>、<code>multipart/form-data</code>、<code>text/plain</code>のいずれかで送る必要がある。
 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request/mode">Request.mode</a>を<code>no-cors</code>にすると送られるHeaderが制限されてエラーにはならなくなるが、レスポンスをスクリプトから取ることができない。</p>
-<pre><code>$ cat test.html
-&lt;script&gt;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-html" data-lang="html">$ cat test.html
+&lt;<span style="color:#ff79c6">script</span>&gt;
   (async () =&gt; {
-    const resp = await fetch('https://script.google.com/macros/s/*****/exec', {
-      method: 'POST',
-      body: JSON.stringify({&quot;req&quot;: 1})
+    <span style="color:#ff79c6">const</span> resp <span style="color:#ff79c6">=</span> await fetch(<span style="color:#f1fa8c">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
+      method<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;POST&#39;</span>,
+      body<span style="color:#ff79c6">:</span> JSON.stringify({<span style="color:#f1fa8c">&#34;req&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">1</span>})
     })
-    console.log(`1: ${await resp.text()}`) // OK
-  })();
+    console.log(<span style="color:#f1fa8c">`1: </span><span style="color:#f1fa8c">${</span>await resp.text()<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>) <span style="color:#6272a4">// OK
+</span><span style="color:#6272a4"></span>  })();
   (async () =&gt; {
-    const resp = await fetch('https://script.google.com/macros/s/*****/exec', {
-      method: 'POST',
-      body: JSON.stringify({&quot;req&quot;: 2}),
-      headers: {
-        'Content-Type': 'text/plain'
+    <span style="color:#ff79c6">const</span> resp <span style="color:#ff79c6">=</span> await fetch(<span style="color:#f1fa8c">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
+      method<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;POST&#39;</span>,
+      body<span style="color:#ff79c6">:</span> JSON.stringify({<span style="color:#f1fa8c">&#34;req&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">2</span>}),
+      headers<span style="color:#ff79c6">:</span> {
+        <span style="color:#f1fa8c">&#39;Content-Type&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;text/plain&#39;</span>
       }
     })
-    console.log(`2: ${await resp.text()}`) // OK
-  })();
+    console.log(<span style="color:#f1fa8c">`2: </span><span style="color:#f1fa8c">${</span>await resp.text()<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>) <span style="color:#6272a4">// OK
+</span><span style="color:#6272a4"></span>  })();
   (async () =&gt; {
-    const resp = await fetch('https://script.google.com/macros/s/*****/exec', {
-      method: 'POST',
-      body: JSON.stringify({&quot;req&quot;: 3}),
-      headers: {
-        'Content-Type': 'application/json'
+    <span style="color:#ff79c6">const</span> resp <span style="color:#ff79c6">=</span> await fetch(<span style="color:#f1fa8c">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
+      method<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;POST&#39;</span>,
+      body<span style="color:#ff79c6">:</span> JSON.stringify({<span style="color:#f1fa8c">&#34;req&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">3</span>}),
+      headers<span style="color:#ff79c6">:</span> {
+        <span style="color:#f1fa8c">&#39;Content-Type&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;application/json&#39;</span>
       }
     })
-    console.log(`3: ${await resp.text()}`) // CORS error
-  })();
+    console.log(<span style="color:#f1fa8c">`3: </span><span style="color:#f1fa8c">${</span>await resp.text()<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>) <span style="color:#6272a4">// CORS error
+</span><span style="color:#6272a4"></span>  })();
   (async () =&gt; {
-    const resp = await fetch('https://script.google.com/macros/s/*****/exec', {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({&quot;req&quot;: 4}),
-      headers: {
-        'Content-Type': 'application/json'
+    <span style="color:#ff79c6">const</span> resp <span style="color:#ff79c6">=</span> await fetch(<span style="color:#f1fa8c">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
+      method<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;POST&#39;</span>,
+      mode<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;no-cors&#39;</span>,
+      body<span style="color:#ff79c6">:</span> JSON.stringify({<span style="color:#f1fa8c">&#34;req&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">4</span>}),
+      headers<span style="color:#ff79c6">:</span> {
+        <span style="color:#f1fa8c">&#39;Content-Type&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;application/json&#39;</span>
       }
     })
-    console.log(`4: ${await resp.text()}`) // OK but text() is empty
-  })();
-&lt;/script&gt;
+    console.log(<span style="color:#f1fa8c">`4: </span><span style="color:#f1fa8c">${</span>await resp.text()<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>) <span style="color:#6272a4">// OK but text() is empty
+</span><span style="color:#6272a4"></span>  })();
+&lt;/<span style="color:#ff79c6">script</span>&gt;
 
 $ npx http-server .
 $ open http://127.0.0.1:8080/test.html
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -210,41 +208,41 @@ $ open http://127.0.0.1:8080/test.html
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

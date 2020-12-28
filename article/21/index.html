@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -139,15 +137,15 @@
 ただ、壁紙のようなサイズを生成するような場合にそれを行うと、GPUのメモリを食いつぶしてしまう。
 これを避けるために、画像を小さなタイルに分割し、それぞれ独立に勾配を計算する。
 また、毎回画像をランダムにシフトしていくことで、タイルに見えることを避け、画像全体の品質を向上させる。</p>
-<pre><code>def tffunc(*argtypes):
-    '''Helper that transforms TF-graph generating function into a regular one.
-    See &quot;resize&quot; function below.
-    '''
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">def tffunc(*argtypes):
+    &#39;&#39;&#39;Helper that transforms TF-graph generating function into a regular one.
+    See &#34;resize&#34; function below.
+    &#39;&#39;&#39;
     placeholders = list(map(tf.placeholder, argtypes))
     def wrap(f):
         out = f(*placeholders)
         def wrapper(*args, **kw):
-            return out.eval(dict(zip(placeholders, args)), session=kw.get('session'))
+            return out.eval(dict(zip(placeholders, args)), session=kw.get(&#39;session&#39;))
         return wrapper
     return wrap
 
@@ -159,9 +157,9 @@ resize = tffunc(np.float32, np.int32)(resize)
 
 
 def calc_grad_tiled(img, t_grad, tile_size=512):
-    '''Compute the value of tensor t_grad over the image in a tiled way.
+    &#39;&#39;&#39;Compute the value of tensor t_grad over the image in a tiled way.
     Random shifts are applied to the image to blur tile boundaries over
-    multiple iterations.'''
+    multiple iterations.&#39;&#39;&#39;
     sz = tile_size
     h, w = img.shape[:2]
     sx, sy = np.random.randint(sz, size=2)
@@ -173,10 +171,10 @@ def calc_grad_tiled(img, t_grad, tile_size=512):
             g = sess.run(t_grad, {t_input:sub})
             grad[y:y+sz,x:x+sz] = g
     return np.roll(np.roll(grad, -sx, 1), -sy, 0)
-</code></pre><p><code>tf.image.resize_bilinear</code>は<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/image.html#resize_bilinear">双線形補間によってリサイズする。</a></p>
+</code></pre></div><p><code>tf.image.resize_bilinear</code>は<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/image.html#resize_bilinear">双線形補間によってリサイズする。</a></p>
 <p><code>numpy.roll</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.roll.html">配列を第三引数axisによってローリングする</a>。
 axisを指定しない場合、フラットなものとして扱われる。</p>
-<pre><code>hoge = [[0, 1, 2],
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">hoge = [[0, 1, 2],
         [3, 4, 5],
         [6, 7, 8]]
 
@@ -194,9 +192,9 @@ print(np.roll(hoge, 1, axis=1))
 # [[2 0 1]
 #  [5 3 4]
 #  [8 6 7]]
-</code></pre><p>つまり、<code>calc_grad_tiled</code>では、ランダムにローリングして、タイルに分割して勾配を求め、ローリングした分を戻して返している。
+</code></pre></div><p>つまり、<code>calc_grad_tiled</code>では、ランダムにローリングして、タイルに分割して勾配を求め、ローリングした分を戻して返している。
 これと、画像サイズを<code>octave_scale</code>倍にしていく以外は前回やったのと基本的に同じだ。</p>
-<pre><code>def render_multiscale(t_obj, img0=img_noise, iter_n=10, step=1.0, octave_n=3, octave_scale=1.4):
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">def render_multiscale(t_obj, img0=img_noise, iter_n=10, step=1.0, octave_n=3, octave_scale=1.4):
     t_score = tf.reduce_mean(t_obj) # defining the optimization objective
     t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
 
@@ -210,12 +208,12 @@ print(np.roll(hoge, 1, axis=1))
             # normalizing the gradient, so the same step size should work
             g /= g.std()+1e-8         # for different layers and networks
             img += g*step
-            print('.', end = ' ')
+            print(&#39;.&#39;, end = &#39; &#39;)
         clear_output()
         showarray(visstd(img))
 
 render_multiscale(T(layer)[:,:,:,channel])
-</code></pre><h2 id="laplacian-pyramid-gradient-normalization">Laplacian Pyramid Gradient Normalization</h2>
+</code></pre></div><h2 id="laplacian-pyramid-gradient-normalization">Laplacian Pyramid Gradient Normalization</h2>
 <p>結果の画像は、高い周波数(ピクセルの変化の度合が高い)が多く含まれている。
 これを改善するための一つの方法として、毎回画像をぼかし、高周波数を抑え、画像を滑らかにするものがある。
 ただ、この方法は良い画像にするためにより多くの繰り返しが必要になってしまう。
@@ -223,7 +221,7 @@ render_multiscale(T(layer)[:,:,:,channel])
 <p>ラプラシアンピラミッドというのは、ガウシアンピラミッドにおける、ある解像度の画像と、
 その一つレベルの高い(解像度1/2 * 1/2 = 1/4)画像をアップサンプルしたものの差分だ。</p>
 <p><a href="http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_pyramids/py_pyramids.html">画像ピラミッド — OpenCV-Python Tutorials 1 documentation</a></p>
-<pre><code>k = np.float32([1,4,6,4,1])
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">k = np.float32([1,4,6,4,1])
 k = np.outer(k, k)
 # [[  1.   4.   6.   4.   1.]
 #  [  4.  16.  24.  16.   4.]
@@ -256,23 +254,23 @@ print(k5x5[0])
 # [[ 0.00390625  0.          0.        ]
 #  [ 0.          0.00390625  0.        ]
 #  [ 0.          0.          0.00390625]]]
-</code></pre><p><code>numpy.outer</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.outer.html">外積を求める</a>もので、
+</code></pre></div><p><code>numpy.outer</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.outer.html">外積を求める</a>もので、
 <code>numpy.eye</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.eye.html">対角線が1で、それ以外は0の2次元行列を返す</a>。
 <code>k</code>を指定すると、対角線の位置を変更できるが、指定していない場合はNxNの単位行列が返ることになる。
 このフィルターで畳み込むことで、ラプラシアンピラミッドの1レベル高い画像に変換できる。
 <code>tf.nn.conv2d_transpose</code>は
 <a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/nn.html#conv2d_transpose">畳み込みの逆処理</a>のようなもので、
 これでアップサンプルした画像と元画像の差分を取って、ラプラシアンピラミッドを生成している。</p>
-<pre><code>def lap_split(img):
-    '''Split the image into lo and hi frequency components'''
-    with tf.name_scope('split'):
-        lo = tf.nn.conv2d(img, k5x5, [1,2,2,1], 'SAME')
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">def lap_split(img):
+    &#39;&#39;&#39;Split the image into lo and hi frequency components&#39;&#39;&#39;
+    with tf.name_scope(&#39;split&#39;):
+        lo = tf.nn.conv2d(img, k5x5, [1,2,2,1], &#39;SAME&#39;)
         lo2 = tf.nn.conv2d_transpose(lo, k5x5*4, tf.shape(img), [1,2,2,1])
         hi = img-lo2
     return lo, hi
 
 def lap_split_n(img, n):
-    '''Build Laplacian pyramid with n splits'''
+    &#39;&#39;&#39;Build Laplacian pyramid with n splits&#39;&#39;&#39;
     levels = []
     for i in range(n):
         img, hi = lap_split(img)
@@ -281,28 +279,28 @@ def lap_split_n(img, n):
     return levels[::-1]
 
 def lap_merge(levels):
-    '''Merge Laplacian pyramid'''
+    &#39;&#39;&#39;Merge Laplacian pyramid&#39;&#39;&#39;
     img = levels[0]
     for hi in levels[1:]:
-        with tf.name_scope('merge'):
+        with tf.name_scope(&#39;merge&#39;):
             img = tf.nn.conv2d_transpose(img, k5x5*4, tf.shape(hi), [1,2,2,1]) + hi
     return img
 
 def normalize_std(img, eps=1e-10):
-    '''Normalize image by making its standard deviation = 1.0'''
-    with tf.name_scope('normalize'):
+    &#39;&#39;&#39;Normalize image by making its standard deviation = 1.0&#39;&#39;&#39;
+    with tf.name_scope(&#39;normalize&#39;):
         std = tf.sqrt(tf.reduce_mean(tf.square(img)))
         return img/tf.maximum(std, eps)
 
 def lap_normalize(img, scale_n=4):
-    '''Perform the Laplacian pyramid normalization.'''
+    &#39;&#39;&#39;Perform the Laplacian pyramid normalization.&#39;&#39;&#39;
     img = tf.expand_dims(img,0)
     tlevels = lap_split_n(img, scale_n)
     tlevels = list(map(normalize_std, tlevels))
     out = lap_merge(tlevels)
     return out[0,:,:,:]
-</code></pre><p><code>lap_normalize</code>で画像からラプラシアンピラミッドを生成し、それぞれで正規化してからマージして元の画像に戻す処理をしている。</p>
-<pre><code>def render_lapnorm(t_obj, img0=img_noise, visfunc=visstd,
+</code></pre></div><p><code>lap_normalize</code>で画像からラプラシアンピラミッドを生成し、それぞれで正規化してからマージして元の画像に戻す処理をしている。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">def render_lapnorm(t_obj, img0=img_noise, visfunc=visstd,
                    iter_n=10, step=1.0, octave_n=3, octave_scale=1.4, lap_n=4):
     t_score = tf.reduce_mean(t_obj) # defining the optimization objective
     t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
@@ -318,15 +316,15 @@ def lap_normalize(img, scale_n=4):
             g = calc_grad_tiled(img, t_grad)
             g = lap_norm_func(g)
             img += g*step
-            print('.', end = ' ')
+            print(&#39;.&#39;, end = &#39; &#39;)
         clear_output()
         showarray(visfunc(img))
 
 render_lapnorm(T(layer)[:,:,:,channel])
-</code></pre><h2 id="deepdream">DeepDream</h2>
+</code></pre></div><h2 id="deepdream">DeepDream</h2>
 <p>で、これがDeepDreamのアルゴリズム。
 ラプラシアンピラミッドを生成して、リサイズの際に次のレベルのを足していっている。</p>
-<pre><code>def render_deepdream(t_obj, img0=img_noise,
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">def render_deepdream(t_obj, img0=img_noise,
                      iter_n=10, step=1.5, octave_n=4, octave_scale=1.4):
     t_score = tf.reduce_mean(t_obj) # defining the optimization objective
     t_grad = tf.gradients(t_score, t_input)[0] # behold the power of automatic differentiation!
@@ -349,10 +347,10 @@ render_lapnorm(T(layer)[:,:,:,channel])
         for i in range(iter_n):
             g = calc_grad_tiled(img, t_grad)
             img += g*(step / (np.abs(g).mean()+1e-7))
-            print('.',end = ' ')
+            print(&#39;.&#39;,end = &#39; &#39;)
         clear_output()
         showarray(img/255.0)
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -361,41 +359,41 @@ render_lapnorm(T(layer)[:,:,:,channel])
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

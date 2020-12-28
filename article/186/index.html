@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -138,21 +136,21 @@ Istioにも含まれていて、これを使って<a href="https://letsencrypt.o
 <p>デフォルトではcert-managerは入らないのでenabled=trueにしてインストールする。
 最初に入るLet&rsquo;s EncryptのClusterIssuerはエラーになったので消す。</p>
 <p><a href="https://www.sambaiz.net/article/185/">IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net</a></p>
-<pre><code>$ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set certmanager.enabled=true
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set certmanager.enabled=true
 $ kubectl delete ClusterIssuer --all
-</code></pre><p>確認用にBookInfoを動かす。</p>
-<pre><code>$ kubectl label namespace default istio-injection=enabled
+</code></pre></div><p>確認用にBookInfoを動かす。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl label namespace default istio-injection=enabled
 $ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
 $ kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
-</code></pre><p>Let&rsquo;s Encryptで使われている<a href="https://github.com/ietf-wg-acme/acme">ACME</a>プロトコルのドメイン認証(Challenge)には
+</code></pre></div><p>Let&rsquo;s Encryptで使われている<a href="https://github.com/ietf-wg-acme/acme">ACME</a>プロトコルのドメイン認証(Challenge)には
 <code>/.well-known/acme-challenge/{token}</code>でHTTPレスポンスを返す<a href="https://github.com/ietf-wg-acme/acme/blob/master/draft-ietf-acme-acme.md#http-challenge">HTTP Challenge</a>(http-01)と
 DNSのTXTレコードに書き込む<a href="https://github.com/ietf-wg-acme/acme/blob/master/draft-ietf-acme-acme.md#dns-challenge">DNS Challenge</a>(dns-01)がある。
 HTTP Challengeは手軽に達成できる一方、CAからアクセスできるようにする必要がある。今回はDNS Challengeでやる。
 cert-managerはCloud DNSやRoute53などに<a href="http://docs.cert-manager.io/en/latest/reference/issuers/acme/dns01.html">対応</a>していて、今回はCloudflareを使う。</p>
 <p>DNSに書き込めるようにするためCloudflareのMy ProfileからGlobal API Keyを持ってきてBase64デコードしSecretに入れる。
 改行コードが含まれないように<code>-n</code>を付ける。</p>
-<pre><code>$ echo -n ***** | base64
-</code></pre><pre><code>apiVersion: v1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ echo -n ***** | base64
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">apiVersion: v1
 kind: Secret
 metadata:
   name: cloudflare-api-key
@@ -160,11 +158,11 @@ metadata:
 type: Opaque
 data:
   api-key: *****
-</code></pre><p>Let&rsquo;s EncryptのClusterIssuerと証明書を生成するドメインのCertificateを作成する。
+</code></pre></div><p>Let&rsquo;s EncryptのClusterIssuerと証明書を生成するドメインのCertificateを作成する。
 serverのURLは<a href="https://letsencrypt.status.io/">Status</a>のページから確認できる。
 本番のURLは<a href="https://letsencrypt.org/docs/rate-limits/">レート制限</a>があるので、まずはFakeの証明書が生成されるstgで試すとよい。</p>
 <p>証明書を書くsecretNameは<code>istio-system</code>ネームスペースの<code>istio-ingressgateway-certs</code>にする<a href="https://istio.io/docs/tasks/traffic-management/secure-ingress/#configure-a-tls-ingress-gateway">必要がある</a>。</p>
-<pre><code>apiVersion: certmanager.k8s.io/v1alpha1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">apiVersion: certmanager.k8s.io/v1alpha1
 kind: ClusterIssuer
 metadata:
   name: letsencrypt-dns01
@@ -203,10 +201,10 @@ spec:
         provider: cloudflare
       domains:
       - xxx.example.com
-</code></pre><p>これをapplyするとcertmanagerのログが流れ始める。何か間違いがあるとエラーになるのでなんとかする。</p>
-<pre><code>$ kubectl -n istio-system logs -f $(kubectl -n istio-system get pods -l app=certmanager -o jsonpath='{.items[0].metadata.name}')
-</code></pre><p>証明書と秘密鍵のSecretはこんな感じ。</p>
-<pre><code>$ kubectl describe secret istio-ingressgateway-certs -n istio-system
+</code></pre></div><p>これをapplyするとcertmanagerのログが流れ始める。何か間違いがあるとエラーになるのでなんとかする。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl -n istio-system logs -f $(kubectl -n istio-system get pods -l app=certmanager -o jsonpath=&#39;{.items[0].metadata.name}&#39;)
+</code></pre></div><p>証明書と秘密鍵のSecretはこんな感じ。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl describe secret istio-ingressgateway-certs -n istio-system
 Name:         istio-ingressgateway-certs
 Namespace:    istio-system
 Labels:       &lt;none&gt;
@@ -221,9 +219,9 @@ Data
 ====
 tls.key:  1675 bytes
 tls.crt:  3805 bytes
-</code></pre><p><code>ingressgateway-certs</code>は自動で<code>/etc/istio/ingressgateway-certs</code>にマウントされる。
+</code></pre></div><p><code>ingressgateway-certs</code>は自動で<code>/etc/istio/ingressgateway-certs</code>にマウントされる。
 このGatewayをapplyするとHTTPでアクセスした場合はリダイレクトし、HTTPSで正常にアクセスできるようになる。</p>
-<pre><code>apiVersion: networking.istio.io/v1alpha3
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
   name: bookinfo-gateway
@@ -249,7 +247,7 @@ spec:
       mode: SIMPLE
       serverCertificate: /etc/istio/ingressgateway-certs/tls.crt
       privateKey: /etc/istio/ingressgateway-certs/tls.key
-</code></pre>
+</code></pre></div>
         </div>
       </article>
     </div>
@@ -258,41 +256,41 @@ spec:
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>

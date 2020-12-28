@@ -9,8 +9,6 @@
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"
     integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
   <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
-  <link rel="stylesheet"
-    href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/magula.min.css">
   <link rel="stylesheet" href="/css/slidebars.min.css">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.sambaiz.net/index.xml">
@@ -137,25 +135,25 @@
 <p><a href="https://www.sambaiz.net/article/297/">CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net</a></p>
 <h2 id="前提">前提</h2>
 <p>実行するシナリオは次のGETリクエストを送るだけのもの。Chartの都合で<code>0.x</code>系のlocustfileになっている。</p>
-<pre><code>from locust import HttpLocust, TaskSet, task
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">from locust import HttpLocust, TaskSet, task
 
 class MyTaskSet(TaskSet):
   @task
   def index(self):
-    self.client.get(&quot;/&quot;)
+    self.client.get(&#34;/&#34;)
 
 class MyUser(HttpLocust):
   task_set = MyTaskSet
   min_wait = 5
   max_wait = 15
-</code></pre><p>ちなみに負荷をかける対象はECS+Fargateに立ち上げたAPIサーバーで、こちらが問題にならないよう余裕を持って動かしている。
+</code></pre></div><p>ちなみに負荷をかける対象はECS+Fargateに立ち上げたAPIサーバーで、こちらが問題にならないよう余裕を持って動かしている。
 スケールするからといってAPI Gatewayなどに向けるとリクエスト数による多額の課金が発生し得るので注意だ。</p>
 <p><a href="https://www.sambaiz.net/article/259/">ECSでアプリケーションを動かすBoilerplateを作った - sambaiz-net</a></p>
 <p>なお、ファイルディスクリプタの数は元から十分大きかったため特に変更していない。</p>
 <p><a href="https://www.sambaiz.net/article/41/">ファイルディスクリプタの上限を増やす - sambaiz-net</a></p>
-<pre><code>$ kubectl exec tryeksstackclusterchartlocustchart1abdd876-worker-d5c7b85cbq6sh -- /bin/sh -c &quot;ulimit -n&quot;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl exec tryeksstackclusterchartlocustchart1abdd876-worker-d5c7b85cbq6sh -- /bin/sh -c &#34;ulimit -n&#34;
 1048576
-</code></pre><h2 id="ワーカー数とリソースの割り当て">ワーカー数とリソースの割り当て</h2>
+</code></pre></div><h2 id="ワーカー数とリソースの割り当て">ワーカー数とリソースの割り当て</h2>
 <p><a href="https://aws.amazon.com/jp/ec2/pricing/on-demand/">m5.large (2vCPU, メモリ10GiB)</a>の2ノードに5ワーカーを立ち上げ負荷をかけたところ<code>230RPS</code>あたりで頭打ちになってしまった。</p>
 <p><img src="https://www.sambaiz.net/images/299-1.png" alt="初期のRPS"></p>
 <p>Container Insightsのメトリクスを見るとワーカーPodのCPUの使用率が100%に張り付いていることが分かる。</p>
@@ -164,7 +162,7 @@ class MyUser(HttpLocust):
 <p>ノードのCPUは40%ほどしかリクエストされておらず同量のlimitsがかかっているので、ワーカーのリクエストCPUを増やすか数を増やせば簡単にRPSを増やせそうだ。</p>
 <p><img src="https://www.sambaiz.net/images/299-3.png" alt="ノードのCPU/メモリのリクエスト割合"></p>
 <p>まずはリクエストCPUを<a href="https://github.com/dellwon/charts/blob/d1553b96959c7218e0bceba4da78f6edc78c4c59/stable/locust/values.yaml#L85">100m</a>から500mに増やした。2.5倍ではないのは40%の中にはkube-systemやContainer InsightsのDaemonSetが含まれているため。リクエスト率は90%ほどになった。</p>
-<pre><code>$ kubectl describe nodes
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl describe nodes
 ...
 Non-terminated Pods:         (9 in total)
   Namespace                  Name                                                               CPU Requests  CPU Limits  Memory Requests  Memory Limits  AGE
@@ -178,61 +176,61 @@ Non-terminated Pods:         (9 in total)
   kube-system                coredns-75b44cb5b4-7qpfl                                           100m (5%)     0 (0%)      70Mi (2%)        170Mi (5%)     4m54s
   kube-system                coredns-75b44cb5b4-gc6mv                                           100m (5%)     0 (0%)      70Mi (2%)        170Mi (5%)     4m54s
   kube-system                kube-proxy-wj8fk                                                   100m (5%)     0 (0%)      0 (0%)           0 (0%)         6m39s
-</code></pre><pre><code>worker: {
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">worker: {
   replicaCount: 5,
   config: {
     configmapName: configmap.metadata.name,
   },
   resources: {
     limits: {
-      cpu: '500m',
-      memory: '128Mi'
+      cpu: &#39;500m&#39;,
+      memory: &#39;128Mi&#39;
     },
     requests: {
-      cpu: '500m',
-      memory: '128Mi'
+      cpu: &#39;500m&#39;,
+      memory: &#39;128Mi&#39;
     } 
   }
 }
-</code></pre><p>これで負荷をかけたところ<code>1150RPS</code>まで伸び、リソースを増やした分だけ増えたことになる。</p>
+</code></pre></div><p>これで負荷をかけたところ<code>1150RPS</code>まで伸び、リソースを増やした分だけ増えたことになる。</p>
 <p><img src="https://www.sambaiz.net/images/299-4.png" alt="リクエストCPU500mでのRPS"></p>
 <p>次にリクエストCPUは戻してワーカー数を同じく5倍の25にしてみたところ<code>1070RPS</code>ほどに留まった。
 ワーカー数を27まで増やしたところ先ほどと同程度のRPSが出た。</p>
-<pre><code>worker: {
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">worker: {
   replicaCount: 25,
   config: {
     configmapName: configmap.metadata.name,
   },
   resources: {
     limits: {
-      cpu: '100m',
-      memory: '128Mi'
+      cpu: &#39;100m&#39;,
+      memory: &#39;128Mi&#39;
     },
     requests: {
-      cpu: '100m',
-      memory: '128Mi'
+      cpu: &#39;100m&#39;,
+      memory: &#39;128Mi&#39;
     } 
   }
 }
-</code></pre><p>続いてワーカー数を2に減らしリクエストCPUを1250mにしようとしたが、1つがリソース不足で立ち上がらなかったため1100mにした。</p>
-<pre><code>worker: {
+</code></pre></div><p>続いてワーカー数を2に減らしリクエストCPUを1250mにしようとしたが、1つがリソース不足で立ち上がらなかったため1100mにした。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">worker: {
     replicaCount: 2,
     config: {
       configmapName: configmap.metadata.name,
     },
     resources: {
       limits: {
-        cpu: '1100m',
-        memory: '128Mi'
+        cpu: &#39;1100m&#39;,
+        memory: &#39;128Mi&#39;
       },
       requests: {
-        cpu: '1100m',
-        memory: '128Mi'
+        cpu: &#39;1100m&#39;,
+        memory: &#39;128Mi&#39;
       } 
     }
   }
 }
-</code></pre><p>これで<code>1450RPS</code>まで出るようになった。
+</code></pre></div><p>これで<code>1450RPS</code>まで出るようになった。
 CPUの使用率が90%までしか上がっていないのはLocustのワーカーが<a href="https://docs.locust.io/en/stable/running-locust-distributed.html">1コアしか使わない</a>ため。</p>
 <p><img src="https://www.sambaiz.net/images/299-5.png" alt="CPUを1100mにしたときのPodのCPU/メモリの使用率"></p>
 <p>以上の結果から1コア(vCPU)を刻んでワーカー数を増やすよりも集中させた方が、多少リソースを埋めきれなくてもパフォーマンスが良いことが分かったので、
@@ -273,41 +271,41 @@ CPUをデフォルトの100mに戻し、インスタンスタイプを<code>m5.4
 
 </div> 
 <script src="//code.jquery.com/jquery-2.1.3.min.js"></script>
-<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"
+  integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 <script src="/js/slidebars.min.js"></script>
 <script>
-    ( function ( $ ) {
-      
-      var controller = new slidebars();
-      controller.init();
+  (function ($) {
+    
+    var controller = new slidebars();
+    controller.init();
 
-      $( '.toggle-side' ).on( 'click', function ( event ) {
-          event.stopPropagation();
-          event.preventDefault();
+    $('.toggle-side').on('click', function (event) {
+      event.stopPropagation();
+      event.preventDefault();
 
-          controller.toggle( 'id-1' );
-        } );
+      controller.toggle('id-1');
+    });
 
-        $( '#container' ).on( 'click', function ( event ) {
-            controller.close( 'id-1' );
-          });
-    } ) ( jQuery );
+    $('#container').on('click', function (event) {
+      controller.close('id-1');
+    });
+  })(jQuery);
 </script>
-
-<script>hljs.initHighlightingOnLoad();</script>
 
 
 <script>
-  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-ga('create', 'UA-39190067-3', 'auto');
-ga('send', 'pageview');
+  (function (i, s, o, g, r, a, m) {
+    i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+      (i[r].q = i[r].q || []).push(arguments)
+    }, i[r].l = 1 * new Date(); a = s.createElement(o),
+      m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+  })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+  ga('create', 'UA-39190067-3', 'auto');
+  ga('send', 'pageview');
 </script>
 
 
-  </body>
-</html>
+</body>
 
+</html>
