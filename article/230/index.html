@@ -137,110 +137,17 @@
 <pre><code>import pandas as pd
 df_train = pd.read_csv('house-prices/train.csv')
 df_test= pd.read_csv('house-prices/test.csv')
-</code></pre><h2 id="欠損値の処理">欠損値の処理</h2>
-<p>以前確認したように欠損値が含まれるので一つずつ見ていって埋めていく。</p>
+</code></pre><h2 id="前処理">前処理</h2>
+<p>目的変数であるSalePriceと相関のあるパラメーターを抽出する。XGBoostは欠損値をそのまま扱うことができるので特に何もしていない。</p>
 <p><a href="https://www.sambaiz.net/article/216/">KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net</a></p>
-<pre><code>import numpy as np
+<pre><code>use_columns = df_train.corr()['SalePrice'].drop('SalePrice').where(lambda x: abs(x) &gt; 0.5).dropna().keys()
+# Index(['OverallQual', 'YearBuilt', 'YearRemodAdd', 'TotalBsmtSF', '1stFlrSF', 'GrLivArea', 'FullBath', 'TotRmsAbvGrd', 'GarageCars', 'GarageArea'], dtype='object')
+def preprocess(df):
+  return df[use_columns].copy()
 
-def fillna(df):
-  # PoolQC: Pool quality
-  print(np.unique(df['PoolQC'].values.tolist())) # ['Ex' 'Fa' 'Gd' 'nan']
-  df[&quot;PoolQC&quot;] = df[&quot;PoolQC&quot;].fillna(&quot;None&quot;)
-
-  # MiscFeature: Miscellaneous feature not covered in other categories
-  print(np.unique(df['MiscFeature'].values.tolist())) # ['Gar2' 'Othr' 'Shed' 'TenC' 'nan']
-  df[&quot;MiscFeature&quot;] = df[&quot;MiscFeature&quot;].fillna(&quot;None&quot;)
-
-  # Alley: Type of alley access
-  print(np.unique(df['Alley'].values.tolist())) # ['Grvl' 'Pave' 'nan']
-  df[&quot;Alley&quot;] = df[&quot;Alley&quot;].fillna(&quot;None&quot;)
-
-  # Fence: Fence quality
-  print(np.unique(df['Fence'].values.tolist())) # ['GdPrv' 'GdWo' 'MnPrv' 'MnWw' 'nan']
-  df[&quot;Fence&quot;] = df[&quot;Fence&quot;].fillna(&quot;None&quot;)
-
-  # FireplaceQu: Fireplace quality
-  print(np.unique(df['FireplaceQu'].values.tolist())) # ['Ex' 'Fa' 'Gd' 'Po' 'TA' 'nan']
-  df[&quot;FireplaceQu&quot;] = df[&quot;FireplaceQu&quot;].fillna(&quot;None&quot;)
-
-  # LotFrontage: Linear feet of street connected to property
-  print(df[&quot;LotFrontage&quot;].describe())
-  '''
-  mean       70.049958
-  std        24.284752
-  min        21.000000
-  25%        59.000000
-  50%        69.000000
-  75%        80.000000
-  max       313.000000
-  '''
-  df[&quot;LotFrontage&quot;] = df[&quot;LotFrontage&quot;].median()
-
-  # GarageCond: Garage condition
-  print(np.unique(df[&quot;GarageCond&quot;].values.tolist())) # ['Ex' 'Fa' 'Gd' 'Po' 'TA' 'nan']
-  df[&quot;GarageCond&quot;] = df[&quot;GarageCond&quot;].fillna(&quot;None&quot;)
-
-  # GarageType: Garage location
-  print(np.unique(df[&quot;GarageType&quot;].values.tolist())) # ['2Types' 'Attchd' 'Basment' 'BuiltIn' 'CarPort' 'Detchd' 'nan']
-  df[&quot;GarageType&quot;] = df[&quot;GarageType&quot;].fillna(&quot;None&quot;)
-
-  # GarageYrBlt: Year garage was built
-  print(np.unique(df[&quot;GarageYrBlt&quot;].values.tolist())) # [1900. 1906. ... 2008. 2009.  2010.  nan]
-  df[&quot;GarageYrBlt&quot;] = df[&quot;GarageYrBlt&quot;].fillna(0)
-
-  # GarageFinish: Interior finish of the garage
-  print(np.unique(df[&quot;GarageFinish&quot;].values.tolist())) # ['Fin' 'RFn' 'Unf' 'nan']
-  df[&quot;GarageFinish&quot;] = df[&quot;GarageFinish&quot;].fillna(&quot;None&quot;)
-
-  # GarageQual: Garage quality
-  print(np.unique(df[&quot;GarageQual&quot;].values.tolist())) # ['Ex' 'Fa' 'Gd' 'Po' 'TA' 'nan']
-  df[&quot;GarageQual&quot;] = df[&quot;GarageQual&quot;].fillna(&quot;None&quot;)
-
-  # BsmtExposure: Walkout or garden level basement walls
-  print(np.unique(df[&quot;BsmtExposure&quot;].values.tolist())) # ['Av' 'Gd' 'Mn' 'No' 'nan']
-  df[&quot;BsmtExposure&quot;] = df[&quot;BsmtExposure&quot;].fillna(&quot;None&quot;)
-
-  # BsmtFinType2: Quality of second finished area (if present)
-  print(np.unique(df[&quot;BsmtFinType2&quot;].values.tolist())) # ['ALQ' 'BLQ' 'GLQ' 'LwQ' 'Rec' 'Unf' 'nan']
-  df[&quot;BsmtFinType2&quot;] = df[&quot;BsmtFinType2&quot;].fillna(&quot;None&quot;)
-
-  # BsmtFinType1: Quality of basement finished area
-  print(np.unique(df[&quot;BsmtFinType1&quot;].values.tolist())) # ['ALQ' 'BLQ' 'GLQ' 'LwQ' 'Rec' 'Unf' 'nan']
-  df[&quot;BsmtFinType1&quot;] = df[&quot;BsmtFinType1&quot;].fillna(&quot;None&quot;)
-
-  # BsmtCond: General condition of the basement
-  print(np.unique(df[&quot;BsmtCond&quot;].values.tolist())) # ['Fa' 'Gd' 'Po' 'TA' 'nan']
-  df[&quot;BsmtCond&quot;] = df[&quot;BsmtCond&quot;].fillna(&quot;None&quot;)
-
-  # BsmtQual: Height of the basement
-  print(np.unique(df[&quot;BsmtQual&quot;].values.tolist())) # ['Ex' 'Fa' 'Gd' 'TA' 'nan']
-  df[&quot;BsmtQual&quot;] = df[&quot;BsmtQual&quot;].fillna(&quot;None&quot;)
-
-  # MasVnrArea: Masonry veneer area in square feet
-  print(df[&quot;MasVnrArea&quot;].describe())
-  '''
-  count     1460.0
-  unique     328.0
-  top          0.0
-  freq       861.0
-  '''
-  df[&quot;MasVnrArea&quot;] = df[&quot;MasVnrArea&quot;].fillna(0)
-
-  # MasVnrType: Masonry veneer type
-  print(np.unique(df[&quot;MasVnrType&quot;].values.tolist())) # ['BrkCmn' 'BrkFace' 'None' 'Stone' 'nan']
-  print(df[&quot;MasVnrType&quot;].describe())
-  '''
-  count     1452
-  unique       4
-  top       None
-  freq       864
-  '''
-  df[&quot;MasVnrType&quot;] = df[&quot;MasVnrType&quot;].fillna(&quot;None&quot;)
-
-  # Electrical: Electrical system
-  print(np.unique(df[&quot;Electrical&quot;].values.tolist())) # ['FuseA' 'FuseF' 'FuseP' 'Mix' 'SBrkr' 'nan']
-  df[&quot;Electrical&quot;] = df[&quot;Electrical&quot;].fillna(&quot;None&quot;)
-  return df
+df_train_p = preprocess(df_train)
+df_train_p['SalePrice'] = df_train['SalePrice']
+df_test_p = preprocess(df_test)
 </code></pre><h2 id="ハイパーパラメータの最適化">ハイパーパラメータの最適化</h2>
 <p>ベイズ最適化でハイパーパラメータを決める。
 他にもいろいろなパラメータがあるが、やみくもに増やしても提出した後のスコアが良くならなかった。</p>
@@ -283,29 +190,21 @@ def optimize_params(df):
   bo.maximize(n_iter=50, alpha=1e-5)
   return bo.max['params']
 
-params = optimize_params(df_train_filled)
+params = optimize_params(df_train_p)
 </code></pre><p>結果こんな感じ。</p>
 <pre><code>print(params)
-# =&gt; {'colsample_bytree': 0.485528388652188, 'learning_rate': 0.010027583064377935, 'sub_sample': 0.10000002653848854}
+# =&gt; {'colsample_bytree': 1.0, 'learning_rate': 0.01, 'sub_sample': 0.28979827351242066}
 </code></pre><h2 id="実行">実行</h2>
-<p><code>pd.get_dummies()</code>でカテゴリカル変数をone hot vectorに変換し、学習して予測結果を出力する。</p>
-<p><a href="https://www.sambaiz.net/article/220/">カテゴリカル変数をLabel/OneHotEncoderやget_dummiesで変換する - sambaiz-net</a></p>
-<pre><code>df_train_filled = fillna(df_train)
-df_train_filled = pd.get_dummies(df_train_filled)
-params = optimize_params(df_train_filled)
-bst = xgb.train(
+<p>学習して予測結果を出力する。</p>
+<pre><code>bst = xgb.train(
     params, 
-    xgb.DMatrix(df_train_filled.drop('SalePrice', axis=1).as_matrix(), label=df_train_filled.SalePrice),
+    xgb.DMatrix(df_train_p.drop('SalePrice', axis=1).values, label=df_train_p.SalePrice),
     num_boost_round)
 
-df_test_filled = fillna(df_test)
-df_test_filled = pd.get_dummies(df_test_filled)
-for miss_key in [key for key in df_train_filled.drop('SalePrice', axis=1).keys() if key not in df_test]:
-  df_test_filled[miss_key] = 0 
-preds = bst.predict(xgb.DMatrix(df_test_filled.as_matrix()))
-submit_data =  pd.Series(preds, name='SalePrice', index=df_test['Id'])
+preds = bst.predict(xgb.DMatrix(df_test_p.values))
+submit_data = pd.Series(preds, name='SalePrice', index=df_test['Id'])
 submit_data.to_csv('submit.csv', header=True)
-</code></pre><p>スコアは <code>0.16164</code> だった。学習時のスコアは <code>0.11</code> ほどだったのにかなり下がってしまった。</p>
+</code></pre><p>スコアは <code>0.15509</code> だった。</p>
 
         </div>
       </article>

@@ -13,7 +13,7 @@
       <pubDate>Wed, 23 Dec 2020 08:41:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/319/</guid>
-      <description>GASでAPIを公開する方法として、scripts.run APIで実行できる実行可能APIと、ウェブアプリがある。 前者は認証が走り実行者の権限で動くが、後者は認証を行わずデプロイユーザーの権限で動かすこともできるのでパブリックなAPIとして使うことができる。 当然、不正な操作が行われないように注意する必要があり、GASのQuotaやhard limitも気にする必要がある。無料で運用することができるが、エラーハンドリングや監視などの上で本番環境で動かすイメージはあまり湧いていない。
+      <description>GASでAPIを公開する方法として、scripts.run APIで実行できる実行可能APIと、ウェブアプリがある。 前者は認証が走り実行者の権限で動くが、後者は認証を行わずデプロイユーザーの権限で動かすこともできるのでパブリックなAPIとして使うことができる。 当然、不正な操作が行われないように注意する必要があり、GASのQuotaやhard limitも気にする必要がある。無料で運用することができるが、レイテンシやエラーハンドリング、監視などの上で本番環境で動かすイメージはあまり湧いていない。
 ウェブアプリではdoGet(e)とdoPost(e)を実装することでそれぞれのメソッドのリクエストをハンドリングできる。これ以外のメソッドには対応していない。
 function doGet(e) { return ContentService.createTextOutput(JSON.stringify(e.parameter)) } function doPost(e) { return ContentService.createTextOutput(e.postData.contents) } claspでデプロイする際は一度画面上でウェブアプリとして公開した後、そのDeplymentsを更新するとそのまま反映できる。ただしDeploymentsに紐づくVersionに限りがあるので一旦undeployしている。
 claspでGoogle Apps Scriptをローカルで開発しデプロイする - sambaiz-net
@@ -1195,9 +1195,11 @@ $ aws secretsmanager create-secret --name GitHubCdkAppSecretKey --secret-string 
       <guid>https://www.sambaiz.net/article/230/</guid>
       <description>以前TitanicをやったXGBoostでHome Prices Competitionに挑戦する。
 KaggleのTitanicのチュートリアルをXGBoostで解く - sambaiz-net
-import pandas as pd df_train = pd.read_csv(&#39;house-prices/train.csv&#39;) df_test= pd.read_csv(&#39;house-prices/test.csv&#39;) 欠損値の処理 以前確認したように欠損値が含まれるので一つずつ見ていって埋めていく。
+import pandas as pd df_train = pd.read_csv(&#39;house-prices/train.csv&#39;) df_test= pd.read_csv(&#39;house-prices/test.csv&#39;) 前処理 目的変数であるSalePriceと相関のあるパラメーターを抽出する。XGBoostは欠損値をそのまま扱うことができるので特に何もしていない。
 KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net
-import numpy as np def fillna(df): # PoolQC: Pool quality print(np.unique(df[&#39;PoolQC&#39;].values.tolist())) # [&#39;Ex&#39; &#39;Fa&#39; &#39;Gd&#39; &#39;nan&#39;] df[&amp;quot;PoolQC&amp;quot;] = df[&amp;quot;PoolQC&amp;quot;].fillna(&amp;quot;None&amp;quot;) # MiscFeature: Miscellaneous feature not covered in other categories print(np.unique(df[&#39;MiscFeature&#39;].values.tolist())) # [&#39;Gar2&#39; &#39;Othr&#39; &#39;Shed&#39; &#39;TenC&#39; &#39;nan&#39;] df[&amp;quot;MiscFeature&amp;quot;] = df[&amp;quot;MiscFeature&amp;quot;].fillna(&amp;quot;None&amp;quot;) # Alley: Type of alley access print(np.unique(df[&#39;Alley&#39;].values.tolist())) # [&#39;Grvl&#39; &#39;Pave&#39; &#39;nan&#39;] df[&amp;quot;Alley&amp;quot;] = df[&amp;quot;Alley&amp;quot;].</description>
+use_columns = df_train.corr()[&#39;SalePrice&#39;].drop(&#39;SalePrice&#39;).where(lambda x: abs(x) &amp;gt; 0.5).dropna().keys() # Index([&#39;OverallQual&#39;, &#39;YearBuilt&#39;, &#39;YearRemodAdd&#39;, &#39;TotalBsmtSF&#39;, &#39;1stFlrSF&#39;, &#39;GrLivArea&#39;, &#39;FullBath&#39;, &#39;TotRmsAbvGrd&#39;, &#39;GarageCars&#39;, &#39;GarageArea&#39;], dtype=&#39;object&#39;) def preprocess(df): return df[use_columns].copy() df_train_p = preprocess(df_train) df_train_p[&#39;SalePrice&#39;] = df_train[&#39;SalePrice&#39;] df_test_p = preprocess(df_test) ハイパーパラメータの最適化 ベイズ最適化でハイパーパラメータを決める。 他にもいろいろなパラメータがあるが、やみくもに増やしても提出した後のスコアが良くならなかった。
+ベイズ最適化でランダムフォレストとXGBoostの良いハイパーパラメータを探す - sambaiz-net
+! pip install bayesian-optimization import xgboost as xgb from sklearn.model_selection import train_test_split from sklearn.</description>
     </item>
     
     <item>
@@ -2064,7 +2066,7 @@ from sklearn.model_selection import cross_val_score from sklearn.ensemble import
       <guid>https://www.sambaiz.net/article/168/</guid>
       <description>XGBoostは高性能なGradient Boostingのライブラリ。 Boostingというのはアンサンブル学習の種類の一つで、ランダムフォレストのように弱学習器をそれぞれ並列に学習するBaggingに対して、 順番に前回までの結果を受けながら学習し、結果をまとめる際にそれぞれの重みを掛けるもの。 XGBoostではランダムフォレストと同様に決定木を弱学習器とする。
 KaggleのTitanicのチュートリアルをランダムフォレストで解く - sambaiz-net
-$ pip install xgboost データの前処理はランダムフォレストと同じようにした。 パラメータの objective(目的関数)には二値分類なのでbinary:logisticを指定し、確率が返るのでroundして出力している。
+$ pip install xgboost XGBoostは欠損値をそのまま扱うこともできるが、今回は以前と同じようにデータの前処理を行った。 パラメータの objective(目的関数)には二値分類なのでbinary:logisticを指定し、確率が返るのでroundして出力している。
 import pandas as pd import xgboost as xgb from sklearn.model_selection import train_test_split from sklearn.metrics import accuracy_score def preprocess(df): df[&#39;Fare&#39;] = df[&#39;Fare&#39;].fillna(df[&#39;Fare&#39;].mean()) df[&#39;Age&#39;] = df[&#39;Age&#39;].fillna(df[&#39;Age&#39;].mean()) df[&#39;Embarked&#39;] = df[&#39;Embarked&#39;].fillna(&#39;Unknown&#39;) df[&#39;Sex&#39;] = df[&#39;Sex&#39;].apply(lambda x: 1 if x == &#39;male&#39; else 0) df[&#39;Embarked&#39;] = df[&#39;Embarked&#39;].map( {&#39;S&#39;: 0, &#39;C&#39;: 1, &#39;Q&#39;: 2, &#39;Unknown&#39;: 3} ).astype(int) df = df.drop([&#39;Cabin&#39;,&#39;Name&#39;,&#39;PassengerId&#39;,&#39;Ticket&#39;],axis=1) return df def train(df): train_x = df.</description>
     </item>
     
@@ -2093,11 +2095,11 @@ $ kubectl get svc -o name -n istio-system NAME TYPE CLUSTER-IP EXTERNAL-IP PORT(
       <pubDate>Tue, 29 May 2018 09:33:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/166/</guid>
-      <description>ランダムフォレストはデータや特徴量をランダムにサンプリングして決定木を複数生成し並列に学習するアンサンブル学習のBaggingという種類の手法。 決定木なので特徴量の影響が分かりやすく、単一の決定木と比べて過学習を防ぐことができる。
+      <description>ランダムフォレストはデータや特徴量をランダムにサンプリングして決定木を複数生成し並列に学習するアンサンブル学習のBaggingという種類の手法。 決定木なので特徴量の影響が分かりやすく、値の大小で分岐するので標準化の必要がない。また、単一の決定木と比べて過学習を防ぐことができる。
 KaggleのTitanicのチュートリアルをXGBoostで解く - sambaiz-net
-train.csvとtest.csvをKaggleからダウンロードする。 csvにはタイタニックの乗客者リストが含まれ、test.csvには生還したかを表すSurvivedが抜けている。 これを予測するのがこのコンペティションの目的だ。
+train.csvとtest.csvをKaggleからダウンロードする。 csvにはタイタニックの乗客者リストが含まれ、test.csvには生還したかを表すSurvivedが抜けている。 これを予測するのがこのコンペティションの目的。
 データのうちFareやAge、Embarkedは入っていないものがあって、これらの欠損値をどう扱うという問題がある。
-df = pd.read_csv(&#39;./train.csv&#39;) print(len(df)) print(df.isnull().sum()) 891 PassengerId 0 Survived 0 Pclass 0 Name 0 Sex 0 Age 177 SibSp 0 Parch 0 Ticket 0 Fare 0 Cabin 687 Embarked 2 dtype: int64 連続値をとるFareとAgeは平均を取り、Embarkedは欠損値用の値にしてみた。数値化できないものについては除いている。
+df = pd.read_csv(&#39;./train.csv&#39;) print(len(df)) print(df.isnull().sum()) 891 PassengerId 0 Survived 0 Pclass 0 Name 0 Sex 0 Age 177 SibSp 0 Parch 0 Ticket 0 Fare 0 Cabin 687 Embarked 2 dtype: int64 欠損値については連続値をとるFareとAgeは平均を取り、Embarkedは専用のカテゴリーにしてみた。決定木は分岐を繰り返すためlabel encodingで学習できる。 数値化できないものについては除いている。
 def preprocess(df): df[&#39;Fare&#39;] = df[&#39;Fare&#39;].fillna(df[&#39;Fare&#39;].mean()) df[&#39;Age&#39;] = df[&#39;Age&#39;].fillna(df[&#39;Age&#39;].mean()) df[&#39;Embarked&#39;] = df[&#39;Embarked&#39;].fillna(&#39;Unknown&#39;) df[&#39;Sex&#39;] = df[&#39;Sex&#39;].apply(lambda x: 1 if x == &#39;male&#39; else 0) df[&#39;Embarked&#39;] = df[&#39;Embarked&#39;].map( {&#39;S&#39;: 0, &#39;C&#39;: 1, &#39;Q&#39;: 2, &#39;Unknown&#39;: 3} ).</description>
     </item>
     
