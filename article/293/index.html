@@ -141,128 +141,128 @@
 <p><a href="https://www.tensorflow.org/api_docs/python/tf/data/experimental/make_csv_dataset">make_csv_dataset()</a>は<code>batch_size</code>が必須になっているが、
 これをそのまま<code>filter()</code>しようとすると、<code>ValueError: predicate return type must be convertible to a scalar boolean tensor.</code>になってしまうので<code>unbatch()</code>している。
 SageMakerのServing containerを用いる場合は<code>save_format=&quot;tf&quot;</code>にして<a href="https://www.tensorflow.org/guide/saved_model">SavedModel</a>形式で保存する必要がある。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat model.py
-import tensorflow as tf
-import logging
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">$ cat model<span style="color:#ff79c6">.</span>py
+<span style="color:#ff79c6">import</span> tensorflow <span style="color:#ff79c6">as</span> tf
+<span style="color:#ff79c6">import</span> logging
 
-class Model:
-    def __init__(self, logger: logging.Logger, dropout: float):
-        self.logger = logger
-        self.model = tf.keras.Sequential([
-            tf.keras.layers.DenseFeatures(self._feature_columns()),
-            tf.keras.layers.Dense(128, activation=tf.nn.relu),
-            tf.keras.layers.Dropout(dropout),
-            tf.keras.layers.Dense(128, activation=tf.nn.relu),
-            tf.keras.layers.Dense(2, activation=tf.nn.sigmoid),
+<span style="color:#ff79c6">class</span> <span style="color:#50fa7b">Model</span>:
+    <span style="color:#ff79c6">def</span> __init__(self, logger: logging<span style="color:#ff79c6">.</span>Logger, dropout: <span style="color:#8be9fd;font-style:italic">float</span>):
+        self<span style="color:#ff79c6">.</span>logger <span style="color:#ff79c6">=</span> logger
+        self<span style="color:#ff79c6">.</span>model <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>Sequential([
+            tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>DenseFeatures(self<span style="color:#ff79c6">.</span>_feature_columns()),
+            tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">128</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu),
+            tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dropout(dropout),
+            tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">128</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu),
+            tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">2</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>sigmoid),
         ])
-        self.model.compile(optimizer=&#39;adam&#39;, loss=&#39;binary_crossentropy&#39;, metrics=[&#39;accuracy&#39;])
+        self<span style="color:#ff79c6">.</span>model<span style="color:#ff79c6">.</span>compile(optimizer<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;adam&#39;</span>, loss<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;binary_crossentropy&#39;</span>, metrics<span style="color:#ff79c6">=</span>[<span style="color:#f1fa8c">&#39;accuracy&#39;</span>])
 
-    def _feature_columns(self):
-        return [
-            tf.feature_column.numeric_column(&#39;age&#39;),
-            tf.feature_column.indicator_column(tf.feature_column.categorical_column_with_identity(&#39;sex&#39;, 2)),
-            tf.feature_column.numeric_column(&#39;fare&#39;)
+    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">_feature_columns</span>(self):
+        <span style="color:#ff79c6">return</span> [
+            tf<span style="color:#ff79c6">.</span>feature_column<span style="color:#ff79c6">.</span>numeric_column(<span style="color:#f1fa8c">&#39;age&#39;</span>),
+            tf<span style="color:#ff79c6">.</span>feature_column<span style="color:#ff79c6">.</span>indicator_column(tf<span style="color:#ff79c6">.</span>feature_column<span style="color:#ff79c6">.</span>categorical_column_with_identity(<span style="color:#f1fa8c">&#39;sex&#39;</span>, <span style="color:#bd93f9">2</span>)),
+            tf<span style="color:#ff79c6">.</span>feature_column<span style="color:#ff79c6">.</span>numeric_column(<span style="color:#f1fa8c">&#39;fare&#39;</span>)
         ]
 
-    def _fill(self, feature: str, value):
-        def __fill(x):
-            if x[feature] == -1.0:
-                x[feature] = value
-            return x
+    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">_fill</span>(self, feature: <span style="color:#8be9fd;font-style:italic">str</span>, value):
+        <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">__fill</span>(x):
+            <span style="color:#ff79c6">if</span> x[feature] <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">-</span><span style="color:#bd93f9">1.0</span>:
+                x[feature] <span style="color:#ff79c6">=</span> value
+            <span style="color:#ff79c6">return</span> x
 
-        return __fill
+        <span style="color:#ff79c6">return</span> __fill
 
-    def _preprocess(self, ds: tf.data.Dataset):
-        ds_size = len(list(ds.filter(lambda x: x[&#39;age&#39;] != -1.0)))
-        avg_age = ds.filter(lambda x: x[&#39;age&#39;] != -1.0).reduce(0.0, lambda x, y: x + y[&#39;age&#39;]) / ds_size
-        ds = ds.map(self._fill(&#39;age&#39;, avg_age))
-        return ds.shuffle(1000).batch(100).prefetch(5)
+    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">_preprocess</span>(self, ds: tf<span style="color:#ff79c6">.</span>data<span style="color:#ff79c6">.</span>Dataset):
+        ds_size <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">len</span>(<span style="color:#8be9fd;font-style:italic">list</span>(ds<span style="color:#ff79c6">.</span>filter(<span style="color:#ff79c6">lambda</span> x: x[<span style="color:#f1fa8c">&#39;age&#39;</span>] <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">-</span><span style="color:#bd93f9">1.0</span>)))
+        avg_age <span style="color:#ff79c6">=</span> ds<span style="color:#ff79c6">.</span>filter(<span style="color:#ff79c6">lambda</span> x: x[<span style="color:#f1fa8c">&#39;age&#39;</span>] <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">-</span><span style="color:#bd93f9">1.0</span>)<span style="color:#ff79c6">.</span>reduce(<span style="color:#bd93f9">0.0</span>, <span style="color:#ff79c6">lambda</span> x, y: x <span style="color:#ff79c6">+</span> y[<span style="color:#f1fa8c">&#39;age&#39;</span>]) <span style="color:#ff79c6">/</span> ds_size
+        ds <span style="color:#ff79c6">=</span> ds<span style="color:#ff79c6">.</span>map(self<span style="color:#ff79c6">.</span>_fill(<span style="color:#f1fa8c">&#39;age&#39;</span>, avg_age))
+        <span style="color:#ff79c6">return</span> ds<span style="color:#ff79c6">.</span>shuffle(<span style="color:#bd93f9">1000</span>)<span style="color:#ff79c6">.</span>batch(<span style="color:#bd93f9">100</span>)<span style="color:#ff79c6">.</span>prefetch(<span style="color:#bd93f9">5</span>)
 
-    def train(self, data_path: str):
-        ds = tf.data.experimental.make_csv_dataset(data_path, num_epochs=1, batch_size=1).unbatch()
-        for features in self._preprocess(ds):
-            self.model.fit(features, tf.one_hot(features[&#39;survived&#39;], 2))
-            loss, accuracy = self.model.evaluate(features, tf.one_hot(features[&#39;survived&#39;], 2), verbose=0)
-            self.logger.info(f&#39;train accuracy: {accuracy}, train loss: {loss};&#39;)
+    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train</span>(self, data_path: <span style="color:#8be9fd;font-style:italic">str</span>):
+        ds <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>data<span style="color:#ff79c6">.</span>experimental<span style="color:#ff79c6">.</span>make_csv_dataset(data_path, num_epochs<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>, batch_size<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)<span style="color:#ff79c6">.</span>unbatch()
+        <span style="color:#ff79c6">for</span> features <span style="color:#ff79c6">in</span> self<span style="color:#ff79c6">.</span>_preprocess(ds):
+            self<span style="color:#ff79c6">.</span>model<span style="color:#ff79c6">.</span>fit(features, tf<span style="color:#ff79c6">.</span>one_hot(features[<span style="color:#f1fa8c">&#39;survived&#39;</span>], <span style="color:#bd93f9">2</span>))
+            loss, accuracy <span style="color:#ff79c6">=</span> self<span style="color:#ff79c6">.</span>model<span style="color:#ff79c6">.</span>evaluate(features, tf<span style="color:#ff79c6">.</span>one_hot(features[<span style="color:#f1fa8c">&#39;survived&#39;</span>], <span style="color:#bd93f9">2</span>), verbose<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0</span>)
+            self<span style="color:#ff79c6">.</span>logger<span style="color:#ff79c6">.</span>info(f<span style="color:#f1fa8c">&#39;train accuracy: {accuracy}, train loss: {loss};&#39;</span>)
 
-    def save(self, path: str):
-        self.model.save(path, save_format=&#34;tf&#34;)
+    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">save</span>(self, path: <span style="color:#8be9fd;font-style:italic">str</span>):
+        self<span style="color:#ff79c6">.</span>model<span style="color:#ff79c6">.</span>save(path, save_format<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;tf&#34;</span>)
 </code></pre></div><h2 id="エントリーポイント">エントリーポイント</h2>
 <p><a href="https://aws.amazon.com/jp/blogs/news/using-tensorflow-eager-execution-with-amazon-sagemaker-script-mode/">スクリプトモード</a>で動かす。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat training.py
-import argparse
-import os
-from model import Model
-import json
-import logging
-import sys
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">$ cat training<span style="color:#ff79c6">.</span>py
+<span style="color:#ff79c6">import</span> argparse
+<span style="color:#ff79c6">import</span> os
+<span style="color:#ff79c6">from</span> model <span style="color:#ff79c6">import</span> Model
+<span style="color:#ff79c6">import</span> json
+<span style="color:#ff79c6">import</span> logging
+<span style="color:#ff79c6">import</span> sys
 
 
-def _make_logger():
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(logging.StreamHandler(sys.stdout))
-    return logger
+<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">_make_logger</span>():
+    logger <span style="color:#ff79c6">=</span> logging<span style="color:#ff79c6">.</span>getLogger(__name__)
+    logger<span style="color:#ff79c6">.</span>setLevel(logging<span style="color:#ff79c6">.</span>DEBUG)
+    logger<span style="color:#ff79c6">.</span>addHandler(logging<span style="color:#ff79c6">.</span>StreamHandler(sys<span style="color:#ff79c6">.</span>stdout))
+    <span style="color:#ff79c6">return</span> logger
 
 
-def _parse_args():
-    parser = argparse.ArgumentParser()
+<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">_parse_args</span>():
+    parser <span style="color:#ff79c6">=</span> argparse<span style="color:#ff79c6">.</span>ArgumentParser()
 
-    # model params
-    parser.add_argument(&#39;--dropout&#39;, type=float, default=0.2, metavar=&#39;DROP&#39;, help=&#39;dropout rate (default: 0.2)&#39;)
+    <span style="color:#6272a4"># model params</span>
+    parser<span style="color:#ff79c6">.</span>add_argument(<span style="color:#f1fa8c">&#39;--dropout&#39;</span>, <span style="color:#8be9fd;font-style:italic">type</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">float</span>, default<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0.2</span>, metavar<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;DROP&#39;</span>, help<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;dropout rate (default: 0.2)&#39;</span>)
 
-    # Container environment
-    parser.add_argument(&#39;--model_dir&#39;, type=str, default=os.environ.get(&#39;SM_MODEL_DIR&#39;, &#39;model&#39;))
-    parser.add_argument(&#39;--hosts&#39;, type=str, default=os.environ.get(&#39;SM_HOSTS&#39;, &#39;[]&#39;))
-    parser.add_argument(&#39;--current-host&#39;, type=str, default=os.environ.get(&#39;SM_CURRENT_HOST&#39;))
+    <span style="color:#6272a4"># Container environment</span>
+    parser<span style="color:#ff79c6">.</span>add_argument(<span style="color:#f1fa8c">&#39;--model_dir&#39;</span>, <span style="color:#8be9fd;font-style:italic">type</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">str</span>, default<span style="color:#ff79c6">=</span>os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;SM_MODEL_DIR&#39;</span>, <span style="color:#f1fa8c">&#39;model&#39;</span>))
+    parser<span style="color:#ff79c6">.</span>add_argument(<span style="color:#f1fa8c">&#39;--hosts&#39;</span>, <span style="color:#8be9fd;font-style:italic">type</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">str</span>, default<span style="color:#ff79c6">=</span>os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;SM_HOSTS&#39;</span>, <span style="color:#f1fa8c">&#39;[]&#39;</span>))
+    parser<span style="color:#ff79c6">.</span>add_argument(<span style="color:#f1fa8c">&#39;--current-host&#39;</span>, <span style="color:#8be9fd;font-style:italic">type</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">str</span>, default<span style="color:#ff79c6">=</span>os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;SM_CURRENT_HOST&#39;</span>))
 
-    # fit() inputs (SM_CHANNEL_XXXX)
-    parser.add_argument(&#39;--data-dir&#39;, type=str, default=os.environ.get(&#39;SM_CHANNEL_TRAINING&#39;, &#39;dataset&#39;))
-    args = parser.parse_args()
-    args.hosts = json.loads(args.hosts)
-    return args
+    <span style="color:#6272a4"># fit() inputs (SM_CHANNEL_XXXX)</span>
+    parser<span style="color:#ff79c6">.</span>add_argument(<span style="color:#f1fa8c">&#39;--data-dir&#39;</span>, <span style="color:#8be9fd;font-style:italic">type</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">str</span>, default<span style="color:#ff79c6">=</span>os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;SM_CHANNEL_TRAINING&#39;</span>, <span style="color:#f1fa8c">&#39;dataset&#39;</span>))
+    args <span style="color:#ff79c6">=</span> parser<span style="color:#ff79c6">.</span>parse_args()
+    args<span style="color:#ff79c6">.</span>hosts <span style="color:#ff79c6">=</span> json<span style="color:#ff79c6">.</span>loads(args<span style="color:#ff79c6">.</span>hosts)
+    <span style="color:#ff79c6">return</span> args
 
 
-if __name__ == &#34;__main__&#34;:
-    args = _parse_args()
-    logger = _make_logger()
-    m = Model(logger, args.dropout)
-    m.train(os.path.join(args.data_dir, &#39;titanic.csv&#39;))
-    if len(args.hosts) == 0 or args.current_host == args.hosts[0]:
-        m.save(args.model_dir)
+<span style="color:#ff79c6">if</span> __name__ <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;__main__&#34;</span>:
+    args <span style="color:#ff79c6">=</span> _parse_args()
+    logger <span style="color:#ff79c6">=</span> _make_logger()
+    m <span style="color:#ff79c6">=</span> Model(logger, args<span style="color:#ff79c6">.</span>dropout)
+    m<span style="color:#ff79c6">.</span>train(os<span style="color:#ff79c6">.</span>path<span style="color:#ff79c6">.</span>join(args<span style="color:#ff79c6">.</span>data_dir, <span style="color:#f1fa8c">&#39;titanic.csv&#39;</span>))
+    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(args<span style="color:#ff79c6">.</span>hosts) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span> <span style="color:#ff79c6">or</span> args<span style="color:#ff79c6">.</span>current_host <span style="color:#ff79c6">==</span> args<span style="color:#ff79c6">.</span>hosts[<span style="color:#bd93f9">0</span>]:
+        m<span style="color:#ff79c6">.</span>save(args<span style="color:#ff79c6">.</span>model_dir)
 </code></pre></div><h2 id="実行">実行</h2>
 <p><code>distributions</code> に分散学習でパラメータを共有するためのパラメータサーバーかHorovodの設定を書くと<a href="https://aws.amazon.com/jp/blogs/news/launching-tensorflow-distributed-training-easily-with-horovod-or-parameter-servers-in-amazon-sagemaker/">クラスタを作ってくれる</a>。
 今回はパラメータサーバーを有効にしている。</p>
 <p><a href="https://www.sambaiz.net/article/179/">Destributed TensorFlowの流れとSavedModelの出力 - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">from sagemaker.tensorflow import TensorFlow
-import sagemaker
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> sagemaker.tensorflow <span style="color:#ff79c6">import</span> TensorFlow
+<span style="color:#ff79c6">import</span> sagemaker
 
-estimator = TensorFlow(
-    source_dir=&#39;/root/sagemaker-tensorflow-titanic&#39;,
-    entry_point=&#39;training.py&#39;,
-    model_dir=&#39;/opt/ml/model&#39;, # =&gt; SM_MODEL_DIR
-    output_path=f&#39;s3://{os.environ[&#34;DATASETS_BUCKET&#34;]}/artifacts&#39;,
-    role=sagemaker.get_execution_role(),
-    framework_version=&#39;2.2.0&#39;,
-    py_version=&#39;py37&#39;,
-    train_instance_count=2,
-    train_instance_type=&#39;ml.g4dn.xlarge&#39;,
-    distributions={
-        &#39;parameter_server&#39;: { &#39;enabled&#39;: True }
+estimator <span style="color:#ff79c6">=</span> TensorFlow(
+    source_dir<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;/root/sagemaker-tensorflow-titanic&#39;</span>,
+    entry_point<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;training.py&#39;</span>,
+    model_dir<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;/opt/ml/model&#39;</span>, <span style="color:#6272a4"># =&gt; SM_MODEL_DIR</span>
+    output_path<span style="color:#ff79c6">=</span>f<span style="color:#f1fa8c">&#39;s3://{os.environ[&#34;DATASETS_BUCKET&#34;]}/artifacts&#39;</span>,
+    role<span style="color:#ff79c6">=</span>sagemaker<span style="color:#ff79c6">.</span>get_execution_role(),
+    framework_version<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;2.2.0&#39;</span>,
+    py_version<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;py37&#39;</span>,
+    train_instance_count<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>,
+    train_instance_type<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;ml.g4dn.xlarge&#39;</span>,
+    distributions<span style="color:#ff79c6">=</span>{
+        <span style="color:#f1fa8c">&#39;parameter_server&#39;</span>: { <span style="color:#f1fa8c">&#39;enabled&#39;</span>: True }
     },
-    hyperparameters={
-        &#39;dropout&#39;: 0.2,
+    hyperparameters<span style="color:#ff79c6">=</span>{
+        <span style="color:#f1fa8c">&#39;dropout&#39;</span>: <span style="color:#bd93f9">0.2</span>,
     },
-    metric_definitions=[
-        {&#39;Name&#39;:&#39;test:accuracy&#39;, &#39;Regex&#39;:&#39;train accuracy: (.*?),&#39;},
-        {&#39;Name&#39;:&#39;test:loss&#39;, &#39;Regex&#39;:&#39;train loss: (.*?);&#39;}
+    metric_definitions<span style="color:#ff79c6">=</span>[
+        {<span style="color:#f1fa8c">&#39;Name&#39;</span>:<span style="color:#f1fa8c">&#39;test:accuracy&#39;</span>, <span style="color:#f1fa8c">&#39;Regex&#39;</span>:<span style="color:#f1fa8c">&#39;train accuracy: (.*?),&#39;</span>},
+        {<span style="color:#f1fa8c">&#39;Name&#39;</span>:<span style="color:#f1fa8c">&#39;test:loss&#39;</span>, <span style="color:#f1fa8c">&#39;Regex&#39;</span>:<span style="color:#f1fa8c">&#39;train loss: (.*?);&#39;</span>}
     ],
-    enable_sagemaker_metrics=True,
+    enable_sagemaker_metrics<span style="color:#ff79c6">=</span>True,
 )
 
-inputs = sagemaker.inputs.s3_input(f&#39;s3://{os.environ[&#34;DATASETS_BUCKET&#34;]}/{os.environ[&#34;DATASETS_KEY_PREFIX&#34;]}&#39;)
+inputs <span style="color:#ff79c6">=</span> sagemaker<span style="color:#ff79c6">.</span>inputs<span style="color:#ff79c6">.</span>s3_input(f<span style="color:#f1fa8c">&#39;s3://{os.environ[&#34;DATASETS_BUCKET&#34;]}/{os.environ[&#34;DATASETS_KEY_PREFIX&#34;]}&#39;</span>)
 
-estimator.fit(inputs={&#39;training&#39;: inputs})
+estimator<span style="color:#ff79c6">.</span>fit(inputs<span style="color:#ff79c6">=</span>{<span style="color:#f1fa8c">&#39;training&#39;</span>: inputs})
 </code></pre></div><p>学習が終わると<code>output_path</code>にモデルが保存される。</p>
 
         </div>

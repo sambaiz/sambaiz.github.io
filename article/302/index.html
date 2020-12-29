@@ -137,25 +137,25 @@ Lambdaに送る。ほかの接続先としてData StreamやFirehoseがあり、�
 <h2 id="streamとpumphttpsdocsawsamazoncomkinesisanalyticslatestdevstreams-pumpshtml"><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/streams-pumps.html">STREAMとPUMP</a></h2>
 <p>(in-application) STREAMを作成し、PUMPで他のSTREAMをSELECTした結果をINSERTすることでデータを流していく。出力先を設定する際にSTREAMを選ぶ。
 STREAMはRDBのテーブルのようにカラムを持ち、<a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/stream-joins-concepts.html">JOIN</a>もできる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CREATE OR REPLACE STREAM &#34;TEMPSTREAM&#34; ( 
-   &#34;column1&#34; BIGINT NOT NULL, 
-   &#34;column2&#34; INTEGER, 
-   &#34;column3&#34; VARCHAR(64));
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">OR</span> <span style="color:#ff79c6">REPLACE</span> STREAM <span style="color:#f1fa8c">&#34;TEMPSTREAM&#34;</span> ( 
+   <span style="color:#f1fa8c">&#34;column1&#34;</span> <span style="color:#8be9fd;font-style:italic">BIGINT</span> <span style="color:#ff79c6">NOT</span> <span style="color:#ff79c6">NULL</span>, 
+   <span style="color:#f1fa8c">&#34;column2&#34;</span> <span style="color:#8be9fd;font-style:italic">INTEGER</span>, 
+   <span style="color:#f1fa8c">&#34;column3&#34;</span> <span style="color:#8be9fd;font-style:italic">VARCHAR</span>(<span style="color:#bd93f9">64</span>));
 
-CREATE OR REPLACE PUMP &#34;SAMPLEPUMP&#34; AS 
-INSERT INTO &#34;TEMPSTREAM&#34; (&#34;column1&#34;, 
-                          &#34;column2&#34;, 
-                          &#34;column3&#34;) 
-SELECT STREAM inputcolumn1, 
+<span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">OR</span> <span style="color:#ff79c6">REPLACE</span> PUMP <span style="color:#f1fa8c">&#34;SAMPLEPUMP&#34;</span> <span style="color:#ff79c6">AS</span> 
+<span style="color:#ff79c6">INSERT</span> <span style="color:#ff79c6">INTO</span> <span style="color:#f1fa8c">&#34;TEMPSTREAM&#34;</span> (<span style="color:#f1fa8c">&#34;column1&#34;</span>, 
+                          <span style="color:#f1fa8c">&#34;column2&#34;</span>, 
+                          <span style="color:#f1fa8c">&#34;column3&#34;</span>) 
+<span style="color:#ff79c6">SELECT</span> STREAM inputcolumn1, 
               inputcolumn2, 
               inputcolumn3
-FROM &#34;INPUTSTREAM&#34;;
+<span style="color:#ff79c6">FROM</span> <span style="color:#f1fa8c">&#34;INPUTSTREAM&#34;</span>;
 </code></pre></div><h2 id="windowed-queries">Windowed Queries</h2>
 <ul>
 <li><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/tumbling-window-concepts.html">Tumbling Windows</a></li>
 </ul>
 <p>固定の重複しない区間で集計するクエリ。次のように書くと60秒区切りで集計できる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">GROUP BY STEP(&#34;SOURCE_SQL_STREAM_001&#34;.ROWTIME BY INTERVAL &#39;60&#39; SECOND)
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">GROUP</span> <span style="color:#ff79c6">BY</span> STEP(<span style="color:#f1fa8c">&#34;SOURCE_SQL_STREAM_001&#34;</span>.ROWTIME <span style="color:#ff79c6">BY</span> <span style="color:#8be9fd;font-style:italic">INTERVAL</span> <span style="color:#f1fa8c">&#39;60&#39;</span> <span style="color:#ff79c6">SECOND</span>)
 </code></pre></div><p><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/timestamps-rowtime-concepts.html">ROWTIME</a>は
 最初のSTREAMにデータが入った時のタイムスタンプが格納される特別なカラム。SELECTしなくても自動で渡される。</p>
 <ul>
@@ -163,19 +163,19 @@ FROM &#34;INPUTSTREAM&#34;;
 </ul>
 <p>固定の区間ではなく最初に対象パーティションのデータが届くとそこからINTERVALの区間のWindowが始まる。
 Tumbling Windowsではデータに含まれるタイムスタンプで集計する場合、遅れて届くことで同じ区間のレコードが分かれてしまう問題があるがそれを緩和できる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">WINDOWED BY STAGGER (
-	PARTITION BY FLOOR(EVENT_TIME TO MINUTE), TICKER_SYMBOL 
-	RANGE INTERVAL &#39;1&#39; MINUTE);
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql">WINDOWED <span style="color:#ff79c6">BY</span> STAGGER (
+	PARTITION <span style="color:#ff79c6">BY</span> FLOOR(EVENT_TIME <span style="color:#ff79c6">TO</span> <span style="color:#ff79c6">MINUTE</span>), TICKER_SYMBOL 
+	RANGE <span style="color:#8be9fd;font-style:italic">INTERVAL</span> <span style="color:#f1fa8c">&#39;1&#39;</span> <span style="color:#ff79c6">MINUTE</span>);
 </code></pre></div><ul>
 <li><a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/sliding-window-concepts.html">Sliding Windows</a></li>
 </ul>
 <p>区間をずらしながら集計するクエリ。次のように書くと{2|10}個のデータの移動平均を出せる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">avg(price) over last2rows
-avg(price) over last10rows
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">avg</span>(price) over last2rows
+<span style="color:#ff79c6">avg</span>(price) over last10rows
 ...
 WINDOW　
-	last2rows AS (PARTITION BY ticker_symbol ROWS 2 PRECEDING),
-	last10rows AS (PARTITION BY ticker_symbol ROWS 10 PRECEDING)
+	last2rows <span style="color:#ff79c6">AS</span> (PARTITION <span style="color:#ff79c6">BY</span> ticker_symbol <span style="color:#ff79c6">ROWS</span> <span style="color:#bd93f9">2</span> PRECEDING),
+	last10rows <span style="color:#ff79c6">AS</span> (PARTITION <span style="color:#ff79c6">BY</span> ticker_symbol <span style="color:#ff79c6">ROWS</span> <span style="color:#bd93f9">10</span> PRECEDING)
 </code></pre></div><h2 id="lambdaへの出力httpsdocsawsamazoncomja_jpkinesisanalyticslatestdevhow-it-works-output-lambdahtml"><a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/dev/how-it-works-output-lambda.html">Lambdaへの出力</a></h2>
 <p>データはbase64エンコードされているのでデコードして使う。
 レスポンスで<code>recordId</code>と<code>result</code>を返す必要があり、失敗するとretryHintをインクリメントして再送する。
@@ -243,45 +243,45 @@ WINDOW　
 <p>LambdaはSAMなどで別に作成している前提で、Data StreamsとAnalyticsのApplicationをCDKで作成する。
 Flinkにも対応しているV2系のリソースで作成したところ現状コンソール上からスキーマやリアルタイムのデータを見ることができなかった。</p>
 <p><img src="https://www.sambaiz.net/images/302.png" alt="コンソール非対応"></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import * as cdk from &#39;@aws-cdk/core&#39;;
-import { Stream } from &#39;@aws-cdk/aws-kinesis&#39;;
-import * as analytics from &#39;@aws-cdk/aws-kinesisanalytics&#39;;
-import { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } from &#39;@aws-cdk/aws-iam&#39;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ts" data-lang="ts"><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>;
+<span style="color:#ff79c6">import</span> { Stream } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-kinesis&#39;</span>;
+<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> analytics <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-kinesisanalytics&#39;</span>;
+<span style="color:#ff79c6">import</span> { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-iam&#39;</span>
 
-export class CdkStack extends cdk.Stack {
-  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
+<span style="color:#ff79c6">export</span> <span style="color:#ff79c6">class</span> CdkStack <span style="color:#ff79c6">extends</span> cdk.Stack {
+  <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">cdk.Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span>) {
+    <span style="color:#ff79c6">super</span>(scope, id, props);
 
-    const lambdaArn = &#34;&lt;lambda_arn&gt;&#34;
+    <span style="color:#ff79c6">const</span> lambdaArn <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;&lt;lambda_arn&gt;&#34;</span>
 
-    const stream = new Stream(this, &#34;TestStream&#34;, {
-      streamName: &#34;test-stream&#34;,
-      shardCount: 3,
+    <span style="color:#ff79c6">const</span> stream <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Stream(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#34;TestStream&#34;</span>, {
+      streamName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test-stream&#34;</span>,
+      shardCount: <span style="color:#8be9fd">3</span>,
     });
 
-    const role = new Role(this, &#39;TestAnalyticsRole&#39;, {
-      assumedBy: new ServicePrincipal(&#39;kinesisanalytics.amazonaws.com&#39;),
-      inlinePolicies: {
-        &#39;test-analytics-policy&#39;: new PolicyDocument({
-          statements: [
-            new PolicyStatement({
-              effect: Effect.ALLOW,
-              actions: [
-                &#34;kinesis:DescribeStream&#34;,
-                &#34;kinesis:GetShardIterator&#34;,
-                &#34;kinesis:GetRecords&#34;
+    <span style="color:#ff79c6">const</span> role <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestAnalyticsRole&#39;</span>, {
+      assumedBy: <span style="color:#8be9fd">new</span> ServicePrincipal(<span style="color:#f1fa8c">&#39;kinesisanalytics.amazonaws.com&#39;</span>),
+      inlinePolicies<span style="color:#ff79c6">:</span> {
+        <span style="color:#f1fa8c">&#39;test-analytics-policy&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> PolicyDocument({
+          statements<span style="color:#ff79c6">:</span> [
+            <span style="color:#ff79c6">new</span> PolicyStatement({
+              effect: <span style="color:#8be9fd">Effect.ALLOW</span>,
+              actions<span style="color:#ff79c6">:</span> [
+                <span style="color:#f1fa8c">&#34;kinesis:DescribeStream&#34;</span>,
+                <span style="color:#f1fa8c">&#34;kinesis:GetShardIterator&#34;</span>,
+                <span style="color:#f1fa8c">&#34;kinesis:GetRecords&#34;</span>
               ],
-              resources: [
+              resources<span style="color:#ff79c6">:</span> [
                 stream.streamArn
               ]
             }),
-            new PolicyStatement({
-              effect: Effect.ALLOW,
-              actions: [
-                &#34;lambda:InvokeFunction&#34;,
-                &#34;lambda:GetFunctionConfiguration&#34;
+            <span style="color:#ff79c6">new</span> PolicyStatement({
+              effect: <span style="color:#8be9fd">Effect.ALLOW</span>,
+              actions<span style="color:#ff79c6">:</span> [
+                <span style="color:#f1fa8c">&#34;lambda:InvokeFunction&#34;</span>,
+                <span style="color:#f1fa8c">&#34;lambda:GetFunctionConfiguration&#34;</span>
               ],
-              resources: [
+              resources<span style="color:#ff79c6">:</span> [
                 lambdaArn
               ]
             })
@@ -290,64 +290,64 @@ export class CdkStack extends cdk.Stack {
       }
     })
 
-    const applicationName = &#34;test-analytics-application&#34;
-    const application = new analytics.CfnApplicationV2(this, &#39;TestAnalyticsApplication&#39;, {
-      applicationName: applicationName,
-      applicationDescription: &#34;test&#34;,
-      runtimeEnvironment: &#34;SQL-1_0&#34;,
-      serviceExecutionRole: role.roleArn,
-      applicationConfiguration: {
-        sqlApplicationConfiguration: {
-          inputs: [{
-            namePrefix: &#34;SOURCE_SQL_STREAM&#34;,
-            inputSchema: {
-              recordColumns: [{
-                name: &#34;column1&#34;,
-                sqlType: &#34;BIGINT&#34;,
-                mapping: &#34;$.column1&#34;,
+    <span style="color:#ff79c6">const</span> applicationName <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;test-analytics-application&#34;</span>
+    <span style="color:#ff79c6">const</span> application <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> analytics.CfnApplicationV2(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestAnalyticsApplication&#39;</span>, {
+      applicationName: <span style="color:#8be9fd">applicationName</span>,
+      applicationDescription<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test&#34;</span>,
+      runtimeEnvironment<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;SQL-1_0&#34;</span>,
+      serviceExecutionRole: <span style="color:#8be9fd">role.roleArn</span>,
+      applicationConfiguration<span style="color:#ff79c6">:</span> {
+        sqlApplicationConfiguration<span style="color:#ff79c6">:</span> {
+          inputs<span style="color:#ff79c6">:</span> [{
+            namePrefix<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;SOURCE_SQL_STREAM&#34;</span>,
+            inputSchema<span style="color:#ff79c6">:</span> {
+              recordColumns<span style="color:#ff79c6">:</span> [{
+                name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;column1&#34;</span>,
+                sqlType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;BIGINT&#34;</span>,
+                mapping<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;$.column1&#34;</span>,
               }],
-              recordFormat: {
-                recordFormatType: &#34;JSON&#34;,
-                mappingParameters: {
-                  jsonMappingParameters: {
-                    recordRowPath: &#34;$&#34;,
+              recordFormat<span style="color:#ff79c6">:</span> {
+                recordFormatType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;JSON&#34;</span>,
+                mappingParameters<span style="color:#ff79c6">:</span> {
+                  jsonMappingParameters<span style="color:#ff79c6">:</span> {
+                    recordRowPath<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;$&#34;</span>,
                   }
                 }
               } 
             },
-            kinesisStreamsInput: {
-              resourceArn: stream.streamArn,
+            kinesisStreamsInput<span style="color:#ff79c6">:</span> {
+              resourceArn: <span style="color:#8be9fd">stream.streamArn</span>,
             }
           }]
         },
-        applicationCodeConfiguration: {
-          codeContent: {
-            textContent: `
-            CREATE OR REPLACE STREAM &#34;SUM_STREAM&#34; (
-                &#34;cnt&#34; BIGINT NOT NULL
-            );
-
-            CREATE OR REPLACE PUMP &#34;SUM_PUMP&#34; AS
-                INSERT INTO &#34;SUM_STREAM&#34; (&#34;cnt&#34;)
-                SELECT STREAM count(1) AS cnt
-                FROM &#34;SOURCE_SQL_STREAM_001&#34;
-                GROUP BY STEP(&#34;SOURCE_SQL_STREAM_001&#34;.ROWTIME BY INTERVAL &#39;10&#39; SECOND);
-            `
+        applicationCodeConfiguration<span style="color:#ff79c6">:</span> {
+          codeContent<span style="color:#ff79c6">:</span> {
+            textContent<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`
+</span><span style="color:#f1fa8c">            CREATE OR REPLACE STREAM &#34;SUM_STREAM&#34; (
+</span><span style="color:#f1fa8c">                &#34;cnt&#34; BIGINT NOT NULL
+</span><span style="color:#f1fa8c">            );
+</span><span style="color:#f1fa8c">
+</span><span style="color:#f1fa8c">            CREATE OR REPLACE PUMP &#34;SUM_PUMP&#34; AS
+</span><span style="color:#f1fa8c">                INSERT INTO &#34;SUM_STREAM&#34; (&#34;cnt&#34;)
+</span><span style="color:#f1fa8c">                SELECT STREAM count(1) AS cnt
+</span><span style="color:#f1fa8c">                FROM &#34;SOURCE_SQL_STREAM_001&#34;
+</span><span style="color:#f1fa8c">                GROUP BY STEP(&#34;SOURCE_SQL_STREAM_001&#34;.ROWTIME BY INTERVAL &#39;10&#39; SECOND);
+</span><span style="color:#f1fa8c">            `</span>
           },
-          codeContentType: &#34;PLAINTEXT&#34;
+          codeContentType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;PLAINTEXT&#34;</span>
         }
       }
     })
 
-    const applicationOutput = new analytics.CfnApplicationOutputV2(this, &#39;TestAnalyticsApplicationOutput&#39;, {
-      applicationName: applicationName,
-      output: {
-        name: &#39;test_analytics_output&#39;,
-        destinationSchema: {
-          recordFormatType: &#34;JSON&#34;
+    <span style="color:#ff79c6">const</span> applicationOutput <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> analytics.CfnApplicationOutputV2(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestAnalyticsApplicationOutput&#39;</span>, {
+      applicationName: <span style="color:#8be9fd">applicationName</span>,
+      output<span style="color:#ff79c6">:</span> {
+        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;test_analytics_output&#39;</span>,
+        destinationSchema<span style="color:#ff79c6">:</span> {
+          recordFormatType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;JSON&#34;</span>
         },
-        lambdaOutput: {
-          resourceArn: lambdaArn
+        lambdaOutput<span style="color:#ff79c6">:</span> {
+          resourceArn: <span style="color:#8be9fd">lambdaArn</span>
         }
       }
     })
@@ -355,64 +355,64 @@ export class CdkStack extends cdk.Stack {
   }
 }
 </code></pre></div><p>非V2の方で書くとこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import * as cdk from &#39;@aws-cdk/core&#39;;
-import { Stream } from &#39;@aws-cdk/aws-kinesis&#39;;
-import * as analytics from &#39;@aws-cdk/aws-kinesisanalytics&#39;;
-import { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } from &#39;@aws-cdk/aws-iam&#39;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ts" data-lang="ts"><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>;
+<span style="color:#ff79c6">import</span> { Stream } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-kinesis&#39;</span>;
+<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> analytics <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-kinesisanalytics&#39;</span>;
+<span style="color:#ff79c6">import</span> { Role, ServicePrincipal, PolicyDocument, PolicyStatement, Effect } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-iam&#39;</span>
 
-export class CdkStack extends cdk.Stack {
-  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+<span style="color:#ff79c6">export</span> <span style="color:#ff79c6">class</span> CdkStack <span style="color:#ff79c6">extends</span> cdk.Stack {
+  <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">cdk.Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span>) {
     ...
-    const applicationName = &#34;test-analytics-application&#34;
-    const application = new analytics.CfnApplication(this, &#39;TestAnalyticsApplication&#39;, {
-      applicationName: applicationName,
-      applicationDescription: &#34;test&#34;,
-      applicationCode: `
-      CREATE OR REPLACE STREAM &#34;SUM_STREAM&#34; (
-          &#34;cnt&#34; BIGINT NOT NULL
-      );
-
-      CREATE OR REPLACE PUMP &#34;SUM_PUMP&#34; AS
-          INSERT INTO &#34;SUM_STREAM&#34; (&#34;cnt&#34;)
-          SELECT STREAM count(1) AS cnt
-          FROM &#34;SOURCE_SQL_STREAM_001&#34;
-          GROUP BY STEP(&#34;SOURCE_SQL_STREAM_001&#34;.ROWTIME BY INTERVAL &#39;10&#39; SECOND);
-      `
-      runtimeEnvironment: &#34;SQL-1_0&#34;,
-      inputs: [{
-        namePrefix: &#34;SOURCE_SQL_STREAM&#34;,
-        inputSchema: {
-          recordColumns: [{
-            name: &#34;column1&#34;,
-            sqlType: &#34;BIGINT&#34;,
-            mapping: &#34;$.column1&#34;,
+    <span style="color:#ff79c6">const</span> applicationName <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;test-analytics-application&#34;</span>
+    <span style="color:#ff79c6">const</span> application <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> analytics.CfnApplication(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestAnalyticsApplication&#39;</span>, {
+      applicationName: <span style="color:#8be9fd">applicationName</span>,
+      applicationDescription<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test&#34;</span>,
+      applicationCode<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`
+</span><span style="color:#f1fa8c">      CREATE OR REPLACE STREAM &#34;SUM_STREAM&#34; (
+</span><span style="color:#f1fa8c">          &#34;cnt&#34; BIGINT NOT NULL
+</span><span style="color:#f1fa8c">      );
+</span><span style="color:#f1fa8c">
+</span><span style="color:#f1fa8c">      CREATE OR REPLACE PUMP &#34;SUM_PUMP&#34; AS
+</span><span style="color:#f1fa8c">          INSERT INTO &#34;SUM_STREAM&#34; (&#34;cnt&#34;)
+</span><span style="color:#f1fa8c">          SELECT STREAM count(1) AS cnt
+</span><span style="color:#f1fa8c">          FROM &#34;SOURCE_SQL_STREAM_001&#34;
+</span><span style="color:#f1fa8c">          GROUP BY STEP(&#34;SOURCE_SQL_STREAM_001&#34;.ROWTIME BY INTERVAL &#39;10&#39; SECOND);
+</span><span style="color:#f1fa8c">      `</span>
+      runtimeEnvironment<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;SQL-1_0&#34;</span>,
+      inputs<span style="color:#ff79c6">:</span> [{
+        namePrefix<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;SOURCE_SQL_STREAM&#34;</span>,
+        inputSchema<span style="color:#ff79c6">:</span> {
+          recordColumns<span style="color:#ff79c6">:</span> [{
+            name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;column1&#34;</span>,
+            sqlType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;BIGINT&#34;</span>,
+            mapping<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;$.column1&#34;</span>,
           }],
-          recordFormat: {
-            recordFormatType: &#34;JSON&#34;,
-            mappingParameters: {
-              jsonMappingParameters: {
-                recordRowPath: &#34;$&#34;,
+          recordFormat<span style="color:#ff79c6">:</span> {
+            recordFormatType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;JSON&#34;</span>,
+            mappingParameters<span style="color:#ff79c6">:</span> {
+              jsonMappingParameters<span style="color:#ff79c6">:</span> {
+                recordRowPath<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;$&#34;</span>,
               }
             }
           } 
         },
-        kinesisStreamsInput: {
-          resourceArn: stream.streamArn,
-          roleArn: role.roleArn
+        kinesisStreamsInput<span style="color:#ff79c6">:</span> {
+          resourceArn: <span style="color:#8be9fd">stream.streamArn</span>,
+          roleArn: <span style="color:#8be9fd">role.roleArn</span>
         }
       }]
     })
 
-    const applicationOutput = new analytics.CfnApplicationOutput(this, &#39;TestAnalyticsApplicationOutput&#39;, {
-      applicationName: applicationName,
-      output: {
-        name: &#39;test_analytics_output&#39;,
-        destinationSchema: {
-          recordFormatType: &#34;JSON&#34;
+    <span style="color:#ff79c6">const</span> applicationOutput <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> analytics.CfnApplicationOutput(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestAnalyticsApplicationOutput&#39;</span>, {
+      applicationName: <span style="color:#8be9fd">applicationName</span>,
+      output<span style="color:#ff79c6">:</span> {
+        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;test_analytics_output&#39;</span>,
+        destinationSchema<span style="color:#ff79c6">:</span> {
+          recordFormatType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;JSON&#34;</span>
         },
-        lambdaOutput: {
-          resourceArn: stream.streamArn,
-          roleArn: role.roleArn
+        lambdaOutput<span style="color:#ff79c6">:</span> {
+          resourceArn: <span style="color:#8be9fd">stream.streamArn</span>,
+          roleArn: <span style="color:#8be9fd">role.roleArn</span>
         }
       }
     })
