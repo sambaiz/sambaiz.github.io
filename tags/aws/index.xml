@@ -226,7 +226,7 @@ SageMakerでPyTorchのモデルを学習させる - sambaiz-net
 設定 .devcontainer/に次のファイルを置く。
 PyTorch  Dockerfile  aws/deep-learning-containersの Deep Learning Containers Imagesから選び、ECRからpullするため認証情報を登録しておく。
 $ aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin https://763104351884.dkr.ecr.us-east-1.amazonaws.com これをベースに、開発用ツールを入れてVSCodeのDevelopment Container Scriptsを実行する。
-$ cat .devcontainer/Dockerfile FROM 763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:1.5.1-cpu-py36-ubuntu16.04 RUN conda install -y yapf flake8 mypy # VS Code Development Container Scripts # https://github.com/microsoft/vscode-dev-containers/tree/v0.128.0/script-library ARG INSTALL_ZSH=&amp;#34;true&amp;#34; ARG USERNAME=&amp;#34;vscode&amp;#34; ARG USER_UID=&amp;#34;1000&amp;#34; ARG USER_GID=&amp;#34;${USER_UID}&amp;#34; ARG UPGRADE_PACKAGES=&amp;#34;true&amp;#34; ARG COMMON_SCRIPT_SOURCE=&amp;#34;https://raw.</description>
+$ cat .devcontainer/Dockerfile FROM763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:1.5.1-cpu-py36-ubuntu16.04 RUN conda install -y yapf flake8 mypy # VS Code Development Container Scripts # https://github.com/microsoft/vscode-dev-containers/tree/v0.128.0/script-library ARG INSTALL_ZSH=&amp;#34;true&amp;#34; ARG USERNAME=&amp;#34;vscode&amp;#34; ARG USER_UID=&amp;#34;1000&amp;#34; ARG USER_GID=&amp;#34;${USER_UID}&amp;#34; ARG UPGRADE_PACKAGES=&amp;#34;true&amp;#34; ARG COMMON_SCRIPT_SOURCE=&amp;#34;https://raw.</description>
     </item>
     
     <item>
@@ -318,6 +318,25 @@ ECSCluster: Type: AWS::ECS::Cluster Properties: ClusterName: &amp;#39;test-clust
     </item>
     
     <item>
+      <title>Lambda環境でできない処理をECSで実行する</title>
+      <link>https://www.sambaiz.net/article/245/</link>
+      <pubDate>Mon, 28 Oct 2019 22:54:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/245/</guid>
+      <description>以前cdkbotというツールを出した。これはGitHubのPRからCDKのデプロイなどを実行できるツールでlambda上で動いていた。
+PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net
+npmやgitといった外部コマンドを実行するため、layerにバイナリを詰めて上げていた。
+Lambda上でnpm installできるLayerを作った - sambaiz-net
+CDKにはローカルのDockerfileをbuildしてECRに上げてくれる ecs.ContainerImage.fromAsset()という関数があって、これに対応させるためlayerにdockerを追加してみたのだがrootが取れず動かない。 rootなしで動くudockerでdind(docker in docker)のイメージを動かしたりもしてみたがbuildはできなかった。
+この他にもCloudFrontなどリソースによっては作成に時間がかかり、Lambdaのタイムアウト上限に到達する問題もあったので、lambda+API Gatewayでwebhookのリクエストだけ受け取り、ECSのTaskを立ち上げて処理を行わせることにした。
+templateにECSまわりのものを追加したところ、Serverless Application Repository非対応ということで上げられなくなってしまった。
+AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net
+Taskへのパラメータの受け渡し runTaskのcontainerOverridesでコマンドの引数としてlambdaに来たリクエストをそのまま渡そうとしたところ、8192文字文字の上限に当たってしまったので SQSで受け渡すことにした。
+sess := session.New() sqsSvc := sqs.New(sess) if _, err := sqsSvc.SendMessage(&amp;amp;sqs.SendMessageInput{ MessageBody: aws.String(string(payload)), QueueUrl: aws.String(os.Getenv(&amp;#34;OPERATION_QUEUE_URL&amp;#34;)), MessageGroupId: aws.String(&amp;#34;group&amp;#34;), }); err != nil { fmt.Println(err.Error()) return response{ StatusCode: http.StatusInternalServerError, }, err } 同時実行数を制限する アプリケーションの特性上、同時実行されないようにしたい。 そこで普段はTask0のServiceを作成し、実行するときは要求Taskを1にして、Queueが空になるまで実行させ、最後に0に戻すようにした。Taskがない場合は立ち上がりにやや時間がかかるが、元々Lambdaで動いていたこともあって常に料金が発生する常駐リソースをなるべく使いたくなかった。
+sess := session.New() sqsSvc := sqs.New(sess) for { res, err := sqsSvc.</description>
+    </item>
+    
+    <item>
       <title>PR上でCDKのレビューやデプロイを行うツールcdkbotを作った</title>
       <link>https://www.sambaiz.net/article/235/</link>
       <pubDate>Thu, 29 Aug 2019 22:53:00 +0900</pubDate>
@@ -363,8 +382,7 @@ const db = new rds.DatabaseCluster(this, &amp;#39;DBCluster&amp;#39;, { engine: 
       <description>Lambda上でnpm installするためにnpmとnode, npmrc入りのLambda Layerを作った。 GitHubにある。
 Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net
 まずは/usr/bin/npmをそのまま入れて実行してみた。
-FROM lambci/lambda-base:build WORKDIR /opt RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \ yum install -y nodejs &amp;amp;&amp;amp; \ mkdir bin &amp;amp;&amp;amp; \ cp /usr/bin/node bin/node &amp;amp;&amp;amp; \ cp /usr/bin/npm bin/ &amp;amp;&amp;amp; \ zip -yr /tmp/npm-layer.zip ./* $ docker build -t npmbin . $ docker run npmbin cat /tmp/npm-layer.zip &amp;gt; npm-layer.zip &amp;amp;&amp;amp; unzip npm-layer.zip -d layer 相対パスでの参照に失敗したようだが対象のパスが見当たらない。
-internal/modules/cjs/loader.js:628 throw err; ^ Error: Cannot find module &amp;#39;.</description>
+FROMlambci/lambda-base:build WORKDIR/opt RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \  yum install -y nodejs &amp;amp;&amp;amp; \  mkdir bin &amp;amp;&amp;amp; \  cp /usr/bin/node bin/node &amp;amp;&amp;amp; \  cp /usr/bin/npm bin/ &amp;amp;&amp;amp; \  zip -yr /tmp/npm-layer.zip ./* $ docker build -t npmbin . $ docker run npmbin cat /tmp/npm-layer.zip &amp;gt; npm-layer.zip &amp;amp;&amp;amp; unzip npm-layer.zip -d layer 相対パスでの参照に失敗したようだが対象のパスが見当たらない。</description>
     </item>
     
     <item>
@@ -447,7 +465,7 @@ CDKでCognito UserPoolとClientを作成しトリガーやFederationを設定す
 強化学習とDQN(Deep Q-network) - sambaiz-net
 設定項目 Action space 取りうるアクションである速度とステアリングの組み合わせのリスト。次の項目から生成される。
  Maximum steering angle (1 - 30) Steering angle granularity (3, 5, 7) Maximum speed (0.8 - 8) Speed granularity (1, 2, 3) Loss type (Mean square error, Huber) Number of experience episodes between each policy-updating iteration (5 - 100)  Reward function 強化学習の報酬関数。次の入力パラメータを用いて実装する。
-{ &amp;#34;all_wheels_on_track&amp;#34;: Boolean, # flag to indicate if the vehicle is on the track &amp;#34;x&amp;#34;: float, # vehicle&amp;#39;s x-coordinate in meters &amp;#34;y&amp;#34;: float, # vehicle&amp;#39;s y-coordinate in meters &amp;#34;distance_from_center&amp;#34;: float, # distance in meters from the track center &amp;#34;is_left_of_center&amp;#34;: Boolean, # Flag to indicate if the vehicle is on the left side to the track center or not.</description>
+{ &amp;#34;all_wheels_on_track&amp;#34;: Boolean, # flag to indicate if the vehicle is on the track &amp;#34;x&amp;#34;: float, # vehicle&amp;#39;s x-coordinate in meters &amp;#34;y&amp;#34;: float, # vehicle&amp;#39;s y-coordinate in meters &amp;#34;distance_from_center&amp;#34;: float, # distance in meters from the track center  &amp;#34;is_left_of_center&amp;#34;: Boolean, # Flag to indicate if the vehicle is on the left side to the track center or not.</description>
     </item>
     
     <item>
@@ -488,7 +506,7 @@ import * as cdk from &amp;#39;@aws-cdk/cdk&amp;#39; import * as ec2 from &amp;#3
 FargateでECSを使う - sambaiz-net
 Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る - sambaiz-net
 Fluentd 必要なプラグインと設定ファイルを入れたイメージを作る。
-FROM fluent/fluentd:v1.4-1 USER root COPY ./fluent.conf /fluentd/etc/ # install plugin RUN apk add --update-cache --virtual .build-deps sudo build-base ruby-dev \ &amp;amp;&amp;amp; gem install fluent-plugin-s3 -v 1.0.0 --no-document \ &amp;amp;&amp;amp; gem install uuidtools \ &amp;amp;&amp;amp; gem sources --clear-all \ &amp;amp;&amp;amp; apk del .build-deps \ &amp;amp;&amp;amp; rm -rf /var/cache/apk/* \ /home/fluent/.gem/ruby/*/cache/*.gem # set timezone (Alpine) RUN apk --update-cache add tzdata &amp;amp;&amp;amp; \ cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime &amp;amp;&amp;amp; \ apk del tzdata &amp;amp;&amp;amp; \ rm -rf /var/cache/apk/* fluent.</description>
+FROMfluent/fluentd:v1.4-1 USERroot COPY ./fluent.conf /fluentd/etc/ # install plugin RUN apk add --update-cache --virtual .build-deps sudo build-base ruby-dev \  &amp;amp;&amp;amp; gem install fluent-plugin-s3 -v 1.0.0 --no-document \  &amp;amp;&amp;amp; gem install uuidtools \  &amp;amp;&amp;amp; gem sources --clear-all \  &amp;amp;&amp;amp; apk del .build-deps \  &amp;amp;&amp;amp; rm -rf /var/cache/apk/* \  /home/fluent/.gem/ruby/*/cache/*.gem # set timezone (Alpine) RUN apk --update-cache add tzdata &amp;amp;&amp;amp; \  cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime &amp;amp;&amp;amp; \  apk del tzdata &amp;amp;&amp;amp; \  rm -rf /var/cache/apk/* fluent.</description>
     </item>
     
     <item>
@@ -590,7 +608,7 @@ AWSにはKubernetesクラスタを立てられるEKSもあるが、こちらは�
 Clusterの作成 まずはClusterを作成する。
 $ aws ecs create-cluster --cluster-name test Taskの登録 イメージやポートマッピング、ヘルスチェックや割り当てるリソースといったContainer definition を含むTask definitionを書く。 Fargateの場合networkModeはawsvpc固定になる。
 { &amp;#34;family&amp;#34;: &amp;#34;test-task&amp;#34;, &amp;#34;networkMode&amp;#34;: &amp;#34;awsvpc&amp;#34;, &amp;#34;containerDefinitions&amp;#34;: [ { &amp;#34;name&amp;#34;: &amp;#34;nginx&amp;#34;, &amp;#34;image&amp;#34;: &amp;#34;nginx:1.15&amp;#34;, &amp;#34;portMappings&amp;#34;: [ { &amp;#34;containerPort&amp;#34;: 80, &amp;#34;hostPort&amp;#34;: 80, &amp;#34;protocol&amp;#34;: &amp;#34;tcp&amp;#34; } ], &amp;#34;essential&amp;#34;: true } ], &amp;#34;requiresCompatibilities&amp;#34;: [ &amp;#34;FARGATE&amp;#34; ], &amp;#34;cpu&amp;#34;: &amp;#34;256&amp;#34;, &amp;#34;memory&amp;#34;: &amp;#34;512&amp;#34; } Taskを登録する。
-$ aws ecs register-task-definition --cli-input-json file://$(pwd)/task.json $ aws ecs list-task-definitions &amp;#34;taskDefinitionArns&amp;#34;: [ &amp;#34;arn:aws:ecs:ap-northeast-1:*****:task-definition/test-task:1&amp;#34; ] } Taskを実行 run-taskでTaskを実行できる。 外からアクセスできるようにPublicIPを割り当てている。</description>
+$ aws ecs register-task-definition --cli-input-json file://$(pwd)/task.json $ aws ecs list-task-definitions { &amp;#34;taskDefinitionArns&amp;#34;: [ &amp;#34;arn:aws:ecs:ap-northeast-1:*****:task-definition/test-task:1&amp;#34; ] } Taskを実行 run-taskでTaskを実行できる。 外からアクセスできるようにPublicIPを割り当てている。</description>
     </item>
     
     <item>
@@ -730,7 +748,7 @@ $ ldd headless_shell linux-vdso.so.1 =&amp;gt; (0x00007ffcb6fed000) libpthread.s
       <description>Terraform
 $ brew install terraform $ terraform -v Terraform v0.9.11 Terraformの設定要素 provider IaaS(e.g. AWS)、PaaS(e.g. Heroku)、SaaS(e.g. CloudFlare)など。
 AWS Providerはこんな感じ。 ここに直接access_keyやsecret_keyを書くこともできるけど、誤って公開されてしまわないように環境変数か variableで渡す。
-provider &amp;#34;aws&amp;#34; { # access_key = &amp;#34;${var.access_key}&amp;#34; # secret_key = &amp;#34;${var.secret_key}&amp;#34; region = &amp;#34;us-east-1&amp;#34; } $ export AWS_ACCESS_KEY_ID=&amp;#34;anaccesskey&amp;#34; $ export AWS_SECRET_ACCESS_KEY=&amp;#34;asecretkey&amp;#34; varibale CLIでオーバーライドできるパラメーター。typeにはstringのほかにmapやlistを渡すことができ、 何も渡さないとdefault値のものが、それもなければstringになる。
+provider &amp;#34;aws&amp;#34; {# access_key = &amp;#34;${var.access_key}&amp;#34; # secret_key = &amp;#34;${var.secret_key}&amp;#34;  region = &amp;#34;us-east-1&amp;#34; } $ export AWS_ACCESS_KEY_ID=&amp;#34;anaccesskey&amp;#34; $ export AWS_SECRET_ACCESS_KEY=&amp;#34;asecretkey&amp;#34; varibale CLIでオーバーライドできるパラメーター。typeにはstringのほかにmapやlistを渡すことができ、 何も渡さないとdefault値のものが、それもなければstringになる。
 variable &amp;#34;key&amp;#34; { type = &amp;#34;string&amp;#34; default = &amp;#34;value&amp;#34; description = &amp;#34;description&amp;#34; } 値を渡す方法はTF_VAR_をprefixとする環境変数、-var、-var-fileがある。 また、moduleのinputとして渡されることもある。
 $ export TF_VAR_somelist=&amp;#39;[&amp;#34;ami-abc123&amp;#34;, &amp;#34;ami-bcd234&amp;#34;]&amp;#39; $ terraform apply -var foo=bar -var foo=baz $ terraform apply -var-file=foo.</description>
     </item>
@@ -788,9 +806,9 @@ GUID=$7 function update_yum_packages { if is_baked update_yum_packages_$GUID; th
       <guid>https://www.sambaiz.net/article/89/</guid>
       <description>node-iconvを使う。
 $ npm install iconv SHIFT_JISからUTF-8への変換はこんな感じ。
-const Iconv = require(&amp;#39;iconv&amp;#39;).Iconv; const before = new Buffer([ 0x8b, 0x8d, 0x8e, 0x4d, 0x26, 0x82, 0xb2, 0x94, 0xd1 ]); const iconv = new Iconv(&amp;#39;SHIFT_JIS&amp;#39;, &amp;#39;UTF-8&amp;#39;); console.log(`before: ${before.toString(&amp;#39;hex&amp;#39;)} ${before.toString()}`) const after = iconv.convert(before); console.log(`after: ${after.toString(&amp;#39;hex&amp;#39;)} ${after.toString()}`); before: 8b8d8e4d2682b294d1 ���M&amp;amp;���� after: e7899be79abf26e38194e9a3af 牛皿&amp;amp;ご飯 文字コードによっては変換後に表せないことがある。 例えば、UTF-8からSHIFT_JISへの変換でサロゲートペア🍚を渡すと変換できず、エラーになる。
+const Iconv = require(&amp;#39;iconv&amp;#39;).Iconv; const before = new Buffer([ 0x8b, 0x8d, 0x8e, 0x4d, 0x26, 0x82, 0xb2, 0x94, 0xd1 ]); const iconv = new Iconv(&amp;#39;SHIFT_JIS&amp;#39;, &amp;#39;UTF-8&amp;#39;); console.log(`before: ${before.toString(&amp;#39;hex&amp;#39;)}${before.toString()}`) const after = iconv.convert(before); console.log(`after: ${after.toString(&amp;#39;hex&amp;#39;)}${after.toString()}`); before: 8b8d8e4d2682b294d1 ���M&amp;amp;���� after: e7899be79abf26e38194e9a3af 牛皿&amp;amp;ご飯 文字コードによっては変換後に表せないことがある。 例えば、UTF-8からSHIFT_JISへの変換でサロゲートペア🍚を渡すと変換できず、エラーになる。
 throw errnoException(&amp;#39;EILSEQ&amp;#39;, &amp;#39;Illegal character sequence.&amp;#39;); //IGNOREを付けることで そのような文字があった場合でもエラーにしないようにできる。
-const Iconv = require(&amp;#39;iconv&amp;#39;).Iconv; const before = &amp;#34;牛皿&amp;amp;🍚&amp;#34;; const iconv = new Iconv(&amp;#39;UTF-8&amp;#39;, &amp;#39;SHIFT_JIS//IGNORE&amp;#39;); console.</description>
+const Iconv = require(&amp;#39;iconv&amp;#39;).Iconv; const before = &amp;#34;牛皿&amp;amp;🍚&amp;#34;; const iconv = new Iconv(&amp;#39;UTF-8&amp;#39;, &amp;#39;SHIFT_JIS//IGNORE&amp;#39;); console.log(`before: ${new Buffer(before).</description>
     </item>
     
     <item>

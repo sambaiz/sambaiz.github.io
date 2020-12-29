@@ -58,7 +58,7 @@ SageMakerでPyTorchのモデルを学習させる - sambaiz-net
 設定 .devcontainer/に次のファイルを置く。
 PyTorch  Dockerfile  aws/deep-learning-containersの Deep Learning Containers Imagesから選び、ECRからpullするため認証情報を登録しておく。
 $ aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin https://763104351884.dkr.ecr.us-east-1.amazonaws.com これをベースに、開発用ツールを入れてVSCodeのDevelopment Container Scriptsを実行する。
-$ cat .devcontainer/Dockerfile FROM 763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:1.5.1-cpu-py36-ubuntu16.04 RUN conda install -y yapf flake8 mypy # VS Code Development Container Scripts # https://github.com/microsoft/vscode-dev-containers/tree/v0.128.0/script-library ARG INSTALL_ZSH=&amp;#34;true&amp;#34; ARG USERNAME=&amp;#34;vscode&amp;#34; ARG USER_UID=&amp;#34;1000&amp;#34; ARG USER_GID=&amp;#34;${USER_UID}&amp;#34; ARG UPGRADE_PACKAGES=&amp;#34;true&amp;#34; ARG COMMON_SCRIPT_SOURCE=&amp;#34;https://raw.</description>
+$ cat .devcontainer/Dockerfile FROM763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:1.5.1-cpu-py36-ubuntu16.04 RUN conda install -y yapf flake8 mypy # VS Code Development Container Scripts # https://github.com/microsoft/vscode-dev-containers/tree/v0.128.0/script-library ARG INSTALL_ZSH=&amp;#34;true&amp;#34; ARG USERNAME=&amp;#34;vscode&amp;#34; ARG USER_UID=&amp;#34;1000&amp;#34; ARG USER_GID=&amp;#34;${USER_UID}&amp;#34; ARG UPGRADE_PACKAGES=&amp;#34;true&amp;#34; ARG COMMON_SCRIPT_SOURCE=&amp;#34;https://raw.</description>
     </item>
     
     <item>
@@ -82,8 +82,8 @@ new ECSStack(app, &amp;#39;ECSBoilerplateSampleStack&amp;#39;, { /* // If vpcAtt
       <description>Buildkitは高速でセキュアなコンテナイメージのビルドツール。 Docker本体にも18.09から統合され、 DOCKER_BUILDKIT=1 docker build するとBuildkitが使われるようになった。
 LLB (low-level builder) BuildkitはDockerfileなどをLLBという中間言語にコンパイルする。 LLBは依存関係を表すDAG(Directed acyclic graph; 有向非巡回グラフ)で、 protobufで定義されている。 これによって処理を並列に実行したり、Dockerfileを変更してもそれ以降のステージのキャッシュを全て破棄する必要がなくなった。
 --mount=type=cache Dockerfileを変更しても残せるキャッシュ。
-# syntax = docker/dockerfile:1.1-experimental FROM golang RUN --mount=type=cache,target=/root/.cache/go-build \ go build ... --mount=type=secret 秘密鍵など一度ADDしてしまったファイルは最終的に消してもレイヤ上に残ってしまうが、--mount=type=secret でマウントすると残らない。
-# syntax = docker/dockerfile:1.1-experimental FROM alpine:20200122 RUN apk add --no-cache git openssh RUN --mount=type=secret,id=ssh,dst=/root/.ssh/id_rsa \ ssh-keyscan -H github.com &amp;gt;&amp;gt; /root/.ssh/known_hosts &amp;amp;&amp;amp; \ git clone ... $ DOCKER_BUILDKIT=1 docker build --secret id=ssh,src=./id_rsa . 参考 Introducing BuildKit - Moby Blog</description>
+# syntax = docker/dockerfile:1.1-experimental FROMgolang RUN --mount=type=cache,target=/root/.cache/go-build \  go build ... --mount=type=secret 秘密鍵など一度ADDしてしまったファイルは最終的に消してもレイヤ上に残ってしまうが、--mount=type=secret でマウントすると残らない。
+# syntax = docker/dockerfile:1.1-experimental FROMalpine:20200122 RUN apk add --no-cache git openssh RUN --mount=type=secret,id=ssh,dst=/root/.ssh/id_rsa \  ssh-keyscan -H github.com &amp;gt;&amp;gt; /root/.ssh/known_hosts &amp;amp;&amp;amp; \  git clone ... $ DOCKER_BUILDKIT=1 docker build --secret id=ssh,src=./id_rsa . 参考 Introducing BuildKit - Moby Blog</description>
     </item>
     
     <item>
@@ -97,6 +97,25 @@ ECS FargateでSidecarのFluentdでログをS3に送る構成をCloudFormationで
 EC2で動かす場合、自分でリソースが不足しないようにインスタンスのスケールを気遣うことになるが、VPC外での実行やprivilegedをtrueにするなどEC2でしかできないことがある。あと同リソースで比較すると安い。
 まずはEC2インスタンス以外のリソースを書く。LaunchType以外はFargateのときとほぼ同じ。 LBなしでバッチのようなものを動かすことを想定した最小構成。
 ECSCluster: Type: AWS::ECS::Cluster Properties: ClusterName: &amp;#39;test-cluster&amp;#39; LogGroup: Type: AWS::Logs::LogGroup Properties: LogGroupName: &amp;#39;test-task-log-group&amp;#39; RetentionInDays: 1 TaskDefinition: Type: AWS::ECS::TaskDefinition Properties: RequiresCompatibilities: - EC2 Cpu: &amp;#39;256&amp;#39; Memory: &amp;#39;512&amp;#39; ContainerDefinitions: - Name: &amp;#39;app&amp;#39; Image: &amp;#39;busybox&amp;#39; EntryPoint: - &amp;#39;sh&amp;#39; - &amp;#39;-c&amp;#39; Command: - &amp;#39;while true; do echo &amp;#34;{\&amp;#34;foo\&amp;#34;:1000,\&amp;#34;time\&amp;#34;:\&amp;#34;2019-05-09T20:00:00+09:00\&amp;#34;}&amp;#34;; sleep 10; done&amp;#39; Essential: &amp;#39;true&amp;#39; LogConfiguration: LogDriver: &amp;#39;awslogs&amp;#39; Options: awslogs-group: !Ref LogGroup awslogs-region: &amp;#39;ap-northeast-1&amp;#39; awslogs-stream-prefix: &amp;#39;app&amp;#39; Environment: - Name: &amp;#39;TZ&amp;#39; Value: &amp;#39;Asia/Tokyo&amp;#39; Volumes: - Name: &amp;#39;varlog&amp;#39; ECSService: Type: AWS::ECS::Service Properties: Cluster: !</description>
+    </item>
+    
+    <item>
+      <title>Lambda環境でできない処理をECSで実行する</title>
+      <link>https://www.sambaiz.net/article/245/</link>
+      <pubDate>Mon, 28 Oct 2019 22:54:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/245/</guid>
+      <description>以前cdkbotというツールを出した。これはGitHubのPRからCDKのデプロイなどを実行できるツールでlambda上で動いていた。
+PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net
+npmやgitといった外部コマンドを実行するため、layerにバイナリを詰めて上げていた。
+Lambda上でnpm installできるLayerを作った - sambaiz-net
+CDKにはローカルのDockerfileをbuildしてECRに上げてくれる ecs.ContainerImage.fromAsset()という関数があって、これに対応させるためlayerにdockerを追加してみたのだがrootが取れず動かない。 rootなしで動くudockerでdind(docker in docker)のイメージを動かしたりもしてみたがbuildはできなかった。
+この他にもCloudFrontなどリソースによっては作成に時間がかかり、Lambdaのタイムアウト上限に到達する問題もあったので、lambda+API Gatewayでwebhookのリクエストだけ受け取り、ECSのTaskを立ち上げて処理を行わせることにした。
+templateにECSまわりのものを追加したところ、Serverless Application Repository非対応ということで上げられなくなってしまった。
+AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net
+Taskへのパラメータの受け渡し runTaskのcontainerOverridesでコマンドの引数としてlambdaに来たリクエストをそのまま渡そうとしたところ、8192文字文字の上限に当たってしまったので SQSで受け渡すことにした。
+sess := session.New() sqsSvc := sqs.New(sess) if _, err := sqsSvc.SendMessage(&amp;amp;sqs.SendMessageInput{ MessageBody: aws.String(string(payload)), QueueUrl: aws.String(os.Getenv(&amp;#34;OPERATION_QUEUE_URL&amp;#34;)), MessageGroupId: aws.String(&amp;#34;group&amp;#34;), }); err != nil { fmt.Println(err.Error()) return response{ StatusCode: http.StatusInternalServerError, }, err } 同時実行数を制限する アプリケーションの特性上、同時実行されないようにしたい。 そこで普段はTask0のServiceを作成し、実行するときは要求Taskを1にして、Queueが空になるまで実行させ、最後に0に戻すようにした。Taskがない場合は立ち上がりにやや時間がかかるが、元々Lambdaで動いていたこともあって常に料金が発生する常駐リソースをなるべく使いたくなかった。
+sess := session.New() sqsSvc := sqs.New(sess) for { res, err := sqsSvc.</description>
     </item>
     
     <item>
@@ -125,7 +144,7 @@ const db = new rds.DatabaseCluster(this, &amp;#39;DBCluster&amp;#39;, { engine: 
 FargateでECSを使う - sambaiz-net
 Kubernetesの1PodでAppとfluentdコンテナを動かしてBigQueryに送る - sambaiz-net
 Fluentd 必要なプラグインと設定ファイルを入れたイメージを作る。
-FROM fluent/fluentd:v1.4-1 USER root COPY ./fluent.conf /fluentd/etc/ # install plugin RUN apk add --update-cache --virtual .build-deps sudo build-base ruby-dev \ &amp;amp;&amp;amp; gem install fluent-plugin-s3 -v 1.0.0 --no-document \ &amp;amp;&amp;amp; gem install uuidtools \ &amp;amp;&amp;amp; gem sources --clear-all \ &amp;amp;&amp;amp; apk del .build-deps \ &amp;amp;&amp;amp; rm -rf /var/cache/apk/* \ /home/fluent/.gem/ruby/*/cache/*.gem # set timezone (Alpine) RUN apk --update-cache add tzdata &amp;amp;&amp;amp; \ cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime &amp;amp;&amp;amp; \ apk del tzdata &amp;amp;&amp;amp; \ rm -rf /var/cache/apk/* fluent.</description>
+FROMfluent/fluentd:v1.4-1 USERroot COPY ./fluent.conf /fluentd/etc/ # install plugin RUN apk add --update-cache --virtual .build-deps sudo build-base ruby-dev \  &amp;amp;&amp;amp; gem install fluent-plugin-s3 -v 1.0.0 --no-document \  &amp;amp;&amp;amp; gem install uuidtools \  &amp;amp;&amp;amp; gem sources --clear-all \  &amp;amp;&amp;amp; apk del .build-deps \  &amp;amp;&amp;amp; rm -rf /var/cache/apk/* \  /home/fluent/.gem/ruby/*/cache/*.gem # set timezone (Alpine) RUN apk --update-cache add tzdata &amp;amp;&amp;amp; \  cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime &amp;amp;&amp;amp; \  apk del tzdata &amp;amp;&amp;amp; \  rm -rf /var/cache/apk/* fluent.</description>
     </item>
     
     <item>
@@ -192,7 +211,7 @@ $ ulimit -n 64000 dockerコンテナでは run時にulimitオプションで --u
       <description>PritunlでVPNサーバーを立てる。
 Dockerfileはこんな感じ。
 https://hub.docker.com/r/sambaiz/pritunl/
-FROM mongo:3.4 # https://docs.pritunl.com/docs/installation RUN echo &amp;#39;deb http://repo.pritunl.com/stable/apt jessie main&amp;#39; &amp;gt; /etc/apt/sources.list.d/pritunl.list &amp;amp;&amp;amp; \ apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 7568D9BB55FF9E5287D586017AE645C0CF8E292A &amp;amp;&amp;amp; \ apt-get --assume-yes update &amp;amp;&amp;amp; \ apt-get --assume-yes upgrade &amp;amp;&amp;amp; \ apt-get --assume-yes install pritunl iptables EXPOSE 80 443 12345/udp CMD mongod --fork --logpath /data/db/mongod.log &amp;amp;&amp;amp; echo &amp;#39;Setup Key:&amp;#39; `pritunl setup-key` &amp;amp;&amp;amp; pritunl start $ docker run -itd -p 80:80 -p 443:443 -p 12345:12345/udp --privileged sambaiz/pritunl $ docker logs &amp;lt;id&amp;gt; .</description>
+FROMmongo:3.4 # https://docs.pritunl.com/docs/installation RUN echo &amp;#39;deb http://repo.pritunl.com/stable/apt jessie main&amp;#39; &amp;gt; /etc/apt/sources.list.d/pritunl.list &amp;amp;&amp;amp; \  apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 7568D9BB55FF9E5287D586017AE645C0CF8E292A &amp;amp;&amp;amp; \  apt-get --assume-yes update &amp;amp;&amp;amp; \  apt-get --assume-yes upgrade &amp;amp;&amp;amp; \  apt-get --assume-yes install pritunl iptables EXPOSE80 443 12345/udp CMD mongod --fork --logpath /data/db/mongod.log &amp;amp;&amp;amp; echo &amp;#39;Setup Key:&amp;#39; `pritunl setup-key` &amp;amp;&amp;amp; pritunl start $ docker run -itd -p 80:80 -p 443:443 -p 12345:12345/udp --privileged sambaiz/pritunl $ docker logs &amp;lt;id&amp;gt; .</description>
     </item>
     
     <item>

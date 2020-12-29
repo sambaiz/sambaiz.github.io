@@ -6,7 +6,26 @@
     <description>Recent content in lambda on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Thu, 29 Aug 2019 22:53:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/lambda/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Mon, 28 Oct 2019 22:54:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/lambda/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Lambda環境でできない処理をECSで実行する</title>
+      <link>https://www.sambaiz.net/article/245/</link>
+      <pubDate>Mon, 28 Oct 2019 22:54:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/245/</guid>
+      <description>以前cdkbotというツールを出した。これはGitHubのPRからCDKのデプロイなどを実行できるツールでlambda上で動いていた。
+PR上でCDKのレビューやデプロイを行うツールcdkbotを作った - sambaiz-net
+npmやgitといった外部コマンドを実行するため、layerにバイナリを詰めて上げていた。
+Lambda上でnpm installできるLayerを作った - sambaiz-net
+CDKにはローカルのDockerfileをbuildしてECRに上げてくれる ecs.ContainerImage.fromAsset()という関数があって、これに対応させるためlayerにdockerを追加してみたのだがrootが取れず動かない。 rootなしで動くudockerでdind(docker in docker)のイメージを動かしたりもしてみたがbuildはできなかった。
+この他にもCloudFrontなどリソースによっては作成に時間がかかり、Lambdaのタイムアウト上限に到達する問題もあったので、lambda+API Gatewayでwebhookのリクエストだけ受け取り、ECSのTaskを立ち上げて処理を行わせることにした。
+templateにECSまわりのものを追加したところ、Serverless Application Repository非対応ということで上げられなくなってしまった。
+AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net
+Taskへのパラメータの受け渡し runTaskのcontainerOverridesでコマンドの引数としてlambdaに来たリクエストをそのまま渡そうとしたところ、8192文字文字の上限に当たってしまったので SQSで受け渡すことにした。
+sess := session.New() sqsSvc := sqs.New(sess) if _, err := sqsSvc.SendMessage(&amp;amp;sqs.SendMessageInput{ MessageBody: aws.String(string(payload)), QueueUrl: aws.String(os.Getenv(&amp;#34;OPERATION_QUEUE_URL&amp;#34;)), MessageGroupId: aws.String(&amp;#34;group&amp;#34;), }); err != nil { fmt.Println(err.Error()) return response{ StatusCode: http.StatusInternalServerError, }, err } 同時実行数を制限する アプリケーションの特性上、同時実行されないようにしたい。 そこで普段はTask0のServiceを作成し、実行するときは要求Taskを1にして、Queueが空になるまで実行させ、最後に0に戻すようにした。Taskがない場合は立ち上がりにやや時間がかかるが、元々Lambdaで動いていたこともあって常に料金が発生する常駐リソースをなるべく使いたくなかった。
+sess := session.New() sqsSvc := sqs.New(sess) for { res, err := sqsSvc.</description>
+    </item>
+    
     <item>
       <title>PR上でCDKのレビューやデプロイを行うツールcdkbotを作った</title>
       <link>https://www.sambaiz.net/article/235/</link>
@@ -37,8 +56,7 @@ test: docker build -t cdkbot-npmbin ./npm-lambda-layer docker build -t cdkbot-te
       <description>Lambda上でnpm installするためにnpmとnode, npmrc入りのLambda Layerを作った。 GitHubにある。
 Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net
 まずは/usr/bin/npmをそのまま入れて実行してみた。
-FROM lambci/lambda-base:build WORKDIR /opt RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \ yum install -y nodejs &amp;amp;&amp;amp; \ mkdir bin &amp;amp;&amp;amp; \ cp /usr/bin/node bin/node &amp;amp;&amp;amp; \ cp /usr/bin/npm bin/ &amp;amp;&amp;amp; \ zip -yr /tmp/npm-layer.zip ./* $ docker build -t npmbin . $ docker run npmbin cat /tmp/npm-layer.zip &amp;gt; npm-layer.zip &amp;amp;&amp;amp; unzip npm-layer.zip -d layer 相対パスでの参照に失敗したようだが対象のパスが見当たらない。
-internal/modules/cjs/loader.js:628 throw err; ^ Error: Cannot find module &amp;#39;.</description>
+FROMlambci/lambda-base:build WORKDIR/opt RUN curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;amp;&amp;amp; \  yum install -y nodejs &amp;amp;&amp;amp; \  mkdir bin &amp;amp;&amp;amp; \  cp /usr/bin/node bin/node &amp;amp;&amp;amp; \  cp /usr/bin/npm bin/ &amp;amp;&amp;amp; \  zip -yr /tmp/npm-layer.zip ./* $ docker build -t npmbin . $ docker run npmbin cat /tmp/npm-layer.zip &amp;gt; npm-layer.zip &amp;amp;&amp;amp; unzip npm-layer.zip -d layer 相対パスでの参照に失敗したようだが対象のパスが見当たらない。</description>
     </item>
     
     <item>
@@ -234,9 +252,9 @@ $ ldd headless_shell linux-vdso.so.1 =&amp;gt; (0x00007ffcb6fed000) libpthread.s
       <guid>https://www.sambaiz.net/article/89/</guid>
       <description>node-iconvを使う。
 $ npm install iconv SHIFT_JISからUTF-8への変換はこんな感じ。
-const Iconv = require(&amp;#39;iconv&amp;#39;).Iconv; const before = new Buffer([ 0x8b, 0x8d, 0x8e, 0x4d, 0x26, 0x82, 0xb2, 0x94, 0xd1 ]); const iconv = new Iconv(&amp;#39;SHIFT_JIS&amp;#39;, &amp;#39;UTF-8&amp;#39;); console.log(`before: ${before.toString(&amp;#39;hex&amp;#39;)} ${before.toString()}`) const after = iconv.convert(before); console.log(`after: ${after.toString(&amp;#39;hex&amp;#39;)} ${after.toString()}`); before: 8b8d8e4d2682b294d1 ���M&amp;amp;���� after: e7899be79abf26e38194e9a3af 牛皿&amp;amp;ご飯 文字コードによっては変換後に表せないことがある。 例えば、UTF-8からSHIFT_JISへの変換でサロゲートペア🍚を渡すと変換できず、エラーになる。
+const Iconv = require(&amp;#39;iconv&amp;#39;).Iconv; const before = new Buffer([ 0x8b, 0x8d, 0x8e, 0x4d, 0x26, 0x82, 0xb2, 0x94, 0xd1 ]); const iconv = new Iconv(&amp;#39;SHIFT_JIS&amp;#39;, &amp;#39;UTF-8&amp;#39;); console.log(`before: ${before.toString(&amp;#39;hex&amp;#39;)}${before.toString()}`) const after = iconv.convert(before); console.log(`after: ${after.toString(&amp;#39;hex&amp;#39;)}${after.toString()}`); before: 8b8d8e4d2682b294d1 ���M&amp;amp;���� after: e7899be79abf26e38194e9a3af 牛皿&amp;amp;ご飯 文字コードによっては変換後に表せないことがある。 例えば、UTF-8からSHIFT_JISへの変換でサロゲートペア🍚を渡すと変換できず、エラーになる。
 throw errnoException(&amp;#39;EILSEQ&amp;#39;, &amp;#39;Illegal character sequence.&amp;#39;); //IGNOREを付けることで そのような文字があった場合でもエラーにしないようにできる。
-const Iconv = require(&amp;#39;iconv&amp;#39;).Iconv; const before = &amp;#34;牛皿&amp;amp;🍚&amp;#34;; const iconv = new Iconv(&amp;#39;UTF-8&amp;#39;, &amp;#39;SHIFT_JIS//IGNORE&amp;#39;); console.</description>
+const Iconv = require(&amp;#39;iconv&amp;#39;).Iconv; const before = &amp;#34;牛皿&amp;amp;🍚&amp;#34;; const iconv = new Iconv(&amp;#39;UTF-8&amp;#39;, &amp;#39;SHIFT_JIS//IGNORE&amp;#39;); console.log(`before: ${new Buffer(before).</description>
     </item>
     
     <item>
