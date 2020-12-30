@@ -70,7 +70,7 @@ HomebrewとSAM CLIのインストール 手順に従ってbrewでインストー
 Cluster Mode 有効にすると最大90までシャードを増やせるようになる。作成後にCluster Modeを有効にはできない。
 シャードには1つのPrimary Nodeと0-5つのReplica Nodeが含まれる。 Replica NodeはPrimary NodeのデータをレプリケーションするRead Onlyなノード。手動でPrimary Nodeに昇格させたり、NodeやAZの障害時に自動で昇格したりする。
 CloudFormationではシャード数はReplicationGroupのNumNodeGroupsで、レプリカノードの数はReplicasPerNodeGroupで設定できる。
-リクエストはキーから計算されるハッシュスロットによって各シャードに分散され、 ClUSTER SLOTSコマンドでハッシュスロットとノードのマッピングが取れる。 go-redisのようなCluster対応クライアントは内部でこのマッピングと計算したハッシュスロットからリクエストを送るノードを決定している。
+リクエストはキーから計算されるハッシュスロットによって各シャードに分散され、 ClUSTER SLOTSコマンドでハッシュスロットとノードのマッピングが取れる。 go-redisのようなCluster対応クライアントは内部でこのマッピングと計算したハッシュスロットからリクエストを送るノードを決定している。
 Node Size 少なくとも総アイテムサイズをシャード数で割った分がメモリに乗るようにする。 これに加えてスナップショットを作成する際にフォークしたプロセスで実行されるBGSAVEや、フェイルオーバーで使うメモリが必要。 reserved-memory-percentパラメータ(以前のバージョンではreserved-memoryだった)でmaxmemoryの25%を予約することが推奨されており、デフォルトは25になっている。
 Subnet Group クラスタに設定するVPCのサブネットの集合。クラスタ作成後には変更できない。</description>
     </item>
@@ -147,7 +147,7 @@ AWSのAssumeRole - sambaiz-net
       <guid>https://www.sambaiz.net/article/298/</guid>
       <description>AWS Organizationsは複数のAWSアカウントを一元管理する機能。 既存のアカウントを一元管理できるだけではなく新規アカウントを簡単に作成することができるので、 セキュリティの向上やコストの分離、クォータなどアカウント全体に及ぶ影響の局所化などのためにサービスや環境ごとにアカウントを分けるハードルが下がる。 引き続きアカウントごとのコストも確認できるが、請求は一括で行われるので支払いの管理が楽になるし、ボリュームディスカウントの使用量が合算されRIも共有できるのでコストの上でも不利にならない。
 また、アカウントやそれをグルーピングしたOrganizational Unit(OU)およびOrganizaion全体に対して、 サービスやアカウントを制御するService control policies (SCPs)などのポリシーを設定することもできる。
-Organizationを作成したアカウントがマスターアカウントとなる。変更するにはOrganizationを削除する必要があるため管理専用のアカウントを作成するのがおすすめらしい。 通常、新規アカウントを作成するには住所や支払い情報などを入れる必要があるが、 Organizationだとその辺りが省略されアカウント名とルートアカウントのメールアドレスだけで済む。 管理に用いられるIAMロール名を入れる項目もあるが何も入れなければデフォルトのOrganizationAccountAccessRoleになる。
+Organizationを作成したアカウントがマスターアカウントとなる。変更するにはOrganizationを削除する必要があるため管理専用のアカウントを作成するのがおすすめらしい。 通常、新規アカウントを作成するには住所や支払い情報などを入れる必要があるが、 Organizationだとその辺りが省略されアカウント名とルートアカウントのメールアドレスだけで済む。 管理に用いられるIAMロール名を入れる項目もあるが何も入れなければデフォルトのOrganizationAccountAccessRoleになる。
 新アカウントのルートユーザーのパスワードは発行されないので必要なら再発行することになるが、 マスターアカウントのIAMユーザーにアカウント作成時に入力したロールのsts:AssumeRole権限を与えれば 新アカウントの方にユーザーを作らなくてもコンソール上部のメニューからスイッチできる。
 AWSのAssumeRole - sambaiz-net
 { &amp;#34;Version&amp;#34;: &amp;#34;2012-10-17&amp;#34;, &amp;#34;Statement&amp;#34;: [ { &amp;#34;Effect&amp;#34;: &amp;#34;Allow&amp;#34;, &amp;#34;Action&amp;#34;: &amp;#34;sts:AssumeRole&amp;#34;, &amp;#34;Resource&amp;#34;: &amp;#34;arn:aws:iam::&amp;lt;new_account_id&amp;gt;:role/&amp;lt;role_name&amp;gt;&amp;#34; } ] } 基本的にマスターアカウントのリソースの権限は必要ないと思われるが、MFAの権限はないと設定できないので追加する。
@@ -518,7 +518,7 @@ FROMfluent/fluentd:v1.4-1 USERroot COPY ./fluent.conf /fluentd/etc/ # install pl
       <description>DatadogのAWS integrationとAlertの設定をTerraformで行い、バージョン管理やレビューできるようにする。 全体のコードはGitHubに置いてある。
 AWS Integration まずdatadog_integration_awsでAWS integrationの設定を作成してExternalIDを取得し、Policy/Roleを作成する。必要な権限はドキュメントを参照。
 resource &amp;#34;datadog_integration_aws&amp;#34; &amp;#34;test&amp;#34; { account_id = &amp;#34;${var.aws_account_id}&amp;#34; role_name = &amp;#34;${var.aws_integration_role_name}&amp;#34; filter_tags = [&amp;#34;datadog:1&amp;#34;] } data &amp;#34;aws_iam_policy_document&amp;#34; &amp;#34;datadog_aws_integration_assume_role&amp;#34; { statement { actions = [&amp;#34;sts:AssumeRole&amp;#34;] principals { type = &amp;#34;AWS&amp;#34; identifiers = [&amp;#34;arn:aws:iam::464622532012:root&amp;#34;] } condition { test = &amp;#34;StringEquals&amp;#34; variable = &amp;#34;sts:ExternalId&amp;#34; values = [ &amp;#34;${datadog_integration_aws.test.external_id}&amp;#34;, ] } } } Datadog providerにはないSlackなどその他のintegrationは手動で設定する必要がある。 また、ログを集める場合Serverless Application Repositoryから公式のDatadog-Log-Forwarderを入れて AWS IntegrationのところにLambdaのARNを入れるのも手動。
- 追記 (2020-12-07): 今はDatadog Forwaderとなり、Serverless Application Repositoryからではなく、直接CloudFormationのスタックを上げるようになっているのでaws_cloudformation_stackでデプロイできる。AWS IntegrationのRoleに必要なPolicyを与えてCollect LogsタブのLambda Cloudwatch Logsにチェックを入れると、Optionally limit resource collectionを設定しているならそのtagを持つ、全てのFunctionのStreamに自動でForwarderへのSubscription Filterが作成され転送が始まる。チェックを外すと削除されるが、この際もtagを見ているようで、条件を変更するとSubscription Filterが一部残ることがあった。ログだけではなくlambdaからのカスタムメトリクスの中継や、estimated_costなどの拡張メトリクスの送信も行う。</description>
+ 追記 (2020-12-07): 今はDatadog Forwaderとなり、Serverless Application Repositoryからではなく、直接CloudFormationのスタックを上げるようになっているのでaws_cloudformation_stackでデプロイできる。AWS IntegrationのRoleに必要なPolicyを与えてCollect LogsタブのLambda Cloudwatch Logsにチェックを入れると、Optionally limit resource collectionを設定しているならそのtagを持つ、全てのFunctionのStreamに自動でForwarderへのSubscription Filterが作成され転送が始まる。チェックを外すと削除されるが、この際もtagを見ているようで、条件を変更するとSubscription Filterが一部残ることがあった。ログだけではなくlambdaからのカスタムメトリクスの中継や、estimated_costなどの拡張メトリクスの送信も行う。</description>
     </item>
     
     <item>
