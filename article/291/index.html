@@ -409,10 +409,10 @@ Optimizerと損失関数を渡して<code>compile()</code>する。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">model</span>(feature_columns):
     model <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>Sequential([
         tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>DenseFeatures(feature_columns),
-        tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">128</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu),
-        tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dropout(<span style="color:#bd93f9">0.2</span>),
-        tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">128</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu),
-        tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">2</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>sigmoid),
+        tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">128</span>, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;dense1&#34;</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu),
+        tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dropout(dropout, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;dropout&#34;</span>),
+        tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">128</span>, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;dense2&#34;</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu),
+        tf<span style="color:#ff79c6">.</span>keras<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(<span style="color:#bd93f9">2</span>, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;output&#34;</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>sigmoid),
     ])
 
     model<span style="color:#ff79c6">.</span>compile(optimizer<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;adam&#39;</span>, loss<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;binary_crossentropy&#39;</span>, metrics<span style="color:#ff79c6">=</span>[<span style="color:#f1fa8c">&#39;accuracy&#39;</span>])
@@ -421,7 +421,8 @@ Optimizerと損失関数を渡して<code>compile()</code>する。</p>
 </code></pre></div><p>用いるカラムを選んで<code>DenseFeatures</code>に渡す。
 ageとfareはそのまま数値として扱うが、sexは<code>[0, 1]</code>のカテゴリーなので、その値をカテゴリーIDとして
 <a href="https://www.tensorflow.org/api_docs/python/tf/feature_column/indicator_column">indicator_column()</a>でone-hot vectorとして扱われるようにする。
-<code>fit()</code>でパラメータを更新し、<code>evaluate()</code>で損失とmetricsを取得でき、<code>predict()</code>で推論できる。</p>
+<code>fit()</code>でパラメータを更新し、<code>evaluate()</code>で損失とmetricsを取得でき、<code>predict()</code>で推論できる。
+また、<a href="https://www.tensorflow.org/api_docs/python/tf/keras/Model#summary">summary()</a>でレイヤーやそのパラメータ数を表示できる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">m <span style="color:#ff79c6">=</span> model([
     tf<span style="color:#ff79c6">.</span>feature_column<span style="color:#ff79c6">.</span>numeric_column(<span style="color:#f1fa8c">&#39;age&#39;</span>),
     tf<span style="color:#ff79c6">.</span>feature_column<span style="color:#ff79c6">.</span>indicator_column(tf<span style="color:#ff79c6">.</span>feature_column<span style="color:#ff79c6">.</span>categorical_column_with_identity(<span style="color:#f1fa8c">&#39;sex&#39;</span>, <span style="color:#bd93f9">2</span>)),
@@ -429,6 +430,7 @@ ageとfareはそのまま数値として扱うが、sexは<code>[0, 1]</code>の
 ])
 <span style="color:#ff79c6">for</span> features <span style="color:#ff79c6">in</span> ds_train<span style="color:#ff79c6">.</span>take(<span style="color:#bd93f9">100</span>):
     m<span style="color:#ff79c6">.</span>fit(features[<span style="color:#f1fa8c">&#39;features&#39;</span>], tf<span style="color:#ff79c6">.</span>one_hot(features[<span style="color:#f1fa8c">&#39;survived&#39;</span>], <span style="color:#bd93f9">2</span>))
+    m<span style="color:#ff79c6">.</span>summary()
     loss, accuracy <span style="color:#ff79c6">=</span> m<span style="color:#ff79c6">.</span>evaluate(features[<span style="color:#f1fa8c">&#39;features&#39;</span>], tf<span style="color:#ff79c6">.</span>one_hot(features[<span style="color:#f1fa8c">&#39;survived&#39;</span>], <span style="color:#bd93f9">2</span>), verbose<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0</span>)
     <span style="color:#ff79c6">print</span>(f<span style="color:#f1fa8c">&#39;loss={loss}, accuracy={accuracy}&#39;</span>)
     predicted <span style="color:#ff79c6">=</span> m<span style="color:#ff79c6">.</span>predict(features[<span style="color:#f1fa8c">&#39;features&#39;</span>], verbose<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0</span>)
@@ -436,6 +438,26 @@ ageとfareはそのまま数値として扱うが、sexは<code>[0, 1]</code>の
 </code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">...
 4/4 [==============================] - 0s 3ms/step - loss: 0.8360 - accuracy: 0.6500
 loss=0.5920160412788391, accuracy=0.7099999785423279
+...
+Model: &#34;sequential&#34;
+_________________________________________________________________
+Layer (type)                 Output Shape              Param #   
+=================================================================
+dense_features (DenseFeature multiple                  0         
+_________________________________________________________________
+dense1 (Dense)               multiple                  640       
+_________________________________________________________________
+dropout (Dropout)            multiple                  0         
+_________________________________________________________________
+dense2 (Dense)               multiple                  16512     
+_________________________________________________________________
+output (Dense)               multiple                  258       
+=================================================================
+Total params: 17,410
+Trainable params: 17,410
+Non-trainable params: 0
+_________________________________________________________________
+...
 tf.Tensor(
 [0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 1 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0
  0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 1 0 0 0 0 0 1 0 0 0 0
