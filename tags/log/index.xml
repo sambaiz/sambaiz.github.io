@@ -6,7 +6,28 @@
     <description>Recent content in log on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sat, 23 Jan 2021 00:04:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/log/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sun, 07 Feb 2021 23:55:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/log/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Kinesis Data Analyticsによる集計遅延箇所の特定</title>
+      <link>https://www.sambaiz.net/article/324/</link>
+      <pubDate>Sun, 07 Feb 2021 23:55:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/324/</guid>
+      <description>Kinesis Data Analytics (KDA)はマッピングしたカラムに加えて、Kinesis Data Streams (KDS)に入った時間 APPROXIMATE_ARRIVAL_TIME とKDAのin-app STREAMに入った時間 ROWTIME をソースに含める。これらとログのタイムスタンプを合わせることで集計遅延が起きた際にどこが原因になっているかを特定することができる。
+Log aggregatorでのタイムスタンプの付加 集計対象のログを集約サーバーを中継して送っている場合、そこでのタイムスタンプを付加しておくとバッファリングによる滞りを検知できる。 fluentdのmonitor_agentの値をDatadogなどに送って監視することもできるが、 集計ウィンドウが短い場合、collection_intervalの関係で、正確な状態を把握しづらいことがある。
+fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する - sambaiz-net
+レコードへの付加にはfluentdのコアに含まれているrecord_transformerを使うこともできるが、性能が良いfluent-plugin-record-modifierという選択肢もある。
+fluentdのrecord_transformerでログを加工する - sambaiz-net
+&amp;lt;filter test.log&amp;gt; @type record_modifier &amp;lt;record&amp;gt; ts_aggr ${Time.now().strftime(&amp;#39;%Y-%m-%dT%H:%M:%S.%L%z&amp;#39;)} &amp;lt;/record&amp;gt; &amp;lt;/filter&amp;gt; また、ログのタイムスタンプをtime_keyとしている場合、keep_time_key trueにするか&amp;lt;inject&amp;gt;してKDSに送られるようにする。
+fluentdのとでtime_formatを指定しなかった場合の挙動と内部処理 - sambaiz-net
+TIMESTAMPのパース タイムスタンプ文字列をTIMESTAMP型のカラムにマッピングすることもできるが、2021-01-01T00:00:00.000+0900形式の文字列をマッピングしたところ、UTCで18時間後ろにずれた時間になってしまった。
+そこで一度CHARにマッピングしてからフォーマットを明示してCHAR_TO_TIMESTAMP(&#39;&amp;lt;format_string&amp;gt;&#39;,&amp;ldquo;column_name&amp;rdquo;)することにした。 &amp;lt;format_string&amp;gt;はJavaのSimpleDateFormatで記述し、この例の場合はyyyy-MM-dd&#39;&#39;T&#39;&#39;HH:mm:ss.SSSZのようになる。
+マッピングの変更後にSourcesの方に何も出てこなくなった場合は、クエリの方で問題が起きている可能性があるので、コンソール上でクエリを保存してみてエラーにならないか確認し、必要なら修正する。
+クエリ Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成 - sambaiz-net
+各タイムスタンプのMINを取って現在時刻との差を取れば、そのウインドウ集計対象のログのうち最も古いものの各箇所からのレイテンシが出せる。
+CREATE OR REPLACE PUMP &amp;#34;TEST_PUMP&amp;#34; AS INSERT INTO &amp;#34;TEST_STREAM&amp;#34; (&amp;#34;min_ts&amp;#34;, &amp;#34;min_ts_kds&amp;#34;, &amp;#34;min_ts_kda&amp;#34;) SELECT STREAM MIN(CHAR_TO_TIMESTAMP(&amp;#39;yyyy-MM-dd&amp;#39;&amp;#39;T&amp;#39;&amp;#39;HH:mm:ss.SSSZ&amp;#39;, &amp;#34;ts&amp;#34;)) as min_ts, MIN(&amp;#34;APPROXIMATE_ARRIVAL_TIME&amp;#34;) as min_ts_kds, &amp;#34;ROWTIME&amp;#34; as min_ts_kda FROM &amp;#34;SOURCE_SQL_STREAM_001&amp;#34; GROUP BY STEP(&amp;#34;SOURCE_SQL_STREAM_001&amp;#34;.</description>
+    </item>
+    
     <item>
       <title>fluentdの&lt;parse&gt;と&lt;inject&gt;でtime_formatを指定しなかった場合の挙動と内部処理</title>
       <link>https://www.sambaiz.net/article/322/</link>

@@ -6,7 +6,28 @@
     <description>Recent content on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sat, 23 Jan 2021 19:03:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sun, 07 Feb 2021 23:55:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Kinesis Data Analyticsによる集計遅延箇所の特定</title>
+      <link>https://www.sambaiz.net/article/324/</link>
+      <pubDate>Sun, 07 Feb 2021 23:55:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/324/</guid>
+      <description>Kinesis Data Analytics (KDA)はマッピングしたカラムに加えて、Kinesis Data Streams (KDS)に入った時間 APPROXIMATE_ARRIVAL_TIME とKDAのin-app STREAMに入った時間 ROWTIME をソースに含める。これらとログのタイムスタンプを合わせることで集計遅延が起きた際にどこが原因になっているかを特定することができる。
+Log aggregatorでのタイムスタンプの付加 集計対象のログを集約サーバーを中継して送っている場合、そこでのタイムスタンプを付加しておくとバッファリングによる滞りを検知できる。 fluentdのmonitor_agentの値をDatadogなどに送って監視することもできるが、 集計ウィンドウが短い場合、collection_intervalの関係で、正確な状態を把握しづらいことがある。
+fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する - sambaiz-net
+レコードへの付加にはfluentdのコアに含まれているrecord_transformerを使うこともできるが、性能が良いfluent-plugin-record-modifierという選択肢もある。
+fluentdのrecord_transformerでログを加工する - sambaiz-net
+&amp;lt;filter test.log&amp;gt; @type record_modifier &amp;lt;record&amp;gt; ts_aggr ${Time.now().strftime(&amp;#39;%Y-%m-%dT%H:%M:%S.%L%z&amp;#39;)} &amp;lt;/record&amp;gt; &amp;lt;/filter&amp;gt; また、ログのタイムスタンプをtime_keyとしている場合、keep_time_key trueにするか&amp;lt;inject&amp;gt;してKDSに送られるようにする。
+fluentdのとでtime_formatを指定しなかった場合の挙動と内部処理 - sambaiz-net
+TIMESTAMPのパース タイムスタンプ文字列をTIMESTAMP型のカラムにマッピングすることもできるが、2021-01-01T00:00:00.000+0900形式の文字列をマッピングしたところ、UTCで18時間後ろにずれた時間になってしまった。
+そこで一度CHARにマッピングしてからフォーマットを明示してCHAR_TO_TIMESTAMP(&#39;&amp;lt;format_string&amp;gt;&#39;,&amp;ldquo;column_name&amp;rdquo;)することにした。 &amp;lt;format_string&amp;gt;はJavaのSimpleDateFormatで記述し、この例の場合はyyyy-MM-dd&#39;&#39;T&#39;&#39;HH:mm:ss.SSSZのようになる。
+マッピングの変更後にSourcesの方に何も出てこなくなった場合は、クエリの方で問題が起きている可能性があるので、コンソール上でクエリを保存してみてエラーにならないか確認し、必要なら修正する。
+クエリ Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成 - sambaiz-net
+各タイムスタンプのMINを取って現在時刻との差を取れば、そのウインドウ集計対象のログのうち最も古いものの各箇所からのレイテンシが出せる。
+CREATE OR REPLACE PUMP &amp;#34;TEST_PUMP&amp;#34; AS INSERT INTO &amp;#34;TEST_STREAM&amp;#34; (&amp;#34;min_ts&amp;#34;, &amp;#34;min_ts_kds&amp;#34;, &amp;#34;min_ts_kda&amp;#34;) SELECT STREAM MIN(CHAR_TO_TIMESTAMP(&amp;#39;yyyy-MM-dd&amp;#39;&amp;#39;T&amp;#39;&amp;#39;HH:mm:ss.SSSZ&amp;#39;, &amp;#34;ts&amp;#34;)) as min_ts, MIN(&amp;#34;APPROXIMATE_ARRIVAL_TIME&amp;#34;) as min_ts_kds, &amp;#34;ROWTIME&amp;#34; as min_ts_kda FROM &amp;#34;SOURCE_SQL_STREAM_001&amp;#34; GROUP BY STEP(&amp;#34;SOURCE_SQL_STREAM_001&amp;#34;.</description>
+    </item>
+    
     <item>
       <title>Pythonのmoduleとpackage</title>
       <link>https://www.sambaiz.net/article/323/</link>
@@ -206,7 +227,7 @@ AWS SAMとGoでPRのコメントに対して返事を返すGitHub Appを作る -
 リポジトリに対して大方の権限は付いているが、フォークしたリポジトリからはreadしかできないようになっている。
 actions/github-script octokit/core.jsを用いたGitHub APIを呼ぶスクリプトを実行できるAction。 直接ワークフローファイルに書くこともできるが、別のファイルに分けている。
 containsで hey botという文字列が含まれるときのみジョブを実行するようにしている。
-name: echo-bot on: issue_comment: types: [created] jobs: echo-bot: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 - uses: actions/github-script@v2 if: ${{ contains(github.event.comment.body, &amp;#39;hey bot&amp;#39;) }} with: github-token: ${{secrets.GITHUB_TOKEN}} script: | const script = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/script.js`) script({github, context}) $ cat .github/workflows/script.js module.exports = ({github, context}) =&amp;gt; { github.issues.createComment({ issue_number: context.payload.issue.number, owner: context.payload.repository.owner.login, repo: context.payload.repository.name, body: `You said ${context.</description>
+name: echo-bot on: issue_comment: types: [created] jobs: echo-bot: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 - uses: actions/github-script@v2 if: ${{ contains(github.event.comment.body, &amp;#39;hey bot&amp;#39;) }} with: github-token: ${{secrets.GITHUB_TOKEN}} script: |const script = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/script.js`) script({github, context}) $ cat .github/workflows/script.js module.exports = ({github, context}) =&amp;gt; { github.issues.createComment({ issue_number: context.payload.issue.number, owner: context.payload.repository.owner.login, repo: context.payload.repository.name, body: `You said ${context.</description>
     </item>
     
     <item>
@@ -1587,7 +1608,7 @@ RDD vs DataFrames and Datasets: A Tale of Three Apache Spark APIs</description>
 Serverless FrameworkでLambdaをデプロイする - sambaiz-net
 SAM CLIのインストール $ brew tap aws/tap $ brew install aws-sam-cli $ sam --version SAM CLI, version 0.11.0 init initすると次の構成のディレクトリが作られる。
 $ sam init --runtime go1.x -n test-sam $ cd test-sam/ $ ls Makefile	README.md	hello-world	template.yaml template.yamlの中に関数の設定やCloudFormationのテンプレートを書く。
-$ cat template.yaml AWSTemplateFormatVersion: &amp;#39;2010-09-09&amp;#39; Transform: AWS::Serverless-2016-10-31 Description: &amp;gt; test-sam Sample SAM Template for test-sam # More info about Globals: https://github.</description>
+$ cat template.yaml AWSTemplateFormatVersion: &amp;#39;2010-09-09&amp;#39; Transform: AWS::Serverless-2016-10-31 Description: &amp;gt;test-sam Sample SAM Template for test-sam # More info about Globals: https://github.</description>
     </item>
     
     <item>
@@ -1936,7 +1957,7 @@ $ jobs [1]+ 停止 ./foo $ bg 1 $ jobs [1]+ 実行中 ./foo $ disown -h %1 </des
       <guid>https://www.sambaiz.net/article/183/</guid>
       <description>(追記: 2019-04-13) 2.1からのOrbを使うと自分でjobを書かなくてもよくなる CircleCI 2.1からのOrbでdocker buildしてECRにpushし、Slackに通知させる - sambaiz-net
  masterにpushしたときと、リリースタグを切ったときにビルドされるようにする。
-version: 2 jobs: build: docker: - image: google/cloud-sdk environment: GCP_PROJECT: &amp;lt;project_name&amp;gt; IMAGE_NAME: &amp;lt;image_name&amp;gt; steps: - checkout - setup_remote_docker: version: 18.05.0-ce - run: name: gcloud auth command: | echo $GCLOUD_SERVICE_KEY | base64 --decode &amp;gt; ${HOME}/gcloud-service-key.json gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json gcloud --quiet auth configure-docker - run: name: docker build &amp;amp; push command: | docker build -t asia.gcr.io/${GCP_PROJECT}/${IMAGE_NAME}:${CIRCLE_BUILD_NUM} . docker tag asia.</description>
+version: 2 jobs: build: docker: - image: google/cloud-sdk environment: GCP_PROJECT: &amp;lt;project_name&amp;gt; IMAGE_NAME: &amp;lt;image_name&amp;gt; steps: - checkout - setup_remote_docker: version: 18.05.0-ce - run: name: gcloud auth command: |echo $GCLOUD_SERVICE_KEY | base64 --decode &amp;gt; ${HOME}/gcloud-service-key.json gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json gcloud --quiet auth configure-docker - run: name: docker build &amp;amp; push command: |docker build -t asia.gcr.io/${GCP_PROJECT}/${IMAGE_NAME}:${CIRCLE_BUILD_NUM} . docker tag asia.gcr.io/${GCP_PROJECT}/${IMAGE_NAME}:${CIRCLE_BUILD_NUM} asia.gcr.io/${GCP_PROJECT}/${IMAGE_NAME}:latest if [ -n &amp;#34;${CIRCLE_TAG}&amp;#34; ]; then docker tag asia.</description>
     </item>
     
     <item>
@@ -2276,7 +2297,7 @@ multistage-buildして、GKEで動かすのでContainer Registryに上げる。
 $ docker build -t go-logging-sample . $ docker tag go-logging-sample gcr.io/&amp;lt;project_id&amp;gt;/go-logging-sample:v1 $ gcloud docker -- push gcr.io/&amp;lt;project_id&amp;gt;/go-logging-sample Fluentdの設定 fluent-plugin-bigqueryプラグインを使う。
 projectとdataset、パーティションの日付分割テーブルに入れる場合は、auto_create_tableできないのでtableも作成しておく。
 fluentdの設定はConfigMapで持つ。
-apiVersion: v1 kind: ConfigMap metadata: name: fluentd-config data: fluent.conf: | &amp;lt;source&amp;gt; @type tail format json path /var/log/app.log pos_file /var/log/app.log.pos tag bigquery &amp;lt;/source&amp;gt; &amp;lt;match bigquery&amp;gt; @type bigquery method load &amp;lt;buffer time&amp;gt; @type file path /var/log/bigquery.*.buffer timekey 1d flush_at_shutdown true &amp;lt;/buffer&amp;gt; auth_method	compute_engine project &amp;lt;project-name&amp;gt; dataset &amp;lt;dataset-name&amp;gt; table &amp;lt;table-name&amp;gt;$%Y%m%d fetch_schema true ignore_unknown_values true	&amp;lt;/match&amp;gt; プラグイン入りのfluentdイメージもビルドして上げる。</description>
+apiVersion: v1 kind: ConfigMap metadata: name: fluentd-config data: fluent.conf: |&amp;lt;source&amp;gt; @type tail format json path /var/log/app.log pos_file /var/log/app.log.pos tag bigquery &amp;lt;/source&amp;gt; &amp;lt;match bigquery&amp;gt; @type bigquery method load &amp;lt;buffer time&amp;gt; @type file path /var/log/bigquery.*.buffer timekey 1d flush_at_shutdown true &amp;lt;/buffer&amp;gt; auth_method	compute_engine project &amp;lt;project-name&amp;gt; dataset &amp;lt;dataset-name&amp;gt; table &amp;lt;table-name&amp;gt;$%Y%m%d fetch_schema true ignore_unknown_values true	&amp;lt;/match&amp;gt; プラグイン入りのfluentdイメージもビルドして上げる。</description>
     </item>
     
     <item>
