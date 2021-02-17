@@ -6,7 +6,29 @@
     <description>Recent content on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Fri, 12 Feb 2021 02:53:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Wed, 17 Feb 2021 02:53:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>偽陽性を許容して空間効率良くキーの存在を確認するBloom filterとCuckoo filter</title>
+      <link>https://www.sambaiz.net/article/326/</link>
+      <pubDate>Wed, 17 Feb 2021 02:53:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/326/</guid>
+      <description>データストアへのアクセス抑制や、ブロッキングを行うためにキーの存在を確認する際、 全てのキーを保持して探索すれば100%正しく判定できるが、キーが長く数が膨大になるとメモリの使用量が問題になることがある。 これらの例では偽陽性が許容できることが多く、次のフィルタを使うと空間効率良くキーの存在を確認できる。
+Bloom filter 1970年に考案されたフィルタで、 LevelDBやCassandraで使われている。
+GoogleのkvsライブラリLevelDBを使う - sambaiz-net
+初期値0のビット配列と、そのいずれかのビットにデータをマッピングするk個のハッシュ関数を定義し、 含めるデータを各ハッシュ関数に通して、マッピングされたビットを1に更新していく。 これにより、いずれかのハッシュ関数によって0のビットにマッピングされるデータは、必ずフィルタに含まれないことが分かる。
+データの追加と存在の確認を、いずれも要素数に依存しないO(k)で行うことができるが、削除はできない。 0/1ではなくインクリメントしていくCounting filterという実装にすると空間効率は劣るが、デクリメントすることで削除できるようになる。
+偽陽性率はビット配列長を大きくすると低くなり、データの数が増えると高くなる。 kはビット配列の情報量を最大化させる、つまり半分のビットが1になるように最適化する。
+自己情報量、エントロピー、KL情報量、交差エントロピーと尤度関数 - sambaiz-net
+Cuckoo filter 2014年に発表されたフィルタ。
+Cuckoo Filter: Practically Better Than Bloom
+データを追加する際は、そのままハッシュ関数に通したi_1と、フィンガープリントfをハッシュ関数に通したものとi_1のXORであるi_2を取って、 対応するいずれかのバケットが空いていたらそこにfを入れる。 いずれも空いていなければ、そのどちらかから一つ追い出して、その値とindexのXORを取れば分かるもう片方のバケットに再度入れる。 既にそこも一杯ならそこからも追い出し、同様の処理を行う。これを追い出されなくなるまで繰り返す。 そして、もしfがいずれのバケットにも入っていない場合、キーが存在しないことが分かる。それをバケットから除けば削除される。
+バケットの空きが十分ならCounting filterよりも高速にデータを追加できるが、埋まるに連れて追い出しが頻発しパフォーマンスが下がっていく。
+フィンガープリントを長くすると、Bloom Filterと比較して少ない容量で偽陽性率を低くできる。
+参考 確率的データ構造の比較：カッコウフィルタ対ブルームフィルタ | POSTD
+ブルームフィルタ - Wikipedia</description>
+    </item>
+    
     <item>
       <title>PythonのProtocolによるstructural subtypingでインタフェースを記述する</title>
       <link>https://www.sambaiz.net/article/325/</link>
@@ -14,9 +36,9 @@
       
       <guid>https://www.sambaiz.net/article/325/</guid>
       <description>interfaceが文法に存在しないPythonで関数が呼べることを保証する方法の一つに 組み込み関数hasattr()によるチェックがあるが、 都度処理を挟む必要があるのと、実行してみないと分からない問題があった。
-class ImplClass(): def foo(self): print(&amp;#34;ok&amp;#34;) class NoImplClass(): pass def call(d): assert hasattr(d, &amp;#39;foo&amp;#39;) d.foo() if __name__ == &amp;#34;__main__&amp;#34;: call(ImplClass()) # =&amp;gt; ok call(NoImplClass()) # =&amp;gt; AssertionError Python 3.5で実装されたType Hintsで共通の基底クラスを型として取ればmypyによる実行前の静的解析で検知できるようになったが、サブクラスでの実装は強制できない。
+class ImplClass(): def foo(self): print(&amp;#34;ok&amp;#34;) class NoImplClass(): pass def call(d): assert hasattr(d, &amp;#39;foo&amp;#39;) d.foo() if __name__ == &amp;#34;__main__&amp;#34;: call(ImplClass()) # =&amp;gt; ok call(NoImplClass()) # =&amp;gt; AssertionError Python 3.5で実装されたType Hintsで共通の基底クラスを型として取れば実行前にmypyによる静的解析で検知できるが、サブクラスでの実装は強制できない。
 PythonのType Hintsとmypy - sambaiz-net
-class BaseClass: def foo(self): print(&amp;#34;please implement this&amp;#34;) class ImplClass(BaseClass): def foo(self): print(&amp;#34;ok&amp;#34;) class NoImplClass(BaseClass): pass def call(d: BaseClass): d.foo() if __name__ == &amp;#34;__main__&amp;#34;: call(BaseClass()) # =&amp;gt; please implement this call(ImplClass()) # =&amp;gt; ok call(NoImplClass()) # =&amp;gt; please implement this それを解決するのがPEP3119のAbstract Base Classesで、 abc moduleで定義することができる。 次のようにabc.</description>
+class BaseClass: def foo(self): print(&amp;#34;please implement this&amp;#34;) class ImplClass(BaseClass): def foo(self): print(&amp;#34;ok&amp;#34;) class NoImplClass(BaseClass): pass def call(d: BaseClass): d.foo() if __name__ == &amp;#34;__main__&amp;#34;: call(BaseClass()) # =&amp;gt; please implement this call(ImplClass()) # =&amp;gt; ok call(NoImplClass()) # =&amp;gt; please implement this それを解決するのがPEP3119のAbstract Base Classesで、 次のようにabc.</description>
     </item>
     
     <item>
@@ -30,7 +52,7 @@ Log aggregatorでのタイムスタンプの付加 集計対象のログを集�
 fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する - sambaiz-net
 レコードへの付加にはfluentdのコアに含まれているrecord_transformerを使うこともできるが、性能が良いfluent-plugin-record-modifierという選択肢もある。
 fluentdのrecord_transformerでログを加工する - sambaiz-net
-&amp;lt;filter test.log&amp;gt; @type record_modifier &amp;lt;record&amp;gt; ts_aggr ${Time.now().strftime(&amp;#39;%Y-%m-%dT%H:%M:%S.%L%z&amp;#39;)} &amp;lt;/record&amp;gt; &amp;lt;/filter&amp;gt; また、ログのタイムスタンプをtime_keyとしている場合、keep_time_key trueにするか&amp;lt;inject&amp;gt;してKDSに送られるようにする。
+&amp;lt;filter test.log&amp;gt; @type record_modifier &amp;lt;record&amp;gt; ts_aggr ${Time.now().strftime(&amp;#39;%Y-%m-%dT%H:%M:%S.%L%z&amp;#39;)} &amp;lt;/record&amp;gt; &amp;lt;/filter&amp;gt; また、ログのタイムスタンプをtime_keyとしている場合、keep_time_key trueにするか&amp;lt;inject&amp;gt;してKDSに送られるようにする。
 fluentdのとでtime_formatを指定しなかった場合の挙動と内部処理 - sambaiz-net
 TIMESTAMPのパース タイムスタンプ文字列をTIMESTAMP型のカラムにマッピングすることもできるが、2021-01-01T00:00:00.000+0900形式の文字列をマッピングしたところ、UTCで18時間後ろにずれた時間になってしまった。
 そこで一度CHARにマッピングしてからフォーマットを明示してCHAR_TO_TIMESTAMP(&#39;&amp;lt;format_string&amp;gt;&#39;,&amp;ldquo;column_name&amp;rdquo;)することにした。 &amp;lt;format_string&amp;gt;はJavaのSimpleDateFormatで記述し、この例の場合はyyyy-MM-dd&#39;&#39;T&#39;&#39;HH:mm:ss.SSSZのようになる。
@@ -314,7 +336,8 @@ Subnet Group クラスタに設定するVPCのサブネットの集合。クラ�
       
       <guid>https://www.sambaiz.net/article/304/</guid>
       <description>Go Compilerが行う、関数の処理をインラインに展開することで呼び出しコストを削減するFunction Inliningの話。 式の数が40未満でループやクロージャなどが含まれないシンプルな処理の関数が対象となる。
-まずは次の例で挙動を確認する。
+ (追記: 2021-02-17) Go 1.16でラベルのないループがInliningされるようになった
+ まずは次の例で挙動を確認する。
 package main import &amp;#34;fmt&amp;#34; func myfunc(a, b int) int { return a + b } func main() { fmt.Println(myfunc(1, 2)) } -gcflags に -m を渡してビルドすると最適化の内容が確認でき、2つ渡すとより詳細な出力が得られる。
 $ go tool compile -help usage: compile [options] file.go... ... -m print optimization decisions myfunc()やfmt.Println()がInliningされたことや、myfunc(1, 2)がヒープに割り当てられたことなどが分かる。 ちなみにコストの低いスタックか、高いヒープのどちらに割り当てるかはEscape analysisによって決まる。
 $ go build -gcflags &amp;#39;-m -m&amp;#39; main.go # command-line-arguments ./main.go:5:6: can inline myfunc with cost 4 as: func(int, int) int { return a + b } &amp;lt;---- .</description>
