@@ -238,14 +238,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>CDKでStep Functionsによるワークフローを構築する - sambaiz-net</title>
-  <meta name="twitter:title" content="CDKでStep Functionsによるワークフローを構築する - sambaiz-net">
-  <meta property='og:title' content="CDKでStep Functionsによるワークフローを構築する - sambaiz-net">
+  <title>AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net</title>
+  <meta name="twitter:title" content="AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net">
+  <meta property='og:title' content="AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="前回との差分のデータを処理する">
+  <meta name="twitter:description" content="前回との差分のデータを処理する">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/332/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/333/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -257,9 +260,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "CDKでStep Functionsによるワークフローを構築する - sambaiz-net",
-    "datePublished": "2021-04-10T21:19:00JST",
-    "dateModified": "2021-04-10T21:19:00JST",
+    "headline": "AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net",
+    "datePublished": "2021-04-16T20:00:00JST",
+    "dateModified": "2021-04-16T20:00:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -281,7 +284,7 @@
       "height": 138,
       "width": 138
     },
-    "description": ""
+    "description": "前回との差分のデータを処理する"
   }
 </script>
 </head>
@@ -353,84 +356,40 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>CDKでStep Functionsによるワークフローを構築する</h1>
-        <time>2021-04-10</time>
-        <a class="tag" href="/tags/aws/">aws</a>
+        <h1>AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う</h1>
+        <time>2021-04-16</time>
+        <a class="tag" href="/tags/aws/">aws</a><a class="tag" href="/tags/spark/">spark</a>
       </div>
-      <p>Step FunctionsはLambdaやGlueのJobなどからなるワークフローを構築できるサービス。これをCDKで構築する。
-全体のコードは<a href="https://github.com/sambaiz/cdk-stepfunctions-sample">GitHub</a>にある。</p>
-<p>taskを<code>next()</code>で繋げたワークフローを<code>StateMachine</code>に渡す流れ。
-複数のtaskを同時に実行する<code>Parallel()</code>は配列をoutputする。
-条件分岐を行う<code>Choice()</code>で<code>otherwise()</code>を指定しないとエラーになる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ts" data-lang="ts"><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>;
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> sfn <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-stepfunctions&#39;</span>;
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> tasks <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-stepfunctions-tasks&#39;</span>;
-<span style="color:#ff79c6">import</span> { <span style="color:#8be9fd;font-style:italic">Function</span>, Code, Runtime } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-lambda&#39;</span>;
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> path <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;path&#39;</span>
-
-<span style="color:#ff79c6">export</span> <span style="color:#ff79c6">class</span> CdkStepfunctionsSampleStack <span style="color:#ff79c6">extends</span> cdk.Stack {
-  <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">cdk.Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span>) {
-    <span style="color:#ff79c6">super</span>(scope, id, props);
-
-    <span style="color:#ff79c6">const</span> fetchScoreFunction <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> <span style="color:#8be9fd;font-style:italic">Function</span>(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;FetchScoreFunction&#39;</span>, {
-      runtime: <span style="color:#8be9fd">Runtime.GO_1_X</span>,
-      code: <span style="color:#8be9fd">Code.fromAsset</span>(path.join(__dirname, <span style="color:#f1fa8c">&#39;lambda&#39;</span>, <span style="color:#f1fa8c">&#39;fetchScore&#39;</span>)),
-      handler<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;main&#34;</span>
-    })
-
-    <span style="color:#ff79c6">const</span> invokeFetchScoreFunction1 <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> tasks.LambdaInvoke(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Invoke FetchScoreFunction1&#39;</span>, {
-      lambdaFunction: <span style="color:#8be9fd">fetchScoreFunction</span>,
-      outputPath<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;$.Payload&#39;</span>,
-      retryOnServiceExceptions: <span style="color:#8be9fd">false</span>,
-    })
-
-    <span style="color:#ff79c6">const</span> invokeFetchScoreFunction2 <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> tasks.LambdaInvoke(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Invoke FetchScoreFunction2&#39;</span>, {
-      lambdaFunction: <span style="color:#8be9fd">fetchScoreFunction</span>,
-      outputPath<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;$.Payload&#39;</span>,
-      retryOnServiceExceptions: <span style="color:#8be9fd">false</span>,
-    })
-
-    <span style="color:#ff79c6">const</span> fetchScores <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> sfn.Parallel(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Fetch Scores&#39;</span>).branch(
-      invokeFetchScoreFunction1,
-      invokeFetchScoreFunction2
-    )
-
-    <span style="color:#ff79c6">const</span> makeSummaryFunction <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> <span style="color:#8be9fd;font-style:italic">Function</span>(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;MakeSummaryFunction&#39;</span>, {
-      runtime: <span style="color:#8be9fd">Runtime.GO_1_X</span>,
-      code: <span style="color:#8be9fd">Code.fromAsset</span>(path.join(__dirname, <span style="color:#f1fa8c">&#39;lambda&#39;</span>, <span style="color:#f1fa8c">&#39;makeSummary&#39;</span>)),
-      handler<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;main&#34;</span>
-    })
-
-    <span style="color:#ff79c6">const</span> invokeMakeSummaryFunction <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> tasks.LambdaInvoke(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Invoke MakeSummaryFunction&#39;</span>, {
-      lambdaFunction: <span style="color:#8be9fd">makeSummaryFunction</span>,
-      outputPath<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;$.Payload&#39;</span>,
-      retryOnServiceExceptions: <span style="color:#8be9fd">false</span>,
-    })
-
-    <span style="color:#ff79c6">const</span> definition <span style="color:#ff79c6">=</span> fetchScores.next(
-      invokeMakeSummaryFunction
-    ).next(
-      <span style="color:#ff79c6">new</span> sfn.Choice(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Check total is over 14&#39;</span>)
-        .when(sfn.Condition.numberGreaterThan(<span style="color:#f1fa8c">&#39;$.retry&#39;</span>, <span style="color:#bd93f9">5</span>),
-          <span style="color:#ff79c6">new</span> sfn.Fail(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Job Failed&#39;</span>, {
-            cause<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;AWS Batch Job Failed&#39;</span>,
-            error<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;DescribeJob returned FAILED&#39;</span>,
-          })
-        )
-        .when(sfn.Condition.numberLessThanEquals(<span style="color:#f1fa8c">&#39;$.total&#39;</span>, <span style="color:#bd93f9">14</span>), fetchScores)
-        .otherwise(<span style="color:#ff79c6">new</span> sfn.Succeed(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Job Succeeded&#39;</span>))
-    )
-  
-    <span style="color:#ff79c6">new</span> sfn.StateMachine(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;StateMachine&#39;</span>, {
-      definition,
-      timeout: <span style="color:#8be9fd">cdk.Duration.minutes</span>(<span style="color:#bd93f9">5</span>)
-    });
-  }
-}
-</code></pre></div><p>実行すると次のようにグラフや実行結果を見ることができる。
-どこで、どのような入力によって失敗しているかが一目で分かるのが便利だ。</p>
-<p><img src="https://www.sambaiz.net/images/332.png" alt="実行結果"></p>
-
+      <p>GlueのJobの<a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/monitor-continuations.html">Bookmark</a>は
+どこまで処理したかを記録し、次回はその続きから実行できるようにする機能。
+1.0以前は対応していなかったParquetやORCも今は対応している。</p>
+<p><a href="https://www.sambaiz.net/article/203/">AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net</a></p>
+<p>Job bookamarkをEnableにして、DynamicFrameのメソッドを呼ぶ際に<code>transcation_ctx</code>を渡し、<code>job.commit()</code>するとBookmarkされる。</p>
+<p><img src="https://www.sambaiz.net/images/333.png" alt="Bookmarkの設定"></p>
+<p>例えば、S3のjsonをソースとするテーブルをカウントして出力する次のjobは、Bookmarkを有効にすると既にカウントしたものが読まれなくなるため、
+トータルの件数ではなく前回との増分が出力される。
+S3の結果整合性による参照できるようになるまでのラグも考慮されていて、
+単純に保存時間のみによって対象を選ぶのではなく、リストを持って対象の時間の少し前も見るようになっている。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">import</span> sys
+<span style="color:#ff79c6">from</span> awsglue.transforms <span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span>
+<span style="color:#ff79c6">from</span> awsglue.utils <span style="color:#ff79c6">import</span> getResolvedOptions
+<span style="color:#ff79c6">from</span> pyspark.context <span style="color:#ff79c6">import</span> SparkContext
+<span style="color:#ff79c6">from</span> awsglue.context <span style="color:#ff79c6">import</span> GlueContext
+<span style="color:#ff79c6">from</span> awsglue.job <span style="color:#ff79c6">import</span> Job
+args <span style="color:#ff79c6">=</span> getResolvedOptions(sys<span style="color:#ff79c6">.</span>argv, [<span style="color:#f1fa8c">&#39;JOB_NAME&#39;</span>])
+sc <span style="color:#ff79c6">=</span> SparkContext()
+glueContext <span style="color:#ff79c6">=</span> GlueContext(sc)
+spark <span style="color:#ff79c6">=</span> glueContext<span style="color:#ff79c6">.</span>spark_session
+job <span style="color:#ff79c6">=</span> Job(glueContext)
+job<span style="color:#ff79c6">.</span>init(args[<span style="color:#f1fa8c">&#39;JOB_NAME&#39;</span>], args)
+source <span style="color:#ff79c6">=</span> glueContext<span style="color:#ff79c6">.</span>create_dynamic_frame<span style="color:#ff79c6">.</span>from_catalog(
+    database<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;test&#34;</span>, table_name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;test&#34;</span>, transformation_ctx<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;source&#34;</span>)
+source<span style="color:#ff79c6">.</span>toDF()<span style="color:#ff79c6">.</span>createOrReplaceTempView(<span style="color:#f1fa8c">&#34;t&#34;</span>)
+df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT COUNT(1) as cnt FROM t&#34;</span>)
+df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>mode(<span style="color:#f1fa8c">&#34;append&#34;</span>)<span style="color:#ff79c6">.</span>csv(
+    <span style="color:#f1fa8c">&#34;s3://*****/test-table-summary&#34;</span>, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
+job<span style="color:#ff79c6">.</span>commit()
+</code></pre></div>
     </div>
   </article>
 </div>

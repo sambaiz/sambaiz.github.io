@@ -6,7 +6,20 @@
     <description>Recent content in aws on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sat, 10 Apr 2021 21:19:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/aws/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Fri, 16 Apr 2021 20:00:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/aws/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う</title>
+      <link>https://www.sambaiz.net/article/333/</link>
+      <pubDate>Fri, 16 Apr 2021 20:00:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/333/</guid>
+      <description>GlueのJobのBookmarkは どこまで処理したかを記録し、次回はその続きから実行できるようにする機能。 1.0以前は対応していなかったParquetやORCも今は対応している。
+AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net
+Job bookamarkをEnableにして、DynamicFrameのメソッドを呼ぶ際にtranscation_ctxを渡し、job.commit()するとBookmarkされる。
+例えば、S3のjsonをソースとするテーブルをカウントして出力する次のjobは、Bookmarkを有効にすると既にカウントしたものが読まれなくなるため、 トータルの件数ではなく前回との増分が出力される。 S3の結果整合性による参照できるようになるまでのラグも考慮されていて、 単純に保存時間のみによって対象を選ぶのではなく、リストを持って対象の時間の少し前も見るようになっている。
+import sys from awsglue.transforms import * from awsglue.utils import getResolvedOptions from pyspark.context import SparkContext from awsglue.context import GlueContext from awsglue.job import Job args = getResolvedOptions(sys.argv, [&amp;#39;JOB_NAME&amp;#39;]) sc = SparkContext() glueContext = GlueContext(sc) spark = glueContext.spark_session job = Job(glueContext) job.init(args[&amp;#39;JOB_NAME&amp;#39;], args) source = glueContext.create_dynamic_frame.from_catalog( database=&amp;#34;test&amp;#34;, table_name=&amp;#34;test&amp;#34;, transformation_ctx=&amp;#34;source&amp;#34;) source.toDF().createOrReplaceTempView(&amp;#34;t&amp;#34;) df = spark.sql(&amp;#34;SELECT COUNT(1) as cnt FROM t&amp;#34;) df.write.mode(&amp;#34;append&amp;#34;).csv( &amp;#34;s3://*****/test-table-summary&amp;#34;, compression=&amp;#34;gzip&amp;#34;) job.</description>
+    </item>
+    
     <item>
       <title>CDKでStep Functionsによるワークフローを構築する</title>
       <link>https://www.sambaiz.net/article/332/</link>
@@ -14,7 +27,7 @@
       
       <guid>https://www.sambaiz.net/article/332/</guid>
       <description>Step FunctionsはLambdaやGlueのJobなどからなるワークフローを構築できるサービス。これをCDKで構築する。 全体のコードはGitHubにある。
-taskをnext()で繋げたワークフローをStateMachineに渡す流れ。 複数のtaskを同時に実行するParallel()は配列をoutputする。 条件分岐を行うChoice()でotherwise()を指定しないとエラーになる。 同じtaskをnextにするとループになる。
+taskをnext()で繋げたワークフローをStateMachineに渡す流れ。 複数のtaskを同時に実行するParallel()は配列をoutputする。 条件分岐を行うChoice()でotherwise()を指定しないとエラーになる。
 import * as cdk from &amp;#39;@aws-cdk/core&amp;#39;; import * as sfn from &amp;#39;@aws-cdk/aws-stepfunctions&amp;#39;; import * as tasks from &amp;#39;@aws-cdk/aws-stepfunctions-tasks&amp;#39;; import { Function, Code, Runtime } from &amp;#39;@aws-cdk/aws-lambda&amp;#39;; import * as path from &amp;#39;path&amp;#39; export class CdkStepfunctionsSampleStack extends cdk.Stack { constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) { super(scope, id, props); const fetchScoreFunction = new Function(this, &amp;#39;FetchScoreFunction&amp;#39;, { runtime: Runtime.GO_1_X, code: Code.fromAsset(path.join(__dirname, &amp;#39;lambda&amp;#39;, &amp;#39;fetchScore&amp;#39;)), handler: &amp;#34;main&amp;#34; }) const invokeFetchScoreFunction1 = new tasks.</description>
     </item>
     
@@ -322,6 +335,19 @@ SageMakerでPyTorchのモデルを学習させる - sambaiz-net
 PyTorch  Dockerfile  aws/deep-learning-containersの Deep Learning Containers Imagesから選び、ECRからpullするため認証情報を登録しておく。
 $ aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin https://763104351884.dkr.ecr.us-east-1.amazonaws.com これをベースに、開発用ツールを入れてVSCodeのDevelopment Container Scriptsを実行する。
 $ cat .devcontainer/Dockerfile FROM763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:1.5.1-cpu-py36-ubuntu16.04 RUN conda install -y yapf flake8 mypy # VS Code Development Container Scripts # https://github.com/microsoft/vscode-dev-containers/tree/v0.128.0/script-library ARG INSTALL_ZSH=&amp;#34;true&amp;#34; ARG USERNAME=&amp;#34;vscode&amp;#34; ARG USER_UID=&amp;#34;1000&amp;#34; ARG USER_GID=&amp;#34;${USER_UID}&amp;#34; ARG UPGRADE_PACKAGES=&amp;#34;true&amp;#34; ARG COMMON_SCRIPT_SOURCE=&amp;#34;https://raw.</description>
+    </item>
+    
+    <item>
+      <title>PoetryでPythonの依存パッケージを管理する</title>
+      <link>https://www.sambaiz.net/article/288/</link>
+      <pubDate>Sat, 18 Jul 2020 21:23:04 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/288/</guid>
+      <description>Poetryは比較的新しいPythonの依存管理ツールで、 pipenvの依存解決に失敗することがある問題を解消したり、ライブラリを開発しやすくしたものらしい。 まだスターはpipenvの半分ほどだがバージョンもv1.0.0に到達したしpipenvよりも速くて安定しているという話もあるので使ってみる。
+インストール pipでインストールした。ドキュメントによると依存が衝突する可能性があるとのことだったが、自分の環境では特に問題なかった。
+$ pip install --user poetry $ poetry --version Poetry version 1.0.9 使い方 PEP 518で定義されている設定ファイルpyproject.tomlを置く。
+$ cat pyproject.toml [tool.poetry] name = &amp;#34;poetry-demo&amp;#34; version = &amp;#34;0.1.0&amp;#34; description = &amp;#34;&amp;#34; authors = [&amp;#34;sambaiz &amp;lt;godgourd@gmail.com&amp;gt;&amp;#34;] [tool.poetry.dependencies] python = &amp;#34;^3.7&amp;#34; [build-system] requires = [&amp;#34;poetry&amp;gt;=0.12&amp;#34;] build-backend = &amp;#34;poetry.masonry.api&amp;#34; poetry addするとvenvがなければ作成してその中にパッケージをインストールしpyproject.tomlにも追加する。
+$ poetry add pendulum Creating virtualenv poetry-demo-t1vYebNd-py3.7 in /Users/*****/Library/Caches/pypoetry/virtualenvs ... $ cat pyproject.toml ... [tool.poetry.dependencies] python = &amp;#34;^3.7&amp;#34; pendulum = &amp;#34;^2.1.1&amp;#34; poetry install でpyproject.</description>
     </item>
     
     <item>
