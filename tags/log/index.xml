@@ -8,14 +8,14 @@
     <copyright>sambaiz-net</copyright>
     <lastBuildDate>Sun, 25 Apr 2021 23:55:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/log/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>FluentdはどのようにMulti Process Workersで処理を実行しているのか</title>
+      <title>FluentdがどのようにMulti Process Workersで処理を実行しているのか実装を追う</title>
       <link>https://www.sambaiz.net/article/335/</link>
       <pubDate>Sun, 25 Apr 2021 23:55:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/335/</guid>
       <description>Fluentdはv1.0から標準でマルチプロセス対応され、 指定した数のWorkerで処理が行われるようになった。
 &amp;lt;system&amp;gt; workers 4 &amp;lt;/system&amp;gt; どのように実行しているのか現行バージョンv1.12.3の実装を見ていく。
-Supervisor Multi Process Workersのドキュメントにもあるように、 Workerと通信するSupervisorというのが存在する。 具体的に何をしているかというとWorkerのプロセスを立ち上げるWorkerModuleを渡してサーバーを立てたり、SIGNALを送ったりしている。
+Supervisor Multi Process Workersのドキュメントにもあるように、 Workerと通信するSupervisorというのが存在する。 具体的に何をしているかというとWorkerプロセスを作成するWorkerModuleを渡してサーバーを立てたり、SIGNALを送ったりしている。
 # https://github.com/fluent/fluentd/blob/master/lib/fluent/supervisor.rb#L365-L377 module WorkerModule def spawn(process_manager) main_cmd = config[:main_cmd] env = { &amp;#39;SERVERENGINE_WORKER_ID&amp;#39; =&amp;gt; @worker_id.to_i.to_s, } @pm = process_manager.spawn(env, *main_cmd) end def after_start (config[:worker_pid] ||= {})[@worker_id] = @pm.pid end end # https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/supervisor.rb#L808-L811 se = ServerEngine.create(ServerModule, WorkerModule){ Fluent::Supervisor.load_config(@config_path, params) } se.run # https://github.com/fluent/fluentd/blob/master/lib/fluent/supervisor.rb#L305-L317 def kill_worker if config[:worker_pid] pids = config[:worker_pid].clone config[:worker_pid].clear pids.each_value do |pid| if Fluent.windows? Process.kill :KILL, pid else Process.</description>
     </item>
     
