@@ -438,8 +438,7 @@ c) Restart the kernel.
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">...</span>
 <span style="color:#ff79c6">print</span>(output_df<span style="color:#ff79c6">.</span>toDF()<span style="color:#ff79c6">.</span>collect()[<span style="color:#bd93f9">0</span>]<span style="color:#ff79c6">.</span>asDict())
 </code></pre></div><h2 id="ジョブのスクリプト">ジョブのスクリプト</h2>
-<p>GlueはSpark標準のDataFrameを扱うこともできるが、独自にスキーマを柔軟に扱える<a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>というのをサポートしている。DataFrameとは相互に変換できるので、SQL文の実行などDataFrameにしかないAPIを使いたい場合は変換する。
-ただ、Sparkの設定を<a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-programming-etl-glue-arguments.html">変えられない</a>分、DynamicFrameがうまくやっているところもある。</p>
+<p>GlueはSpark標準のDataFrameを扱うこともできるが、スキーマを明示しない独自の<a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>というのをサポートしている。DataFrameとは相互に変換できるのでSQL文の実行などDataFrameにしかないAPIを使いたい場合は変換すれば良いが、データフォーマットが不定な場合、<code>from_options()</code>で読み込んだデータセットによってはクエリで参照しているフィールドがなく失敗することがある。</p>
 <p><a href="https://www.sambaiz.net/article/208/">Apache SparkのRDD, DataFrame, DataSetとAction, Transformation - sambaiz-net</a></p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> pyspark.sql.utils <span style="color:#ff79c6">import</span> ParseException
 data_frame <span style="color:#ff79c6">=</span> dynamc_frame<span style="color:#ff79c6">.</span>toDF()
@@ -544,6 +543,16 @@ glue_client <span style="color:#ff79c6">=</span> boto3<span style="color:#ff79c6
 glue_client<span style="color:#ff79c6">.</span>start_crawler(Name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;kawase&#39;</span>)
 </code></pre></div><p>Glueのロールで読める場所にアップロードする。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ aws s3 cp main.py s3://aws-glue-scripts-*****/root/main.py
+</code></pre></div><p>ちなみに、<code>glueContext.get_logger()</code>でログを出力すると、
+<code>/aws-glue/jobs/error</code>に送られてしまうので
+<code>/aws-glue/jobs/output</code>に送りたい場合はloggerを作る。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">make_logger</span>():
+    logger <span style="color:#ff79c6">=</span> logging<span style="color:#ff79c6">.</span>getLogger()
+    handler <span style="color:#ff79c6">=</span> logging<span style="color:#ff79c6">.</span>StreamHandler()
+    handler<span style="color:#ff79c6">.</span>setFormatter(logging<span style="color:#ff79c6">.</span>Formatter(<span style="color:#f1fa8c">&#39;</span><span style="color:#f1fa8c">%(asctime)s</span><span style="color:#f1fa8c"> </span><span style="color:#f1fa8c">%(levelname)s</span><span style="color:#f1fa8c"> </span><span style="color:#f1fa8c">%(message)s</span><span style="color:#f1fa8c">&#39;</span>))
+    logger<span style="color:#ff79c6">.</span>addHandler(handler)
+    logger<span style="color:#ff79c6">.</span>setLevel(logging<span style="color:#ff79c6">.</span>INFO)
+    <span style="color:#ff79c6">return</span> logger
 </code></pre></div><h2 id="ジョブとクローラの作成">ジョブとクローラの作成</h2>
 <p>ジョブを作成する。デフォルトで10DPU使うようになっているので調整する。1DPUで2つのExecutorが<a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/monitor-debug-capacity.html#monitor-debug-capacity-visualize">動く</a>。
 <a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/monitor-continuations.html">ブックマーク</a>を有効にすると以前処理したデータは処理しないようにできるが、残念ながらParquetは対応していないため2回実行すると重複して出力されてしまう。</p>
@@ -556,6 +565,7 @@ glue_client<span style="color:#ff79c6">.</span>start_crawler(Name<span style="co
 以前、LambdaでAthenaのスキーマを管理したりパーティションを切ったりするバッチを作ったが、Glueのデータカタログ上で同じことをやってくれる。
 楽だけど現状DPUの設定項目がないのでデータが多くて時間がかかる場合はどうしようもなさそう。</p>
 <p><a href="https://www.sambaiz.net/article/145/">Athenaのmigrationやpartitionするathena-adminを作った - sambaiz-net</a></p>
+<p><a href="https://www.sambaiz.net/article/357/">CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net</a></p>
 <h2 id="ジョブの実行">ジョブの実行</h2>
 <p>トリガーを設定して定期的に実行することもできるが、今回は手動で実行する。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ aws glue start-job-run --job-name kawase

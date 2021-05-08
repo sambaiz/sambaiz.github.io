@@ -238,17 +238,17 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net</title>
-  <meta name="twitter:title" content="AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net">
-  <meta property='og:title' content="AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net">
+  <title>CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net</title>
+  <meta name="twitter:title" content="CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net">
+  <meta property='og:title' content="CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="前回との差分のデータを処理する">
-  <meta name="twitter:description" content="前回との差分のデータを処理する">
+  <meta name="description" content="Glue Data Catalog">
+  <meta name="twitter:description" content="Glue Data Catalog">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/article/333/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/357/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
   <meta name="google-site-verification" content="CEqNYjzc4Y7hb3FY7uUkmllGzeDc40brBwQJixeH61Q" />
@@ -260,9 +260,9 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net",
-    "datePublished": "2021-04-16T20:00:00JST",
-    "dateModified": "2021-04-16T20:00:00JST",
+    "headline": "CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net",
+    "datePublished": "2021-05-09T01:52:00JST",
+    "dateModified": "2021-05-09T01:52:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -284,7 +284,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "前回との差分のデータを処理する"
+    "description": "Glue Data Catalog"
   }
 </script>
 </head>
@@ -356,39 +356,78 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う</h1>
-        <time>2021-04-16</time>
-        <a class="tag" href="/tags/aws/">aws</a><a class="tag" href="/tags/python/">python</a><a class="tag" href="/tags/spark/">spark</a>
+        <h1>CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する</h1>
+        <time>2021-05-09</time>
+        <a class="tag" href="/tags/aws/">aws</a>
       </div>
-      <p>GlueのJobの<a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/monitor-continuations.html">Bookmark</a>は
-どこまで処理したかを記録し、次回はその続きから実行できるようにする機能。
-1.0以前は対応していなかったParquetやORCも今は対応している。</p>
+      <p>CDKでGlue Data CatlogのDatabase,Table,Partitionを作成する。
+PartitionはまだL2 constructが<a href="https://github.com/aws/aws-cdk/issues/8863">存在しない</a>。<code>storageDescriptor</code>の設定は<a href="https://github.com/aws/aws-cdk/blob/v1.102.0/packages/@aws-cdk/aws-glue/lib/table.ts#L267">Tableの実装</a>を参考にした。</p>
+<p>TableやPartitionはクローラで作ることもできるが、ファイル数が膨大だと時間がかかることもあり、マニュアルで作ることがある。直接APIを呼ぶこともできるが、CDKで管理すると今の状態に関わらずデプロイによって必要なパーティションが存在することを保証できる。</p>
 <p><a href="https://www.sambaiz.net/article/203/">AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net</a></p>
-<p>Job bookamarkをEnableにして、DynamicFrameのメソッドを呼ぶ際に<code>transcation_ctx</code>を渡し、<code>job.commit()</code>するとBookmarkされる。</p>
-<p><img src="https://www.sambaiz.net/images/333.png" alt="Bookmarkの設定"></p>
-<p>例えば、S3のjsonをソースとするテーブルをカウントして出力する次のjobは、Bookmarkを有効にすると既にカウントしたものが読まれなくなるため、
-トータルの件数ではなく前回との増分が出力される。
-S3の結果整合性による参照できるようになるまでのラグも考慮されていて、
-単純に保存時間のみによって対象を選ぶのではなく、リストを持って対象の時間の少し前から見るようになっている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">import</span> sys
-<span style="color:#ff79c6">from</span> awsglue.transforms <span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span>
-<span style="color:#ff79c6">from</span> awsglue.utils <span style="color:#ff79c6">import</span> getResolvedOptions
-<span style="color:#ff79c6">from</span> pyspark.context <span style="color:#ff79c6">import</span> SparkContext
-<span style="color:#ff79c6">from</span> awsglue.context <span style="color:#ff79c6">import</span> GlueContext
-<span style="color:#ff79c6">from</span> awsglue.job <span style="color:#ff79c6">import</span> Job
-args <span style="color:#ff79c6">=</span> getResolvedOptions(sys<span style="color:#ff79c6">.</span>argv, [<span style="color:#f1fa8c">&#39;JOB_NAME&#39;</span>])
-sc <span style="color:#ff79c6">=</span> SparkContext()
-glueContext <span style="color:#ff79c6">=</span> GlueContext(sc)
-spark <span style="color:#ff79c6">=</span> glueContext<span style="color:#ff79c6">.</span>spark_session
-job <span style="color:#ff79c6">=</span> Job(glueContext)
-job<span style="color:#ff79c6">.</span>init(args[<span style="color:#f1fa8c">&#39;JOB_NAME&#39;</span>], args)
-source <span style="color:#ff79c6">=</span> glueContext<span style="color:#ff79c6">.</span>create_dynamic_frame<span style="color:#ff79c6">.</span>from_catalog(
-    database<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;test&#34;</span>, table_name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;test&#34;</span>, transformation_ctx<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;source&#34;</span>)
-source<span style="color:#ff79c6">.</span>toDF()<span style="color:#ff79c6">.</span>createOrReplaceTempView(<span style="color:#f1fa8c">&#34;t&#34;</span>)
-df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT COUNT(1) as cnt FROM t&#34;</span>)
-df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>mode(<span style="color:#f1fa8c">&#34;append&#34;</span>)<span style="color:#ff79c6">.</span>csv(
-    <span style="color:#f1fa8c">&#34;s3://*****/test-table-summary&#34;</span>, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
-job<span style="color:#ff79c6">.</span>commit()
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-typescript" data-lang="typescript"><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>;
+<span style="color:#ff79c6">import</span> { Database, Table, DataFormat, Schema, CfnPartition } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-glue&#39;</span>;
+<span style="color:#ff79c6">import</span> { Bucket } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-s3&#39;</span>;
+<span style="color:#ff79c6">import</span> { format, subDays } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;date-fns&#39;</span>
+
+<span style="color:#ff79c6">export</span> <span style="color:#ff79c6">class</span> CdkGlueDataCatalogSampleStack <span style="color:#ff79c6">extends</span> cdk.Stack {
+  <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">cdk.Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span>) {
+    <span style="color:#ff79c6">super</span>(scope, id, props);
+
+    <span style="color:#ff79c6">const</span> db <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Database(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestDB&#39;</span>, {
+      databaseName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test-db&#34;</span>,
+    })
+
+    <span style="color:#ff79c6">const</span> bucket <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Bucket(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;DBBucket&#39;</span>, {
+      bucketName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`test-db-bucket-</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>
+    })
+
+    <span style="color:#ff79c6">const</span> table <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Table(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestTable&#39;</span>, {
+      tableName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test_table&#34;</span>,
+      database: <span style="color:#8be9fd">db</span>,
+      columns<span style="color:#ff79c6">:</span> [{
+        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;id&#34;</span>,
+        <span style="color:#ff79c6">type</span><span style="color:#ff79c6">:</span> Schema.BIG_INT
+      }, {
+        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;foo&#34;</span>,
+        <span style="color:#ff79c6">type</span><span style="color:#ff79c6">:</span> Schema.struct([{
+          name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;bar&#34;</span>,
+          <span style="color:#ff79c6">type</span><span style="color:#ff79c6">:</span> Schema.STRING
+        }])
+      }],
+      partitionKeys<span style="color:#ff79c6">:</span> [{
+        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;ymd&#34;</span>, 
+        <span style="color:#ff79c6">type</span><span style="color:#ff79c6">:</span> Schema.DATE
+      }],
+      dataFormat: <span style="color:#8be9fd">DataFormat.JSON</span>,
+      bucket: <span style="color:#8be9fd">bucket</span>,
+      s3Prefix<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test-table/&#34;</span>,
+      compressed: <span style="color:#8be9fd">false</span>,
+    })
+
+    <span style="color:#ff79c6">const</span> now <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> <span style="color:#8be9fd;font-style:italic">Date</span>()
+    <span style="color:#ff79c6">const</span> partitionRetainDays <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">30</span>;
+    <span style="color:#ff79c6">for</span> (<span style="color:#8be9fd;font-style:italic">let</span> i <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0</span>; i <span style="color:#ff79c6">&lt;=</span> partitionRetainDays; i<span style="color:#ff79c6">++</span>) {
+      <span style="color:#ff79c6">const</span> ymd <span style="color:#ff79c6">=</span> format(subDays(now, i), <span style="color:#f1fa8c">&#39;yyyy-MM-dd&#39;</span>)
+      <span style="color:#ff79c6">new</span> CfnPartition(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`Partition</span><span style="color:#f1fa8c">${</span>ymd<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>, {
+        catalogId: <span style="color:#8be9fd">this.account</span>,
+        databaseName: <span style="color:#8be9fd">db.databaseName</span>,
+        tableName: <span style="color:#8be9fd">table.tableName</span>,
+        partitionInput<span style="color:#ff79c6">:</span> {
+          storageDescriptor<span style="color:#ff79c6">:</span> {
+            location<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`s3://</span><span style="color:#f1fa8c">${</span>table.bucket.bucketName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">/</span><span style="color:#f1fa8c">${</span>table.s3Prefix<span style="color:#f1fa8c">}${</span>ymd<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">/`</span>,
+            compressed: <span style="color:#8be9fd">table.compressed</span>,
+            inputFormat: <span style="color:#8be9fd">table.dataFormat.inputFormat.className</span>,
+            outputFormat: <span style="color:#8be9fd">table.dataFormat.outputFormat.className</span>,
+            serdeInfo<span style="color:#ff79c6">:</span> {
+              serializationLibrary: <span style="color:#8be9fd">table.dataFormat.serializationLibrary.className</span>
+            },
+          },
+          values<span style="color:#ff79c6">:</span> [ymd],
+        }
+      })
+    }
+  }
+}
 </code></pre></div>
     </div>
   </article>
