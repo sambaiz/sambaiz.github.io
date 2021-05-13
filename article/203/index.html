@@ -438,7 +438,7 @@ c) Restart the kernel.
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">...</span>
 <span style="color:#ff79c6">print</span>(output_df<span style="color:#ff79c6">.</span>toDF()<span style="color:#ff79c6">.</span>collect()[<span style="color:#bd93f9">0</span>]<span style="color:#ff79c6">.</span>asDict())
 </code></pre></div><h2 id="ジョブのスクリプト">ジョブのスクリプト</h2>
-<p>GlueはSpark標準のDataFrameを扱うこともできるが、スキーマを明示しない独自の<a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>というのをサポートしている。DataFrameとは相互に変換できるのでSQL文の実行などDataFrameにしかないAPIを使いたい場合は変換すれば良いが、データフォーマットが不定な場合、<code>from_options()</code>で読み込んだデータセットによってはクエリで参照しているフィールドがなく失敗することがある。</p>
+<p>GlueはSpark標準のDataFrameを扱うこともできるが、スキーマを明示しない独自の<a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>というのをサポートしている。DataFrameとは相互に変換できるのでSQL文の実行などDataFrameにしかないAPIを使いたい場合は変換すれば良い。</p>
 <p><a href="https://www.sambaiz.net/article/208/">Apache SparkのRDD, DataFrame, DataSetとAction, Transformation - sambaiz-net</a></p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> pyspark.sql.utils <span style="color:#ff79c6">import</span> ParseException
 data_frame <span style="color:#ff79c6">=</span> dynamc_frame<span style="color:#ff79c6">.</span>toDF()
@@ -447,7 +447,8 @@ data_frame<span style="color:#ff79c6">.</span>toDF()<span style="color:#ff79c6">
   data_frame2 <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#39;SELECT * FROM t1&#39;</span>)
 <span style="color:#ff79c6">except</span> ParseException <span style="color:#ff79c6">as</span> e:
     <span style="color:#ff79c6">print</span>(<span style="color:#8be9fd;font-style:italic">str</span>(e)<span style="color:#ff79c6">.</span>replace(<span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">\\</span><span style="color:#f1fa8c">n&#34;</span>, <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">\n</span><span style="color:#f1fa8c">&#34;</span>))
-</code></pre></div><p>入力は為替データのCSV。</p>
+</code></pre></div><p>ただ、データフォーマットが不定な場合、読み込んだデータセットによってはクエリで参照しているフィールドがなく<code>cannnot resolve *** given input columns</code>で失敗することがある。これは <a href="https://docs.aws.amazon.com/ja_jp/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-glue-context.html#aws-glue-api-crawler-pyspark-extensions-glue-context-create_dynamic_frame_from_catalog">create_dynamic_frame_from_catalog()</a>で読み込んだ際も同様で、カタログのスキーマに存在しても実際のデータに存在しないフィールドは、変換したDataFrameのスキーマには含まれない。</p>
+<p>入力は為替データのCSV。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ less kawase1.csv
 Date,USD,GBP,EUR,CAD,CHF,SEK,DKK,NOK,AUD,NZD
 2002/4/1,133.15,189.79,116.12,83.48,79.28,12.87,15.63,15.08,71.14,58.8
