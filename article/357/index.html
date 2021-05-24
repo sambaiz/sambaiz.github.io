@@ -238,9 +238,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net</title>
-  <meta name="twitter:title" content="CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net">
-  <meta property='og:title' content="CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net">
+  <title>CDKでGlue Data CatalogのDatabase,Table,Partition,Crawlerを作成する - sambaiz-net</title>
+  <meta name="twitter:title" content="CDKでGlue Data CatalogのDatabase,Table,Partition,Crawlerを作成する - sambaiz-net">
+  <meta property='og:title' content="CDKでGlue Data CatalogのDatabase,Table,Partition,Crawlerを作成する - sambaiz-net">
   <meta property="og:type" content="article">
   
   <meta name="description" content="Glue Data Catalog">
@@ -260,7 +260,7 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する - sambaiz-net",
+    "headline": "CDKでGlue Data CatalogのDatabase,Table,Partition,Crawlerを作成する - sambaiz-net",
     "datePublished": "2021-05-09T01:52:00JST",
     "dateModified": "2021-05-09T01:52:00JST",
     "author": {
@@ -356,13 +356,13 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>CDKでGlue Data CatalogのDatabase,Table,Partitionを作成する</h1>
+        <h1>CDKでGlue Data CatalogのDatabase,Table,Partition,Crawlerを作成する</h1>
         <time>2021-05-09</time>
         <a class="tag" href="/tags/aws/">aws</a>
       </div>
-      <p>CDKでGlue Data CatlogのDatabase,Table,Partitionを作成する。
-PartitionはまだL2 constructが<a href="https://github.com/aws/aws-cdk/issues/8863">存在しない</a>。<code>storageDescriptor</code>の設定は<a href="https://github.com/aws/aws-cdk/blob/v1.102.0/packages/@aws-cdk/aws-glue/lib/table.ts#L267">Tableの実装</a>を参考にした。</p>
-<p>TableやPartitionはクローラで自動生成することができるが、ファイル数が膨大だと時間がかかることもあり、Tableはマニュアルで、Partitionの作成はAPIを呼んで作ることがあって、CDKで管理すると今の状態に関わらずデプロイによって必要なものが存在することを保証できる。</p>
+      <p>CDKでGlue Data CatlogのDatabase,Table,Partition,Crawlerを作成する。
+PartitionやCrawlerはまだL2 constructが<a href="https://github.com/aws/aws-cdk/issues/8863">存在しない</a>。<code>storageDescriptor</code>の設定は<a href="https://github.com/aws/aws-cdk/blob/v1.102.0/packages/@aws-cdk/aws-glue/lib/table.ts#L267">Tableの実装</a>を参考にした。</p>
+<p>TableやPartitionはCrawlerで自動生成することができるが、ファイル数が膨大だと時間がかかることもあり、Tableはマニュアルで、Partitionの作成はAPIを呼んで作ることがあって、CDKで管理すると今の状態に関わらずデプロイによって必要なものが存在することを保証できる。</p>
 <p><a href="https://www.sambaiz.net/article/203/">AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net</a></p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-typescript" data-lang="typescript"><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>;
 <span style="color:#ff79c6">import</span> { Database, Table, DataFormat, Schema, CfnPartition } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-glue&#39;</span>;
@@ -427,6 +427,36 @@ PartitionはまだL2 constructが<a href="https://github.com/aws/aws-cdk/issues/
         }
       })
     }
+
+    <span style="color:#ff79c6">const</span> role <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestTableCrawlerRole&#39;</span>, {
+      roleName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test-table-crawler-role&#34;</span>,
+      assumedBy: <span style="color:#8be9fd">new</span> ServicePrincipal(<span style="color:#f1fa8c">&#34;glue.amazonaws.com&#34;</span>),
+      managedPolicies<span style="color:#ff79c6">:</span> [
+        ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#f1fa8c">&#34;service-role/AWSGlueServiceRole&#34;</span>)
+      ]
+    })
+
+    role.attachInlinePolicy(<span style="color:#ff79c6">new</span> Policy(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#34;TestTableCrawlerRolePolicy&#34;</span>, {
+      statements<span style="color:#ff79c6">:</span> [<span style="color:#ff79c6">new</span> PolicyStatement({
+        effect: <span style="color:#8be9fd">Effect.ALLOW</span>,
+        actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;s3:GetObject&#34;</span>],
+        resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:s3:::</span><span style="color:#f1fa8c">${</span>bucket.bucketName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">/*`</span>]
+      })]
+    }))
+
+    <span style="color:#ff79c6">new</span> CfnCrawler(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestTableCrawler&#39;</span>, {
+      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test-crawler&#34;</span>,
+      role: <span style="color:#8be9fd">role.roleArn</span>,
+      databaseName: <span style="color:#8be9fd">db.databaseName</span>,
+      targets<span style="color:#ff79c6">:</span> {
+        s3Targets<span style="color:#ff79c6">:</span> [{
+          path<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`s3://</span><span style="color:#f1fa8c">${</span>bucket.bucketName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">/test/`</span>,
+        }]
+      },
+      schedule<span style="color:#ff79c6">:</span> {
+        scheduleExpression<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;cron(0 0 * * ? *)&#34;</span>
+      }
+    })
   }
 }
 </code></pre></div>
