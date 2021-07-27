@@ -246,9 +246,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>gomockでmockを入力とするmockを生成すると意図した出力が返らない理由 - sambaiz-net</title>
-  <meta name="twitter:title" content="gomockでmockを入力とするmockを生成すると意図した出力が返らない理由 - sambaiz-net">
-  <meta property='og:title' content="gomockでmockを入力とするmockを生成すると意図した出力が返らない理由 - sambaiz-net">
+  <title>gomockのmockを入力とするmockが意図した出力を返さない理由 - sambaiz-net</title>
+  <meta name="twitter:title" content="gomockのmockを入力とするmockが意図した出力を返さない理由 - sambaiz-net">
+  <meta property='og:title' content="gomockのmockを入力とするmockが意図した出力を返さない理由 - sambaiz-net">
   <meta property="og:type" content="article">
   
   <meta name="description" content="gomockの内部実装を見る">
@@ -267,7 +267,7 @@
       "@type":"WebPage",
       "@id":"https:\/\/www.sambaiz.net\/"
     },
-    "headline": "gomockでmockを入力とするmockを生成すると意図した出力が返らない理由 - sambaiz-net",
+    "headline": "gomockのmockを入力とするmockが意図した出力を返さない理由 - sambaiz-net",
     "datePublished": "2021-07-27T12:49:00JST",
     "dateModified": "2021-07-27T12:49:00JST",
     "author": {
@@ -372,7 +372,7 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>gomockでmockを入力とするmockを生成すると意図した出力が返らない理由</h1>
+        <h1>gomockのmockを入力とするmockが意図した出力を返さない理由</h1>
         <time>2021-07-27</time>
         <a class="tag" href="/tags/golang/">golang</a>
       </div>
@@ -483,7 +483,7 @@
 	}
 	m[key] = <span style="color:#8be9fd;font-style:italic">append</span>(m[key], call)
 }
-</code></pre></div><p>呼び出す際はこの中から引数が一致するものを、<a href="https://pkg.go.dev/reflect#Value.Convert">Convert</a>でTypeを揃えて<a href="https://pkg.go.dev/reflect#DeepEqual">reflect.DeepEqual</a>することで探している。</p>
+</code></pre></div><p>呼び出す際はこの中から引数が一致するものを、<a href="https://pkg.go.dev/reflect#Value.Convert">Convert</a>しTypeを揃えて<a href="https://pkg.go.dev/reflect#DeepEqual">reflect.DeepEqual</a>する<a href="https://github.com/golang/mock/blob/v1.6.0/gomock/matchers.go#L100">eqMatcher</a>で探す。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#6272a4">// https://github.com/golang/mock/blob/v1.6.0/gomock/callset.go#L85
 </span><span style="color:#6272a4"></span><span style="color:#ff79c6">for</span> _, call <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> exhausted {
     <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> call.<span style="color:#50fa7b">matches</span>(args); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
@@ -514,7 +514,7 @@ x2Val <span style="color:#ff79c6">:=</span> reflect.<span style="color:#50fa7b">
 }
 </code></pre></div><p>fooMock1とfooMock2はそれぞれ<code>Call</code>を保存しているわけではなく、同じ<code>Controller</code>を参照しているためtrue判定され、先に追加されたfooMock1の方で呼ばれることになる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">fmt.<span style="color:#50fa7b">Println</span>(reflect.<span style="color:#50fa7b">DeepEqual</span>(fooMock1, fooMock2)) <span style="color:#6272a4">// =&gt; true
-</span></code></pre></div><p>したがって、別の<code>Controller</code>で生成すると意図した出力が返るようになる。</p>
+</span></code></pre></div><p>したがって、別の<code>Controller</code>で生成すると意図した出力を返すようになる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
 
 <span style="color:#ff79c6">import</span> (
@@ -542,6 +542,63 @@ x2Val <span style="color:#ff79c6">:=</span> reflect.<span style="color:#50fa7b">
 	}
 	<span style="color:#ff79c6">if</span> m <span style="color:#ff79c6">:=</span> barMock.<span style="color:#50fa7b">Bar</span>(fooMock2); m <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;2222&#34;</span> { <span style="color:#6272a4">// ok
 </span><span style="color:#6272a4"></span>		t.<span style="color:#50fa7b">Fatalf</span>(<span style="color:#f1fa8c">&#34;expected: 2222, actual: %s\n&#34;</span>, m)
+	}
+}
+</code></pre></div><p><code>gomock.Any</code> にして <code>DoAndReturn</code> で返す方法もある。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
+
+<span style="color:#ff79c6">import</span> (
+	<span style="color:#f1fa8c">&#34;testing&#34;</span>
+
+	<span style="color:#f1fa8c">&#34;github.com/golang/mock/gomock&#34;</span>
+)
+
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">TestFoo</span>(t <span style="color:#ff79c6">*</span>testing.T) {
+	ctrl <span style="color:#ff79c6">:=</span> gomock.<span style="color:#50fa7b">NewController</span>(t)
+	<span style="color:#ff79c6">defer</span> ctrl.<span style="color:#50fa7b">Finish</span>()
+
+	fooMock1 <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">NewMockFoo</span>(ctrl)
+	fooMock2 <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">NewMockFoo</span>(ctrl)
+	barMock <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">NewMockBar</span>(ctrl)
+	fooMock1.<span style="color:#50fa7b">EXPECT</span>().<span style="color:#50fa7b">Shout</span>().<span style="color:#50fa7b">AnyTimes</span>().<span style="color:#50fa7b">Return</span>(<span style="color:#f1fa8c">&#34;1111&#34;</span>)
+	fooMock2.<span style="color:#50fa7b">EXPECT</span>().<span style="color:#50fa7b">Shout</span>().<span style="color:#50fa7b">AnyTimes</span>().<span style="color:#50fa7b">Return</span>(<span style="color:#f1fa8c">&#34;2222&#34;</span>)
+	barMock.<span style="color:#50fa7b">EXPECT</span>().<span style="color:#50fa7b">Bar</span>(gomock.<span style="color:#50fa7b">Any</span>()).<span style="color:#50fa7b">AnyTimes</span>().<span style="color:#50fa7b">DoAndReturn</span>(<span style="color:#8be9fd;font-style:italic">func</span>(foo Foo) <span style="color:#8be9fd">string</span> {
+		<span style="color:#ff79c6">return</span> foo.<span style="color:#50fa7b">Shout</span>()
+	})
+	<span style="color:#ff79c6">if</span> m <span style="color:#ff79c6">:=</span> barMock.<span style="color:#50fa7b">Bar</span>(fooMock2); m <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;2222&#34;</span> { <span style="color:#6272a4">// ok
+</span><span style="color:#6272a4"></span>		t.<span style="color:#50fa7b">Fatalf</span>(<span style="color:#f1fa8c">&#34;expected: 2222, actual: %s\n&#34;</span>, m)
+	}
+}
+</code></pre></div><p>ちなみに、次のようなfuncを引数に取るinterfaceをmockすると</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
+
+<span style="color:#8be9fd;font-style:italic">type</span> Bar <span style="color:#8be9fd;font-style:italic">interface</span> {
+	<span style="color:#50fa7b">Bar</span>(foo <span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">string</span>) <span style="color:#8be9fd">string</span>
+}
+</code></pre></div><p><code>reflect.DeepEqual</code>が必ずfalseを返すので</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">f <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">string</span> { <span style="color:#ff79c6">return</span> <span style="color:#f1fa8c">&#34;foo&#34;</span> }
+fmt.<span style="color:#50fa7b">Println</span>(reflect.<span style="color:#50fa7b">DeepEqual</span>(f, f)) <span style="color:#6272a4">// false
+</span></code></pre></div><p>GotとWantが一致していてもmissing callになってしまう。
+その場合は、<code>gomock.Any</code>にするか、独自の<a href="https://github.com/golang/mock/blob/v1.6.0/gomock/matchers.go#L25">Matcher</a>を実装することになる。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
+
+<span style="color:#ff79c6">import</span> (
+	<span style="color:#f1fa8c">&#34;testing&#34;</span>
+
+	<span style="color:#f1fa8c">&#34;github.com/golang/mock/gomock&#34;</span>
+)
+
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">TestFoo</span>(t <span style="color:#ff79c6">*</span>testing.T) {
+	ctrl <span style="color:#ff79c6">:=</span> gomock.<span style="color:#50fa7b">NewController</span>(t)
+	<span style="color:#ff79c6">defer</span> ctrl.<span style="color:#50fa7b">Finish</span>()
+
+	mock <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">NewMockBar</span>(ctrl)
+	f <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">string</span> { <span style="color:#ff79c6">return</span> <span style="color:#f1fa8c">&#34;foo&#34;</span> }
+	mock.<span style="color:#50fa7b">EXPECT</span>().<span style="color:#50fa7b">Bar</span>(f).<span style="color:#50fa7b">Return</span>(<span style="color:#f1fa8c">&#34;bar&#34;</span>)
+	<span style="color:#ff79c6">if</span> m <span style="color:#ff79c6">:=</span> mock.<span style="color:#50fa7b">Bar</span>(f); m <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;bar&#34;</span> {
+		<span style="color:#6272a4">// Got: 0x1114620 (func() string)
+</span><span style="color:#6272a4"></span>		<span style="color:#6272a4">// Want: is equal to 0x1114620 (func() string)
+</span><span style="color:#6272a4"></span>		t.<span style="color:#50fa7b">Fatalf</span>(<span style="color:#f1fa8c">&#34;expected: bar, actual: %s\n&#34;</span>, m)
 	}
 }
 </code></pre></div>
