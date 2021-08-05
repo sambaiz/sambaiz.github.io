@@ -413,67 +413,77 @@ $ cat segment.txt &gt; /dev/udp/<span style="color:#bd93f9">127.0</span>.<span s
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
 
 <span style="color:#ff79c6">import</span> (
-  <span style="color:#f1fa8c">&#34;io&#34;</span>
-  <span style="color:#f1fa8c">&#34;net/http&#34;</span>
+	<span style="color:#f1fa8c">&#34;io&#34;</span>
+	<span style="color:#f1fa8c">&#34;net/http&#34;</span>
 
-  <span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go-v2/config&#34;</span>
-  <span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go-v2/service/s3&#34;</span>
-  <span style="color:#f1fa8c">&#34;github.com/aws/aws-xray-sdk-go/instrumentation/awsv2&#34;</span>
-  <span style="color:#f1fa8c">&#34;github.com/aws/aws-xray-sdk-go/xray&#34;</span>
-  <span style="color:#f1fa8c">&#34;github.com/labstack/echo/v4&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go-v2/config&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go-v2/service/s3&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/aws/aws-xray-sdk-go/instrumentation/awsv2&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/aws/aws-xray-sdk-go/xray&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/labstack/echo/v4&#34;</span>
 )
 
 <span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
-  <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> xray.<span style="color:#50fa7b">Configure</span>(xray.Config{
-    DaemonAddr:     <span style="color:#f1fa8c">&#34;xray-daemon:2000&#34;</span>,
-    ServiceVersion: <span style="color:#f1fa8c">&#34;1.0.0&#34;</span>,
-  }); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-    <span style="color:#8be9fd;font-style:italic">panic</span>(err)
-  }
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> xray.<span style="color:#50fa7b">Configure</span>(xray.Config{
+		DaemonAddr:     <span style="color:#f1fa8c">&#34;xray-daemon:2000&#34;</span>,
+		ServiceVersion: <span style="color:#f1fa8c">&#34;1.0.0&#34;</span>,
+	}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+	}
 
-  e <span style="color:#ff79c6">:=</span> echo.<span style="color:#50fa7b">New</span>()
-  hello <span style="color:#ff79c6">:=</span> echo.<span style="color:#50fa7b">WrapHandler</span>(xray.<span style="color:#50fa7b">Handler</span>(xray.<span style="color:#50fa7b">NewFixedSegmentNamer</span>(<span style="color:#f1fa8c">&#34;test-app&#34;</span>), http.<span style="color:#50fa7b">HandlerFunc</span>(<span style="color:#8be9fd;font-style:italic">func</span>(w http.ResponseWriter, r <span style="color:#ff79c6">*</span>http.Request) {
-    ctx <span style="color:#ff79c6">:=</span> r.<span style="color:#50fa7b">Context</span>()
-
-    <span style="color:#6272a4">// http request
-</span><span style="color:#6272a4"></span>    req, err <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">NewRequest</span>(http.MethodGet, <span style="color:#f1fa8c">&#34;https://aws.amazon.com/&#34;</span>, <span style="color:#ff79c6">nil</span>)
-    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-      w.<span style="color:#50fa7b">Write</span>([]<span style="color:#8be9fd;font-style:italic">byte</span>(err.<span style="color:#50fa7b">Error</span>()))
-      <span style="color:#ff79c6">return</span>
-    }
-    resp, err <span style="color:#ff79c6">:=</span> xray.<span style="color:#50fa7b">Client</span>(http.DefaultClient).<span style="color:#50fa7b">Do</span>(req.<span style="color:#50fa7b">WithContext</span>(ctx))
-    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-      w.<span style="color:#50fa7b">Write</span>([]<span style="color:#8be9fd;font-style:italic">byte</span>(err.<span style="color:#50fa7b">Error</span>()))
-      <span style="color:#ff79c6">return</span>
-    }
-    io.<span style="color:#50fa7b">Copy</span>(io.Discard, resp.Body)
-    resp.Body.<span style="color:#50fa7b">Close</span>()
-
-    <span style="color:#6272a4">// sub segment
-</span><span style="color:#6272a4"></span>    subCtx, subSeg <span style="color:#ff79c6">:=</span> xray.<span style="color:#50fa7b">BeginSubsegment</span>(ctx, <span style="color:#f1fa8c">&#34;waiting-something&#34;</span>)
-
-    <span style="color:#6272a4">// aws sdk
-</span><span style="color:#6272a4"></span>    cfg, err <span style="color:#ff79c6">:=</span> config.<span style="color:#50fa7b">LoadDefaultConfig</span>(subCtx)
-    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-      w.<span style="color:#50fa7b">Write</span>([]<span style="color:#8be9fd;font-style:italic">byte</span>(err.<span style="color:#50fa7b">Error</span>()))
-      <span style="color:#ff79c6">return</span>
-    }
-    awsv2.<span style="color:#50fa7b">AWSV2Instrumentor</span>(<span style="color:#ff79c6">&amp;</span>cfg.APIOptions)
-    svc <span style="color:#ff79c6">:=</span> s3.<span style="color:#50fa7b">NewFromConfig</span>(cfg)
-    <span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> svc.<span style="color:#50fa7b">ListBuckets</span>(subCtx, <span style="color:#ff79c6">&amp;</span>s3.ListBucketsInput{}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-      w.<span style="color:#50fa7b">Write</span>([]<span style="color:#8be9fd;font-style:italic">byte</span>(err.<span style="color:#50fa7b">Error</span>()))
-      <span style="color:#ff79c6">return</span>
-    }
-
-    subSeg.<span style="color:#50fa7b">Close</span>(<span style="color:#ff79c6">nil</span>)
-
-    w.<span style="color:#50fa7b">Write</span>([]<span style="color:#8be9fd;font-style:italic">byte</span>(<span style="color:#f1fa8c">&#34;Hello!&#34;</span>))
-  })))
-  e.<span style="color:#50fa7b">GET</span>(<span style="color:#f1fa8c">&#34;/&#34;</span>, hello)
-  e.Logger.<span style="color:#50fa7b">Fatal</span>(e.<span style="color:#50fa7b">Start</span>(<span style="color:#f1fa8c">&#34;:8080&#34;</span>))
+	e <span style="color:#ff79c6">:=</span> echo.<span style="color:#50fa7b">New</span>()
+	e.<span style="color:#50fa7b">Use</span>(echo.<span style="color:#50fa7b">WrapMiddleware</span>(<span style="color:#8be9fd;font-style:italic">func</span>(h http.Handler) http.Handler {
+		<span style="color:#ff79c6">return</span> xray.<span style="color:#50fa7b">Handler</span>(xray.<span style="color:#50fa7b">NewFixedSegmentNamer</span>(<span style="color:#f1fa8c">&#34;test-app&#34;</span>), h)
+	}))
+	e.<span style="color:#50fa7b">GET</span>(<span style="color:#f1fa8c">&#34;/&#34;</span>, hello)
+	e.Logger.<span style="color:#50fa7b">Fatal</span>(e.<span style="color:#50fa7b">Start</span>(<span style="color:#f1fa8c">&#34;:8080&#34;</span>))
 }
-</code></pre></div><p><img src="https://www.sambaiz.net/images/376.png" alt="タイムライン"></p>
-<p>あとはCDKでSamplingRuleとGroupを作成した。追加料金はかかるが、<a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-console-insights.html">Insight</a>を有効にすることでGroupの異常を検知することができる。</p>
+
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">hello</span>(c echo.Context) <span style="color:#8be9fd">error</span> {
+	ctx <span style="color:#ff79c6">:=</span> c.<span style="color:#50fa7b">Request</span>().<span style="color:#50fa7b">Context</span>()
+	<span style="color:#6272a4">// http request
+</span><span style="color:#6272a4"></span>	req, err <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">NewRequest</span>(http.MethodGet, <span style="color:#f1fa8c">&#34;https://aws.amazon.com/&#34;</span>, <span style="color:#ff79c6">nil</span>)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> c.<span style="color:#50fa7b">JSON</span>(http.StatusInternalServerError, err.<span style="color:#50fa7b">Error</span>())
+	}
+	resp, err <span style="color:#ff79c6">:=</span> xray.<span style="color:#50fa7b">Client</span>(http.DefaultClient).<span style="color:#50fa7b">Do</span>(req.<span style="color:#50fa7b">WithContext</span>(ctx))
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> c.<span style="color:#50fa7b">JSON</span>(http.StatusInternalServerError, err.<span style="color:#50fa7b">Error</span>())
+	}
+	io.<span style="color:#50fa7b">Copy</span>(io.Discard, resp.Body)
+	resp.Body.<span style="color:#50fa7b">Close</span>()
+
+	<span style="color:#6272a4">// sub segment
+</span><span style="color:#6272a4"></span>	subCtx, subSeg <span style="color:#ff79c6">:=</span> xray.<span style="color:#50fa7b">BeginSubsegment</span>(ctx, <span style="color:#f1fa8c">&#34;waiting-something&#34;</span>)
+
+	<span style="color:#6272a4">// aws sdk
+</span><span style="color:#6272a4"></span>	cfg, err <span style="color:#ff79c6">:=</span> config.<span style="color:#50fa7b">LoadDefaultConfig</span>(subCtx)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> c.<span style="color:#50fa7b">JSON</span>(http.StatusInternalServerError, err.<span style="color:#50fa7b">Error</span>())
+	}
+	awsv2.<span style="color:#50fa7b">AWSV2Instrumentor</span>(<span style="color:#ff79c6">&amp;</span>cfg.APIOptions)
+	svc <span style="color:#ff79c6">:=</span> s3.<span style="color:#50fa7b">NewFromConfig</span>(cfg)
+	<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> svc.<span style="color:#50fa7b">ListBuckets</span>(subCtx, <span style="color:#ff79c6">&amp;</span>s3.ListBucketsInput{}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		c.<span style="color:#50fa7b">JSON</span>(http.StatusInternalServerError, err.<span style="color:#50fa7b">Error</span>())
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+	}
+
+	subSeg.<span style="color:#50fa7b">Close</span>(<span style="color:#ff79c6">nil</span>)
+
+	<span style="color:#ff79c6">return</span> c.<span style="color:#50fa7b">JSON</span>(http.StatusOK, <span style="color:#f1fa8c">&#34;hello&#34;</span>)
+}
+</code></pre></div><p>サービス間のTraceID等の受け渡しのために次のような<a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-concepts.html#xray-concepts-tracingheader">Tracing header</a>が
+<a href="https://github.com/aws/aws-xray-sdk-go/blob/v1.6.0/instrumentation/awsv2/awsv2.go#L60">付与される</a>。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">X-Amzn-Trace-Id: Root=1-5759e988-bd862e3fe1be46a994272793;Sampled=1
+</code></pre></div><p>リクエストを送るとコンソール上からタイムラインとサービスマップが確認できる。</p>
+<p><img src="https://www.sambaiz.net/images/376.png" alt="タイムライン"></p>
+<p>contextにセグメントのデータが含まれていないと、<code>segment cannot be found</code> でpanicしてしまうので、
+ユニットテストの際は <code>AWS_XRAY_SDK_DISABLED=true</code> で回避する必要がありそうだ。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">test</span>() {
+	os.<span style="color:#50fa7b">Setenv</span>(<span style="color:#f1fa8c">&#34;AWS_XRAY_SDK_DISABLED&#34;</span>, <span style="color:#f1fa8c">&#34;true&#34;</span>)
+	xray.<span style="color:#50fa7b">BeginSubsegment</span>(context.<span style="color:#50fa7b">TODO</span>(), <span style="color:#f1fa8c">&#34;test&#34;</span>)
+}
+</code></pre></div><p>あとはCDKでSamplingRuleとGroupを作成した。追加料金はかかるが、<a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-console-insights.html">Insight</a>を有効にすることでGroupの異常を検知することができる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ts" data-lang="ts"><span style="color:#ff79c6">new</span> CfnSamplingRule(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TestAppSamplingRule&#39;</span>, {
   samplingRule<span style="color:#ff79c6">:</span> {
     ruleName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test-app&#34;</span>,
