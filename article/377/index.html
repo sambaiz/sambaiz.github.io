@@ -391,8 +391,9 @@ EC2をECSクラスタに登録する際の <code>echo ECS_CLUSTER=&lt;cluster_na
 
 <span style="color:#ff79c6">export</span> <span style="color:#ff79c6">class</span> ECSEC2Stack <span style="color:#ff79c6">extends</span> cdk.Stack {
   <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">cdk.Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span>) {
-    <span style="color:#ff79c6">super</span>(scope, id, props);
+    <span style="color:#ff79c6">super</span>(scope, id, props)
     <span style="color:#ff79c6">this</span>.createECRRepository(<span style="color:#f1fa8c">&#39;test&#39;</span>)
+    <span style="color:#ff79c6">this</span>.createLogGroup(<span style="color:#f1fa8c">&#34;test&#34;</span>)
     <span style="color:#ff79c6">const</span> ecsCluster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">this</span>.createECSCluster(<span style="color:#f1fa8c">&#39;test&#39;</span>)
     <span style="color:#ff79c6">this</span>.createASGForCluster(ecsCluster)
     <span style="color:#ff79c6">this</span>.createALB(<span style="color:#f1fa8c">&#39;test&#39;</span>, ecsCluster.vpc)
@@ -402,6 +403,13 @@ EC2をECSクラスタに登録する際の <code>echo ECS_CLUSTER=&lt;cluster_na
       repositoryName: <span style="color:#8be9fd">name</span>
     })
     <span style="color:#ff79c6">return</span> repository
+  }
+
+  createLogGroup(name: <span style="color:#8be9fd">string</span>) {
+    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> logs.LogGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LogGroup&#39;</span>, {
+      logGroupName: <span style="color:#8be9fd">name</span>,
+      retention: <span style="color:#8be9fd">RetentionDays.TWO_WEEKS</span> 
+    })
   }
 
   createECSCluster(name: <span style="color:#8be9fd">string</span>) {
@@ -414,7 +422,6 @@ EC2をECSクラスタに登録する際の <code>echo ECS_CLUSTER=&lt;cluster_na
   createASGForCluster(ecsCluster: <span style="color:#8be9fd">Cluster</span>) {
     <span style="color:#ff79c6">const</span> securityGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.SecurityGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EC2SecurityGroup&#39;</span>, {
       vpc: <span style="color:#8be9fd">ecsCluster.vpc</span>,
-      
     })
     securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.allTcp())
     <span style="color:#ff79c6">const</span> autoScalingGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> autoscaling.AutoScalingGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ASG&#39;</span>, {
@@ -445,6 +452,7 @@ EC2をECSクラスタに登録する際の <code>echo ECS_CLUSTER=&lt;cluster_na
     })
     <span style="color:#ff79c6">const</span> target <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> elbv2.ApplicationTargetGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;TargetGroup&#39;</span>, {
       targetGroupName: <span style="color:#8be9fd">name</span>,
+      targetType: <span style="color:#8be9fd">elbv2.TargetType.INSTANCE</span>,
       vpc: <span style="color:#8be9fd">vpc</span>,
       protocol: <span style="color:#8be9fd">elbv2.ApplicationProtocol.HTTP</span>,
       port: <span style="color:#8be9fd">80</span>,
@@ -461,6 +469,24 @@ EC2をECSクラスタに登録する際の <code>echo ECS_CLUSTER=&lt;cluster_na
     <span style="color:#ff79c6">return</span> alb
   }
 }
+</code></pre></div><p>CloudWatchにログを送るための<a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/using_awslogs.html#create_awslogs_logdriver_options">awslogs log driver</a>の設定を行う。
+ECSコンソールのLogsにログを表示するにはprefixを指定する必要がある。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">services</span>:
+  <span style="color:#ff79c6">app</span>:
+    ...
+    <span style="color:#ff79c6">logging</span>:
+      <span style="color:#ff79c6">driver</span>: awslogs
+      <span style="color:#ff79c6">options</span>:
+        <span style="color:#ff79c6">awslogs-group</span>: test
+        <span style="color:#ff79c6">awslogs-region</span>: ap-northeast-1
+        <span style="color:#ff79c6">awslogs-stream-prefix</span>: app
+</code></pre></div><p><code>docker-compose.yml</code>がサポートしていないパラメータは<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/cmd-ecs-cli-compose-ecsparams.html">ecs-params.yml</a>に記述する。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">version</span>: <span style="color:#bd93f9">1</span>
+<span style="color:#ff79c6">task_definition</span>:
+  <span style="color:#ff79c6">docker_volumes</span>:
+    - <span style="color:#ff79c6">name</span>: log
+      <span style="color:#ff79c6">scope</span>: shared
+      <span style="color:#ff79c6">autoprovision</span>: <span style="color:#ff79c6">true</span>
 </code></pre></div><p><a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/developerguide/cmd-ecs-cli-compose-service-up.html">ecs-cli compose service up</a>でdocker-compose.ymlからサービスを作成する。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ecs-cli compose service up --target-groups &#34;targetGroupArn=${TARGET_GROUP_ARN},containerName=app,containerPort=8080&#34; --launch-type EC2 --cluster ${CLUSTER_NAME}
 </code></pre></div><p>もしLBが503か504を返す場合、ECSのTaskがエラーで落ちていないか、TargetGroupのTargetにEC2インスタンスが紐づいているか、HealthCheckが通っているかといったことを確認する。</p>
