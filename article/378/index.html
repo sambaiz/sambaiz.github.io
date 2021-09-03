@@ -376,7 +376,7 @@
         <time>2021-08-17</time>
         <a class="tag" href="/tags/aws/">aws</a><a class="tag" href="/tags/docker/">docker</a>
       </div>
-      <p>以前、EKS上にLocustをインストールしたが、使っていないときに立ち上げ直したりしているとEKSクラスタを起動する度にかなりの時間がかかるのが不便だった。</p>
+      <p>以前、EKS上にLocustをインストールしたが、使わないときにクラスタを落としていたりすると起動を待つ必要があったり、K8sのバージョンアップに追従する必要があったりと少し不便な所があった。</p>
 <p><a href="https://www.sambaiz.net/article/297/">CDKでEKSクラスタの作成からHelm ChartでのLocustのインストールまでを一気に行う - sambaiz-net</a></p>
 <p>そこで今回はECS上にLocust masterとworkerのServiceをデプロイする。</p>
 <h2 id="dockerfile">Dockerfile</h2>
@@ -386,8 +386,9 @@ FROM locustio/locust
 
 COPY locustfile.py /mnt/locust/
 </code></pre></div><h2 id="stack">Stack</h2>
-<p>クラスタの作成については以前のものを使い回している。</p>
+<p>クラスタの作成については以前のものを使い回す。</p>
 <p><a href="https://www.sambaiz.net/article/377/">CDKでALBとECS(EC2)クラスタを作成し、ecs-cliでDocker Composeの構成をデプロイする - sambaiz-net</a></p>
+<p>locustfileを更新する度にデプロイすることになるので、ALBのヘルスチェックの間隔と回数および登録解除のタイムアウト時間を減らして高速化している。また、locustに認証の仕組みがないためIPアドレスでアクセス制限をしているが、ApplicationListenerのopenがデフォルトのtrueのままだと<code>Allow from anyone</code>の設定が<a href="https://github.com/aws/aws-cdk/blob/v1.121.0/packages/@aws-cdk/aws-elasticloadbalancingv2/lib/alb/application-listener.ts#L231">追加され</a>てしまうのでfalseにしている。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-typescript" data-lang="typescript"><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>
 <span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> ecs <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-ecs&#39;</span>
 <span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> ec2 <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-ec2&#39;</span>
@@ -472,7 +473,6 @@ COPY locustfile.py /mnt/locust/
       cloudMapOptions<span style="color:#ff79c6">:</span> {
         name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;master&#34;</span>,
       },
-      minHealthyPercent: <span style="color:#8be9fd">0</span>,
       securityGroups<span style="color:#ff79c6">:</span> [securityGroup]
     })
   }
@@ -499,7 +499,6 @@ COPY locustfile.py /mnt/locust/
       cluster,
       taskDefinition,
       desiredCount,
-      minHealthyPercent: <span style="color:#8be9fd">0</span>
     })
   }
 
@@ -522,13 +521,19 @@ COPY locustfile.py /mnt/locust/
       targets<span style="color:#ff79c6">:</span> [service.loadBalancerTarget({
         containerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust&#39;</span>,
         containerPort: <span style="color:#8be9fd">8089</span>
-      })]
+      })],
+      healthCheck<span style="color:#ff79c6">:</span> {
+        interval: <span style="color:#8be9fd">cdk.Duration.seconds</span>(<span style="color:#bd93f9">6</span>),
+        healthyThresholdCount: <span style="color:#8be9fd">2</span>
+      },
+      deregistrationDelay: <span style="color:#8be9fd">cdk.Duration.seconds</span>(<span style="color:#bd93f9">5</span>)
     })
     <span style="color:#ff79c6">new</span> elbv2.ApplicationListener(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALBListener&#39;</span>, {
       loadBalancer: <span style="color:#8be9fd">alb</span>,
       defaultTargetGroups<span style="color:#ff79c6">:</span> [target],
       protocol: <span style="color:#8be9fd">elbv2.ApplicationProtocol.HTTP</span>,
       port: <span style="color:#8be9fd">80</span>,
+      open: <span style="color:#8be9fd">false</span>
     })
     <span style="color:#ff79c6">return</span> alb
   }
@@ -539,6 +544,8 @@ COPY locustfile.py /mnt/locust/
 Taskの<a href="https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-networkmode.html">network mode</a>がawsvpcの場合、
 Aレコードとして、EC2インスタンスに追加で紐づけられるTask専用のENIのIPアドレスが返される。
 Taskが動いていて<code>zmq.error.Again: Resource temporarily unavailable</code>などのエラーでWorkerが登録されない場合は、ENIのSGで弾かれていないか確認する。</p>
+<h2 id="参考">参考</h2>
+<p><a href="https://toris.io/2021/04/speeding-up-amazon-ecs-container-deployments/">Amazon ECS でのコンテナデプロイの高速化 | トリの部屋</a></p>
 
     </div>
   </article>
