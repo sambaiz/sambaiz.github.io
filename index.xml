@@ -6,7 +6,24 @@
     <description>Recent content on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Mon, 27 Sep 2021 16:42:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Thu, 30 Sep 2021 13:00:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>SparkのWeb UIでJobのStageとExecutorによるTask分散、SQLのplanを確認する</title>
+      <link>https://www.sambaiz.net/article/382/</link>
+      <pubDate>Thu, 30 Sep 2021 13:00:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/382/</guid>
+      <description>SparkのWeb UIはJobやExecutorをモニタリングするためのツール。
+aws-glue-samplesから maven:3.6-amazoncorretto-8 ベースでSparkを動かすDockerfileを持ってきて、 History Serverを起動する。Glueで出力されたEventLogのパスと認証情報を渡している。
+$ git clone https://github.com/aws-samples/aws-glue-samples.git $ cd aws-glue-samples/utilities/Spark_UI/glue-3_0/ $ docker build -t glue/sparkui:latest . $ docker run -it -e SPARK_HISTORY_OPTS=&amp;#34;$SPARK_HISTORY_OPTS-Dspark.history.fs.logDirectory=s3a://path_to_eventlog -Dspark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY_ID-Dspark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY&amp;#34; -p 18080:18080 glue/sparkui:latest &amp;#34;/opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer&amp;#34; これで http://localhost:18080 にアクセスしApplicationを選択するとJob実行やExecutor追加のタイムラインが表示される。
+各Jobをクリックすると次のようにStageとDAG(Directed Acyclic Graph)が表示される。 WholeStageCodeGenは高速化のため処理ごとではなくStage単位でCode Generationする処理。 ただ生成されるコードが大きいとJVMがJITコンパイルせず遅くなってしまうので、その場合は無効にすると速くなるそうだ。
+Stageはコストが大きいシャッフルを必要としない実行単位なので少ない方が良い。 Joinのためにかさんでいるのであれば、パラメータを調整するなどしてシャッフルしないBroadcast Hash Joinにできないか検討する。
+Apache SparkのRDD, DataFrame, DataSetとAction, Transformation - sambaiz-net
+さらにStageをクリックすると各ExecutorごとのTaskのタイムラインが表示される。 ほとんどの時間をComputing Timeに割けていて、Taskの実行時間やExecutorへのInput Recordsの統計も概ね均一で、うまく分散できているように見える。
+SQLのタブを見るとOptimizerによって最適化されたクエリのLogical planや、 実際に実行されるPhysical plan、そのどこにどれくらい時間がかかっているかを確認できる。
+参考 Apache Sparkコミッターが教える、Spark SQLの詳しい仕組みとパフォーマンスチューニング Part2 - ログミーTech</description>
+    </item>
+    
     <item>
       <title>Glue DataBrewでデータを可視化して分析するProjectと機械学習の前処理を行うJobをCDKで作成する</title>
       <link>https://www.sambaiz.net/article/381/</link>
@@ -2097,8 +2114,10 @@ HDFS(Hadoop Distributed File System)とは - sambaiz-net
 RDDとDataFrameとDataSet RDD(Resilient Distributed Dataset)はSpark Coreの低レベルな インタフェースで、 型を持つイミュータブルな分散コレクション。
 DataFrameはSpark SQLのテーブル状で型を持たないデータ形式で、 Tungstenというバイトレベルの最適化や Catalystというクエリのオプティマイザが効くので自分でRDDのAPIを呼ぶよりパフォーマンスが良い。
 DataSetは型を持つDataFrameで、Spark 2.0からはDataFrameもDataset[Row]のエイリアスになった。
-ActionとTransformation 外部への出力といった副作用を持つActionに対して RDDを返すだけの処理をTransformationという。 Transformationは都度実行されるのではなく Actionが実行される際に、依存関係を表すDAG(Directed Acyclic Graph) をもとに必要なものが遅延評価される。DAGはWeb UIで可視化できる。 また、ネットワークやノードの障害によって計算結果が失われても依存関係をたどり、 並列に計算することで高速に復旧できるようになっている。
-narrow dependencyとwide dependency TransformationはRDDのパーティションに対して各Executorが並列に実行する。 mapやfilterなどの、見るパーティションが単一か他と被らない依存関係をnarrow dependencyといって、 そのExecutorだけで処理が完結するためパイプラインでまとめて実行でき速い。 一方、groupByKeyなどの一つのパーティションが複数のパーティションの処理で必要とされる依存関係をwide dependencyといって、 そのパーティションをExecutorが持っていない場合、コストが高いシャッフルが発生する。 シャッフルを必要としない一連の実行単位をstageという。
+ActionとTransformation 外部への出力といった副作用を持つActionに対して RDDを返すだけの処理をTransformationという。 Transformationは都度実行されるのではなく Actionが実行される際に、依存関係を表すDAG(Directed Acyclic Graph) をもとに必要なものが遅延評価される。DAGはWeb UIで可視化できる。
+SparkのWeb UIでJobのStageとExecutorによるTask分散、SQLのPhysical planを確認する - sambaiz-net
+また、ネットワークやノードの障害によって計算結果が失われても依存関係をたどり、 並列に計算することで高速に復旧できるようになっている。
+narrow dependencyとwide dependency TransformationはRDDのパーティションに対して各Executorが並列に実行する。 mapやfilterなどの、見るパーティションが単一か他と被らない依存関係をnarrow dependencyといって、 そのExecutorだけで処理が完結するためパイプラインでまとめて実行でき速い。 一方、groupByKeyなどの一つのパーティションが複数のパーティションの処理で必要とされる依存関係をwide dependencyといって、 そのパーティションをExecutorが持っていない場合、コストが高いシャッフルが発生する。 シャッフルを回避するためにspark.sql.autoBroadcastJoinThresholdより小さいDataFrameをjoinする際は全てのExecutorにそれを送るBroadcast Hash Joinが行われる。 シャッフルを必要としない一連の実行単位をstageという。
 参考 High Performance Spark - O&amp;rsquo;Reilly Media
 RDD vs DataFrames and Datasets: A Tale of Three Apache Spark APIs</description>
     </item>
