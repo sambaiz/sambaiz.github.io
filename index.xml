@@ -6,7 +6,22 @@
     <description>Recent content on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Thu, 30 Sep 2021 13:00:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Thu, 07 Oct 2021 03:14:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Adaptive Replacement Cache (ARC) とは</title>
+      <link>https://www.sambaiz.net/article/383/</link>
+      <pubDate>Thu, 07 Oct 2021 03:14:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/383/</guid>
+      <description>Adaptive Replacement Cache (ARC) は4つのLRU Cacheを用いることでチューニングを自動で行いヒット率を向上させたキャッシュ。 PostgreSQLでバッファ管理のため一時期用いられていたが、IBMの特許を回避するため今は使われていない。
+ARC: A SELF-TUNING, LOW OVERHEAD REPLACEMENT CACHE, Nimrod Megiddo and Dharmendra S. Modha
+それぞれ次のデータを保持する。
+ T1: 最近アクセスしたもの T2: 2回以上参照したもの B1: T1から追い出されたもののキー B2: T2から追い出されたもののキー  次の図では中央が各LRU Cacheの先頭で、!がT1の先頭、^がT1のサイズを表す。 新規データは!の左に格納され、既にT1またはB1に存在するデータは!の右に格納される。
+...(B1)...[...(T1)...!...^...(T2)...]...(B2)... ghost listと呼ばれるB1とB2によってrecencyとfrequencyに応じたリソースの調整が自動で行われる。 B1でヒットした場合^を右に動かしてT1のサイズを増やし、T2の末尾のデータはB2に追い出される。 B2でヒットした場合^を左に動かしてT2のサイズを増やし、T1の末尾のデータはB1に追い出される。 いずれもヒットしなかった場合は!を^に近づける。
+...(B1)...[...(T1)..!...→^.(T2)...]...(B2)... ...(B1)...[...(T1)..!..^←..(T2)...]...(B2)... ...(B1)...[...(T1)..→!..^..(T2)...]...(B2)... 参考 Adaptive replacement cache - Wikipedia
+IBM patent sparks open source code rewrite | ZDNet</description>
+    </item>
+    
     <item>
       <title>SparkのWeb UIでJobのStageとExecutorによるTask分散、SQLのplanを確認する</title>
       <link>https://www.sambaiz.net/article/382/</link>
@@ -16,7 +31,7 @@
       <description>SparkのWeb UIはJobやExecutorをモニタリングするためのツール。
 aws-glue-samplesから maven:3.6-amazoncorretto-8 ベースでSparkを動かすDockerfileを持ってきて、 History Serverを起動する。Glueで出力されたEventLogのパスと認証情報を渡している。
 $ git clone https://github.com/aws-samples/aws-glue-samples.git $ cd aws-glue-samples/utilities/Spark_UI/glue-3_0/ $ docker build -t glue/sparkui:latest . $ docker run -it -e SPARK_HISTORY_OPTS=&amp;#34;$SPARK_HISTORY_OPTS-Dspark.history.fs.logDirectory=s3a://path_to_eventlog -Dspark.hadoop.fs.s3a.access.key=$AWS_ACCESS_KEY_ID-Dspark.hadoop.fs.s3a.secret.key=$AWS_SECRET_ACCESS_KEY&amp;#34; -p 18080:18080 glue/sparkui:latest &amp;#34;/opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer&amp;#34; これで http://localhost:18080 にアクセスしApplicationを選択するとJob実行やExecutor追加のタイムラインが表示される。
-各Jobをクリックすると次のようにStageとDAG(Directed Acyclic Graph)が表示される。 WholeStageCodeGenは高速化のため処理ごとではなくStage単位でCode Generationする処理。 ただ生成されるコードが大きいとJVMがJITコンパイルしなくなるので無効にするとかえって遅くなることもあるそうだ。
+各Jobをクリックすると次のようにStageとDAG(Directed Acyclic Graph)が表示される。 WholeStageCodeGenは高速化のため処理ごとではなくStage単位でCode Generationする処理。 ただ生成されるコードが大きいとJVMがJITコンパイルしなくなるのでかえって遅くなることもあるそうだ。
 Stageはコストが大きいシャッフルを必要としない実行単位なので少ない方が良い。 Joinのためにかさんでいるのであれば、パラメータを調整するなどしてシャッフルしないBroadcast Hash Joinにできないか検討する。
 Apache SparkのRDD, DataFrame, DataSetとAction, Transformation - sambaiz-net
 さらにStageをクリックすると各ExecutorごとのTaskのタイムラインが表示される。 ほとんどの時間をComputing Timeに割けていて、Taskの実行時間やExecutorへのInput Recordsの統計も概ね均一で、うまく分散できているように見える。

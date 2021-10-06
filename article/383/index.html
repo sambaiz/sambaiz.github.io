@@ -246,16 +246,55 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>read_paper - sambaiz-net</title>
-  <meta name="twitter:title" content="read_paper - sambaiz-net">
-  <meta property='og:title' content="read_paper - sambaiz-net">
+  <title>Adaptive Replacement Cache (ARC) とは - sambaiz-net</title>
+  <meta name="twitter:title" content="Adaptive Replacement Cache (ARC) とは - sambaiz-net">
+  <meta property='og:title' content="Adaptive Replacement Cache (ARC) とは - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="4つのLRU Cacheを用いることでチューニングを自動で行いヒット率を向上させたキャッシュ">
+  <meta name="twitter:description" content="4つのLRU Cacheを用いることでチューニングを自動で行いヒット率を向上させたキャッシュ">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/tags/read_paper/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/383/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id": "https://www.sambaiz.net/"
+    },
+    "headline": "Adaptive Replacement Cache (ARC) とは",
+    "datePublished": "2021-10-07T03:14:00JST",
+    "dateModified": "2021-10-07T03:14:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "url": "https://www.sambaiz.net/",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Person",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "4つのLRU Cacheを用いることでチューニングを自動で行いヒット率を向上させたキャッシュ"
+  }
+</script>
 </head>
 
 <body>
@@ -336,36 +375,39 @@
     </header>
 
 <div class="container">
-  <div class="list">
-    <h1 class="title">read_paper</h1>
-    <div class="grid">
-      
-      <div>
-        <a class="nl grid-nl" href="https://www.sambaiz.net/article/383/" aria-label="Adaptive Replacement Cache (ARC) とは">
-  <article class="cell grid-cell">
-    <div class="date">
-      <time>2021-10-07</time>
-    </div>
-    <p class="title">Adaptive Replacement Cache (ARC) とは</p>
-  </article>
-</a>
+  <article class="single">
+    <div class="cell">
+      <div class="single-header">
+        <h1>Adaptive Replacement Cache (ARC) とは</h1>
+        <time>2021-10-07</time>
+        <a class="tag" href="/tags/read_paper/">read_paper</a><a class="tag" href="/tags/algorithm/">algorithm</a>
       </div>
-      
-      <div>
-        <a class="nl grid-nl" href="https://www.sambaiz.net/article/214/" aria-label="HI-VAE(Heterogeneous-Incomple VAE)の論文を読んで処理を追う">
-  <article class="cell grid-cell">
-    <div class="date">
-      <time>2019-03-22</time>
-    </div>
-    <p class="title">HI-VAE(Heterogeneous-Incomple VAE)の論文を読んで処理を追う</p>
-  </article>
-</a>
-      </div>
-      
-    </div>
-  </div>
+      <p>Adaptive Replacement Cache (ARC) は4つのLRU Cacheを用いることでチューニングを自動で行いヒット率を向上させたキャッシュ。
+PostgreSQLでバッファ管理のため一時期用いられていたが、IBMの特許を回避するため今は使われていない。</p>
+<p><a href="https://www.usenix.org/legacy/events/fast03/tech/full_papers/megiddo/megiddo.pdf">ARC: A SELF-TUNING, LOW OVERHEAD REPLACEMENT CACHE, Nimrod Megiddo and Dharmendra S. Modha</a></p>
+<p>それぞれ次のデータを保持する。</p>
+<ul>
+<li>T1: 最近アクセスしたもの</li>
+<li>T2: 2回以上参照したもの</li>
+<li>B1: T1から追い出されたもののキー</li>
+<li>B2: T2から追い出されたもののキー</li>
+</ul>
+<p>次の図では中央が各LRU Cacheの先頭で、<code>!</code>がT1の先頭、<code>^</code>がT1のサイズを表す。
+新規データは<code>!</code>の左に格納され、既にT1またはB1に存在するデータは<code>!</code>の右に格納される。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">...(B1)...[...(T1)...!...^...(T2)...]...(B2)...
+</code></pre></div><p>ghost listと呼ばれるB1とB2によってrecencyとfrequencyに応じたリソースの調整が自動で行われる。
+B1でヒットした場合<code>^</code>を右に動かしてT1のサイズを増やし、T2の末尾のデータはB2に追い出される。
+B2でヒットした場合<code>^</code>を左に動かしてT2のサイズを増やし、T1の末尾のデータはB1に追い出される。
+いずれもヒットしなかった場合は<code>!</code>を<code>^</code>に近づける。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">...(B1)...[...(T1)..!...→^.(T2)...]...(B2)...
+...(B1)...[...(T1)..!..^←..(T2)...]...(B2)...
+...(B1)...[...(T1)..→!..^..(T2)...]...(B2)...
+</code></pre></div><h2 id="参考">参考</h2>
+<p><a href="https://en.wikipedia.org/wiki/Adaptive_replacement_cache">Adaptive replacement cache - Wikipedia</a></p>
+<p><a href="https://www.zdnet.com/article/ibm-patent-sparks-open-source-code-rewrite/">IBM patent sparks open source code rewrite | ZDNet</a></p>
 
-  
+    </div>
+  </article>
 </div>
 
 </div>
