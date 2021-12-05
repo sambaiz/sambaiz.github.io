@@ -471,22 +471,52 @@ classはカプセル化のために用いられ、公開フィールドを持ち
     };
 };
 
-<span style="color:#ff79c6">struct</span> <span style="color:#50fa7b">C2</span><span style="color:#ff79c6">:</span> S{
-<span style="color:#ff79c6">public</span><span style="color:#ff79c6">:</span>
-    C2(<span style="color:#8be9fd">int</span> value) <span style="color:#ff79c6">:</span> S(value) {
-        <span style="color:#ff79c6">this</span><span style="color:#ff79c6">-&gt;</span>value <span style="color:#ff79c6">*=</span> value;
-    } 
-    <span style="color:#8be9fd">int</span> <span style="color:#50fa7b">func2</span>() {
-        <span style="color:#ff79c6">return</span> value;
-    }
-};
-
 <span style="color:#8be9fd">int</span> <span style="color:#50fa7b">main</span> () {
     (<span style="color:#ff79c6">new</span> C(<span style="color:#bd93f9">1</span>))<span style="color:#ff79c6">-&gt;</span>value; <span style="color:#6272a4">// member &#34;C::value&#34; (declared at line 2) is inaccessible
 </span><span style="color:#6272a4"></span>    (<span style="color:#ff79c6">new</span> C(<span style="color:#bd93f9">1</span>))<span style="color:#ff79c6">-&gt;</span>func();
     (<span style="color:#ff79c6">new</span> S(<span style="color:#bd93f9">1</span>))<span style="color:#ff79c6">-&gt;</span>value;
     (<span style="color:#ff79c6">new</span> S(<span style="color:#bd93f9">1</span>))<span style="color:#ff79c6">-&gt;</span>func(); <span style="color:#6272a4">// function &#34;S::func&#34; (declared at line 18) is inaccessible
-</span><span style="color:#6272a4"></span>    cout <span style="color:#ff79c6">&lt;&lt;</span> C2{<span style="color:#bd93f9">9</span>}.func2() <span style="color:#ff79c6">&lt;&lt;</span> endl; <span style="color:#6272a4">// =&gt; 81
+</span><span style="color:#6272a4"></span>}
+</code></pre></div><p>いずれも継承できる。C++では継承元の関数にvirtualを付けて仮想関数にしないと、
+継承元の型の変数から呼んだ際にオーバーライドされず元の関数が呼ばれる。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-cpp" data-lang="cpp"><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&lt;iostream&gt;</span><span style="color:#ff79c6">
+</span><span style="color:#ff79c6"></span><span style="color:#ff79c6">using</span> <span style="color:#ff79c6">namespace</span> std;
+
+<span style="color:#ff79c6">class</span> <span style="color:#50fa7b">c1</span> {
+<span style="color:#ff79c6">protected</span><span style="color:#ff79c6">:</span>
+    string value;
+<span style="color:#ff79c6">public</span><span style="color:#ff79c6">:</span>
+    c1(string value) {
+        <span style="color:#ff79c6">this</span><span style="color:#ff79c6">-&gt;</span>value <span style="color:#ff79c6">=</span> value;
+    } 
+    string <span style="color:#50fa7b">func</span>() {
+        <span style="color:#ff79c6">return</span> value;
+    }
+    <span style="color:#ff79c6">virtual</span> string <span style="color:#50fa7b">vfunc</span>() {
+        <span style="color:#ff79c6">return</span> value;
+    }
+};
+
+<span style="color:#ff79c6">struct</span> <span style="color:#50fa7b">s2</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">public</span> c1 {
+    s2(string value) <span style="color:#ff79c6">:</span> c1(value) {} 
+    string <span style="color:#50fa7b">func</span>() {
+        <span style="color:#ff79c6">return</span> value <span style="color:#ff79c6">+</span> <span style="color:#f1fa8c">&#34;!!&#34;</span>;
+    }
+    string <span style="color:#50fa7b">vfunc</span>() {
+        <span style="color:#ff79c6">return</span> func();
+    }
+};
+
+<span style="color:#8be9fd">int</span> <span style="color:#50fa7b">main</span> () {
+    c1<span style="color:#ff79c6">*</span> c1c1 <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> c1(<span style="color:#f1fa8c">&#34;A&#34;</span>);
+    cout <span style="color:#ff79c6">&lt;&lt;</span> c1c1<span style="color:#ff79c6">-&gt;</span>func() <span style="color:#ff79c6">&lt;&lt;</span> endl;  <span style="color:#6272a4">// =&gt; A
+</span><span style="color:#6272a4"></span>    cout <span style="color:#ff79c6">&lt;&lt;</span> c1c1<span style="color:#ff79c6">-&gt;</span>vfunc() <span style="color:#ff79c6">&lt;&lt;</span> endl; <span style="color:#6272a4">// =&gt; A
+</span><span style="color:#6272a4"></span>    c1<span style="color:#ff79c6">*</span> c1s2 <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> s2(<span style="color:#f1fa8c">&#34;A&#34;</span>);
+    cout <span style="color:#ff79c6">&lt;&lt;</span> c1s2<span style="color:#ff79c6">-&gt;</span>func() <span style="color:#ff79c6">&lt;&lt;</span> endl;  <span style="color:#6272a4">// =&gt; A
+</span><span style="color:#6272a4"></span>    cout <span style="color:#ff79c6">&lt;&lt;</span> c1s2<span style="color:#ff79c6">-&gt;</span>vfunc() <span style="color:#ff79c6">&lt;&lt;</span> endl; <span style="color:#6272a4">// =&gt; A!!
+</span><span style="color:#6272a4"></span>    s2<span style="color:#ff79c6">*</span> s2s2 <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> s2(<span style="color:#f1fa8c">&#34;A&#34;</span>);
+    cout <span style="color:#ff79c6">&lt;&lt;</span> s2s2<span style="color:#ff79c6">-&gt;</span>func() <span style="color:#ff79c6">&lt;&lt;</span> endl;  <span style="color:#6272a4">// =&gt; A!!
+</span><span style="color:#6272a4"></span>    cout <span style="color:#ff79c6">&lt;&lt;</span> s2s2<span style="color:#ff79c6">-&gt;</span>vfunc() <span style="color:#ff79c6">&lt;&lt;</span> endl; <span style="color:#6272a4">// =&gt; A!!
 </span><span style="color:#6272a4"></span>}
 </code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://isocpp.org/wiki/faq/classes-and-objects#struct-vs-class">What’s the difference between the keywords struct and class?</a></p>
