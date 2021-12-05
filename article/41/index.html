@@ -288,8 +288,8 @@
   <meta property='og:title' content="ファイルディスクリプタの上限を増やす - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="ulimitとか。dockerも">
-  <meta name="twitter:description" content="ulimitとか。dockerも">
+  <meta name="description" content="プロセスの外部とやりとりするための識別子">
+  <meta name="twitter:description" content="プロセスの外部とやりとりするための識別子">
   
   
 
@@ -297,6 +297,16 @@
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
 
+  
+  
+  <link rel="alternate" hreflang="ja" href="https://www.sambaiz.net/article/41/" />
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.sambaiz.net/article/41/" />
+  
+  
+  <link rel="alternate" hreflang="en" href="https://www.sambaiz.net/en/article/41/" />
+  
+  
   
 
 <script type="application/ld+json">
@@ -332,7 +342,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "ulimitとか。dockerも"
+    "description": "プロセスの外部とやりとりするための識別子"
   }
 </script>
 </head>
@@ -344,6 +354,14 @@
   
   <div>
     <div class="languages">
+      
+      <ul>
+          
+          <li>
+              <a href="https://www.sambaiz.net/en/article/41/">English</a>
+          </li>
+          
+      </ul>
       
     </div>
 
@@ -427,41 +445,38 @@
         <a class="tag" href='/tags/infra/'>infra</a><a class="tag" href='/tags/docker/'>docker</a><a class="tag" href='/tags/linux/'>linux</a>
       </div>
       <h2 id="ファイルディスクリプタとは">ファイルディスクリプタとは</h2>
-<p>プロセスの外部とやりとりするための識別子。POSIXではint型で、0がstdin、1がstdout、2がstderrといったもの。
-ファイルやデバイスに対するopen()や、
+<p>プロセスの外部とやりとりするための識別子。POSIXではint型で、0がstdin、1がstdout、2がstderrとなっている。
+ファイルやデバイスに対する<code>open()</code>や、
 ネットワーク(INETドメインソケット)やホスト内(UNIXドメインソケット)で
-通信するためのソケットを生成するsocket()などのシステムコールで生成される。</p>
+通信するためのソケットを生成する<code>socket()</code>などのシステムコールで割り当てられる。</p>
 <h2 id="ファイルディスクリプタの上限">ファイルディスクリプタの上限</h2>
-<p>一つのプロセスがリソースを食いつぶさないように
-使えるファイルディスクリプタの上限が決まっていて、<code>ulimit -n</code>で確認できる。デフォルトは大体1024。</p>
+<p>一つのプロセスがリソースを食いつぶさないように使えるファイルディスクリプタの上限が決まっていて、現在のプロセスの値は<code>ulimit -n</code>で確認できる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ulimit -n
 1024
-</code></pre></div><p>各プロセスの上限と使っているファイルディスクリプタはこれで確認できる。</p>
+</code></pre></div><p>各プロセスの上限と、使っているファイルディスクリプタは次のようにして確認できる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat /proc/&lt;プロセスID&gt;/limits
 ...
 Max open files            1024                 4096                 files     
 ...
 
 $ ls -l /proc/&lt;プロセスID&gt;/fd
-</code></pre></div><p>webサーバーのように同時にたくさん通信したりすると上限に達してしまい、<code>Too many open files</code>になってしまうので増やす必要がある。</p>
+</code></pre></div><p>webサーバーのような同時に大量の通信をするプロセスではこの上限に達してしまい、<code>Too many open files</code>になってしまうことがあるので増やす必要がある。
+上限を変更する方法として次の方法がある。</p>
 <h3 id="etcsecuritylimitsconfで変更する"><code>/etc/security/limits.conf</code>で変更する</h3>
-<p>PAM認証時(ログインするときなど)に適用されるので、サーバーの起動時に立ち上がったデーモンには使えない。</p>
+<p>ログインの際などに行われるPAM認証時に適用されるので、サーバーの起動時に立ち上がったデーモンには適用されない。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat /etc/pam.d/sshd
 ...
 session    required     pam_limits.so
 ...
-</code></pre></div><p>全てのユーザー(<code>*</code>)のプロセスが使える
-ファイルディスクリプタ(nofile)のsoft(ユーザーが設定できる)とhard(rootが設定できる)上限を共に64000にする。</p>
+</code></pre></div><p>全てのユーザー(<code>*</code>)のプロセスが使えるファイルディスクリプタの、ユーザーが設定できるsoftとrootが設定できるhard limitを共に64000にする。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ echo &#34;* hard nofile 64000&#34; &gt;&gt; /etc/security/limits.conf
 $ echo &#34;* soft nofile 64000&#34; &gt;&gt; /etc/security/limits.conf
 $ ulimit -n
 64000
 </code></pre></div><h3 id="ulimit--nで変更する"><code>ulimit -n</code>で変更する</h3>
-<p>シェルと、起動したプロセスで有効。</p>
+<p>シェルと、そこから起動したプロセスでのみ有効。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ulimit -n 64000
-</code></pre></div><h3 id="dockerコンテナでは">dockerコンテナでは</h3>
-<p>run時に<a href="https://docs.docker.com/engine/reference/commandline/run/#/set-ulimits-in-container---ulimit">ulimitオプション</a>で
-<code>--ulimit nofile=11111</code>のように指定することもできる。</p>
+</code></pre></div><h3 id="dockerの場合-run時の--ulimithttpsdocsdockercomenginereferencecommandlinerunset-ulimits-in-container---ulimitで変更する">(dockerの場合) run時の<a href="https://docs.docker.com/engine/reference/commandline/run/#/set-ulimits-in-container---ulimit">&ndash;ulimit</a>で変更する</h3>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker run -itd --ulimit nofile=11111 ubuntu
 $ docker exec -it &lt;id&gt; /bin/bash -c &#34;ulimit -n&#34;
 11111
