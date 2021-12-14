@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -433,7 +434,7 @@
       <p>Athena(Presto)で<code>SUM()</code>や<code>AVG()</code>といった集計関数に<code>OVER</code>を付けてWindow集計を行う。</p>
 <p><a href="https://prestodb.io/docs/current/functions/window.html">Window Functions — Presto 0.247 Documentation</a></p>
 <p>次のテストデータを使う。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat test-data.csv 
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat test-data.csv 
 {&#34;date&#34;:&#34;2021-02-01&#34;,&#34;user&#34;:1,&#34;value&#34;:10}
 {&#34;date&#34;:&#34;2021-02-01&#34;,&#34;user&#34;:2,&#34;value&#34;:20}
 {&#34;date&#34;:&#34;2021-02-01&#34;,&#34;user&#34;:3,&#34;value&#34;:30} 
@@ -454,11 +455,11 @@
 {&#34;date&#34;:&#34;2021-02-03&#34;,&#34;user&#34;:3,&#34;value&#34;:6}
 </code></pre></div><h3 id="partition-by">PARTITION BY</h3>
 <p>その値ごとに集計する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">SELECT date, user, value, SUM(value) OVER (PARTITION BY user) as sum_value 
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">SELECT date, user, value, SUM(value) OVER (PARTITION BY user) as sum_value 
 FROM test
 ORDER BY date, user;
 </code></pre></div><p>GROUP BYしているわけではないので、行数は減らない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&#34;date&#34;,&#34;user&#34;,&#34;value&#34;,&#34;sum_value&#34;
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&#34;date&#34;,&#34;user&#34;,&#34;value&#34;,&#34;sum_value&#34;
 &#34;2021-02-01&#34;,&#34;1&#34;,&#34;40&#34;,&#34;555&#34;
 &#34;2021-02-01&#34;,&#34;1&#34;,&#34;10&#34;,&#34;555&#34;
 &#34;2021-02-01&#34;,&#34;2&#34;,&#34;20&#34;,&#34;777&#34;
@@ -480,11 +481,11 @@ ORDER BY date, user;
 </code></pre></div><h3 id="order-by">ORDER BY</h3>
 <p>ソートし範囲を絞って集計する。
 デフォルトの集計範囲が <code>RANGE UNBOUNDED PRECEDING (BETWEEN CURRENT ROW)</code> なので、それまでの値の行で集計されている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">SELECT date, user, value, SUM(value) OVER (ORDER BY date) as sum_value 
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">SELECT date, user, value, SUM(value) OVER (ORDER BY date) as sum_value 
 FROM test 
 WHERE user = 1
 ORDER BY date, user;
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&#34;date&#34;,&#34;user&#34;,&#34;value&#34;,&#34;sum_value&#34;
+</code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&#34;date&#34;,&#34;user&#34;,&#34;value&#34;,&#34;sum_value&#34;
 &#34;2021-02-01&#34;,&#34;1&#34;,&#34;10&#34;,&#34;50&#34;
 &#34;2021-02-01&#34;,&#34;1&#34;,&#34;40&#34;,&#34;50&#34;
 &#34;2021-02-02&#34;,&#34;1&#34;,&#34;100&#34;,&#34;550&#34;
@@ -495,11 +496,11 @@ ORDER BY date, user;
 <p>行単位で集計範囲を指定する。次の例では1行前からその行までを集計範囲としている。<code>1 FOLLOWING</code> でそれ以降の行も指定できる。
 RANGEではdateが等しい行は同じ集計値になるが、ROWSでは行によって異なる。
 それなら <code>RANGE 1 PRECEDING</code> のように書きたいところだが、<code>RANGE PRECEDING is only supported with UNBOUNDED</code> となっている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">SELECT date, user, value, SUM(value) OVER (ORDER BY date ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) as sum_value 
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">SELECT date, user, value, SUM(value) OVER (ORDER BY date ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) as sum_value 
 FROM test 
 WHERE user = 1
 ORDER BY date, user;
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&#34;date&#34;,&#34;user&#34;,&#34;value&#34;,&#34;sum_value&#34;
+</code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&#34;date&#34;,&#34;user&#34;,&#34;value&#34;,&#34;sum_value&#34;
 &#34;2021-02-01&#34;,&#34;1&#34;,&#34;10&#34;,&#34;10&#34;
 &#34;2021-02-01&#34;,&#34;1&#34;,&#34;40&#34;,&#34;50&#34;
 &#34;2021-02-02&#34;,&#34;1&#34;,&#34;100&#34;,&#34;140&#34;

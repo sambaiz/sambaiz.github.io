@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -434,22 +435,22 @@
 はPodが生きているか/リクエストを受けられるかの判定で、
 後者はアプリケーションの起動に時間がかかる場合などに使われる。
 ヘルスチェックのようなエンドポイントを叩くのはhttpGetでできるが、任意のcommandを実行することもできる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">livenessProbe</span>:
-  <span style="color:#ff79c6">httpGet</span>:
-    <span style="color:#ff79c6">path</span>: /healthz
-    <span style="color:#ff79c6">port</span>: <span style="color:#bd93f9">8080</span>
-    <span style="color:#ff79c6">httpHeaders</span>:
-    - <span style="color:#ff79c6">name</span>: X-Custom-Header
-      <span style="color:#ff79c6">value</span>: Awesome
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+    httpHeaders:
+    - name: X-Custom-Header
+      value: Awesome
 </code></pre></div><p>Manifestに書かれたProbeは、
 各ノードで動いている<a href="https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/">kubelet</a>が
 <a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/kubelet.go#L1983">Podが追加されたとき</a>にworkerを
 <a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/prober/prober_manager.go#L157">作って</a>
 <a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/prober/prober.go#L147">runProbe()</a>で実行させている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">if</span> p.Exec <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-    glog.<span style="color:#50fa7b">V</span>(<span style="color:#bd93f9">4</span>).<span style="color:#50fa7b">Infof</span>(<span style="color:#f1fa8c">&#34;Exec-Probe Pod: %v, Container: %v, Command: %v&#34;</span>, pod, container, p.Exec.Command)
-    command <span style="color:#ff79c6">:=</span> kubecontainer.<span style="color:#50fa7b">ExpandContainerCommandOnlyStatic</span>(p.Exec.Command, container.Env)
-    <span style="color:#ff79c6">return</span> pb.exec.<span style="color:#50fa7b">Probe</span>(pb.<span style="color:#50fa7b">newExecInContainer</span>(container, containerID, command, timeout))
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">if</span> p.Exec != <span style="color:#00f">nil</span> {
+    glog.V(4).Infof(<span style="color:#a31515">&#34;Exec-Probe Pod: %v, Container: %v, Command: %v&#34;</span>, pod, container, p.Exec.Command)
+    command := kubecontainer.ExpandContainerCommandOnlyStatic(p.Exec.Command, container.Env)
+    <span style="color:#00f">return</span> pb.exec.Probe(pb.newExecInContainer(container, containerID, command, timeout))
 }
 </code></pre></div><p>まずcommandに含まれる<code>$( )</code>で囲まれた文字列を
 <a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/third_party/forked/golang/expansion/expand.go#L38">Expand()</a>
@@ -459,39 +460,39 @@
 コンテナランタイムがK8s標準のCRI(Container Runtime Interface)に対応している場合はその<a href="https://github.com/kubernetes/kubernetes/blob/v1.13.0-alpha.0/pkg/kubelet/apis/cri/services.go#L50">API</a>の、
 対応していない場合は~shimパッケージのExecSync()が呼ばれ、コンテナ内でcommandを実行させて結果を受け取り、終了コードが0でなければエラーとする。</p>
 <p><code>$( )</code>でenvの値が使えることを確認する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ kubectl config use-context docker-for-desktop
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ kubectl config use-context docker-for-desktop
 $ cat test.yaml
 ---
-<span style="color:#ff79c6">apiVersion</span>: extensions/v1beta1
-<span style="color:#ff79c6">kind</span>: Deployment
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: <span style="color:#f1fa8c">&#34;test&#34;</span>
-<span style="color:#ff79c6">spec</span>:
-  <span style="color:#ff79c6">replicas</span>: <span style="color:#bd93f9">1</span>
-  <span style="color:#ff79c6">template</span>:
-    <span style="color:#ff79c6">metadata</span>:
-      <span style="color:#ff79c6">labels</span>:
-        <span style="color:#ff79c6">app</span>: <span style="color:#f1fa8c">&#34;test&#34;</span>
-    <span style="color:#ff79c6">spec</span>:
-      <span style="color:#ff79c6">containers</span>:
-        - <span style="color:#ff79c6">name</span>: <span style="color:#f1fa8c">&#34;test&#34;</span>
-          <span style="color:#ff79c6">image</span>: <span style="color:#f1fa8c">&#34;alpine&#34;</span>
-          <span style="color:#ff79c6">command</span>: [<span style="color:#f1fa8c">&#34;top&#34;</span>]
-          <span style="color:#ff79c6">env</span>:
-          - <span style="color:#ff79c6">name</span>: TEST
-            <span style="color:#ff79c6">value</span>: <span style="color:#f1fa8c">&#34;foobar&#34;</span>
-          <span style="color:#ff79c6">ports</span>:
-          - <span style="color:#ff79c6">containerPort</span>: <span style="color:#bd93f9">5000</span>
-            <span style="color:#ff79c6">name</span>: grpc
-          <span style="color:#ff79c6">readinessProbe</span>:
-            <span style="color:#ff79c6">exec</span>:
-              <span style="color:#ff79c6">command</span>:
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: <span style="color:#a31515">&#34;test&#34;</span>
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: <span style="color:#a31515">&#34;test&#34;</span>
+    spec:
+      containers:
+        - name: <span style="color:#a31515">&#34;test&#34;</span>
+          image: <span style="color:#a31515">&#34;alpine&#34;</span>
+          command: [<span style="color:#a31515">&#34;top&#34;</span>]
+          env:
+          - name: TEST
+            value: <span style="color:#a31515">&#34;foobar&#34;</span>
+          ports:
+          - containerPort: 5000
+            name: grpc
+          readinessProbe:
+            exec:
+              command:
               - test
               - $(TEST)
               - =
               - foobar
-            <span style="color:#ff79c6">initialDelaySeconds</span>: <span style="color:#bd93f9">0</span>
-            <span style="color:#ff79c6">timeoutSeconds</span>: <span style="color:#bd93f9">1</span>
+            initialDelaySeconds: 0
+            timeoutSeconds: 1
 
 $ kubectl apply test.yaml
 $ kubectl describe pod $(kubectl get pods -l app=test -o jsonpath=&#39;{.items[0].metadata.name}&#39;)

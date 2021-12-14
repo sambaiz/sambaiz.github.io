@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -432,7 +433,7 @@
       </div>
       <p>以前、Helmでlocustをインストールしたが、今回はEKSにCDKでインストールする。CDKだとクラスタの作成からできるので<code>cdk deploy</code>で一気に環境が整う。</p>
 <p><a href="https://www.sambaiz.net/article/161/">KubernetesにHelmでLocustによる分散負荷試験環境を立てる - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm run cdk -- --version
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm run cdk -- --version
 1.62.0 (build 8c2d7fc)
 </code></pre></div><p>まずVPCとClusterを作成する。mastersRoleをユーザーもassumeできるようPrincipalにAWSアカウントも入れている。</p>
 <p><a href="https://www.sambaiz.net/article/72/">AWSのAssumeRole - sambaiz-net</a></p>
@@ -442,76 +443,76 @@ Chartのリポジトリは<a href="https://hub.helm.sh/charts/stable/locust">Hel
 <blockquote>
 <p>追記 (2020-12-21): 以前はHelm Hubの <code>https://kubernetes-charts.storage.googleapis.com/</code> を参照していたが、<code>helm/charts</code> リポジトリが<a href="https://helm.sh/blog/charts-repo-deprecation/">deprecated</a> になり削除されてしまったので、archiveを参照するようにした。</p>
 </blockquote>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ts" data-lang="ts"><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>;
-<span style="color:#ff79c6">import</span> { Cluster, KubernetesVersion, DefaultCapacityType } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-eks&#39;</span>
-<span style="color:#ff79c6">import</span> { Vpc, SubnetType, InstanceType } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-ec2&#39;</span>
-<span style="color:#ff79c6">import</span> { Role, ManagedPolicy, ServicePrincipal, AccountPrincipal, CompositePrincipal } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-iam&#39;</span>
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> fs <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;fs&#39;</span>;
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ts" data-lang="ts"><span style="color:#00f">import</span> * <span style="color:#00f">as</span> cdk <span style="color:#00f">from</span> <span style="color:#a31515">&#39;@aws-cdk/core&#39;</span>;
+<span style="color:#00f">import</span> { Cluster, KubernetesVersion, DefaultCapacityType } <span style="color:#00f">from</span> <span style="color:#a31515">&#39;@aws-cdk/aws-eks&#39;</span>
+<span style="color:#00f">import</span> { Vpc, SubnetType, InstanceType } <span style="color:#00f">from</span> <span style="color:#a31515">&#39;@aws-cdk/aws-ec2&#39;</span>
+<span style="color:#00f">import</span> { Role, ManagedPolicy, ServicePrincipal, AccountPrincipal, CompositePrincipal } <span style="color:#00f">from</span> <span style="color:#a31515">&#39;@aws-cdk/aws-iam&#39;</span>
+<span style="color:#00f">import</span> * <span style="color:#00f">as</span> fs <span style="color:#00f">from</span> <span style="color:#a31515">&#39;fs&#39;</span>;
 
-<span style="color:#ff79c6">export</span> <span style="color:#ff79c6">class</span> TryEksStack <span style="color:#ff79c6">extends</span> cdk.Stack {
-  <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">cdk.Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span>) {
-    <span style="color:#ff79c6">super</span>(scope, id, props);
-    <span style="color:#ff79c6">const</span> vpc <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Vpc(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;vpc&#39;</span>, {
-      cidr<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;10.0.0.0/16&#39;</span>,
-      maxAzs: <span style="color:#8be9fd">2</span>,
-      subnetConfiguration<span style="color:#ff79c6">:</span> [
+<span style="color:#00f">export</span> <span style="color:#00f">class</span> TryEksStack <span style="color:#00f">extends</span> cdk.Stack {
+  <span style="color:#00f">constructor</span>(scope: <span style="color:#2b91af">cdk.Construct</span>, id: <span style="color:#2b91af">string</span>, props?: <span style="color:#2b91af">cdk.StackProps</span>) {
+    <span style="color:#00f">super</span>(scope, id, props);
+    <span style="color:#00f">const</span> vpc = <span style="color:#00f">new</span> Vpc(<span style="color:#00f">this</span>, <span style="color:#a31515">&#39;vpc&#39;</span>, {
+      cidr: <span style="color:#a31515">&#39;10.0.0.0/16&#39;</span>,
+      maxAzs: <span style="color:#2b91af">2</span>,
+      subnetConfiguration: [
         {
-          cidrMask: <span style="color:#8be9fd">18</span>,
-          name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;public&#39;</span>,
-          subnetType: <span style="color:#8be9fd">SubnetType.PUBLIC</span>,
+          cidrMask: <span style="color:#2b91af">18</span>,
+          name: <span style="color:#a31515">&#39;public&#39;</span>,
+          subnetType: <span style="color:#2b91af">SubnetType.PUBLIC</span>,
         },
         {
-          cidrMask: <span style="color:#8be9fd">18</span>,
-          name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;private&#39;</span>,
-          subnetType: <span style="color:#8be9fd">SubnetType.PRIVATE</span>,
+          cidrMask: <span style="color:#2b91af">18</span>,
+          name: <span style="color:#a31515">&#39;private&#39;</span>,
+          subnetType: <span style="color:#2b91af">SubnetType.PRIVATE</span>,
         },
       ]
     })
-    cdk.Tags.<span style="color:#ff79c6">of</span>(vpc).add(<span style="color:#f1fa8c">&#34;Name&#34;</span>, <span style="color:#ff79c6">this</span>.stackName)
-    <span style="color:#ff79c6">const</span> mastersRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;masters-role&#39;</span>, {
-      assumedBy: <span style="color:#8be9fd">new</span> CompositePrincipal(
-        <span style="color:#ff79c6">new</span> ServicePrincipal(<span style="color:#f1fa8c">&#39;eks.amazonaws.com&#39;</span>),
-        <span style="color:#ff79c6">new</span> AccountPrincipal(<span style="color:#ff79c6">this</span>.account)
+    cdk.Tags.<span style="color:#00f">of</span>(vpc).add(<span style="color:#a31515">&#34;Name&#34;</span>, <span style="color:#00f">this</span>.stackName)
+    <span style="color:#00f">const</span> mastersRole = <span style="color:#00f">new</span> Role(<span style="color:#00f">this</span>, <span style="color:#a31515">&#39;masters-role&#39;</span>, {
+      assumedBy: <span style="color:#2b91af">new</span> CompositePrincipal(
+        <span style="color:#00f">new</span> ServicePrincipal(<span style="color:#a31515">&#39;eks.amazonaws.com&#39;</span>),
+        <span style="color:#00f">new</span> AccountPrincipal(<span style="color:#00f">this</span>.account)
       ),
-      managedPolicies<span style="color:#ff79c6">:</span> [
-        ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#f1fa8c">&#39;AmazonEKSClusterPolicy&#39;</span>),
-        ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#f1fa8c">&#39;AmazonEKSServicePolicy&#39;</span>),
+      managedPolicies: [
+        ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#a31515">&#39;AmazonEKSClusterPolicy&#39;</span>),
+        ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#a31515">&#39;AmazonEKSServicePolicy&#39;</span>),
       ]
     })
-    <span style="color:#ff79c6">const</span> cluster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> Cluster(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;cluster&#39;</span>, {
+    <span style="color:#00f">const</span> cluster = <span style="color:#00f">new</span> Cluster(<span style="color:#00f">this</span>, <span style="color:#a31515">&#39;cluster&#39;</span>, {
       vpc,
       mastersRole,
-      clusterName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;&lt;cluster_name&gt;&#39;</span>,
-      version: <span style="color:#8be9fd">KubernetesVersion.V1_17</span>,
-      defaultCapacity: <span style="color:#8be9fd">2</span>,
-      defaultCapacityInstance: <span style="color:#8be9fd">new</span> InstanceType(<span style="color:#f1fa8c">&#39;m5.large&#39;</span>)
+      clusterName: <span style="color:#a31515">&#39;&lt;cluster_name&gt;&#39;</span>,
+      version: <span style="color:#2b91af">KubernetesVersion.V1_17</span>,
+      defaultCapacity: <span style="color:#2b91af">2</span>,
+      defaultCapacityInstance: <span style="color:#2b91af">new</span> InstanceType(<span style="color:#a31515">&#39;m5.large&#39;</span>)
     })
-    <span style="color:#ff79c6">const</span> configmap <span style="color:#ff79c6">=</span> {
-      apiVersion<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;v1&#39;</span>,
-      kind<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;ConfigMap&#39;</span>,
-      metadata<span style="color:#ff79c6">:</span> {
-        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust-worker-configs&#39;</span>,
+    <span style="color:#00f">const</span> configmap = {
+      apiVersion: <span style="color:#a31515">&#39;v1&#39;</span>,
+      kind: <span style="color:#a31515">&#39;ConfigMap&#39;</span>,
+      metadata: {
+        name: <span style="color:#a31515">&#39;locust-worker-configs&#39;</span>,
       },
-      data<span style="color:#ff79c6">:</span> {
-        <span style="color:#f1fa8c">&#39;tasks.py&#39;</span><span style="color:#ff79c6">:</span> fs.readFileSync(<span style="color:#f1fa8c">&#39;lib/tasks.py&#39;</span>).toString(),
+      data: {
+        <span style="color:#a31515">&#39;tasks.py&#39;</span>: fs.readFileSync(<span style="color:#a31515">&#39;lib/tasks.py&#39;</span>).toString(),
       },
     }
-    cluster.addManifest(<span style="color:#f1fa8c">&#39;locust-worker-configmap&#39;</span>, configmap)
-    cluster.addChart(<span style="color:#f1fa8c">&#39;locust-chart&#39;</span>, {
-      chart<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust&#39;</span>,
-      repository<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;https://charts.helm.sh/stable&#39;</span>,
-      version<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;1.2.1&#39;</span>,
-      wait: <span style="color:#8be9fd">true</span>,
-      values<span style="color:#ff79c6">:</span> {
-        master<span style="color:#ff79c6">:</span> {
-          config<span style="color:#ff79c6">:</span> {
-            <span style="color:#f1fa8c">&#39;target-host&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;https://example.com&#39;</span>
+    cluster.addManifest(<span style="color:#a31515">&#39;locust-worker-configmap&#39;</span>, configmap)
+    cluster.addChart(<span style="color:#a31515">&#39;locust-chart&#39;</span>, {
+      chart: <span style="color:#a31515">&#39;locust&#39;</span>,
+      repository: <span style="color:#a31515">&#39;https://charts.helm.sh/stable&#39;</span>,
+      version: <span style="color:#a31515">&#39;1.2.1&#39;</span>,
+      wait: <span style="color:#2b91af">true</span>,
+      values: {
+        master: {
+          config: {
+            <span style="color:#a31515">&#39;target-host&#39;</span>: <span style="color:#a31515">&#39;https://example.com&#39;</span>
           }
         },
-        worker<span style="color:#ff79c6">:</span> {
-          replicaCount: <span style="color:#8be9fd">2</span>,
-          config<span style="color:#ff79c6">:</span> {
-            configmapName: <span style="color:#8be9fd">configmap.metadata.name</span>,
+        worker: {
+          replicaCount: <span style="color:#2b91af">2</span>,
+          config: {
+            configmapName: <span style="color:#2b91af">configmap.metadata.name</span>,
           }
         }
       }
@@ -521,39 +522,39 @@ Chartのリポジトリは<a href="https://hub.helm.sh/charts/stable/locust">Hel
 </code></pre></div><p>イメージのバージョンを最新の<code>1.x</code>系にしたところ、
 現状のChartが設定する <code>LOCUSTFILE_PATH</code> を読んでくれず <code>Could not find any locustfile!</code> になってしまったのでデフォルトの<code>0.9</code>で動かしている。
 locustfileの書き方が少し異なるのでバージョンを上げたい場合はChartを持ってきて編集するか自前のイメージを参照する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">$ cat lib<span style="color:#ff79c6">/</span>tasks<span style="color:#ff79c6">.</span>py
-<span style="color:#ff79c6">from</span> locust <span style="color:#ff79c6">import</span> HttpLocust, TaskSet, task
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="">$</span> cat lib/tasks.py
+<span style="color:#00f">from</span> locust <span style="color:#00f">import</span> HttpLocust, TaskSet, task
 
-<span style="color:#ff79c6">class</span> <span style="color:#50fa7b">MyTaskSet</span>(TaskSet):
+<span style="color:#00f">class</span> <span style="color:#2b91af">MyTaskSet</span>(TaskSet):
   @task
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">index</span>(self):
-    self<span style="color:#ff79c6">.</span>client<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#34;/&#34;</span>)
+  <span style="color:#00f">def</span> index(self):
+    self.client.get(<span style="color:#a31515">&#34;/&#34;</span>)
 
-<span style="color:#ff79c6">class</span> <span style="color:#50fa7b">MyUser</span>(HttpLocust):
-  task_set <span style="color:#ff79c6">=</span> MyTaskSet
-  min_wait <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">5</span>
-  max_wait <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">15</span>
+<span style="color:#00f">class</span> <span style="color:#2b91af">MyUser</span>(HttpLocust):
+  task_set = MyTaskSet
+  min_wait = 5
+  max_wait = 15
 </code></pre></div><p>デプロイするとupdate-kubeconfigするコマンドがOutputsに出るので実行する。ChartがインストールされLocustが起動していることが確認できる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ npm run cdk -- deploy
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ npm run cdk -- deploy
 ...
-<span style="color:#ff79c6">Outputs</span>:
+Outputs:
 TryEksStack.clusterConfigCommand30DB378E = aws eks update-kubeconfig --name &lt;cluster_name&gt; --region &lt;region&gt; --role-arn &lt;masters_role_arn&gt;
 TryEksStack.clusterGetTokenCommand09C244B5 = aws eks get-token --cluster-name &lt;cluster_name&gt; --region &lt;region&gt; --role-arn &lt;masters_role_arn&gt;
 
 $ $(aws cloudformation describe-stacks --region &lt;region&gt; --stack-name &lt;stack_name&gt; | jq -r &#39;.Stacks | .[] | .Outputs | reduce .[] as $i ({}; .[$i.OutputKey] = $i.OutputValue) | to_entries | map(select(.key | startswith(&#34;clusterConfigCommand&#34;))) | .[0].value&#39;)
 
 $ kubectl config view
-<span style="color:#ff79c6">apiVersion</span>: v1
+apiVersion: v1
 ...
-<span style="color:#ff79c6">current-context</span>: &lt;cluster_arn&gt;
-<span style="color:#ff79c6">kind</span>: Config
-<span style="color:#ff79c6">preferences</span>: {}
-<span style="color:#ff79c6">users</span>:
-- <span style="color:#ff79c6">name</span>: &lt;cluster_arn&gt;
-  <span style="color:#ff79c6">user</span>:
-    <span style="color:#ff79c6">exec</span>:
-      <span style="color:#ff79c6">apiVersion</span>: client.authentication.k8s.io/v1alpha1
-      <span style="color:#ff79c6">args</span>:
+current-context: &lt;cluster_arn&gt;
+kind: Config
+preferences: {}
+users:
+- name: &lt;cluster_arn&gt;
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1alpha1
+      args:
       - --region
       - &lt;region&gt;
       - eks
@@ -562,10 +563,10 @@ $ kubectl config view
       - &lt;cluster_name&gt;
       - --role
       - &lt;masters_role&gt;
-      <span style="color:#ff79c6">command</span>: aws
-      <span style="color:#ff79c6">env</span>:
-      - <span style="color:#ff79c6">name</span>: AWS_PROFILE
-        <span style="color:#ff79c6">value</span>: &lt;profile_name&gt;
+      command: aws
+      env:
+      - name: AWS_PROFILE
+        value: &lt;profile_name&gt;
 
 $ helm list
 NAME                                            NAMESPACE       REVISION        UPDATED                                 STATUS          CHART           APP VERSION     
@@ -580,10 +581,10 @@ tryeksstackclusterchartlocustchart1abdd876-worker-58b74b6bsltvr   1/1     Runnin
 $ kubectl port-forward $(kubectl get pod -l &#34;component=master&#34; --template &#39;{{(index .items 0).metadata.name}}&#39;) 8089
 $ open http://localhost:8089
 </code></pre></div><p>次のようなエラーが出た場合、bootstrapして<code>CDKTookKit</code> stackをデプロイする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Error: This stack uses assets, so the toolkit stack must be deployed to the environment
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm run cdk -- bootstrap
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Error: This stack uses assets, so the toolkit stack must be deployed to the environment
+</code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm run cdk -- bootstrap
 </code></pre></div><p>後片付けする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm run cdk -- destroy
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm run cdk -- destroy
 </code></pre></div><p><a href="https://www.sambaiz.net/article/299/">EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 - sambaiz-net</a></p>
 <p><a href="https://www.sambaiz.net/article/378/">CDKでECS(EC2)上にLocust masterとworkerのServiceをデプロイしCloud Mapで名前解決させる - sambaiz-net</a></p>
 

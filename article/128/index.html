@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -445,13 +446,13 @@ SQLを拡張したHiveQLを書くとデータを処理するMapReduceやSpark、
 <li><a href="https://www.cloudera.com/documentation/enterprise/latest/topics/cloudera_manager.html">Cloudera Manager</a>: CDHクラスタを管理する。無料のExpressと有料のEnterpriseで使える機能に<a href="https://www.cloudera.com/content/dam/www/static/documents/datasheets/cloudera-enterprise-datasheet.pdf">差がある</a>。</li>
 </ul>
 <p>が含まれていて、これを起動すると諸々立ち上がる。CDHクラスタを組むのはサポートされていないようなのでテスト用らしい。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker pull cloudera/quickstart:latest
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker pull cloudera/quickstart:latest
 $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 7180 -p 80 cloudera/quickstart /usr/bin/docker-quickstart
 </code></pre></div><p>80がチュートリアルで、8888がHadoopのWeb UIの<a href="https://github.com/cloudera/hue">Hue</a>、7180がCloudera Manager。Dockerに割り当てるメモリが2GBだと<code>Failed to contact an active Resource Manager</code>になってしまったので4GBにした。</p>
 <h2 id="hiveのテーブルを作成して実行する">Hiveのテーブルを作成して実行する</h2>
 <p>チュートリアルでは<a href="http://sqoop.apache.org/">Sqoop</a>を使ってDBから取り込んでいるんだけど、
 今回はjsonのログのテーブルを作成する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sqoop import-all-tables \
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sqoop import-all-tables \
     -m 1 \
     --connect jdbc:mysql://localhost:3306/retail_db \
     --username=retail_dba \
@@ -498,38 +499,38 @@ $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 71
 </tbody>
 </table>
 <p>Arrayが空の場合にexplodeすると消滅してしまうので、LEFT JOINのように残すにはarray(null)に加工してやるとよい。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">CASE</span> <span style="color:#ff79c6">WHEN</span> <span style="color:#ff79c6">size</span>(json_split(arr)) <span style="color:#ff79c6">&gt;</span> <span style="color:#bd93f9">0</span> <span style="color:#ff79c6">THEN</span> json_split(arr) <span style="color:#ff79c6">ELSE</span> <span style="color:#8be9fd;font-style:italic">array</span>(<span style="color:#ff79c6">null</span>) <span style="color:#ff79c6">END</span> <span style="color:#ff79c6">AS</span> arr
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#00f">CASE</span> <span style="color:#00f">WHEN</span> <span style="color:#00f">size</span>(json_split(arr)) &gt; 0 <span style="color:#00f">THEN</span> json_split(arr) <span style="color:#00f">ELSE</span> array(<span style="color:#00f">null</span>) <span style="color:#00f">END</span> <span style="color:#00f">AS</span> arr
 </code></pre></div><hr>
 <p>JSON SerDeのjarを持ってくる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl http://www.congiu.net/hive-json-serde/1.3.8/cdh5/json-serde-1.3.8-jar-with-dependencies.jar &gt; /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl http://www.congiu.net/hive-json-serde/1.3.8/cdh5/json-serde-1.3.8-jar-with-dependencies.jar &gt; /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar
 </code></pre></div><p>クエリはHueから実行できて、初期ユーザー名とパスワードはどちらもcloudera。</p>
 <p>CREATE TABLEはこんな感じ。スキーマ情報はmetastoreに入る。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#ff79c6">ADD</span> JAR /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar;
-
-CREATE EXTERNAL TABLE jinrou <span style="color:#ff79c6">(</span>
-        participant ARRAY&lt;STRUCT&lt;user_id:INT,role:STRING,team:STRING&gt;&gt;,
-        win_team    STRING,
-        ts          STRING
-      <span style="color:#ff79c6">)</span>
-      ROW FORMAT SERDE <span style="color:#f1fa8c">&#39;org.openx.data.jsonserde.JsonSerDe&#39;</span>
-      WITH SERDEPROPERTIES <span style="color:#ff79c6">(</span> <span style="color:#f1fa8c">&#34;mapping.ts&#34;</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;timestamp&#34;</span> <span style="color:#ff79c6">)</span>
-      LOCATION <span style="color:#f1fa8c">&#39;/user/cloudera/jinrou&#39;</span>;
-      
-<span style="color:#ff79c6">ADD</span> JAR /usr/lib/hive/lib/hive-contrib.jar;
-</code></pre></div><p>指定したLOCATIONにログをアップロードする。これもHueからできる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">{<span style="color:#ff79c6">&#34;participant&#34;</span>:[{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">1</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">2</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;wolf&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;wolf&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">3</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">4</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;medium&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">5</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">6</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;fortune-teller&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>}],<span style="color:#ff79c6">&#34;win_team&#34;</span>:<span style="color:#f1fa8c">&#34;wolf&#34;</span>,<span style="color:#ff79c6">&#34;timestamp&#34;</span>:<span style="color:#f1fa8c">&#34;2017-08-21T01:23:45.678+0900&#34;</span>}
-{<span style="color:#ff79c6">&#34;participant&#34;</span>:[{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">3</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">4</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;wolf&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;wolf&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">1</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">2</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;medium&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">6</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>},{<span style="color:#ff79c6">&#34;user_id&#34;</span>:<span style="color:#bd93f9">5</span>,<span style="color:#ff79c6">&#34;role&#34;</span>:<span style="color:#f1fa8c">&#34;fortune-teller&#34;</span>,<span style="color:#ff79c6">&#34;team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>}],<span style="color:#ff79c6">&#34;win_team&#34;</span>:<span style="color:#f1fa8c">&#34;villager&#34;</span>,<span style="color:#ff79c6">&#34;timestamp&#34;</span>:<span style="color:#f1fa8c">&#34;2017-08-21T02:34:56.789+0900&#34;</span>}
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#00f">ADD</span> JAR /usr/lib/hive/lib/json-serde-1.3.8-jar-with-dependencies.jar;<span style="">
+</span><span style="">
+</span><span style=""></span>CREATE EXTERNAL TABLE jinrou (<span style="">
+</span><span style=""></span>        participant ARRAY&lt;STRUCT&lt;user_id:INT,role:STRING,team:STRING&gt;&gt;,<span style="">
+</span><span style=""></span>        win_team    STRING,<span style="">
+</span><span style=""></span>        ts          STRING<span style="">
+</span><span style=""></span>      )<span style="">
+</span><span style=""></span>      ROW FORMAT SERDE <span style="color:#a31515">&#39;org.openx.data.jsonserde.JsonSerDe&#39;</span><span style="">
+</span><span style=""></span>      WITH SERDEPROPERTIES ( <span style="color:#a31515">&#34;mapping.ts&#34;</span> = <span style="color:#a31515">&#34;timestamp&#34;</span> )<span style="">
+</span><span style=""></span>      LOCATION <span style="color:#a31515">&#39;/user/cloudera/jinrou&#39;</span>;<span style="">
+</span><span style=""></span>      <span style="">
+</span><span style=""></span><span style="color:#00f">ADD</span> JAR /usr/lib/hive/lib/hive-contrib.jar;<span style="">
+</span></code></pre></div><p>指定したLOCATIONにログをアップロードする。これもHueからできる。</p>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">{&#34;participant&#34;:[{&#34;user_id&#34;:1,&#34;role&#34;:<span style="color:#a31515">&#34;villager&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>},{&#34;user_id&#34;:2,&#34;role&#34;:<span style="color:#a31515">&#34;wolf&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;wolf&#34;</span>},{&#34;user_id&#34;:3,&#34;role&#34;:<span style="color:#a31515">&#34;villager&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>},{&#34;user_id&#34;:4,&#34;role&#34;:<span style="color:#a31515">&#34;medium&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>},{&#34;user_id&#34;:5,&#34;role&#34;:<span style="color:#a31515">&#34;villager&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>},{&#34;user_id&#34;:6,&#34;role&#34;:<span style="color:#a31515">&#34;fortune-teller&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>}],&#34;win_team&#34;:<span style="color:#a31515">&#34;wolf&#34;</span>,&#34;timestamp&#34;:<span style="color:#a31515">&#34;2017-08-21T01:23:45.678+0900&#34;</span>}
+{&#34;participant&#34;:[{&#34;user_id&#34;:3,&#34;role&#34;:<span style="color:#a31515">&#34;villager&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>},{&#34;user_id&#34;:4,&#34;role&#34;:<span style="color:#a31515">&#34;wolf&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;wolf&#34;</span>},{&#34;user_id&#34;:1,&#34;role&#34;:<span style="color:#a31515">&#34;villager&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>},{&#34;user_id&#34;:2,&#34;role&#34;:<span style="color:#a31515">&#34;medium&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>},{&#34;user_id&#34;:6,&#34;role&#34;:<span style="color:#a31515">&#34;villager&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>},{&#34;user_id&#34;:5,&#34;role&#34;:<span style="color:#a31515">&#34;fortune-teller&#34;</span>,&#34;team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>}],&#34;win_team&#34;:<span style="color:#a31515">&#34;villager&#34;</span>,&#34;timestamp&#34;:<span style="color:#a31515">&#34;2017-08-21T02:34:56.789+0900&#34;</span>}
 </code></pre></div><p>SELECT文を実行すると</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">SELECT</span> user_id, <span style="color:#ff79c6">role</span>, <span style="color:#ff79c6">SUM</span>(is_win)<span style="color:#ff79c6">/</span><span style="color:#ff79c6">COUNT</span>(<span style="color:#bd93f9">1</span>) <span style="color:#ff79c6">AS</span> wp <span style="color:#ff79c6">FROM</span> (
-  <span style="color:#ff79c6">SELECT</span> 
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#00f">SELECT</span> user_id, <span style="color:#00f">role</span>, <span style="color:#00f">SUM</span>(is_win)/<span style="color:#00f">COUNT</span>(1) <span style="color:#00f">AS</span> wp <span style="color:#00f">FROM</span> (
+  <span style="color:#00f">SELECT</span> 
     par.user_id,
-    par.<span style="color:#ff79c6">role</span>, 
-    <span style="color:#ff79c6">CASE</span> <span style="color:#ff79c6">WHEN</span> par.<span style="color:#ff79c6">role</span> <span style="color:#ff79c6">=</span> win_team <span style="color:#ff79c6">THEN</span> <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">ELSE</span> <span style="color:#bd93f9">0</span> <span style="color:#ff79c6">END</span> <span style="color:#ff79c6">AS</span> is_win
-    <span style="color:#ff79c6">FROM</span> jinrou
-  <span style="color:#ff79c6">LATERAL</span> <span style="color:#ff79c6">VIEW</span> explode(participant) p <span style="color:#ff79c6">AS</span> par
-) j <span style="color:#ff79c6">GROUP</span> <span style="color:#ff79c6">BY</span> user_id, <span style="color:#ff79c6">role</span>;
+    par.<span style="color:#00f">role</span>, 
+    <span style="color:#00f">CASE</span> <span style="color:#00f">WHEN</span> par.<span style="color:#00f">role</span> = win_team <span style="color:#00f">THEN</span> 1 <span style="color:#00f">ELSE</span> 0 <span style="color:#00f">END</span> <span style="color:#00f">AS</span> is_win
+    <span style="color:#00f">FROM</span> jinrou
+  <span style="color:#00f">LATERAL</span> <span style="color:#00f">VIEW</span> explode(participant) p <span style="color:#00f">AS</span> par
+) j <span style="color:#00f">GROUP</span> <span style="color:#00f">BY</span> user_id, <span style="color:#00f">role</span>;
 </code></pre></div><p>参照できている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">user_id,role,wp
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">user_id,role,wp
 1,villager,0.5
 2,medium,0.0
 2,wolf,1.0

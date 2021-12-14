@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -433,14 +434,14 @@
       <p><a href="https://github.com/awslabs/aws-fluent-plugin-kinesis">aws-fluent-plugin-kinesis</a>でKinesis Streamsに送り、Lambdaで読んでS3に保存する。
 要するにFirehoseのようなことをやりたいのだけれどTokyoリージョンにまだ来ないので自分でやる。</p>
 <h2 id="fluentdで送る">fluentdで送る</h2>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ td-agent-gem install fluent-plugin-kinesis
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ td-agent-gem install fluent-plugin-kinesis
 </code></pre></div><p><code>try_flush_interval</code>と<code>queued_chunk_flush_interval</code>はドキュメントには載っていないが、
 以下のページによるとそれぞれqueueに次のchunkがないときとあるときのflushする間隔。
 いずれもデフォルトは1だが、これを減らすことでもっと頻繁に吐き出されるようになるらしい。</p>
 <p><a href="https://github.com/sonots/fluentd-scr/blob/master/02_out_forward_buffered.md">Fluentd の out_forward と BufferedOutput</a></p>
 <p>あとシャードに振り分けるための<a href="https://github.com/awslabs/aws-fluent-plugin-kinesis#partition_key">partition_key</a>
 を指定できる。デフォルトはランダム。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;source&gt;
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;source&gt;
   @type tail
   path /var/log/td-agent/hoge.log
   pos_file /etc/td-agent/log.pos
@@ -465,7 +466,7 @@
   num_threads 15
 &lt;/match&gt;
 </code></pre></div><p>いくつか送ってみる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">for i in `seq 1 1000`
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">for i in `seq 1 1000`
 do
   echo &#39;{&#34;hoge&#34;: &#34;fuga&#34;, &#34;timestamp&#34;: &#34;2017-01-01T01:01:01+0900&#34;}&#39; &gt;&gt; /var/log/td-agent/hoge.log
 done
@@ -475,42 +476,42 @@ done
 <p>Lambdaのトリガーの設定でKinesisを選ぶと、バッチサイズや開始位置を設定できる。</p>
 <p><img src="https://www.sambaiz.net/images/73-lambda-kinesis.png" alt="トリガーの設定"></p>
 <p>コードはこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js"><span style="color:#f1fa8c">&#39;use strict&#39;</span>;
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js"><span style="color:#a31515">&#39;use strict&#39;</span>;
 
-<span style="color:#ff79c6">const</span> zlib <span style="color:#ff79c6">=</span> require(<span style="color:#f1fa8c">&#39;zlib&#39;</span>);
-<span style="color:#ff79c6">const</span> aws <span style="color:#ff79c6">=</span> require(<span style="color:#f1fa8c">&#39;aws-sdk&#39;</span>);
-<span style="color:#ff79c6">const</span> s3 <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> aws.S3({ apiVersion<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;2006-03-01&#39;</span> });
-<span style="color:#ff79c6">const</span> BUCKET_NAME <span style="color:#ff79c6">=</span> process.env.BUCKET_NAME; <span style="color:#6272a4">// 環境変数で設定する
-</span><span style="color:#6272a4"></span>
-exports.handler <span style="color:#ff79c6">=</span> (event, context, callback) =&gt; {
+<span style="color:#00f">const</span> zlib = require(<span style="color:#a31515">&#39;zlib&#39;</span>);
+<span style="color:#00f">const</span> aws = require(<span style="color:#a31515">&#39;aws-sdk&#39;</span>);
+<span style="color:#00f">const</span> s3 = <span style="color:#00f">new</span> aws.S3({ apiVersion: <span style="color:#a31515">&#39;2006-03-01&#39;</span> });
+<span style="color:#00f">const</span> BUCKET_NAME = process.env.BUCKET_NAME; <span style="color:#008000">// 環境変数で設定する
+</span><span style="color:#008000"></span>
+exports.handler = (event, context, callback) =&gt; {
 
-    <span style="color:#ff79c6">const</span> data <span style="color:#ff79c6">=</span> event.Records.map((record) =&gt; <span style="color:#ff79c6">new</span> Buffer(record.kinesis.data, <span style="color:#f1fa8c">&#39;base64&#39;</span>).toString()).join(<span style="color:#f1fa8c">&#34;\n&#34;</span>);
-    <span style="color:#ff79c6">const</span> key <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> <span style="color:#8be9fd;font-style:italic">Date</span>().toISOString();
+    <span style="color:#00f">const</span> data = event.Records.map((record) =&gt; <span style="color:#00f">new</span> Buffer(record.kinesis.data, <span style="color:#a31515">&#39;base64&#39;</span>).toString()).join(<span style="color:#a31515">&#34;\n&#34;</span>);
+    <span style="color:#00f">const</span> key = <span style="color:#00f">new</span> Date().toISOString();
     
-    putS3(key, data, <span style="color:#ff79c6">true</span>).then(
-        (data) =&gt; callback(<span style="color:#ff79c6">null</span>, <span style="color:#f1fa8c">`Successfully processed </span><span style="color:#f1fa8c">${</span>event.Records.length<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c"> records.`</span>),
-        (err) =&gt; callback(err, <span style="color:#ff79c6">null</span>)
+    putS3(key, data, <span style="color:#00f">true</span>).then(
+        (data) =&gt; callback(<span style="color:#00f">null</span>, <span style="color:#a31515">`Successfully processed </span><span style="color:#a31515">${</span>event.Records.length<span style="color:#a31515">}</span><span style="color:#a31515"> records.`</span>),
+        (err) =&gt; callback(err, <span style="color:#00f">null</span>)
     );
 };
 
-<span style="color:#8be9fd;font-style:italic">function</span> putS3(key, data, gzip){    
-    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> <span style="color:#8be9fd;font-style:italic">Promise</span>((resolve, reject) =&gt; {
+<span style="color:#00f">function</span> putS3(key, data, gzip){    
+    <span style="color:#00f">return</span> <span style="color:#00f">new</span> Promise((resolve, reject) =&gt; {
         
-        <span style="color:#ff79c6">const</span> params <span style="color:#ff79c6">=</span> {
-            Bucket<span style="color:#ff79c6">:</span> BUCKET_NAME,
-            Key<span style="color:#ff79c6">:</span> key
+        <span style="color:#00f">const</span> params = {
+            Bucket: BUCKET_NAME,
+            Key: key
         };
 
-        <span style="color:#ff79c6">if</span>(gzip){
-            params.Body <span style="color:#ff79c6">=</span> zlib.gzipSync(data);
-            params.ContentEncoding <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;gzip&#34;</span>;
-        }<span style="color:#ff79c6">else</span>{
-            params.Body <span style="color:#ff79c6">=</span> data;
+        <span style="color:#00f">if</span>(gzip){
+            params.Body = zlib.gzipSync(data);
+            params.ContentEncoding = <span style="color:#a31515">&#34;gzip&#34;</span>;
+        }<span style="color:#00f">else</span>{
+            params.Body = data;
         }
         
         s3.putObject(params, (err, data) =&gt; {
-            <span style="color:#ff79c6">if</span> (err) reject(err);
-            <span style="color:#ff79c6">else</span> resolve(data);
+            <span style="color:#00f">if</span> (err) reject(err);
+            <span style="color:#00f">else</span> resolve(data);
         });
     });
 }

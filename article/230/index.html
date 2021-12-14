@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -432,76 +433,76 @@
       </div>
       <p>以前TitanicをやったXGBoostでHome Prices Competitionに挑戦する。</p>
 <p><a href="https://www.sambaiz.net/article/168/">KaggleのTitanicのチュートリアルをXGBoostで解く - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">import</span> pandas <span style="color:#ff79c6">as</span> pd
-df_train <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(<span style="color:#f1fa8c">&#39;house-prices/train.csv&#39;</span>)
-df_test<span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(<span style="color:#f1fa8c">&#39;house-prices/test.csv&#39;</span>)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">import</span> pandas <span style="color:#00f">as</span> pd
+df_train = pd.read_csv(<span style="color:#a31515">&#39;house-prices/train.csv&#39;</span>)
+df_test= pd.read_csv(<span style="color:#a31515">&#39;house-prices/test.csv&#39;</span>)
 </code></pre></div><h2 id="前処理">前処理</h2>
 <p>目的変数であるSalePriceと相関のある変数を抽出する。XGBoostは欠損値をそのまま扱うことができるので特に何もしていない。</p>
 <p><a href="https://www.sambaiz.net/article/216/">KaggleのHome Prices CompetitionのKernelからデータの探り方を学ぶ - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">use_columns <span style="color:#ff79c6">=</span> df_train<span style="color:#ff79c6">.</span>corr()[<span style="color:#f1fa8c">&#39;SalePrice&#39;</span>]<span style="color:#ff79c6">.</span>drop(<span style="color:#f1fa8c">&#39;SalePrice&#39;</span>)<span style="color:#ff79c6">.</span>where(<span style="color:#ff79c6">lambda</span> x: <span style="color:#8be9fd;font-style:italic">abs</span>(x) <span style="color:#ff79c6">&gt;</span> <span style="color:#bd93f9">0.5</span>)<span style="color:#ff79c6">.</span>dropna()<span style="color:#ff79c6">.</span>keys()
-<span style="color:#6272a4"># Index([&#39;OverallQual&#39;, &#39;YearBuilt&#39;, &#39;YearRemodAdd&#39;, &#39;TotalBsmtSF&#39;, &#39;1stFlrSF&#39;, &#39;GrLivArea&#39;, &#39;FullBath&#39;, &#39;TotRmsAbvGrd&#39;, &#39;GarageCars&#39;, &#39;GarageArea&#39;], dtype=&#39;object&#39;)</span>
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">preprocess</span>(df):
-  <span style="color:#ff79c6">return</span> df[use_columns]<span style="color:#ff79c6">.</span>copy()
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">use_columns = df_train.corr()[<span style="color:#a31515">&#39;SalePrice&#39;</span>].drop(<span style="color:#a31515">&#39;SalePrice&#39;</span>).where(<span style="color:#00f">lambda</span> x: abs(x) &gt; 0.5).dropna().keys()
+<span style="color:#008000"># Index([&#39;OverallQual&#39;, &#39;YearBuilt&#39;, &#39;YearRemodAdd&#39;, &#39;TotalBsmtSF&#39;, &#39;1stFlrSF&#39;, &#39;GrLivArea&#39;, &#39;FullBath&#39;, &#39;TotRmsAbvGrd&#39;, &#39;GarageCars&#39;, &#39;GarageArea&#39;], dtype=&#39;object&#39;)</span>
+<span style="color:#00f">def</span> preprocess(df):
+  <span style="color:#00f">return</span> df[use_columns].copy()
 
-df_train_p <span style="color:#ff79c6">=</span> preprocess(df_train)
-df_train_p[<span style="color:#f1fa8c">&#39;SalePrice&#39;</span>] <span style="color:#ff79c6">=</span> df_train[<span style="color:#f1fa8c">&#39;SalePrice&#39;</span>]
-df_test_p <span style="color:#ff79c6">=</span> preprocess(df_test)
+df_train_p = preprocess(df_train)
+df_train_p[<span style="color:#a31515">&#39;SalePrice&#39;</span>] = df_train[<span style="color:#a31515">&#39;SalePrice&#39;</span>]
+df_test_p = preprocess(df_test)
 </code></pre></div><h2 id="ハイパーパラメータの最適化">ハイパーパラメータの最適化</h2>
 <p>ベイズ最適化でハイパーパラメータを決める。
 他にもいろいろなパラメータがあるが、やみくもに増やしても提出した後のスコアが良くならなかった。</p>
 <p><a href="https://www.sambaiz.net/article/169/">ベイズ最適化でランダムフォレストとXGBoostの良いハイパーパラメータを探す - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">! pip install bayesian<span style="color:#ff79c6">-</span>optimization
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="">!</span> pip install bayesian-optimization
 
-<span style="color:#ff79c6">import</span> xgboost <span style="color:#ff79c6">as</span> xgb
-<span style="color:#ff79c6">from</span> sklearn.model_selection <span style="color:#ff79c6">import</span> train_test_split
-<span style="color:#ff79c6">from</span> sklearn.metrics <span style="color:#ff79c6">import</span> mean_squared_error
-<span style="color:#ff79c6">from</span> bayes_opt <span style="color:#ff79c6">import</span> BayesianOptimization
+<span style="color:#00f">import</span> xgboost <span style="color:#00f">as</span> xgb
+<span style="color:#00f">from</span> sklearn.model_selection <span style="color:#00f">import</span> train_test_split
+<span style="color:#00f">from</span> sklearn.metrics <span style="color:#00f">import</span> mean_squared_error
+<span style="color:#00f">from</span> bayes_opt <span style="color:#00f">import</span> BayesianOptimization
 
-num_boost_round<span style="color:#ff79c6">=</span><span style="color:#bd93f9">500</span>
+num_boost_round=500
 
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">optimize_params</span>(df):
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train</span>(
+<span style="color:#00f">def</span> optimize_params(df):
+  <span style="color:#00f">def</span> train(
       learning_rate, 
       colsample_bytree,
       sub_sample):
-    train_x <span style="color:#ff79c6">=</span> df<span style="color:#ff79c6">.</span>drop(<span style="color:#f1fa8c">&#39;SalePrice&#39;</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)
-    train_y <span style="color:#ff79c6">=</span> df<span style="color:#ff79c6">.</span>SalePrice
-    (train_x, test_x ,train_y, test_y) <span style="color:#ff79c6">=</span> train_test_split(train_x, train_y, test_size <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0.3</span>)
-    dtrain <span style="color:#ff79c6">=</span> xgb<span style="color:#ff79c6">.</span>DMatrix(train_x, label<span style="color:#ff79c6">=</span>train_y)
-    param <span style="color:#ff79c6">=</span> {
-        <span style="color:#f1fa8c">&#39;learning_rate&#39;</span>: learning_rate, 
-        <span style="color:#f1fa8c">&#39;colsample_bytree&#39;</span>: colsample_bytree,
-        <span style="color:#f1fa8c">&#39;sub_sample&#39;</span>: sub_sample}
-    bst <span style="color:#ff79c6">=</span> xgb<span style="color:#ff79c6">.</span>train(param, dtrain, num_boost_round)
-    preds <span style="color:#ff79c6">=</span> bst<span style="color:#ff79c6">.</span>predict(xgb<span style="color:#ff79c6">.</span>DMatrix(test_x))
-    <span style="color:#6272a4"># Root-Mean-Squared-Error (RMSE) between the logarithm of the predicted value and the logarithm of the observed sales price</span>
-    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">-</span>np<span style="color:#ff79c6">.</span>sqrt(mean_squared_error(
-        np<span style="color:#ff79c6">.</span>log(np<span style="color:#ff79c6">.</span>clip(np<span style="color:#ff79c6">.</span>nan_to_num(test_y), <span style="color:#bd93f9">1e-6</span>, None)),
-        np<span style="color:#ff79c6">.</span>log(np<span style="color:#ff79c6">.</span>clip(np<span style="color:#ff79c6">.</span>nan_to_num(preds), <span style="color:#bd93f9">1e-6</span>, None))
+    train_x = df.drop(<span style="color:#a31515">&#39;SalePrice&#39;</span>, axis=1)
+    train_y = df.SalePrice
+    (train_x, test_x ,train_y, test_y) = train_test_split(train_x, train_y, test_size = 0.3)
+    dtrain = xgb.DMatrix(train_x, label=train_y)
+    param = {
+        <span style="color:#a31515">&#39;learning_rate&#39;</span>: learning_rate, 
+        <span style="color:#a31515">&#39;colsample_bytree&#39;</span>: colsample_bytree,
+        <span style="color:#a31515">&#39;sub_sample&#39;</span>: sub_sample}
+    bst = xgb.train(param, dtrain, num_boost_round)
+    preds = bst.predict(xgb.DMatrix(test_x))
+    <span style="color:#008000"># Root-Mean-Squared-Error (RMSE) between the logarithm of the predicted value and the logarithm of the observed sales price</span>
+    <span style="color:#00f">return</span> -np.sqrt(mean_squared_error(
+        np.log(np.clip(np.nan_to_num(test_y), 1e-6, None)),
+        np.log(np.clip(np.nan_to_num(preds), 1e-6, None))
     ))
-  bo <span style="color:#ff79c6">=</span> BayesianOptimization(
+  bo = BayesianOptimization(
     train,
-    {<span style="color:#f1fa8c">&#39;learning_rate&#39;</span>: (<span style="color:#bd93f9">0.01</span>, <span style="color:#bd93f9">0.5</span>), <span style="color:#6272a4"># default=0.3</span>
-     <span style="color:#f1fa8c">&#39;colsample_bytree&#39;</span>: (<span style="color:#bd93f9">0.1</span>, <span style="color:#bd93f9">1.0</span>),  <span style="color:#6272a4"># default=1</span>
-     <span style="color:#f1fa8c">&#39;sub_sample&#39;</span>: (<span style="color:#bd93f9">0.1</span>, <span style="color:#bd93f9">1.0</span>), <span style="color:#6272a4"># default=1</span>
+    {<span style="color:#a31515">&#39;learning_rate&#39;</span>: (0.01, 0.5), <span style="color:#008000"># default=0.3</span>
+     <span style="color:#a31515">&#39;colsample_bytree&#39;</span>: (0.1, 1.0),  <span style="color:#008000"># default=1</span>
+     <span style="color:#a31515">&#39;sub_sample&#39;</span>: (0.1, 1.0), <span style="color:#008000"># default=1</span>
     })
-  bo<span style="color:#ff79c6">.</span>maximize(n_iter<span style="color:#ff79c6">=</span><span style="color:#bd93f9">50</span>, alpha<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1e-5</span>)
-  <span style="color:#ff79c6">return</span> bo<span style="color:#ff79c6">.</span>max[<span style="color:#f1fa8c">&#39;params&#39;</span>]
+  bo.maximize(n_iter=50, alpha=1e-5)
+  <span style="color:#00f">return</span> bo.max[<span style="color:#a31515">&#39;params&#39;</span>]
 
-params <span style="color:#ff79c6">=</span> optimize_params(df_train_p)
+params = optimize_params(df_train_p)
 </code></pre></div><p>結果こんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">print</span>(params)
-<span style="color:#6272a4"># =&gt; {&#39;colsample_bytree&#39;: 1.0, &#39;learning_rate&#39;: 0.01, &#39;sub_sample&#39;: 0.28979827351242066}</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">print</span>(params)
+<span style="color:#008000"># =&gt; {&#39;colsample_bytree&#39;: 1.0, &#39;learning_rate&#39;: 0.01, &#39;sub_sample&#39;: 0.28979827351242066}</span>
 </code></pre></div><h2 id="実行">実行</h2>
 <p>学習して予測結果を出力する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">bst <span style="color:#ff79c6">=</span> xgb<span style="color:#ff79c6">.</span>train(
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">bst = xgb.train(
     params, 
-    xgb<span style="color:#ff79c6">.</span>DMatrix(df_train_p<span style="color:#ff79c6">.</span>drop(<span style="color:#f1fa8c">&#39;SalePrice&#39;</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)<span style="color:#ff79c6">.</span>values, label<span style="color:#ff79c6">=</span>df_train_p<span style="color:#ff79c6">.</span>SalePrice),
+    xgb.DMatrix(df_train_p.drop(<span style="color:#a31515">&#39;SalePrice&#39;</span>, axis=1).values, label=df_train_p.SalePrice),
     num_boost_round)
 
-preds <span style="color:#ff79c6">=</span> bst<span style="color:#ff79c6">.</span>predict(xgb<span style="color:#ff79c6">.</span>DMatrix(df_test_p<span style="color:#ff79c6">.</span>values))
-submit_data <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>Series(preds, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;SalePrice&#39;</span>, index<span style="color:#ff79c6">=</span>df_test[<span style="color:#f1fa8c">&#39;Id&#39;</span>])
-submit_data<span style="color:#ff79c6">.</span>to_csv(<span style="color:#f1fa8c">&#39;submit.csv&#39;</span>, header<span style="color:#ff79c6">=</span>True)
+preds = bst.predict(xgb.DMatrix(df_test_p.values))
+submit_data = pd.Series(preds, name=<span style="color:#a31515">&#39;SalePrice&#39;</span>, index=df_test[<span style="color:#a31515">&#39;Id&#39;</span>])
+submit_data.to_csv(<span style="color:#a31515">&#39;submit.csv&#39;</span>, header=True)
 </code></pre></div><p>スコアは <code>0.15509</code> だった。</p>
 
     </div>

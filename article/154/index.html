@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -436,122 +437,122 @@
 <h3 id="入力">入力</h3>
 <p>以下の関数によって生成した1次元のデータ列。
 これをstrideした最後のデータ、つまり時系列的に次に来るものを予測させる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">make_time_series_data</span>(size):
-  data <span style="color:#ff79c6">=</span> []
-  <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(size):
-    data<span style="color:#ff79c6">.</span>append(sin(random<span style="color:#ff79c6">.</span>normalvariate(i,<span style="color:#bd93f9">0.1</span>)<span style="color:#ff79c6">*</span><span style="color:#bd93f9">0.1</span>))
-  <span style="color:#ff79c6">return</span> np<span style="color:#ff79c6">.</span>reshape(np<span style="color:#ff79c6">.</span>array(data, dtype<span style="color:#ff79c6">=</span>np<span style="color:#ff79c6">.</span>float32), (size,<span style="color:#bd93f9">1</span>))
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">def</span> make_time_series_data(size):
+  data = []
+  <span style="color:#00f">for</span> i <span style="color:#00f">in</span> range(size):
+    data.append(sin(random.normalvariate(i,0.1)*0.1))
+  <span style="color:#00f">return</span> np.reshape(np.array(data, dtype=np.float32), (size,1))
 
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">make_batch</span>(data, batch_size, num_steps, num_dimensions, name<span style="color:#ff79c6">=</span>None):
-  epoch_size <span style="color:#ff79c6">=</span>  data<span style="color:#ff79c6">.</span>size <span style="color:#ff79c6">//</span> (batch_size<span style="color:#ff79c6">*</span>num_steps<span style="color:#ff79c6">*</span>num_dimensions)
-  data <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>lib<span style="color:#ff79c6">.</span>stride_tricks<span style="color:#ff79c6">.</span>as_strided(
+<span style="color:#00f">def</span> make_batch(data, batch_size, num_steps, num_dimensions, name=None):
+  epoch_size =  data.size // (batch_size*num_steps*num_dimensions)
+  data = np.lib.stride_tricks.as_strided(
     data, 
-    shape<span style="color:#ff79c6">=</span>
+    shape=
       (epoch_size,
         batch_size, 
-       num_steps<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1</span>,
+       num_steps+1,
        num_dimensions),
-    strides<span style="color:#ff79c6">=</span>(
-        <span style="color:#bd93f9">4</span><span style="color:#ff79c6">*</span>batch_size<span style="color:#ff79c6">*</span>num_steps<span style="color:#ff79c6">*</span>num_dimensions, 
-        <span style="color:#bd93f9">4</span><span style="color:#ff79c6">*</span>num_steps<span style="color:#ff79c6">*</span>num_dimensions, 
-        <span style="color:#bd93f9">4</span><span style="color:#ff79c6">*</span>num_dimensions, 
-        <span style="color:#bd93f9">4</span> <span style="color:#6272a4"># bytes</span>
+    strides=(
+        4*batch_size*num_steps*num_dimensions, 
+        4*num_steps*num_dimensions, 
+        4*num_dimensions, 
+        4 <span style="color:#008000"># bytes</span>
     ), 
-    writeable<span style="color:#ff79c6">=</span>False
+    writeable=False
   )
   
-  <span style="color:#ff79c6">return</span> data[:, :, :<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>], data[:, :, <span style="color:#bd93f9">1</span>:]
+  <span style="color:#00f">return</span> data[:, :, :-1], data[:, :, 1:]
 </code></pre></div><h3 id="モデル">モデル</h3>
 <p>input layerでLSTMのhidden_sizeに合わせて、output layerで予測値を得ている。
 lossはMSE(Mean squared error)。Optimizerは<a href="https://www.tensorflow.org/api_docs/python/tf/train/GradientDescentOptimizer">GradientDecentOptimizer</a>を使っている。</p>
 <p>チュートリアルでは自力で各time_stepの値を<a href="https://github.com/tensorflow/models/blob/12f279d6f4cb33574bc20109b41eb8a59f40cfd1/tutorials/rnn/ptb/ptb_word_lm.py#L141">入れていた</a>けど、
 今回は<a href="https://www.tensorflow.org/api_docs/python/tf/nn/dynamic_rnn">dynamic_rnn()</a>に任せている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">Model</span>(<span style="color:#8be9fd;font-style:italic">object</span>):
-  <span style="color:#ff79c6">def</span> __init__(self, config, is_training<span style="color:#ff79c6">=</span>False):
-    <span style="color:#6272a4"># config</span>
-    self<span style="color:#ff79c6">.</span>batch_size <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">.</span>batch_size
-    self<span style="color:#ff79c6">.</span>num_steps <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">.</span>num_steps
-    self<span style="color:#ff79c6">.</span>num_dimensions <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">.</span>num_dimensions
-    self<span style="color:#ff79c6">.</span>keep_prob <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">.</span>keep_prob
-    self<span style="color:#ff79c6">.</span>hidden_size <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">.</span>hidden_size
-    self<span style="color:#ff79c6">.</span>num_layers <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">.</span>num_layers
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">class</span> <span style="color:#2b91af">Model</span>(object):
+  <span style="color:#00f">def</span> __init__(self, config, is_training=False):
+    <span style="color:#008000"># config</span>
+    self.batch_size = config.batch_size
+    self.num_steps = config.num_steps
+    self.num_dimensions = config.num_dimensions
+    self.keep_prob = config.keep_prob
+    self.hidden_size = config.hidden_size
+    self.num_layers = config.num_layers
     
-    <span style="color:#6272a4"># placeholder</span>
-    self<span style="color:#ff79c6">.</span>input <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, [None, self<span style="color:#ff79c6">.</span>num_steps, self<span style="color:#ff79c6">.</span>num_dimensions], name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;input&#34;</span>)
-    self<span style="color:#ff79c6">.</span>input_strided <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, [self<span style="color:#ff79c6">.</span>batch_size, self<span style="color:#ff79c6">.</span>num_steps, self<span style="color:#ff79c6">.</span>num_dimensions], name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;input_strided&#34;</span>)
-    self<span style="color:#ff79c6">.</span>lr <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;learning_rate&#34;</span>)
+    <span style="color:#008000"># placeholder</span>
+    self.input = tf.placeholder(tf.float32, [None, self.num_steps, self.num_dimensions], name=<span style="color:#a31515">&#34;input&#34;</span>)
+    self.input_strided = tf.placeholder(tf.float32, [self.batch_size, self.num_steps, self.num_dimensions], name=<span style="color:#a31515">&#34;input_strided&#34;</span>)
+    self.lr = tf.placeholder(tf.float32, name=<span style="color:#a31515">&#34;learning_rate&#34;</span>)
     
-    <span style="color:#6272a4"># input layer</span>
-    <span style="color:#8be9fd;font-style:italic">input</span> <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reshape(self<span style="color:#ff79c6">.</span>input, [<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, self<span style="color:#ff79c6">.</span>num_dimensions])
-    input_w <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>get_variable(<span style="color:#f1fa8c">&#34;input_w&#34;</span>, [self<span style="color:#ff79c6">.</span>num_dimensions, self<span style="color:#ff79c6">.</span>hidden_size], dtype<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>float32)
-    input_b <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>get_variable(<span style="color:#f1fa8c">&#34;input_b&#34;</span>, [self<span style="color:#ff79c6">.</span>hidden_size], dtype<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>float32)
-    <span style="color:#8be9fd;font-style:italic">input</span> <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>xw_plus_b(<span style="color:#8be9fd;font-style:italic">input</span>, input_w, input_b)
-    <span style="color:#8be9fd;font-style:italic">input</span> <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reshape(<span style="color:#8be9fd;font-style:italic">input</span>, [self<span style="color:#ff79c6">.</span>batch_size, self<span style="color:#ff79c6">.</span>num_steps, self<span style="color:#ff79c6">.</span>hidden_size])
+    <span style="color:#008000"># input layer</span>
+    input = tf.reshape(self.input, [-1, self.num_dimensions])
+    input_w = tf.get_variable(<span style="color:#a31515">&#34;input_w&#34;</span>, [self.num_dimensions, self.hidden_size], dtype=tf.float32)
+    input_b = tf.get_variable(<span style="color:#a31515">&#34;input_b&#34;</span>, [self.hidden_size], dtype=tf.float32)
+    input = tf.nn.xw_plus_b(input, input_w, input_b)
+    input = tf.reshape(input, [self.batch_size, self.num_steps, self.hidden_size])
     
-    <span style="color:#6272a4"># LSTM layer</span>
-    output, state <span style="color:#ff79c6">=</span> self<span style="color:#ff79c6">.</span>_build_rnn_graph(<span style="color:#8be9fd;font-style:italic">input</span>, is_training)
+    <span style="color:#008000"># LSTM layer</span>
+    output, state = self._build_rnn_graph(input, is_training)
     
-    <span style="color:#6272a4"># output layer</span>
-    output <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reshape(output, [<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, self<span style="color:#ff79c6">.</span>hidden_size])
-    output_w <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>get_variable(<span style="color:#f1fa8c">&#34;output_w&#34;</span>, [self<span style="color:#ff79c6">.</span>hidden_size, <span style="color:#bd93f9">1</span>], dtype<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>float32)
-    output_b <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>get_variable(<span style="color:#f1fa8c">&#34;output_b&#34;</span>, [<span style="color:#bd93f9">1</span>], dtype<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>float32)
-    output <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>xw_plus_b(output, output_w, output_b)
-    self<span style="color:#ff79c6">.</span>output <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reshape(output, [self<span style="color:#ff79c6">.</span>batch_size, self<span style="color:#ff79c6">.</span>num_steps, <span style="color:#bd93f9">1</span>])
+    <span style="color:#008000"># output layer</span>
+    output = tf.reshape(output, [-1, self.hidden_size])
+    output_w = tf.get_variable(<span style="color:#a31515">&#34;output_w&#34;</span>, [self.hidden_size, 1], dtype=tf.float32)
+    output_b = tf.get_variable(<span style="color:#a31515">&#34;output_b&#34;</span>, [1], dtype=tf.float32)
+    output = tf.nn.xw_plus_b(output, output_w, output_b)
+    self.output = tf.reshape(output, [self.batch_size, self.num_steps, 1])
     
-    self<span style="color:#ff79c6">.</span>cost <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_mean(tf<span style="color:#ff79c6">.</span>square(self<span style="color:#ff79c6">.</span>output[:, <span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, :] <span style="color:#ff79c6">-</span> self<span style="color:#ff79c6">.</span>input_strided[:, <span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, :]))
-    self<span style="color:#ff79c6">.</span>train_op <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>GradientDescentOptimizer(self<span style="color:#ff79c6">.</span>lr)<span style="color:#ff79c6">.</span>minimize(self<span style="color:#ff79c6">.</span>cost, global_step<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>get_or_create_global_step())
+    self.cost = tf.reduce_mean(tf.square(self.output[:, -1, :] - self.input_strided[:, -1, :]))
+    self.train_op = tf.train.GradientDescentOptimizer(self.lr).minimize(self.cost, global_step=tf.train.get_or_create_global_step())
 
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">_build_rnn_graph</span>(self, <span style="color:#8be9fd;font-style:italic">input</span>, is_training):
-    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">make_cell</span>():
-      cell <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>rnn<span style="color:#ff79c6">.</span>LSTMBlockCell(
-        self<span style="color:#ff79c6">.</span>hidden_size, forget_bias<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0.0</span>)
-      <span style="color:#ff79c6">if</span> is_training <span style="color:#ff79c6">and</span> self<span style="color:#ff79c6">.</span>keep_prob <span style="color:#ff79c6">&lt;</span> <span style="color:#bd93f9">1</span>:
-        cell <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>rnn<span style="color:#ff79c6">.</span>DropoutWrapper(
-          cell, output_keep_prob<span style="color:#ff79c6">=</span>self<span style="color:#ff79c6">.</span>keep_prob)
-      <span style="color:#ff79c6">return</span> cell
+  <span style="color:#00f">def</span> _build_rnn_graph(self, input, is_training):
+    <span style="color:#00f">def</span> make_cell():
+      cell = tf.contrib.rnn.LSTMBlockCell(
+        self.hidden_size, forget_bias=0.0)
+      <span style="color:#00f">if</span> is_training <span style="color:#00f">and</span> self.keep_prob &lt; 1:
+        cell = tf.contrib.rnn.DropoutWrapper(
+          cell, output_keep_prob=self.keep_prob)
+      <span style="color:#00f">return</span> cell
 
-    cell <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>rnn<span style="color:#ff79c6">.</span>MultiRNNCell(
-      [make_cell() <span style="color:#ff79c6">for</span> _ <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(self<span style="color:#ff79c6">.</span>num_layers)], state_is_tuple<span style="color:#ff79c6">=</span>True)
-    initial_state <span style="color:#ff79c6">=</span> cell<span style="color:#ff79c6">.</span>zero_state(self<span style="color:#ff79c6">.</span>batch_size, tf<span style="color:#ff79c6">.</span>float32)
-    output, state <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>dynamic_rnn(cell, <span style="color:#8be9fd;font-style:italic">input</span>, initial_state<span style="color:#ff79c6">=</span>initial_state)
-    <span style="color:#ff79c6">return</span> output, state
+    cell = tf.contrib.rnn.MultiRNNCell(
+      [make_cell() <span style="color:#00f">for</span> _ <span style="color:#00f">in</span> range(self.num_layers)], state_is_tuple=True)
+    initial_state = cell.zero_state(self.batch_size, tf.float32)
+    output, state = tf.nn.dynamic_rnn(cell, input, initial_state=initial_state)
+    <span style="color:#00f">return</span> output, state
 
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">learn</span>(self, session, <span style="color:#8be9fd;font-style:italic">input</span>, input_strided, learning_rate):
-    fetches <span style="color:#ff79c6">=</span> {
-      <span style="color:#f1fa8c">&#34;cost&#34;</span>: self<span style="color:#ff79c6">.</span>cost,
-      <span style="color:#f1fa8c">&#34;train_op&#34;</span>: self<span style="color:#ff79c6">.</span>train_op
+  <span style="color:#00f">def</span> learn(self, session, input, input_strided, learning_rate):
+    fetches = {
+      <span style="color:#a31515">&#34;cost&#34;</span>: self.cost,
+      <span style="color:#a31515">&#34;train_op&#34;</span>: self.train_op
     }
-    feed_dict <span style="color:#ff79c6">=</span> {
-      self<span style="color:#ff79c6">.</span>input: <span style="color:#8be9fd;font-style:italic">input</span>,
-      self<span style="color:#ff79c6">.</span>input_strided: input_strided,
-      self<span style="color:#ff79c6">.</span>lr: learning_rate
+    feed_dict = {
+      self.input: input,
+      self.input_strided: input_strided,
+      self.lr: learning_rate
     }
-    vals <span style="color:#ff79c6">=</span> session<span style="color:#ff79c6">.</span>run(fetches, feed_dict<span style="color:#ff79c6">=</span>feed_dict)
-    cost <span style="color:#ff79c6">=</span> vals[<span style="color:#f1fa8c">&#34;cost&#34;</span>]
-    <span style="color:#ff79c6">return</span> cost
+    vals = session.run(fetches, feed_dict=feed_dict)
+    cost = vals[<span style="color:#a31515">&#34;cost&#34;</span>]
+    <span style="color:#00f">return</span> cost
 
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">predict</span>(self, session, <span style="color:#8be9fd;font-style:italic">input</span>):
-    feed_dict <span style="color:#ff79c6">=</span> {
-      self<span style="color:#ff79c6">.</span>input: np<span style="color:#ff79c6">.</span>reshape(<span style="color:#8be9fd;font-style:italic">input</span>, (<span style="color:#bd93f9">1</span>, <span style="color:#8be9fd;font-style:italic">input</span><span style="color:#ff79c6">.</span>shape[<span style="color:#bd93f9">0</span>], <span style="color:#8be9fd;font-style:italic">input</span><span style="color:#ff79c6">.</span>shape[<span style="color:#bd93f9">1</span>]))
+  <span style="color:#00f">def</span> predict(self, session, input):
+    feed_dict = {
+      self.input: np.reshape(input, (1, input.shape[0], input.shape[1]))
     }
-    <span style="color:#ff79c6">return</span> session<span style="color:#ff79c6">.</span>run(self<span style="color:#ff79c6">.</span>output, feed_dict<span style="color:#ff79c6">=</span>feed_dict)[<span style="color:#bd93f9">0</span>,<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>]
+    <span style="color:#00f">return</span> session.run(self.output, feed_dict=feed_dict)[0,-1]
 </code></pre></div><h3 id="ハイパーパラメータ">ハイパーパラメータ</h3>
 <p>調整が難しい。<code>max_epoch</code>は学習率の初期値(<code>learning_rate</code>)で学習し続けるepochの数なわけなんだけど、
 これを大きくして一気にlossを減らしていこうとしたら案外簡単に収束しなくなってしまった。
 <code>num_steps</code>、つまり予測するのに見る数は今回のデータの場合そんなに大きくある必要はなくて、
 むしろ大きくすると平たいグラフになって最大値や最小値との誤差が大きくなった。
 <code>hidden_size</code>や<code>num_layers</code>は増やしても良さそうだけどメモリが足りなかった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">Config</span>(<span style="color:#8be9fd;font-style:italic">object</span>):
-  init_scale <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0.1</span>
-  learning_rate <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1.0</span>
-  num_layers <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">2</span>
-  num_steps <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">5</span>
-  hidden_size <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">200</span>
-  max_epoch <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">3</span>
-  batch_size <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">3000</span>
-  num_dimensions <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>
-  keep_prob <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1.0</span>
-  lr_decay <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0.5</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">class</span> <span style="color:#2b91af">Config</span>(object):
+  init_scale = 0.1
+  learning_rate = 1.0
+  num_layers = 2
+  num_steps = 5
+  hidden_size = 200
+  max_epoch = 3
+  batch_size = 3000
+  num_dimensions = 1
+  keep_prob = 1.0
+  lr_decay = 0.5
 </code></pre></div><h3 id="学習結果">学習結果</h3>
 <p>300000個のデータから学習して予測させたところ
 予測値は実際の値と比べて振幅が少なくなってしまった。</p>

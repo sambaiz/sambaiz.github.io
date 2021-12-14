@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -437,41 +438,41 @@
 <p>Goの<a href="https://github.com/GoogleCloudPlatform/google-cloud-go">クライアントライブラリ</a>で動かしてみる。
 まずTopicを作成して50件Publishした後、Subsriptionを作成して、再び50件Publishする。
 Publishできるデータは<a href="https://cloud.google.com/pubsub/docs/publisher#header_1">10MB未満</a>。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">topic, err <span style="color:#ff79c6">:=</span> client.<span style="color:#50fa7b">CreateTopic</span>(ctx, topicName)
-<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-  <span style="color:#8be9fd;font-style:italic">panic</span>(err)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">topic, err := client.CreateTopic(ctx, topicName)
+<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+  panic(err)
 }
 
-<span style="color:#8be9fd;font-style:italic">var</span> wg sync.WaitGroup
-<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; <span style="color:#bd93f9">50</span>; i<span style="color:#ff79c6">++</span> {
-  wg.<span style="color:#50fa7b">Add</span>(<span style="color:#bd93f9">1</span>)
-  <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
-    <span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> topic.<span style="color:#50fa7b">Publish</span>(ctx, <span style="color:#ff79c6">&amp;</span>pubsub.Message{Data: []<span style="color:#8be9fd;font-style:italic">byte</span>(strconv.<span style="color:#50fa7b">Itoa</span>(i))}).<span style="color:#50fa7b">Get</span>(ctx); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-      log.<span style="color:#50fa7b">Fatalf</span>(<span style="color:#f1fa8c">&#34;Publish error: %s&#34;</span>, err.<span style="color:#50fa7b">Error</span>())
-    } <span style="color:#ff79c6">else</span> {
-      log.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;Publish successful: %d&#34;</span>, i)
+<span style="color:#00f">var</span> wg sync.WaitGroup
+<span style="color:#00f">for</span> i := 0; i &lt; 50; i++ {
+  wg.Add(1)
+  <span style="color:#00f">go</span> <span style="color:#00f">func</span>() {
+    <span style="color:#00f">if</span> _, err := topic.Publish(ctx, &amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != <span style="color:#00f">nil</span> {
+      log.Fatalf(<span style="color:#a31515">&#34;Publish error: %s&#34;</span>, err.Error())
+    } <span style="color:#00f">else</span> {
+      log.Printf(<span style="color:#a31515">&#34;Publish successful: %d&#34;</span>, i)
     }
-    wg.<span style="color:#50fa7b">Done</span>()
+    wg.Done()
   }()
-  wg.<span style="color:#50fa7b">Wait</span>()
+  wg.Wait()
 }
 
-log.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;Create Subscription&#34;</span>)
-sub <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">createSubscription</span>(ctx, client, topic, subscriptionName)
+log.Printf(<span style="color:#a31515">&#34;Create Subscription&#34;</span>)
+sub := createSubscription(ctx, client, topic, subscriptionName)
 
-<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">50</span>; i &lt; <span style="color:#bd93f9">100</span>; i<span style="color:#ff79c6">++</span> {
-  wg.<span style="color:#50fa7b">Add</span>(<span style="color:#bd93f9">1</span>)
-  <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
-    <span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> topic.<span style="color:#50fa7b">Publish</span>(ctx, <span style="color:#ff79c6">&amp;</span>pubsub.Message{Data: []<span style="color:#8be9fd;font-style:italic">byte</span>(strconv.<span style="color:#50fa7b">Itoa</span>(i))}).<span style="color:#50fa7b">Get</span>(ctx); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-      log.<span style="color:#50fa7b">Fatalf</span>(<span style="color:#f1fa8c">&#34;Publish error: %s&#34;</span>, err.<span style="color:#50fa7b">Error</span>())
-    } <span style="color:#ff79c6">else</span> {
-      log.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;Publish successful: %d&#34;</span>, i)
+<span style="color:#00f">for</span> i := 50; i &lt; 100; i++ {
+  wg.Add(1)
+  <span style="color:#00f">go</span> <span style="color:#00f">func</span>() {
+    <span style="color:#00f">if</span> _, err := topic.Publish(ctx, &amp;pubsub.Message{Data: []byte(strconv.Itoa(i))}).Get(ctx); err != <span style="color:#00f">nil</span> {
+      log.Fatalf(<span style="color:#a31515">&#34;Publish error: %s&#34;</span>, err.Error())
+    } <span style="color:#00f">else</span> {
+      log.Printf(<span style="color:#a31515">&#34;Publish successful: %d&#34;</span>, i)
     }
-    wg.<span style="color:#50fa7b">Done</span>()
+    wg.Done()
   }()
-  wg.<span style="color:#50fa7b">Wait</span>()
+  wg.Wait()
 }
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">2018/07/26 21:42:51 Publish successful: 47
+</code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">2018/07/26 21:42:51 Publish successful: 47
 2018/07/26 21:42:51 Publish successful: 48
 2018/07/26 21:42:51 Publish successful: 49
 2018/07/26 21:42:51 Create Subscription
@@ -480,64 +481,64 @@ sub <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">createSubs
 2018/07/26 21:42:58 Publish successful: 52
 </code></pre></div><p>Pull時のHandlerとしてAckを呼ぶackHandlerと、Nackを呼ぶnackHandler、何もしないnothingHandlerを用意した。
 AckするとPub/Subからメッセージが消え、Nackまたはタイムアウトするとリトライされる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">type</span> GotData <span style="color:#8be9fd;font-style:italic">struct</span> {
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">type</span> GotData <span style="color:#00f">struct</span> {
 	sync.Mutex
-	gotData []<span style="color:#8be9fd">string</span>
+	gotData []<span style="color:#2b91af">string</span>
 }
 
-<span style="color:#8be9fd;font-style:italic">var</span> g = GotData{}
+<span style="color:#00f">var</span> g = GotData{}
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">ackHandler</span>(done <span style="color:#8be9fd;font-style:italic">func</span>()) <span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context, m <span style="color:#ff79c6">*</span>pubsub.Message) {
-	<span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context, m <span style="color:#ff79c6">*</span>pubsub.Message) {
-		g.<span style="color:#50fa7b">Lock</span>()
-		g.gotData = <span style="color:#8be9fd;font-style:italic">append</span>(g.gotData, <span style="color:#8be9fd;font-style:italic">string</span>(m.Data))
-		sort.<span style="color:#50fa7b">Slice</span>(g.gotData, <span style="color:#8be9fd;font-style:italic">func</span>(i, j <span style="color:#8be9fd">int</span>) <span style="color:#8be9fd">bool</span> {
-			<span style="color:#ff79c6">return</span> g.gotData[i] &lt; g.gotData[j]
+<span style="color:#00f">func</span> ackHandler(done <span style="color:#00f">func</span>()) <span style="color:#00f">func</span>(ctx context.Context, m *pubsub.Message) {
+	<span style="color:#00f">return</span> <span style="color:#00f">func</span>(ctx context.Context, m *pubsub.Message) {
+		g.Lock()
+		g.gotData = append(g.gotData, string(m.Data))
+		sort.Slice(g.gotData, <span style="color:#00f">func</span>(i, j <span style="color:#2b91af">int</span>) <span style="color:#2b91af">bool</span> {
+			<span style="color:#00f">return</span> g.gotData[i] &lt; g.gotData[j]
 		})
-		log.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;ackHandler got message: %s %#v&#34;</span>, m.Data, g.gotData)
-		<span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(g.gotData) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">50</span> {
-			<span style="color:#50fa7b">done</span>()
+		log.Printf(<span style="color:#a31515">&#34;ackHandler got message: %s %#v&#34;</span>, m.Data, g.gotData)
+		<span style="color:#00f">if</span> len(g.gotData) == 50 {
+			done()
 		}
-		g.<span style="color:#50fa7b">Unlock</span>()
-		m.<span style="color:#50fa7b">Ack</span>()
+		g.Unlock()
+		m.Ack()
 	}
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">nackHandler</span>(ctx context.Context, m <span style="color:#ff79c6">*</span>pubsub.Message) {
-	log.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;nackHandler got message: %s&#34;</span>, m.Data)
-	m.<span style="color:#50fa7b">Nack</span>()
+<span style="color:#00f">func</span> nackHandler(ctx context.Context, m *pubsub.Message) {
+	log.Printf(<span style="color:#a31515">&#34;nackHandler got message: %s&#34;</span>, m.Data)
+	m.Nack()
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">nothingHandler</span>(ctx context.Context, m <span style="color:#ff79c6">*</span>pubsub.Message) {
-	log.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;nothingHandler got message: %s&#34;</span>, m.Data)
+<span style="color:#00f">func</span> nothingHandler(ctx context.Context, m *pubsub.Message) {
+	log.Printf(<span style="color:#a31515">&#34;nothingHandler got message: %s&#34;</span>, m.Data)
 }
 </code></pre></div><p>一つのSubscriptionを複数のSubscriberで使うことでメッセージを分散処理することができる。
 ただし同じstructを使うとエラーになるのでそれぞれ生成している。</p>
 <p>nothingHandlerではSubscriptionの<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L210">MaxExtension</a>を<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L240">デフォルト</a>の10分から10秒にすることでリトライを早めている。<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L136">AckDeadline</a>というのもあるがPullの場合、結局MaxExtensionまで延長してしまうので意味がないようだ。</p>
 <p>ReceiveSettingsにはほかに<a href="https://github.com/GoogleCloudPlatform/google-cloud-go/blob/f4024bfe9905677af1b3705dc5299b82622933c7/pubsub/subscription.go#L217">MaxOutstandingMessages</a>というのもあり、一度に処理されるメッセージの量を制限することができる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
-  sub <span style="color:#ff79c6">:=</span> client.<span style="color:#50fa7b">Subscription</span>(subscriptionName)
-  <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> sub.<span style="color:#50fa7b">Receive</span>(ctx, <span style="color:#50fa7b">ackHandler</span>(cancel)); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-    <span style="color:#8be9fd;font-style:italic">panic</span>(err)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">go</span> <span style="color:#00f">func</span>() {
+  sub := client.Subscription(subscriptionName)
+  <span style="color:#00f">if</span> err := sub.Receive(ctx, ackHandler(cancel)); err != <span style="color:#00f">nil</span> {
+    panic(err)
   }
 }()
-<span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
-  sub <span style="color:#ff79c6">:=</span> client.<span style="color:#50fa7b">Subscription</span>(subscriptionName)
-  <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> sub.<span style="color:#50fa7b">Receive</span>(ctx, nackHandler); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-    <span style="color:#8be9fd;font-style:italic">panic</span>(err)
+<span style="color:#00f">go</span> <span style="color:#00f">func</span>() {
+  sub := client.Subscription(subscriptionName)
+  <span style="color:#00f">if</span> err := sub.Receive(ctx, nackHandler); err != <span style="color:#00f">nil</span> {
+    panic(err)
   }
 }()
-<span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
-  sub <span style="color:#ff79c6">:=</span> client.<span style="color:#50fa7b">Subscription</span>(subscriptionName)
-  sub.ReceiveSettings.MaxExtension = time.Second <span style="color:#ff79c6">*</span> <span style="color:#bd93f9">10</span>
-  <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> sub.<span style="color:#50fa7b">Receive</span>(ctx, nothingHandler); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+<span style="color:#00f">go</span> <span style="color:#00f">func</span>() {
+  sub := client.Subscription(subscriptionName)
+  sub.ReceiveSettings.MaxExtension = time.Second * 10
+  <span style="color:#00f">if</span> err := sub.Receive(ctx, nothingHandler); err != <span style="color:#00f">nil</span> {
+		panic(err)
   }
 }()
 </code></pre></div><p>nack/nothingHandlerによっていくつかリトライされた後、ackHandlerにSubscription作成後のメッセージが全て届いた。
 データは<a href="https://cloud.google.com/pubsub/faq#persistent">7日間</a>保持される。
 メッセージの順序は<a href="https://cloud.google.com/pubsub/docs/ordering">保証されず</a>、今回は1件ずつになっているが重複することがある。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">2018/07/26 21:43:49 nothingHandler got message: 91
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">2018/07/26 21:43:49 nothingHandler got message: 91
 2018/07/26 21:44:28 nackHandler got message: 91
 2018/07/26 21:44:30 ackHandler got message: 91 []string{&#34;50&#34;, &#34;51&#34;, &#34;52&#34;, &#34;53&#34;, &#34;54&#34;, &#34;55&#34;, &#34;56&#34;, &#34;57&#34;, &#34;58&#34;, &#34;59&#34;, &#34;60&#34;, &#34;61&#34;, &#34;62&#34;, &#34;63&#34;, &#34;64&#34;, &#34;65&#34;, &#34;66&#34;, &#34;67&#34;, &#34;68&#34;, &#34;69&#34;, &#34;70&#34;, &#34;71&#34;, &#34;72&#34;, &#34;73&#34;, &#34;74&#34;, &#34;75&#34;, &#34;76&#34;, &#34;77&#34;, &#34;78&#34;, &#34;79&#34;, &#34;80&#34;, &#34;81&#34;, &#34;82&#34;, &#34;83&#34;, &#34;84&#34;, &#34;85&#34;, &#34;86&#34;, &#34;87&#34;, &#34;88&#34;, &#34;89&#34;, &#34;90&#34;, &#34;91&#34;, &#34;92&#34;, &#34;93&#34;, &#34;94&#34;, &#34;95&#34;, &#34;96&#34;, &#34;97&#34;, &#34;98&#34;, &#34;99&#34;}
 2018/07/26 21:44:30 Finished!

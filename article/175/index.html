@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -441,99 +442,99 @@
 今回は新しいsessionを作ってAccuracyを返しているが、hookでやった方がrestoreする必要がないので良さそうだ。</p>
 <p><a href="https://www.sambaiz.net/article/179/">Destributed TensorFlowの流れとSavedModelの出力 - sambaiz-net</a></p>
 <p>全体のコードは<a href="https://gist.github.com/sambaiz/72888520379cff778d6261cd417a3773">ここ</a>。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train</span>(self, learning_rate, variable_default_stddev, bias_default, last_step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">800</span>):
-  test_images <span style="color:#ff79c6">=</span> self<span style="color:#ff79c6">.</span>images[:<span style="color:#bd93f9">500</span>]
-  test_labels <span style="color:#ff79c6">=</span> self<span style="color:#ff79c6">.</span>labels[:<span style="color:#bd93f9">500</span>]
-  train_batch <span style="color:#ff79c6">=</span> Batch(self<span style="color:#ff79c6">.</span>images[<span style="color:#bd93f9">500</span>:], self<span style="color:#ff79c6">.</span>labels[<span style="color:#bd93f9">500</span>:])
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">def</span> train(self, learning_rate, variable_default_stddev, bias_default, last_step=800):
+  test_images = self.images[:500]
+  test_labels = self.labels[:500]
+  train_batch = Batch(self.images[500:], self.labels[500:])
 
-  <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>Graph()<span style="color:#ff79c6">.</span>as_default():
-    global_step<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>get_or_create_global_step()
-    g <span style="color:#ff79c6">=</span> MNIST_CNN(learning_rate,  variable_default_stddev, bias_default)<span style="color:#ff79c6">.</span>graph()
-    saver <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>Saver()
-    savedir <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;./ckpt-{}-{}-{}&#39;</span><span style="color:#ff79c6">.</span>format(learning_rate, variable_default_stddev, bias_default)
-    hooks <span style="color:#ff79c6">=</span> [
-      tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>StopAtStepHook(last_step<span style="color:#ff79c6">=</span>last_step)
+  <span style="color:#00f">with</span> tf.Graph().as_default():
+    global_step=tf.train.get_or_create_global_step()
+    g = MNIST_CNN(learning_rate,  variable_default_stddev, bias_default).graph()
+    saver = tf.train.Saver()
+    savedir = <span style="color:#a31515">&#39;./ckpt-{}-{}-{}&#39;</span>.format(learning_rate, variable_default_stddev, bias_default)
+    hooks = [
+      tf.train.StopAtStepHook(last_step=last_step)
     ]
-    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>MonitoredTrainingSession(
-      hooks<span style="color:#ff79c6">=</span>hooks,
-      checkpoint_dir<span style="color:#ff79c6">=</span>savedir,
-      save_checkpoint_secs <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">300</span>,
-    ) <span style="color:#ff79c6">as</span> sess:
-      sess<span style="color:#ff79c6">.</span>run(global_step)
-      <span style="color:#ff79c6">while</span> <span style="color:#ff79c6">not</span> sess<span style="color:#ff79c6">.</span>should_stop():
-        <span style="color:#6272a4"># step = sess.run(global_step)</span>
-        images, labels <span style="color:#ff79c6">=</span> train_batch<span style="color:#ff79c6">.</span>get_next(<span style="color:#bd93f9">500</span>)
-        sess<span style="color:#ff79c6">.</span>run(g[<span style="color:#f1fa8c">&#34;op&#34;</span>][<span style="color:#f1fa8c">&#34;train_step&#34;</span>], feed_dict<span style="color:#ff79c6">=</span>{
-          g[<span style="color:#f1fa8c">&#34;placeholder&#34;</span>][<span style="color:#f1fa8c">&#34;x&#34;</span>]: <span style="color:#8be9fd;font-style:italic">list</span>(images), 
-          g[<span style="color:#f1fa8c">&#34;placeholder&#34;</span>][<span style="color:#f1fa8c">&#34;y&#34;</span>]: <span style="color:#8be9fd;font-style:italic">list</span>(labels),
+    <span style="color:#00f">with</span> tf.train.MonitoredTrainingSession(
+      hooks=hooks,
+      checkpoint_dir=savedir,
+      save_checkpoint_secs = 300,
+    ) <span style="color:#00f">as</span> sess:
+      sess.run(global_step)
+      <span style="color:#00f">while</span> <span style="color:#00f">not</span> sess.should_stop():
+        <span style="color:#008000"># step = sess.run(global_step)</span>
+        images, labels = train_batch.get_next(500)
+        sess.run(g[<span style="color:#a31515">&#34;op&#34;</span>][<span style="color:#a31515">&#34;train_step&#34;</span>], feed_dict={
+          g[<span style="color:#a31515">&#34;placeholder&#34;</span>][<span style="color:#a31515">&#34;x&#34;</span>]: list(images), 
+          g[<span style="color:#a31515">&#34;placeholder&#34;</span>][<span style="color:#a31515">&#34;y&#34;</span>]: list(labels),
         })
-    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>Session() <span style="color:#ff79c6">as</span> sess:
-      self<span style="color:#ff79c6">.</span>_restore(sess, saver, savedir)
-      <span style="color:#ff79c6">return</span> sess<span style="color:#ff79c6">.</span>run(g[<span style="color:#f1fa8c">&#34;op&#34;</span>][<span style="color:#f1fa8c">&#34;accuracy&#34;</span>], feed_dict<span style="color:#ff79c6">=</span>{
-        g[<span style="color:#f1fa8c">&#34;placeholder&#34;</span>][<span style="color:#f1fa8c">&#34;x&#34;</span>]: <span style="color:#8be9fd;font-style:italic">list</span>(test_images), 
-        g[<span style="color:#f1fa8c">&#34;placeholder&#34;</span>][<span style="color:#f1fa8c">&#34;y&#34;</span>]: <span style="color:#8be9fd;font-style:italic">list</span>(test_labels)
+    <span style="color:#00f">with</span> tf.Session() <span style="color:#00f">as</span> sess:
+      self._restore(sess, saver, savedir)
+      <span style="color:#00f">return</span> sess.run(g[<span style="color:#a31515">&#34;op&#34;</span>][<span style="color:#a31515">&#34;accuracy&#34;</span>], feed_dict={
+        g[<span style="color:#a31515">&#34;placeholder&#34;</span>][<span style="color:#a31515">&#34;x&#34;</span>]: list(test_images), 
+        g[<span style="color:#a31515">&#34;placeholder&#34;</span>][<span style="color:#a31515">&#34;y&#34;</span>]: list(test_labels)
       }), savedir
 </code></pre></div><p>hooksに渡す<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/session_run_hook.py#L103">SessionRunHook</a>は以下のメソッドからなる。
 <code>before_run()</code>で返すSessionRunArgsのfeed_dictはrunで渡すfeed_dictとmergeされ、
 fetchesはrunするたびに毎回評価される。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">MySessionRunHook</span>:
-  <span style="color:#ff79c6">def</span> __init__(self, feed_dict):
-    self<span style="color:#ff79c6">.</span>feed_dict <span style="color:#ff79c6">=</span> feed_dict
-    self<span style="color:#ff79c6">.</span>a <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;a&#34;</span>)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">class</span> <span style="color:#2b91af">MySessionRunHook</span>:
+  <span style="color:#00f">def</span> __init__(self, feed_dict):
+    self.feed_dict = feed_dict
+    self.a = tf.placeholder(tf.float32, name=<span style="color:#a31515">&#34;a&#34;</span>)
       
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">begin</span>(self):
-    <span style="color:#f1fa8c">&#34;&#34;&#34;Called once before using the session.&#34;&#34;&#34;</span>
-    <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#34;begin&#34;</span>)
+  <span style="color:#00f">def</span> begin(self):
+    <span style="color:#a31515">&#34;&#34;&#34;Called once before using the session.&#34;&#34;&#34;</span>
+    <span style="color:#00f">print</span>(<span style="color:#a31515">&#34;begin&#34;</span>)
 
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">after_create_session</span>(self, session, coord):
-    <span style="color:#f1fa8c">&#34;&#34;&#34;Called when new TensorFlow session is created.&#34;&#34;&#34;</span>
-    <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#34;after_create_session&#34;</span>)
+  <span style="color:#00f">def</span> after_create_session(self, session, coord):
+    <span style="color:#a31515">&#34;&#34;&#34;Called when new TensorFlow session is created.&#34;&#34;&#34;</span>
+    <span style="color:#00f">print</span>(<span style="color:#a31515">&#34;after_create_session&#34;</span>)
       
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">before_run</span>(self, run_context):
-    <span style="color:#f1fa8c">&#34;&#34;&#34;Called before each call to run().&#34;&#34;&#34;</span>
-    <span style="color:#ff79c6">return</span> SessionRunArgs(fetches<span style="color:#ff79c6">=</span>{<span style="color:#f1fa8c">&#34;a&#34;</span>: self<span style="color:#ff79c6">.</span>a}, feed_dict<span style="color:#ff79c6">=</span>self<span style="color:#ff79c6">.</span>feed_dict)
+  <span style="color:#00f">def</span> before_run(self, run_context):
+    <span style="color:#a31515">&#34;&#34;&#34;Called before each call to run().&#34;&#34;&#34;</span>
+    <span style="color:#00f">return</span> SessionRunArgs(fetches={<span style="color:#a31515">&#34;a&#34;</span>: self.a}, feed_dict=self.feed_dict)
   
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">after_run</span>(self, run_context, run_values):
-    <span style="color:#f1fa8c">&#34;&#34;&#34;Called after each call to run().&#34;&#34;&#34;</span>
-    <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#34;after_run {} {}&#34;</span><span style="color:#ff79c6">.</span>format(run_values<span style="color:#ff79c6">.</span>results[<span style="color:#f1fa8c">&#34;a&#34;</span>], run_context<span style="color:#ff79c6">.</span>session<span style="color:#ff79c6">.</span>run(self<span style="color:#ff79c6">.</span>a, feed_dict<span style="color:#ff79c6">=</span>{self<span style="color:#ff79c6">.</span>a: <span style="color:#bd93f9">10</span>})))
+  <span style="color:#00f">def</span> after_run(self, run_context, run_values):
+    <span style="color:#a31515">&#34;&#34;&#34;Called after each call to run().&#34;&#34;&#34;</span>
+    <span style="color:#00f">print</span>(<span style="color:#a31515">&#34;after_run {} {}&#34;</span>.format(run_values.results[<span style="color:#a31515">&#34;a&#34;</span>], run_context.session.run(self.a, feed_dict={self.a: 10})))
 
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">end</span>(self, session):
-    <span style="color:#f1fa8c">&#34;&#34;&#34;Called at the end of session.&#34;&#34;&#34;</span>
-    <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#34;end&#34;</span>)
+  <span style="color:#00f">def</span> end(self, session):
+    <span style="color:#a31515">&#34;&#34;&#34;Called at the end of session.&#34;&#34;&#34;</span>
+    <span style="color:#00f">print</span>(<span style="color:#a31515">&#34;end&#34;</span>)
 </code></pre></div><p>したがって、hooks内のfetchesにfeedする必要があるものが含まれる場合、
 runする対象がfeedする必要がない場合でも<code>You must feed a value for placeholder tensor</code>のエラーが出ることになる。
 また、hooks内とrunの引数のfeed_dictが衝突した場合もエラーになる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>Graph()<span style="color:#ff79c6">.</span>as_default():
-  global_step <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>get_or_create_global_step()
-  x <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;x&#34;</span>)
-  y <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;y&#34;</span>)
-  z <span style="color:#ff79c6">=</span> x <span style="color:#ff79c6">+</span> y
-  hook1 <span style="color:#ff79c6">=</span> MySessionRunHook({x: <span style="color:#bd93f9">2</span>})
-  hook2 <span style="color:#ff79c6">=</span> MySessionRunHook({y: <span style="color:#bd93f9">3</span>})
-  hooks<span style="color:#ff79c6">=</span>[hook1, hook2]
-  <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>MonitoredTrainingSession(hooks<span style="color:#ff79c6">=</span>hooks) <span style="color:#ff79c6">as</span> sess:
-    <span style="color:#ff79c6">try</span>:
-      <span style="color:#ff79c6">print</span>(sess<span style="color:#ff79c6">.</span>run(global_step))
-    <span style="color:#ff79c6">except</span> tf<span style="color:#ff79c6">.</span>errors<span style="color:#ff79c6">.</span>InvalidArgumentError <span style="color:#ff79c6">as</span> err:
-      <span style="color:#ff79c6">print</span>(err) <span style="color:#6272a4"># You must feed a value for placeholder tensor &#39;a_1&#39; with dtype float ...</span>
-    <span style="color:#ff79c6">print</span>(sess<span style="color:#ff79c6">.</span>run([global_step, z], feed_dict<span style="color:#ff79c6">=</span>{hook1<span style="color:#ff79c6">.</span>a: <span style="color:#bd93f9">2</span>, hook2<span style="color:#ff79c6">.</span>a: <span style="color:#bd93f9">3</span>})) <span style="color:#6272a4"># [0, 5.0]</span>
-    <span style="color:#ff79c6">try</span>:
-      <span style="color:#ff79c6">print</span>(sess<span style="color:#ff79c6">.</span>run(y, feed_dict<span style="color:#ff79c6">=</span>{x: <span style="color:#bd93f9">10</span>}))
-    <span style="color:#ff79c6">except</span> RuntimeError <span style="color:#ff79c6">as</span> err:
-      <span style="color:#ff79c6">print</span>(err) <span style="color:#6272a4"># Same tensor is fed by a SessionRunHook and user. Conflict(s): [&lt;tf.Tensor &#39;x:0&#39; shape=&lt;unknown&gt; dtype=float32&gt;]     </span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">with</span> tf.Graph().as_default():
+  global_step = tf.train.get_or_create_global_step()
+  x = tf.placeholder(tf.float32, name=<span style="color:#a31515">&#34;x&#34;</span>)
+  y = tf.placeholder(tf.float32, name=<span style="color:#a31515">&#34;y&#34;</span>)
+  z = x + y
+  hook1 = MySessionRunHook({x: 2})
+  hook2 = MySessionRunHook({y: 3})
+  hooks=[hook1, hook2]
+  <span style="color:#00f">with</span> tf.train.MonitoredTrainingSession(hooks=hooks) <span style="color:#00f">as</span> sess:
+    <span style="color:#00f">try</span>:
+      <span style="color:#00f">print</span>(sess.run(global_step))
+    <span style="color:#00f">except</span> tf.errors.InvalidArgumentError <span style="color:#00f">as</span> err:
+      <span style="color:#00f">print</span>(err) <span style="color:#008000"># You must feed a value for placeholder tensor &#39;a_1&#39; with dtype float ...</span>
+    <span style="color:#00f">print</span>(sess.run([global_step, z], feed_dict={hook1.a: 2, hook2.a: 3})) <span style="color:#008000"># [0, 5.0]</span>
+    <span style="color:#00f">try</span>:
+      <span style="color:#00f">print</span>(sess.run(y, feed_dict={x: 10}))
+    <span style="color:#00f">except</span> RuntimeError <span style="color:#00f">as</span> err:
+      <span style="color:#00f">print</span>(err) <span style="color:#008000"># Same tensor is fed by a SessionRunHook and user. Conflict(s): [&lt;tf.Tensor &#39;x:0&#39; shape=&lt;unknown&gt; dtype=float32&gt;]     </span>
 </code></pre></div><p>上で書いたようにMonitoredTrainingSessionは内部でCheckpointSaverHookを持っていて、
 これがfetchesでsummaryを<a href="https://github.com/tensorflow/tensorflow/blob/r1.8/tensorflow/python/training/basic_session_run_hooks.py#L689">返している</a>ので、一つでもsummaryを入れるとrunするときにそれに必要なfeed_dictを渡さないとエラーになる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>Graph()<span style="color:#ff79c6">.</span>as_default():
-  global_step <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>get_or_create_global_step()
-  x <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;x&#34;</span>)
-  y <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;y&#34;</span>)
-  z <span style="color:#ff79c6">=</span> x <span style="color:#ff79c6">+</span> y
-  tf<span style="color:#ff79c6">.</span>summary<span style="color:#ff79c6">.</span>scalar(<span style="color:#f1fa8c">&#34;z&#34;</span>, z)
-  <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>MonitoredTrainingSession(checkpoint_dir<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;./aaa&#34;</span>, save_summaries_steps<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>) <span style="color:#ff79c6">as</span> sess:
-    <span style="color:#6272a4"># ng</span>
-    <span style="color:#6272a4"># sess.run(global_step) =&gt; You must feed a value for placeholder tensor &#39;y&#39; with dtype float</span>
-    <span style="color:#6272a4"># sess.run(z, feed_dict={x: 10, y:20})</span>
-    step, zz <span style="color:#ff79c6">=</span> sess<span style="color:#ff79c6">.</span>run([global_step, z], feed_dict<span style="color:#ff79c6">=</span>{x: <span style="color:#bd93f9">10</span>, y:<span style="color:#bd93f9">20</span>}) <span style="color:#6272a4"># ok</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">with</span> tf.Graph().as_default():
+  global_step = tf.train.get_or_create_global_step()
+  x = tf.placeholder(tf.float32, name=<span style="color:#a31515">&#34;x&#34;</span>)
+  y = tf.placeholder(tf.float32, name=<span style="color:#a31515">&#34;y&#34;</span>)
+  z = x + y
+  tf.summary.scalar(<span style="color:#a31515">&#34;z&#34;</span>, z)
+  <span style="color:#00f">with</span> tf.train.MonitoredTrainingSession(checkpoint_dir=<span style="color:#a31515">&#34;./aaa&#34;</span>, save_summaries_steps=1) <span style="color:#00f">as</span> sess:
+    <span style="color:#008000"># ng</span>
+    <span style="color:#008000"># sess.run(global_step) =&gt; You must feed a value for placeholder tensor &#39;y&#39; with dtype float</span>
+    <span style="color:#008000"># sess.run(z, feed_dict={x: 10, y:20})</span>
+    step, zz = sess.run([global_step, z], feed_dict={x: 10, y:20}) <span style="color:#008000"># ok</span>
 </code></pre></div>
     </div>
     <div class="share">

@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -440,7 +441,7 @@
 <p><img src="https://www.sambaiz.net/images/268-ecb.png" alt="ECBによる暗号化/復号"></p>
 <h2 id="goのcryptocipher-packageに実装されている暗号化利用モード">Goのcrypto/cipher packageに実装されている暗号化利用モード</h2>
 <p>Goの<a href="https://golang.org/pkg/crypto/cipher/">crypto/cipher</a> packageには次の暗号化利用モードが実装されている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go version
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go version
 go version go1.14 darwin/amd64
 </code></pre></div><h3 id="cipher-block-chaining-cbc">Cipher Block Chaining (CBC)</h3>
 <p>メッセージをブロックに分割し、前段の暗号文(最初はランダムなIV)と入力ブロックのXORを取ったものが暗号文で、
@@ -452,48 +453,48 @@ ECBと同様パディングが必要。最も広く使われているらしい�
 Length extension attackが成立する。そのためメッセージを固定長にするかメッセージ長を先頭に入れるなどの対策が必要。</p>
 <p><img src="https://www.sambaiz.net/images/268-cbc.png" alt="CBCによる暗号化/復号"></p>
 <p>Goではパディングは自分でやる必要がある。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (x <span style="color:#ff79c6">*</span>cbcEncrypter) <span style="color:#50fa7b">CryptBlocks</span>(dst, src []<span style="color:#8be9fd">byte</span>) {
-    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(src)<span style="color:#ff79c6">%</span>x.blockSize <span style="color:#ff79c6">!=</span> <span style="color:#bd93f9">0</span> {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: input not full blocks&#34;</span>)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (x *cbcEncrypter) CryptBlocks(dst, src []<span style="color:#2b91af">byte</span>) {
+    <span style="color:#00f">if</span> len(src)%x.blockSize != 0 {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: input not full blocks&#34;</span>)
     }
-    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(dst) &lt; <span style="color:#8be9fd;font-style:italic">len</span>(src) {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: output smaller than input&#34;</span>)
+    <span style="color:#00f">if</span> len(dst) &lt; len(src) {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: output smaller than input&#34;</span>)
     }
-    <span style="color:#ff79c6">if</span> subtle.<span style="color:#50fa7b">InexactOverlap</span>(dst[:<span style="color:#8be9fd;font-style:italic">len</span>(src)], src) {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: invalid buffer overlap&#34;</span>)
+    <span style="color:#00f">if</span> subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: invalid buffer overlap&#34;</span>)
     }
 
-    iv <span style="color:#ff79c6">:=</span> x.iv
+    iv := x.iv
 
-    <span style="color:#ff79c6">for</span> <span style="color:#8be9fd;font-style:italic">len</span>(src) &gt; <span style="color:#bd93f9">0</span> {
-        <span style="color:#6272a4">// Write the xor to dst, then encrypt in place.
-</span><span style="color:#6272a4"></span>        <span style="color:#50fa7b">xorBytes</span>(dst[:x.blockSize], src[:x.blockSize], iv)
-        x.b.<span style="color:#50fa7b">Encrypt</span>(dst[:x.blockSize], dst[:x.blockSize])
+    <span style="color:#00f">for</span> len(src) &gt; 0 {
+        <span style="color:#008000">// Write the xor to dst, then encrypt in place.
+</span><span style="color:#008000"></span>        xorBytes(dst[:x.blockSize], src[:x.blockSize], iv)
+        x.b.Encrypt(dst[:x.blockSize], dst[:x.blockSize])
 
-        <span style="color:#6272a4">// Move to the next block with this block as the next iv.
-</span><span style="color:#6272a4"></span>        iv = dst[:x.blockSize]
+        <span style="color:#008000">// Move to the next block with this block as the next iv.
+</span><span style="color:#008000"></span>        iv = dst[:x.blockSize]
         src = src[x.blockSize:]
         dst = dst[x.blockSize:]
     }
 
-    <span style="color:#6272a4">// Save the iv for the next CryptBlocks call.
-</span><span style="color:#6272a4"></span>    <span style="color:#8be9fd;font-style:italic">copy</span>(x.iv, iv)
+    <span style="color:#008000">// Save the iv for the next CryptBlocks call.
+</span><span style="color:#008000"></span>    copy(x.iv, iv)
 }
 </code></pre></div><p>足りないバイト数の値でパディングする<a href="https://tools.ietf.org/html/rfc5652#section-6.3">PKCS#7</a>の方式はこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">pad</span>(data []<span style="color:#8be9fd">byte</span>, blockSize <span style="color:#8be9fd">int</span>) []<span style="color:#8be9fd">byte</span> {
-    padSize <span style="color:#ff79c6">:=</span> blockSize <span style="color:#ff79c6">-</span> <span style="color:#8be9fd;font-style:italic">len</span>(data) <span style="color:#ff79c6">%</span> blockSize
-    ret <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data) <span style="color:#ff79c6">+</span> padSize)
-    <span style="color:#8be9fd;font-style:italic">copy</span>(ret, data)
-    <span style="color:#8be9fd;font-style:italic">copy</span>(ret[<span style="color:#8be9fd;font-style:italic">len</span>(data):], bytes.<span style="color:#50fa7b">Repeat</span>([]<span style="color:#8be9fd">byte</span>{<span style="color:#8be9fd;font-style:italic">byte</span>(padSize)}, padSize))
-    <span style="color:#ff79c6">return</span> ret
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> pad(data []<span style="color:#2b91af">byte</span>, blockSize <span style="color:#2b91af">int</span>) []<span style="color:#2b91af">byte</span> {
+    padSize := blockSize - len(data) % blockSize
+    ret := make([]<span style="color:#2b91af">byte</span>, len(data) + padSize)
+    copy(ret, data)
+    copy(ret[len(data):], bytes.Repeat([]<span style="color:#2b91af">byte</span>{byte(padSize)}, padSize))
+    <span style="color:#00f">return</span> ret
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">unpad</span>(data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
-    padSize <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">int</span>(data[<span style="color:#8be9fd;font-style:italic">len</span>(data)<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>])
-    <span style="color:#ff79c6">if</span> padSize &gt; <span style="color:#8be9fd;font-style:italic">len</span>(data) {
-        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+<span style="color:#00f">func</span> unpad(data []<span style="color:#2b91af">byte</span>) []<span style="color:#2b91af">byte</span> {
+    padSize := int(data[len(data)-1])
+    <span style="color:#00f">if</span> padSize &gt; len(data) {
+        <span style="color:#00f">return</span> <span style="color:#00f">nil</span>
     }
-    <span style="color:#ff79c6">return</span> data[:<span style="color:#8be9fd;font-style:italic">len</span>(data)<span style="color:#ff79c6">-</span>padSize]
+    <span style="color:#00f">return</span> data[:len(data)-padSize]
 }
 </code></pre></div><h3 id="cipher-feedback-cfb">Cipher Feedback (CFB)</h3>
 <p>ブロック暗号を使ってはいるがブロックに分割不要なストリーム暗号になった。したがってパディングする必要もない。
@@ -501,33 +502,33 @@ Length extension attackが成立する。そのためメッセージを固定長
 暗号化/復号共に暗号関数を用いる。IVや暗号文が破損した場合それ以降の復号はできない。</p>
 <p><img src="https://www.sambaiz.net/images/268-cfb.png" alt="CFBによる暗号化/復号"></p>
 <p><code>xorBytes()</code> はサイズが小さい方に合わせてXORを取る。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (x <span style="color:#ff79c6">*</span>cfb) <span style="color:#50fa7b">XORKeyStream</span>(dst, src []<span style="color:#8be9fd">byte</span>) {
-    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(dst) &lt; <span style="color:#8be9fd;font-style:italic">len</span>(src) {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: output smaller than input&#34;</span>)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (x *cfb) XORKeyStream(dst, src []<span style="color:#2b91af">byte</span>) {
+    <span style="color:#00f">if</span> len(dst) &lt; len(src) {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: output smaller than input&#34;</span>)
     }
-    <span style="color:#ff79c6">if</span> subtle.<span style="color:#50fa7b">InexactOverlap</span>(dst[:<span style="color:#8be9fd;font-style:italic">len</span>(src)], src) {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: invalid buffer overlap&#34;</span>)
+    <span style="color:#00f">if</span> subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: invalid buffer overlap&#34;</span>)
     }
-    <span style="color:#ff79c6">for</span> <span style="color:#8be9fd;font-style:italic">len</span>(src) &gt; <span style="color:#bd93f9">0</span> {
-        <span style="color:#ff79c6">if</span> x.outUsed <span style="color:#ff79c6">==</span> <span style="color:#8be9fd;font-style:italic">len</span>(x.out) {
-            x.b.<span style="color:#50fa7b">Encrypt</span>(x.out, x.next)
-            x.outUsed = <span style="color:#bd93f9">0</span>
+    <span style="color:#00f">for</span> len(src) &gt; 0 {
+        <span style="color:#00f">if</span> x.outUsed == len(x.out) {
+            x.b.Encrypt(x.out, x.next)
+            x.outUsed = 0
         }
 
-        <span style="color:#ff79c6">if</span> x.decrypt {
-            <span style="color:#6272a4">// We can precompute a larger segment of the
-</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// keystream on decryption. This will allow
-</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// larger batches for xor, and we should be
-</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// able to match CTR/OFB performance.
-</span><span style="color:#6272a4"></span>            <span style="color:#8be9fd;font-style:italic">copy</span>(x.next[x.outUsed:], src)
+        <span style="color:#00f">if</span> x.decrypt {
+            <span style="color:#008000">// We can precompute a larger segment of the
+</span><span style="color:#008000"></span>            <span style="color:#008000">// keystream on decryption. This will allow
+</span><span style="color:#008000"></span>            <span style="color:#008000">// larger batches for xor, and we should be
+</span><span style="color:#008000"></span>            <span style="color:#008000">// able to match CTR/OFB performance.
+</span><span style="color:#008000"></span>            copy(x.next[x.outUsed:], src)
         }
-        n <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">xorBytes</span>(dst, src, x.out[x.outUsed:])
-        <span style="color:#ff79c6">if</span> !x.decrypt {
-            <span style="color:#8be9fd;font-style:italic">copy</span>(x.next[x.outUsed:], dst)
+        n := xorBytes(dst, src, x.out[x.outUsed:])
+        <span style="color:#00f">if</span> !x.decrypt {
+            copy(x.next[x.outUsed:], dst)
         }
         dst = dst[n:]
         src = src[n:]
-        x.outUsed <span style="color:#ff79c6">+=</span> n
+        x.outUsed += n
     }
 }
 </code></pre></div><h3 id="output-feedback-ofb">Output Feedback (OFB)</h3>
@@ -536,174 +537,174 @@ CFBが暗号文を次にフィードバックしていたのに対し、OFBは�
 したがってKeystreamはIVがn回暗号関数を通ったものとなりメッセージに依存しないため先に計算することもできる。
 それらとXORを取ったものが暗号文になるため復号も全く同じ処理になる。</p>
 <p><img src="https://www.sambaiz.net/images/268-ofb.png" alt="OFBによる暗号化/復号"></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (x <span style="color:#ff79c6">*</span>ofb) <span style="color:#50fa7b">refill</span>() {
-    bs <span style="color:#ff79c6">:=</span> x.b.<span style="color:#50fa7b">BlockSize</span>()
-    remain <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x.out) <span style="color:#ff79c6">-</span> x.outUsed
-    <span style="color:#ff79c6">if</span> remain &gt; x.outUsed {
-        <span style="color:#ff79c6">return</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (x *ofb) refill() {
+    bs := x.b.BlockSize()
+    remain := len(x.out) - x.outUsed
+    <span style="color:#00f">if</span> remain &gt; x.outUsed {
+        <span style="color:#00f">return</span>
     }
-    <span style="color:#8be9fd;font-style:italic">copy</span>(x.out, x.out[x.outUsed:])
-    x.out = x.out[:<span style="color:#8be9fd;font-style:italic">cap</span>(x.out)]
-    <span style="color:#ff79c6">for</span> remain &lt; <span style="color:#8be9fd;font-style:italic">len</span>(x.out)<span style="color:#ff79c6">-</span>bs {
-        x.b.<span style="color:#50fa7b">Encrypt</span>(x.cipher, x.cipher)
-        <span style="color:#8be9fd;font-style:italic">copy</span>(x.out[remain:], x.cipher)
-        remain <span style="color:#ff79c6">+=</span> bs
+    copy(x.out, x.out[x.outUsed:])
+    x.out = x.out[:cap(x.out)]
+    <span style="color:#00f">for</span> remain &lt; len(x.out)-bs {
+        x.b.Encrypt(x.cipher, x.cipher)
+        copy(x.out[remain:], x.cipher)
+        remain += bs
     }
     x.out = x.out[:remain]
-    x.outUsed = <span style="color:#bd93f9">0</span>
+    x.outUsed = 0
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> (x <span style="color:#ff79c6">*</span>ofb) <span style="color:#50fa7b">XORKeyStream</span>(dst, src []<span style="color:#8be9fd">byte</span>) {
-    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(dst) &lt; <span style="color:#8be9fd;font-style:italic">len</span>(src) {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: output smaller than input&#34;</span>)
+<span style="color:#00f">func</span> (x *ofb) XORKeyStream(dst, src []<span style="color:#2b91af">byte</span>) {
+    <span style="color:#00f">if</span> len(dst) &lt; len(src) {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: output smaller than input&#34;</span>)
     }
-    <span style="color:#ff79c6">if</span> subtle.<span style="color:#50fa7b">InexactOverlap</span>(dst[:<span style="color:#8be9fd;font-style:italic">len</span>(src)], src) {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: invalid buffer overlap&#34;</span>)
+    <span style="color:#00f">if</span> subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: invalid buffer overlap&#34;</span>)
     }
-    <span style="color:#ff79c6">for</span> <span style="color:#8be9fd;font-style:italic">len</span>(src) &gt; <span style="color:#bd93f9">0</span> {
-        <span style="color:#ff79c6">if</span> x.outUsed <span style="color:#ff79c6">&gt;=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x.out)<span style="color:#ff79c6">-</span>x.b.<span style="color:#50fa7b">BlockSize</span>() {
-            x.<span style="color:#50fa7b">refill</span>()
+    <span style="color:#00f">for</span> len(src) &gt; 0 {
+        <span style="color:#00f">if</span> x.outUsed &gt;= len(x.out)-x.b.BlockSize() {
+            x.refill()
         }
-        n <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">xorBytes</span>(dst, src, x.out[x.outUsed:])
+        n := xorBytes(dst, src, x.out[x.outUsed:])
         dst = dst[n:]
         src = src[n:]
-        x.outUsed <span style="color:#ff79c6">+=</span> n
+        x.outUsed += n
     }
 }
 </code></pre></div><h3 id="counter-ctr">Counter (CTR)</h3>
 <p>同じくストリーミング暗号。IV相当のNonceと重複しないCounterを合わせて暗号関数に通したCounter blockをKeystreamとする。</p>
 <p><img src="https://www.sambaiz.net/images/268-ctr.png" alt="CTRによる暗号化/復号"></p>
 <p>前段に依存しないため並列に暗号化できるがGoではしていない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewCTR</span>(block Block, iv []<span style="color:#8be9fd">byte</span>) Stream {
-    <span style="color:#ff79c6">if</span> ctr, ok <span style="color:#ff79c6">:=</span> block.(ctrAble); ok {
-        <span style="color:#ff79c6">return</span> ctr.<span style="color:#50fa7b">NewCTR</span>(iv)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> NewCTR(block Block, iv []<span style="color:#2b91af">byte</span>) Stream {
+    <span style="color:#00f">if</span> ctr, ok := block.(ctrAble); ok {
+        <span style="color:#00f">return</span> ctr.NewCTR(iv)
     }
-    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(iv) <span style="color:#ff79c6">!=</span> block.<span style="color:#50fa7b">BlockSize</span>() {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;cipher.NewCTR: IV length must equal block size&#34;</span>)
+    <span style="color:#00f">if</span> len(iv) != block.BlockSize() {
+        panic(<span style="color:#a31515">&#34;cipher.NewCTR: IV length must equal block size&#34;</span>)
     }
-    bufSize <span style="color:#ff79c6">:=</span> streamBufferSize
-    <span style="color:#ff79c6">if</span> bufSize &lt; block.<span style="color:#50fa7b">BlockSize</span>() {
-        bufSize = block.<span style="color:#50fa7b">BlockSize</span>()
+    bufSize := streamBufferSize
+    <span style="color:#00f">if</span> bufSize &lt; block.BlockSize() {
+        bufSize = block.BlockSize()
     }
-    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>ctr{
+    <span style="color:#00f">return</span> &amp;ctr{
         b:       block,
-        ctr:     <span style="color:#50fa7b">dup</span>(iv),
-        out:     <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#bd93f9">0</span>, bufSize),
-        outUsed: <span style="color:#bd93f9">0</span>,
+        ctr:     dup(iv),
+        out:     make([]<span style="color:#2b91af">byte</span>, 0, bufSize),
+        outUsed: 0,
     }
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> (x <span style="color:#ff79c6">*</span>ctr) <span style="color:#50fa7b">refill</span>() {
-    remain <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x.out) <span style="color:#ff79c6">-</span> x.outUsed
-    <span style="color:#8be9fd;font-style:italic">copy</span>(x.out, x.out[x.outUsed:])
-    x.out = x.out[:<span style="color:#8be9fd;font-style:italic">cap</span>(x.out)]
-    bs <span style="color:#ff79c6">:=</span> x.b.<span style="color:#50fa7b">BlockSize</span>()
-    <span style="color:#ff79c6">for</span> remain <span style="color:#ff79c6">&lt;=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x.out)<span style="color:#ff79c6">-</span>bs {
-        x.b.<span style="color:#50fa7b">Encrypt</span>(x.out[remain:], x.ctr)
-        remain <span style="color:#ff79c6">+=</span> bs
+<span style="color:#00f">func</span> (x *ctr) refill() {
+    remain := len(x.out) - x.outUsed
+    copy(x.out, x.out[x.outUsed:])
+    x.out = x.out[:cap(x.out)]
+    bs := x.b.BlockSize()
+    <span style="color:#00f">for</span> remain &lt;= len(x.out)-bs {
+        x.b.Encrypt(x.out[remain:], x.ctr)
+        remain += bs
 
-        <span style="color:#6272a4">// Increment counter
-</span><span style="color:#6272a4"></span>        <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x.ctr) <span style="color:#ff79c6">-</span> <span style="color:#bd93f9">1</span>; i <span style="color:#ff79c6">&gt;=</span> <span style="color:#bd93f9">0</span>; i<span style="color:#ff79c6">--</span> {
-            x.ctr[i]<span style="color:#ff79c6">++</span>
-            <span style="color:#ff79c6">if</span> x.ctr[i] <span style="color:#ff79c6">!=</span> <span style="color:#bd93f9">0</span> {
-                <span style="color:#ff79c6">break</span>
+        <span style="color:#008000">// Increment counter
+</span><span style="color:#008000"></span>        <span style="color:#00f">for</span> i := len(x.ctr) - 1; i &gt;= 0; i-- {
+            x.ctr[i]++
+            <span style="color:#00f">if</span> x.ctr[i] != 0 {
+                <span style="color:#00f">break</span>
             }
         }
     }
     x.out = x.out[:remain]
-    x.outUsed = <span style="color:#bd93f9">0</span>
+    x.outUsed = 0
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> (x <span style="color:#ff79c6">*</span>ctr) <span style="color:#50fa7b">XORKeyStream</span>(dst, src []<span style="color:#8be9fd">byte</span>) {
-    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(dst) &lt; <span style="color:#8be9fd;font-style:italic">len</span>(src) {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: output smaller than input&#34;</span>)
+<span style="color:#00f">func</span> (x *ctr) XORKeyStream(dst, src []<span style="color:#2b91af">byte</span>) {
+    <span style="color:#00f">if</span> len(dst) &lt; len(src) {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: output smaller than input&#34;</span>)
     }
-    <span style="color:#ff79c6">if</span> subtle.<span style="color:#50fa7b">InexactOverlap</span>(dst[:<span style="color:#8be9fd;font-style:italic">len</span>(src)], src) {
-        <span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;crypto/cipher: invalid buffer overlap&#34;</span>)
+    <span style="color:#00f">if</span> subtle.InexactOverlap(dst[:len(src)], src) {
+        panic(<span style="color:#a31515">&#34;crypto/cipher: invalid buffer overlap&#34;</span>)
     }
-    <span style="color:#ff79c6">for</span> <span style="color:#8be9fd;font-style:italic">len</span>(src) &gt; <span style="color:#bd93f9">0</span> {
-        <span style="color:#ff79c6">if</span> x.outUsed <span style="color:#ff79c6">&gt;=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x.out)<span style="color:#ff79c6">-</span>x.b.<span style="color:#50fa7b">BlockSize</span>() {
-            x.<span style="color:#50fa7b">refill</span>()
+    <span style="color:#00f">for</span> len(src) &gt; 0 {
+        <span style="color:#00f">if</span> x.outUsed &gt;= len(x.out)-x.b.BlockSize() {
+            x.refill()
         }
-        n <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">xorBytes</span>(dst, src, x.out[x.outUsed:])
+        n := xorBytes(dst, src, x.out[x.outUsed:])
         dst = dst[n:]
         src = src[n:]
-        x.outUsed <span style="color:#ff79c6">+=</span> n
+        x.outUsed += n
     }
 }
 </code></pre></div><h2 id="ベンチマーク">ベンチマーク</h2>
 <p>それぞれの暗号利用モードで暗号化/復号する際のベンチマークを取る。コードは<a href="https://github.com/sambaiz/go-cipher-benchmark">GitHub</a>にある。
 CBCはパディング込み。OFBとCTRは暗号化/復号処理が同じなのでまとめている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> sandbox
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">package</span> sandbox
 
-<span style="color:#ff79c6">import</span> (
-    <span style="color:#f1fa8c">&#34;bytes&#34;</span>
-    <span style="color:#f1fa8c">&#34;crypto/cipher&#34;</span>
+<span style="color:#00f">import</span> (
+    <span style="color:#a31515">&#34;bytes&#34;</span>
+    <span style="color:#a31515">&#34;crypto/cipher&#34;</span>
 )
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">pad</span>(data []<span style="color:#8be9fd">byte</span>, blockSize <span style="color:#8be9fd">int</span>) []<span style="color:#8be9fd">byte</span> {
-    padSize <span style="color:#ff79c6">:=</span> blockSize <span style="color:#ff79c6">-</span> <span style="color:#8be9fd;font-style:italic">len</span>(data) <span style="color:#ff79c6">%</span> blockSize
-    ret <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data) <span style="color:#ff79c6">+</span> padSize)
-    <span style="color:#8be9fd;font-style:italic">copy</span>(ret, data)
-    <span style="color:#8be9fd;font-style:italic">copy</span>(ret[<span style="color:#8be9fd;font-style:italic">len</span>(data):], bytes.<span style="color:#50fa7b">Repeat</span>([]<span style="color:#8be9fd">byte</span>{<span style="color:#8be9fd;font-style:italic">byte</span>(padSize)}, padSize))
-    <span style="color:#ff79c6">return</span> ret
+<span style="color:#00f">func</span> pad(data []<span style="color:#2b91af">byte</span>, blockSize <span style="color:#2b91af">int</span>) []<span style="color:#2b91af">byte</span> {
+    padSize := blockSize - len(data) % blockSize
+    ret := make([]<span style="color:#2b91af">byte</span>, len(data) + padSize)
+    copy(ret, data)
+    copy(ret[len(data):], bytes.Repeat([]<span style="color:#2b91af">byte</span>{byte(padSize)}, padSize))
+    <span style="color:#00f">return</span> ret
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">unpad</span>(data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
-    padSize <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">int</span>(data[<span style="color:#8be9fd;font-style:italic">len</span>(data)<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>])
-    <span style="color:#ff79c6">if</span> padSize &gt; <span style="color:#8be9fd;font-style:italic">len</span>(data) {
-        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+<span style="color:#00f">func</span> unpad(data []<span style="color:#2b91af">byte</span>) []<span style="color:#2b91af">byte</span> {
+    padSize := int(data[len(data)-1])
+    <span style="color:#00f">if</span> padSize &gt; len(data) {
+        <span style="color:#00f">return</span> <span style="color:#00f">nil</span>
     }
-    <span style="color:#ff79c6">return</span> data[:<span style="color:#8be9fd;font-style:italic">len</span>(data)<span style="color:#ff79c6">-</span>padSize]
+    <span style="color:#00f">return</span> data[:len(data)-padSize]
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">EncryptWithCBC</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
-    data = <span style="color:#50fa7b">pad</span>(data, block.<span style="color:#50fa7b">BlockSize</span>())
-    enc <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCBCEncrypter</span>(block, iv)
-    encrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
-    enc.<span style="color:#50fa7b">CryptBlocks</span>(encrypted, data)
-    <span style="color:#ff79c6">return</span> encrypted
+<span style="color:#00f">func</span> EncryptWithCBC(block cipher.Block, iv []<span style="color:#2b91af">byte</span>, data []<span style="color:#2b91af">byte</span>) []<span style="color:#2b91af">byte</span> {
+    data = pad(data, block.BlockSize())
+    enc := cipher.NewCBCEncrypter(block, iv)
+    encrypted := make([]<span style="color:#2b91af">byte</span>, len(data))
+    enc.CryptBlocks(encrypted, data)
+    <span style="color:#00f">return</span> encrypted
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">DecryptWithCBC</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
-    dec <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCBCDecrypter</span>(block, iv)
-    decrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
-    dec.<span style="color:#50fa7b">CryptBlocks</span>(decrypted, data)
-    <span style="color:#ff79c6">return</span> decrypted
+<span style="color:#00f">func</span> DecryptWithCBC(block cipher.Block, iv []<span style="color:#2b91af">byte</span>, data []<span style="color:#2b91af">byte</span>) []<span style="color:#2b91af">byte</span> {
+    dec := cipher.NewCBCDecrypter(block, iv)
+    decrypted := make([]<span style="color:#2b91af">byte</span>, len(data))
+    dec.CryptBlocks(decrypted, data)
+    <span style="color:#00f">return</span> decrypted
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">EncryptWithCFB</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
-    enc <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCFBEncrypter</span>(block, iv)
-    encrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
-    enc.<span style="color:#50fa7b">XORKeyStream</span>(encrypted, data)
-    <span style="color:#ff79c6">return</span> encrypted
+<span style="color:#00f">func</span> EncryptWithCFB(block cipher.Block, iv []<span style="color:#2b91af">byte</span>, data []<span style="color:#2b91af">byte</span>) []<span style="color:#2b91af">byte</span> {
+    enc := cipher.NewCFBEncrypter(block, iv)
+    encrypted := make([]<span style="color:#2b91af">byte</span>, len(data))
+    enc.XORKeyStream(encrypted, data)
+    <span style="color:#00f">return</span> encrypted
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">DecryptWithCFB</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
-    dec <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCFBDecrypter</span>(block, iv)
-    decrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
-    dec.<span style="color:#50fa7b">XORKeyStream</span>(decrypted, data)
-    <span style="color:#ff79c6">return</span> decrypted
+<span style="color:#00f">func</span> DecryptWithCFB(block cipher.Block, iv []<span style="color:#2b91af">byte</span>, data []<span style="color:#2b91af">byte</span>) []<span style="color:#2b91af">byte</span> {
+    dec := cipher.NewCFBDecrypter(block, iv)
+    decrypted := make([]<span style="color:#2b91af">byte</span>, len(data))
+    dec.XORKeyStream(decrypted, data)
+    <span style="color:#00f">return</span> decrypted
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">EncryptDecryptWithOFB</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
-    enc <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewOFB</span>(block, iv)
-    encrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
-    enc.<span style="color:#50fa7b">XORKeyStream</span>(encrypted, data)
-    <span style="color:#ff79c6">return</span> encrypted
+<span style="color:#00f">func</span> EncryptDecryptWithOFB(block cipher.Block, iv []<span style="color:#2b91af">byte</span>, data []<span style="color:#2b91af">byte</span>) []<span style="color:#2b91af">byte</span> {
+    enc := cipher.NewOFB(block, iv)
+    encrypted := make([]<span style="color:#2b91af">byte</span>, len(data))
+    enc.XORKeyStream(encrypted, data)
+    <span style="color:#00f">return</span> encrypted
 }
 
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">EncryptDecryptWithCTR</span>(block cipher.Block, iv []<span style="color:#8be9fd">byte</span>, data []<span style="color:#8be9fd">byte</span>) []<span style="color:#8be9fd">byte</span> {
-    enc <span style="color:#ff79c6">:=</span> cipher.<span style="color:#50fa7b">NewCTR</span>(block, iv)
-    encrypted <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(data))
-    enc.<span style="color:#50fa7b">XORKeyStream</span>(encrypted, data)
-    <span style="color:#ff79c6">return</span> encrypted
+<span style="color:#00f">func</span> EncryptDecryptWithCTR(block cipher.Block, iv []<span style="color:#2b91af">byte</span>, data []<span style="color:#2b91af">byte</span>) []<span style="color:#2b91af">byte</span> {
+    enc := cipher.NewCTR(block, iv)
+    encrypted := make([]<span style="color:#2b91af">byte</span>, len(data))
+    enc.XORKeyStream(encrypted, data)
+    <span style="color:#00f">return</span> encrypted
 }
 </code></pre></div><p>入力は128 bytesと12800 bytesのランダムなバイト列。
 128 bytesではCFBが最速でCBCがそれに次ぎ、OFBとCTRのパフォーマンスが悪く、
 12800 bytesではOFBが最速でCBCとCTRが同じくらい、CFBのパフォーマンスが悪いという結果になった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go test -bench &#34;.*&#34; -benchmem main_test.go  main.go
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go test -bench &#34;.*&#34; -benchmem main_test.go  main.go
 goos: darwin
 goarch: amd64
 BenchmarkShortEncryptWithCBC-4                    852924              1323 ns/op             416 B/op          6 allocs/op

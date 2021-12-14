@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -439,29 +440,29 @@ API GatewayでCognitoの認証をかける場合、AuthorizerでUserPoolを指�
 <h2 id="準備">準備</h2>
 <p>UserPoolとClientを作成する。
 CloudFormationで作成する場合SchemaのMutableのデフォルトがfalseで、変えると作り直されてしまうことに注意。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">Resources</span>:
-  <span style="color:#ff79c6">Userpool</span>:
-    <span style="color:#ff79c6">Type</span>: AWS::Cognito::UserPool
-    <span style="color:#ff79c6">Properties</span>:
-      <span style="color:#ff79c6">AdminCreateUserConfig</span>:
-        <span style="color:#ff79c6">AllowAdminCreateUserOnly</span>: <span style="color:#ff79c6">false</span>
-      <span style="color:#ff79c6">Schema</span>:
-        - <span style="color:#ff79c6">Mutable</span>: <span style="color:#ff79c6">true</span>
-          <span style="color:#ff79c6">Name</span>: email
-          <span style="color:#ff79c6">Required</span>: <span style="color:#ff79c6">true</span>
-        - <span style="color:#ff79c6">Mutable</span>: <span style="color:#ff79c6">true</span>
-          <span style="color:#ff79c6">Name</span>: name
-          <span style="color:#ff79c6">Required</span>: <span style="color:#ff79c6">true</span>
-      <span style="color:#ff79c6">UsernameAttributes</span>:
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">Resources:
+  Userpool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: <span style="color:#00f">false</span>
+      Schema:
+        - Mutable: <span style="color:#00f">true</span>
+          Name: email
+          Required: <span style="color:#00f">true</span>
+        - Mutable: <span style="color:#00f">true</span>
+          Name: name
+          Required: <span style="color:#00f">true</span>
+      UsernameAttributes:
         - email
-      <span style="color:#ff79c6">UserPoolName</span>: testpool
-  <span style="color:#ff79c6">UserpoolClient</span>:
-    <span style="color:#ff79c6">Type</span>: AWS::Cognito::UserPoolClient
-    <span style="color:#ff79c6">Properties</span>:
-      <span style="color:#ff79c6">UserPoolId</span>:
-        <span style="color:#ff79c6">Ref</span>: Userpool
-      <span style="color:#ff79c6">ClientName</span>: testclient
-      <span style="color:#ff79c6">GenerateSecret</span>: <span style="color:#ff79c6">true</span>
+      UserPoolName: testpool
+  UserpoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId:
+        Ref: Userpool
+      ClientName: testclient
+      GenerateSecret: <span style="color:#00f">true</span>
 </code></pre></div><p>その後、<a href="https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/cognito-user-pools-social-idp.html">GoogleのOAuth Client ID</a>を作成し、フェデレーションの設定を行ってGoogleアカウントでもログインできるようにした。
 これはID Poolの<a href="https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/cognito-identity.html">フェデレーティッドアイデンティティ</a>とは異なる機能。
 UserPoolのドメインや、外部IdPとのAttributes Mapping、Clientの設定はCloudFormationではできないので手で行う。</p>
@@ -483,277 +484,277 @@ identity_providerを指定するかClientに一つしか紐づいていなけれ
 <p>通常stateはサーバーに保持されるがDBを持たなくていいようにCookieに焼いている。
 CSRF対策のためのものなのでCookieが攻撃者に読み書きされなければ意味を為すと思っているが、このフローで問題がある場合は教えてほしい。
 直接アクセスすることを想定してTokenをCookieに焼いているので、CORSの、特に<code>Access-Control-Allow-Origin: *</code>のような設定を行うと穴が開いてしまう。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> auth
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">package</span> auth
 
-<span style="color:#ff79c6">import</span> (
-	<span style="color:#f1fa8c">&#34;encoding/base64&#34;</span>
-	<span style="color:#f1fa8c">&#34;encoding/json&#34;</span>
-	<span style="color:#f1fa8c">&#34;errors&#34;</span>
-	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
-	<span style="color:#f1fa8c">&#34;io/ioutil&#34;</span>
-	<span style="color:#f1fa8c">&#34;net/http&#34;</span>
-	<span style="color:#f1fa8c">&#34;net/url&#34;</span>
-	<span style="color:#f1fa8c">&#34;strings&#34;</span>
-	<span style="color:#f1fa8c">&#34;time&#34;</span>
+<span style="color:#00f">import</span> (
+	<span style="color:#a31515">&#34;encoding/base64&#34;</span>
+	<span style="color:#a31515">&#34;encoding/json&#34;</span>
+	<span style="color:#a31515">&#34;errors&#34;</span>
+	<span style="color:#a31515">&#34;fmt&#34;</span>
+	<span style="color:#a31515">&#34;io/ioutil&#34;</span>
+	<span style="color:#a31515">&#34;net/http&#34;</span>
+	<span style="color:#a31515">&#34;net/url&#34;</span>
+	<span style="color:#a31515">&#34;strings&#34;</span>
+	<span style="color:#a31515">&#34;time&#34;</span>
 
-	<span style="color:#f1fa8c">&#34;github.com/gofrs/uuid&#34;</span>
+	<span style="color:#a31515">&#34;github.com/gofrs/uuid&#34;</span>
 
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-lambda-go/events&#34;</span>
-	jwt <span style="color:#f1fa8c">&#34;github.com/dgrijalva/jwt-go&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/lestrrat/go-jwx/jwk&#34;</span>
+	<span style="color:#a31515">&#34;github.com/aws/aws-lambda-go/events&#34;</span>
+	jwt <span style="color:#a31515">&#34;github.com/dgrijalva/jwt-go&#34;</span>
+	<span style="color:#a31515">&#34;github.com/lestrrat/go-jwx/jwk&#34;</span>
 )
 
-<span style="color:#8be9fd;font-style:italic">const</span> (
-	stateCookieName = <span style="color:#f1fa8c">&#34;st&#34;</span>
-	tokenCookieName = <span style="color:#f1fa8c">&#34;ck&#34;</span>
+<span style="color:#00f">const</span> (
+	stateCookieName = <span style="color:#a31515">&#34;st&#34;</span>
+	tokenCookieName = <span style="color:#a31515">&#34;ck&#34;</span>
 )
 
-<span style="color:#8be9fd;font-style:italic">type</span> TokenResponse <span style="color:#8be9fd;font-style:italic">struct</span> {
-	AccessToken  <span style="color:#8be9fd">string</span>  <span style="color:#f1fa8c">`json:&#34;access_token&#34;`</span>
-	RefreshToken <span style="color:#8be9fd">string</span>  <span style="color:#f1fa8c">`json:&#34;refresh_token&#34;`</span>
-	IdToken      <span style="color:#8be9fd">string</span>  <span style="color:#f1fa8c">`json:&#34;id_token&#34;`</span>
-	TokenType    <span style="color:#8be9fd">string</span>  <span style="color:#f1fa8c">`json:&#34;token_type&#34;`</span>
-	ExpiresIn    <span style="color:#8be9fd">int</span>     <span style="color:#f1fa8c">`json:&#34;expires_in&#34;`</span>
-	Error        <span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span> <span style="color:#f1fa8c">`json:&#34;error&#34;`</span>
+<span style="color:#00f">type</span> TokenResponse <span style="color:#00f">struct</span> {
+	AccessToken  <span style="color:#2b91af">string</span>  <span style="color:#a31515">`json:&#34;access_token&#34;`</span>
+	RefreshToken <span style="color:#2b91af">string</span>  <span style="color:#a31515">`json:&#34;refresh_token&#34;`</span>
+	IdToken      <span style="color:#2b91af">string</span>  <span style="color:#a31515">`json:&#34;id_token&#34;`</span>
+	TokenType    <span style="color:#2b91af">string</span>  <span style="color:#a31515">`json:&#34;token_type&#34;`</span>
+	ExpiresIn    <span style="color:#2b91af">int</span>     <span style="color:#a31515">`json:&#34;expires_in&#34;`</span>
+	Error        *<span style="color:#2b91af">string</span> <span style="color:#a31515">`json:&#34;error&#34;`</span>
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">AuthOrLogin</span>(
+<span style="color:#00f">func</span> AuthOrLogin(
 	request events.APIGatewayProxyRequest,
-	userPoolClientID <span style="color:#8be9fd">string</span>,
-	userPoolClientSecret <span style="color:#8be9fd">string</span>,
-	userPoolURL <span style="color:#8be9fd">string</span>,
-	userPoolID <span style="color:#8be9fd">string</span>,
-	region <span style="color:#8be9fd">string</span>) <span style="color:#ff79c6">*</span>events.APIGatewayProxyResponse {
-	myselfURL <span style="color:#ff79c6">:=</span> fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;https://%s/%s%s&#34;</span>, request.Headers[<span style="color:#f1fa8c">&#34;Host&#34;</span>], request.RequestContext.Stage, request.Path)
+	userPoolClientID <span style="color:#2b91af">string</span>,
+	userPoolClientSecret <span style="color:#2b91af">string</span>,
+	userPoolURL <span style="color:#2b91af">string</span>,
+	userPoolID <span style="color:#2b91af">string</span>,
+	region <span style="color:#2b91af">string</span>) *events.APIGatewayProxyResponse {
+	myselfURL := fmt.Sprintf(<span style="color:#a31515">&#34;https://%s/%s%s&#34;</span>, request.Headers[<span style="color:#a31515">&#34;Host&#34;</span>], request.RequestContext.Stage, request.Path)
 
-	<span style="color:#ff79c6">if</span> code <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">getCodeFromParams</span>(request.QueryStringParameters); code <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">checkState</span>(request); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-			fmt.<span style="color:#50fa7b">Printf</span>(err.<span style="color:#50fa7b">Error</span>())
-			<span style="color:#ff79c6">return</span> <span style="color:#50fa7b">newErrorResponse</span>()
+	<span style="color:#00f">if</span> code := getCodeFromParams(request.QueryStringParameters); code != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">if</span> err := checkState(request); err != <span style="color:#00f">nil</span> {
+			fmt.Printf(err.Error())
+			<span style="color:#00f">return</span> newErrorResponse()
 		}
-		tokenResp, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">requestTokenByCode</span>(<span style="color:#ff79c6">*</span>code, userPoolClientID, userPoolClientSecret, myselfURL, userPoolURL)
-		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-			fmt.<span style="color:#50fa7b">Println</span>(err.<span style="color:#50fa7b">Error</span>())
-			<span style="color:#ff79c6">return</span> <span style="color:#50fa7b">newErrorResponse</span>()
+		tokenResp, err := requestTokenByCode(*code, userPoolClientID, userPoolClientSecret, myselfURL, userPoolURL)
+		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+			fmt.Println(err.Error())
+			<span style="color:#00f">return</span> newErrorResponse()
 		}
-		resp <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">newRedirectResponse</span>(myselfURL)
-		resp.MultiValueHeaders = <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>][]<span style="color:#8be9fd">string</span>{
-			<span style="color:#f1fa8c">&#34;Set-Cookie&#34;</span>: []<span style="color:#8be9fd">string</span>{
-				fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;%s=%s; Secure; HttpOnly&#34;</span>, tokenCookieName, tokenResp.AccessToken),
-				<span style="color:#6272a4">// delete state
-</span><span style="color:#6272a4"></span>				fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;%s=; Expires=Thu, 1-Jan-1990 00:00:00 GMT; Secure; HttpOnly&#34;</span>, stateCookieName),
+		resp := newRedirectResponse(myselfURL)
+		resp.MultiValueHeaders = <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>][]<span style="color:#2b91af">string</span>{
+			<span style="color:#a31515">&#34;Set-Cookie&#34;</span>: []<span style="color:#2b91af">string</span>{
+				fmt.Sprintf(<span style="color:#a31515">&#34;%s=%s; Secure; HttpOnly&#34;</span>, tokenCookieName, tokenResp.AccessToken),
+				<span style="color:#008000">// delete state
+</span><span style="color:#008000"></span>				fmt.Sprintf(<span style="color:#a31515">&#34;%s=; Expires=Thu, 1-Jan-1990 00:00:00 GMT; Secure; HttpOnly&#34;</span>, stateCookieName),
 			},
 		}
-		<span style="color:#ff79c6">return</span> resp
+		<span style="color:#00f">return</span> resp
 	}
 
-	<span style="color:#ff79c6">if</span> token <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">getTokenFromCookie</span>(request.Headers); token <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		claims, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">parseToken</span>(<span style="color:#ff79c6">*</span>token, userPoolClientID, userPoolID, region)
-		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
-			fmt.<span style="color:#50fa7b">Println</span>(claims)
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span> <span style="color:#6272a4">// ok
-</span><span style="color:#6272a4"></span>		} <span style="color:#ff79c6">else</span> {
-			fmt.<span style="color:#50fa7b">Println</span>(err.<span style="color:#50fa7b">Error</span>()) <span style="color:#6272a4">// re-login
-</span><span style="color:#6272a4"></span>		}
+	<span style="color:#00f">if</span> token := getTokenFromCookie(request.Headers); token != <span style="color:#00f">nil</span> {
+		claims, err := parseToken(*token, userPoolClientID, userPoolID, region)
+		<span style="color:#00f">if</span> err == <span style="color:#00f">nil</span> {
+			fmt.Println(claims)
+			<span style="color:#00f">return</span> <span style="color:#00f">nil</span> <span style="color:#008000">// ok
+</span><span style="color:#008000"></span>		} <span style="color:#00f">else</span> {
+			fmt.Println(err.Error()) <span style="color:#008000">// re-login
+</span><span style="color:#008000"></span>		}
 	}
 
-	loginURL, state, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">makeLoginURL</span>(userPoolURL, userPoolClientID, myselfURL)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		fmt.<span style="color:#50fa7b">Println</span>(err.<span style="color:#50fa7b">Error</span>())
-		<span style="color:#ff79c6">return</span> <span style="color:#50fa7b">newErrorResponse</span>()
+	loginURL, state, err := makeLoginURL(userPoolURL, userPoolClientID, myselfURL)
+	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+		fmt.Println(err.Error())
+		<span style="color:#00f">return</span> newErrorResponse()
 
 	}
-	resp <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">newRedirectResponse</span>(loginURL)
-	resp.MultiValueHeaders = <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>][]<span style="color:#8be9fd">string</span>{
-		<span style="color:#f1fa8c">&#34;Set-Cookie&#34;</span>: []<span style="color:#8be9fd">string</span>{
-			<span style="color:#6272a4">// delete old token
-</span><span style="color:#6272a4"></span>			fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;%s=; Expires=Thu, 1-Jan-1990 00:00:00 GMT; Secure; HttpOnly&#34;</span>, tokenCookieName),
-			fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;%s=%s; Secure; HttpOnly&#34;</span>, stateCookieName, state),
+	resp := newRedirectResponse(loginURL)
+	resp.MultiValueHeaders = <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>][]<span style="color:#2b91af">string</span>{
+		<span style="color:#a31515">&#34;Set-Cookie&#34;</span>: []<span style="color:#2b91af">string</span>{
+			<span style="color:#008000">// delete old token
+</span><span style="color:#008000"></span>			fmt.Sprintf(<span style="color:#a31515">&#34;%s=; Expires=Thu, 1-Jan-1990 00:00:00 GMT; Secure; HttpOnly&#34;</span>, tokenCookieName),
+			fmt.Sprintf(<span style="color:#a31515">&#34;%s=%s; Secure; HttpOnly&#34;</span>, stateCookieName, state),
 		},
 	}
-	<span style="color:#ff79c6">return</span> resp
+	<span style="color:#00f">return</span> resp
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">getCodeFromParams</span>(params <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd">string</span>) <span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span> {
-	<span style="color:#ff79c6">if</span> code, ok <span style="color:#ff79c6">:=</span> params[<span style="color:#f1fa8c">&#34;code&#34;</span>]; ok {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>code
+<span style="color:#00f">func</span> getCodeFromParams(params <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>]<span style="color:#2b91af">string</span>) *<span style="color:#2b91af">string</span> {
+	<span style="color:#00f">if</span> code, ok := params[<span style="color:#a31515">&#34;code&#34;</span>]; ok {
+		<span style="color:#00f">return</span> &amp;code
 	}
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+	<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">getStateFromCookie</span>(headers <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd">string</span>) <span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span> {
-	<span style="color:#ff79c6">if</span> cookie, ok <span style="color:#ff79c6">:=</span> headers[<span style="color:#f1fa8c">&#34;Cookie&#34;</span>]; ok {
-		header <span style="color:#ff79c6">:=</span> http.Header{}
-		header.<span style="color:#50fa7b">Add</span>(<span style="color:#f1fa8c">&#34;Cookie&#34;</span>, cookie)
-		request <span style="color:#ff79c6">:=</span> http.Request{Header: header}
-		c, err <span style="color:#ff79c6">:=</span> request.<span style="color:#50fa7b">Cookie</span>(stateCookieName)
-		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+<span style="color:#00f">func</span> getStateFromCookie(headers <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>]<span style="color:#2b91af">string</span>) *<span style="color:#2b91af">string</span> {
+	<span style="color:#00f">if</span> cookie, ok := headers[<span style="color:#a31515">&#34;Cookie&#34;</span>]; ok {
+		header := http.Header{}
+		header.Add(<span style="color:#a31515">&#34;Cookie&#34;</span>, cookie)
+		request := http.Request{Header: header}
+		c, err := request.Cookie(stateCookieName)
+		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
 		}
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>c.Value
+		<span style="color:#00f">return</span> &amp;c.Value
 	}
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+	<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">getTokenFromCookie</span>(headers <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd">string</span>) <span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span> {
-	<span style="color:#ff79c6">if</span> cookie, ok <span style="color:#ff79c6">:=</span> headers[<span style="color:#f1fa8c">&#34;Cookie&#34;</span>]; ok {
-		header <span style="color:#ff79c6">:=</span> http.Header{}
-		header.<span style="color:#50fa7b">Add</span>(<span style="color:#f1fa8c">&#34;Cookie&#34;</span>, cookie)
-		request <span style="color:#ff79c6">:=</span> http.Request{Header: header}
-		c, err <span style="color:#ff79c6">:=</span> request.<span style="color:#50fa7b">Cookie</span>(tokenCookieName)
-		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+<span style="color:#00f">func</span> getTokenFromCookie(headers <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>]<span style="color:#2b91af">string</span>) *<span style="color:#2b91af">string</span> {
+	<span style="color:#00f">if</span> cookie, ok := headers[<span style="color:#a31515">&#34;Cookie&#34;</span>]; ok {
+		header := http.Header{}
+		header.Add(<span style="color:#a31515">&#34;Cookie&#34;</span>, cookie)
+		request := http.Request{Header: header}
+		c, err := request.Cookie(tokenCookieName)
+		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
 		}
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>c.Value
+		<span style="color:#00f">return</span> &amp;c.Value
 	}
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+	<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">newRedirectResponse</span>(location <span style="color:#8be9fd">string</span>) <span style="color:#ff79c6">*</span>events.APIGatewayProxyResponse {
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>events.APIGatewayProxyResponse{
+<span style="color:#00f">func</span> newRedirectResponse(location <span style="color:#2b91af">string</span>) *events.APIGatewayProxyResponse {
+	<span style="color:#00f">return</span> &amp;events.APIGatewayProxyResponse{
 		StatusCode: http.StatusFound,
-		Headers: <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd">string</span>{
-			<span style="color:#f1fa8c">&#34;Location&#34;</span>: location,
+		Headers: <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>]<span style="color:#2b91af">string</span>{
+			<span style="color:#a31515">&#34;Location&#34;</span>: location,
 		},
 	}
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">newErrorResponse</span>() <span style="color:#ff79c6">*</span>events.APIGatewayProxyResponse {
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>events.APIGatewayProxyResponse{
+<span style="color:#00f">func</span> newErrorResponse() *events.APIGatewayProxyResponse {
+	<span style="color:#00f">return</span> &amp;events.APIGatewayProxyResponse{
 		StatusCode: http.StatusInternalServerError,
 	}
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">makeState</span>() (<span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
-	uuid, err <span style="color:#ff79c6">:=</span> uuid.<span style="color:#50fa7b">NewV4</span>()
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#f1fa8c">&#34;&#34;</span>, err
+<span style="color:#00f">func</span> makeState() (<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
+	uuid, err := uuid.NewV4()
+	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#a31515">&#34;&#34;</span>, err
 	}
-	<span style="color:#ff79c6">return</span> uuid.<span style="color:#50fa7b">String</span>(), <span style="color:#ff79c6">nil</span>
+	<span style="color:#00f">return</span> uuid.String(), <span style="color:#00f">nil</span>
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">checkState</span>(request events.APIGatewayProxyRequest) <span style="color:#8be9fd">error</span> {
-	<span style="color:#ff79c6">if</span> state, ok <span style="color:#ff79c6">:=</span> request.QueryStringParameters[<span style="color:#f1fa8c">&#34;state&#34;</span>]; ok {
-		<span style="color:#ff79c6">if</span> hasState <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">getStateFromCookie</span>(request.Headers); hasState <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-			<span style="color:#ff79c6">if</span> state <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">*</span>hasState {
-				<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+<span style="color:#00f">func</span> checkState(request events.APIGatewayProxyRequest) <span style="color:#2b91af">error</span> {
+	<span style="color:#00f">if</span> state, ok := request.QueryStringParameters[<span style="color:#a31515">&#34;state&#34;</span>]; ok {
+		<span style="color:#00f">if</span> hasState := getStateFromCookie(request.Headers); hasState != <span style="color:#00f">nil</span> {
+			<span style="color:#00f">if</span> state == *hasState {
+				<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
 			}
 		}
 	}
-	<span style="color:#ff79c6">return</span> errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;state is invalid&#34;</span>)
+	<span style="color:#00f">return</span> errors.New(<span style="color:#a31515">&#34;state is invalid&#34;</span>)
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">requestTokenByCode</span>(code <span style="color:#8be9fd">string</span>, userPoolClientID <span style="color:#8be9fd">string</span>, userPoolClientSecret <span style="color:#8be9fd">string</span>, myselfURL <span style="color:#8be9fd">string</span>, userPoolURL <span style="color:#8be9fd">string</span>) (<span style="color:#ff79c6">*</span>TokenResponse, <span style="color:#8be9fd">error</span>) {
-	<span style="color:#6272a4">// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/token-endpoint.html
-</span><span style="color:#6272a4"></span>	form <span style="color:#ff79c6">:=</span> url.Values{}
-	form.<span style="color:#50fa7b">Add</span>(<span style="color:#f1fa8c">&#34;grant_type&#34;</span>, <span style="color:#f1fa8c">&#34;authorization_code&#34;</span>)
-	form.<span style="color:#50fa7b">Add</span>(<span style="color:#f1fa8c">&#34;code&#34;</span>, code)
-	form.<span style="color:#50fa7b">Add</span>(<span style="color:#f1fa8c">&#34;redirect_uri&#34;</span>, myselfURL)
-	body <span style="color:#ff79c6">:=</span> strings.<span style="color:#50fa7b">NewReader</span>(form.<span style="color:#50fa7b">Encode</span>())
-	req, err <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">NewRequest</span>(<span style="color:#f1fa8c">&#34;POST&#34;</span>, fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;%s/oauth2/token&#34;</span>, userPoolURL), body)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+<span style="color:#00f">func</span> requestTokenByCode(code <span style="color:#2b91af">string</span>, userPoolClientID <span style="color:#2b91af">string</span>, userPoolClientSecret <span style="color:#2b91af">string</span>, myselfURL <span style="color:#2b91af">string</span>, userPoolURL <span style="color:#2b91af">string</span>) (*TokenResponse, <span style="color:#2b91af">error</span>) {
+	<span style="color:#008000">// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/token-endpoint.html
+</span><span style="color:#008000"></span>	form := url.Values{}
+	form.Add(<span style="color:#a31515">&#34;grant_type&#34;</span>, <span style="color:#a31515">&#34;authorization_code&#34;</span>)
+	form.Add(<span style="color:#a31515">&#34;code&#34;</span>, code)
+	form.Add(<span style="color:#a31515">&#34;redirect_uri&#34;</span>, myselfURL)
+	body := strings.NewReader(form.Encode())
+	req, err := http.NewRequest(<span style="color:#a31515">&#34;POST&#34;</span>, fmt.Sprintf(<span style="color:#a31515">&#34;%s/oauth2/token&#34;</span>, userPoolURL), body)
+	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
 	}
-	req.Header.<span style="color:#50fa7b">Add</span>(<span style="color:#f1fa8c">&#34;Authorization&#34;</span>,
-		fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;Basic %s&#34;</span>,
-			base64.StdEncoding.<span style="color:#50fa7b">EncodeToString</span>(
-				[]<span style="color:#8be9fd;font-style:italic">byte</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;%s:%s&#34;</span>, userPoolClientID, userPoolClientSecret)))))
-	req.Header.<span style="color:#50fa7b">Add</span>(<span style="color:#f1fa8c">&#34;Content-Type&#34;</span>, <span style="color:#f1fa8c">&#34;application/x-www-form-urlencoded&#34;</span>)
-	res, err <span style="color:#ff79c6">:=</span> http.DefaultClient.<span style="color:#50fa7b">Do</span>(req)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+	req.Header.Add(<span style="color:#a31515">&#34;Authorization&#34;</span>,
+		fmt.Sprintf(<span style="color:#a31515">&#34;Basic %s&#34;</span>,
+			base64.StdEncoding.EncodeToString(
+				[]byte(fmt.Sprintf(<span style="color:#a31515">&#34;%s:%s&#34;</span>, userPoolClientID, userPoolClientSecret)))))
+	req.Header.Add(<span style="color:#a31515">&#34;Content-Type&#34;</span>, <span style="color:#a31515">&#34;application/x-www-form-urlencoded&#34;</span>)
+	res, err := http.DefaultClient.Do(req)
+	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
 	}
-	<span style="color:#ff79c6">defer</span> res.Body.<span style="color:#50fa7b">Close</span>()
-	<span style="color:#8be9fd;font-style:italic">var</span> tokenResp TokenResponse
-	bytes, err <span style="color:#ff79c6">:=</span> ioutil.<span style="color:#50fa7b">ReadAll</span>(res.Body)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> json.<span style="color:#50fa7b">Unmarshal</span>(bytes, <span style="color:#ff79c6">&amp;</span>tokenResp); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+	<span style="color:#00f">defer</span> res.Body.Close()
+	<span style="color:#00f">var</span> tokenResp TokenResponse
+	bytes, err := ioutil.ReadAll(res.Body)
+	<span style="color:#00f">if</span> err := json.Unmarshal(bytes, &amp;tokenResp); err != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
 	}
-	<span style="color:#ff79c6">if</span> tokenResp.Error <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#ff79c6">*</span>tokenResp.Error)
+	<span style="color:#00f">if</span> tokenResp.Error != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(*tokenResp.Error)
 	}
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>tokenResp, <span style="color:#ff79c6">nil</span>
+	<span style="color:#00f">return</span> &amp;tokenResp, <span style="color:#00f">nil</span>
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">makeLoginURL</span>(userPoolURL <span style="color:#8be9fd">string</span>, userPoolClientID <span style="color:#8be9fd">string</span>, myselfURL <span style="color:#8be9fd">string</span>) (<span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
-	<span style="color:#6272a4">// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/authorization-endpoint.html
-</span><span style="color:#6272a4"></span>	u, err <span style="color:#ff79c6">:=</span> url.<span style="color:#50fa7b">Parse</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;%s/oauth2/authorize&#34;</span>, userPoolURL))
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#f1fa8c">&#34;&#34;</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;failed to parse&#34;</span>)
+<span style="color:#00f">func</span> makeLoginURL(userPoolURL <span style="color:#2b91af">string</span>, userPoolClientID <span style="color:#2b91af">string</span>, myselfURL <span style="color:#2b91af">string</span>) (<span style="color:#2b91af">string</span>, <span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
+	<span style="color:#008000">// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/authorization-endpoint.html
+</span><span style="color:#008000"></span>	u, err := url.Parse(fmt.Sprintf(<span style="color:#a31515">&#34;%s/oauth2/authorize&#34;</span>, userPoolURL))
+	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#a31515">&#34;&#34;</span>, <span style="color:#a31515">&#34;&#34;</span>, errors.New(<span style="color:#a31515">&#34;failed to parse&#34;</span>)
 	}
-	q <span style="color:#ff79c6">:=</span> u.<span style="color:#50fa7b">Query</span>()
-	q.<span style="color:#50fa7b">Set</span>(<span style="color:#f1fa8c">&#34;response_type&#34;</span>, <span style="color:#f1fa8c">&#34;code&#34;</span>)
-	q.<span style="color:#50fa7b">Set</span>(<span style="color:#f1fa8c">&#34;client_id&#34;</span>, userPoolClientID)
-	q.<span style="color:#50fa7b">Set</span>(<span style="color:#f1fa8c">&#34;redirect_uri&#34;</span>, myselfURL)
-	q.<span style="color:#50fa7b">Set</span>(<span style="color:#f1fa8c">&#34;identity_provider&#34;</span>, <span style="color:#f1fa8c">&#34;Google&#34;</span>)
-	state, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">makeState</span>()
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#f1fa8c">&#34;&#34;</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;failed to make state&#34;</span>)
+	q := u.Query()
+	q.Set(<span style="color:#a31515">&#34;response_type&#34;</span>, <span style="color:#a31515">&#34;code&#34;</span>)
+	q.Set(<span style="color:#a31515">&#34;client_id&#34;</span>, userPoolClientID)
+	q.Set(<span style="color:#a31515">&#34;redirect_uri&#34;</span>, myselfURL)
+	q.Set(<span style="color:#a31515">&#34;identity_provider&#34;</span>, <span style="color:#a31515">&#34;Google&#34;</span>)
+	state, err := makeState()
+	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#a31515">&#34;&#34;</span>, <span style="color:#a31515">&#34;&#34;</span>, errors.New(<span style="color:#a31515">&#34;failed to make state&#34;</span>)
 	}
-	q.<span style="color:#50fa7b">Set</span>(<span style="color:#f1fa8c">&#34;state&#34;</span>, state)
-	u.RawQuery = q.<span style="color:#50fa7b">Encode</span>()
-	<span style="color:#ff79c6">return</span> u.<span style="color:#50fa7b">String</span>(), state, <span style="color:#ff79c6">nil</span>
+	q.Set(<span style="color:#a31515">&#34;state&#34;</span>, state)
+	u.RawQuery = q.Encode()
+	<span style="color:#00f">return</span> u.String(), state, <span style="color:#00f">nil</span>
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">parseToken</span>(tokenString <span style="color:#8be9fd">string</span>, userPoolClientID <span style="color:#8be9fd">string</span>, userPoolID <span style="color:#8be9fd">string</span>, region <span style="color:#8be9fd">string</span>) (jwt.MapClaims, <span style="color:#8be9fd">error</span>) {
-	token, err <span style="color:#ff79c6">:=</span> jwt.<span style="color:#50fa7b">Parse</span>(tokenString, <span style="color:#8be9fd;font-style:italic">func</span>(token <span style="color:#ff79c6">*</span>jwt.Token) (<span style="color:#8be9fd;font-style:italic">interface</span>{}, <span style="color:#8be9fd">error</span>) {
-		<span style="color:#6272a4">// RS256
-</span><span style="color:#6272a4"></span>		<span style="color:#ff79c6">if</span> _, ok <span style="color:#ff79c6">:=</span> token.Method.(<span style="color:#ff79c6">*</span>jwt.SigningMethodRSA); !ok {
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;unexpected signing method: %v&#34;</span>, token.Header[<span style="color:#f1fa8c">&#34;alg&#34;</span>])
+<span style="color:#00f">func</span> parseToken(tokenString <span style="color:#2b91af">string</span>, userPoolClientID <span style="color:#2b91af">string</span>, userPoolID <span style="color:#2b91af">string</span>, region <span style="color:#2b91af">string</span>) (jwt.MapClaims, <span style="color:#2b91af">error</span>) {
+	token, err := jwt.Parse(tokenString, <span style="color:#00f">func</span>(token *jwt.Token) (<span style="color:#00f">interface</span>{}, <span style="color:#2b91af">error</span>) {
+		<span style="color:#008000">// RS256
+</span><span style="color:#008000"></span>		<span style="color:#00f">if</span> _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, fmt.Errorf(<span style="color:#a31515">&#34;unexpected signing method: %v&#34;</span>, token.Header[<span style="color:#a31515">&#34;alg&#34;</span>])
 		}
-		<span style="color:#ff79c6">return</span> <span style="color:#50fa7b">getKey</span>(token, userPoolID, region)
+		<span style="color:#00f">return</span> getKey(token, userPoolID, region)
 	})
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
 	}
-	<span style="color:#ff79c6">if</span> claims, ok <span style="color:#ff79c6">:=</span> token.Claims.(jwt.MapClaims); ok <span style="color:#ff79c6">&amp;&amp;</span> token.Valid {
-		<span style="color:#6272a4">// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html
-</span><span style="color:#6272a4"></span>		<span style="color:#ff79c6">if</span> v, ok <span style="color:#ff79c6">:=</span> claims[<span style="color:#f1fa8c">&#34;exp&#34;</span>].(<span style="color:#8be9fd">float64</span>); ok {
-			<span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">int64</span>(v) &lt; time.<span style="color:#50fa7b">Now</span>().<span style="color:#50fa7b">Unix</span>() {
-				<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;token is expired&#34;</span>)
+	<span style="color:#00f">if</span> claims, ok := token.Claims.(jwt.MapClaims); ok &amp;&amp; token.Valid {
+		<span style="color:#008000">// https://docs.aws.amazon.com/ja_jp/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html
+</span><span style="color:#008000"></span>		<span style="color:#00f">if</span> v, ok := claims[<span style="color:#a31515">&#34;exp&#34;</span>].(<span style="color:#2b91af">float64</span>); ok {
+			<span style="color:#00f">if</span> int64(v) &lt; time.Now().Unix() {
+				<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;token is expired&#34;</span>)
 			}
-		} <span style="color:#ff79c6">else</span> {
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;failed to get claims[exp]&#34;</span>)
+		} <span style="color:#00f">else</span> {
+			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;failed to get claims[exp]&#34;</span>)
 		}
-		<span style="color:#6272a4">// instead of aud
-</span><span style="color:#6272a4"></span>		<span style="color:#ff79c6">if</span> v, ok <span style="color:#ff79c6">:=</span> claims[<span style="color:#f1fa8c">&#34;client_id&#34;</span>].(<span style="color:#8be9fd">string</span>); ok {
-			<span style="color:#ff79c6">if</span> v <span style="color:#ff79c6">!=</span> userPoolClientID {
-				<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;token has invalid audience&#34;</span>)
+		<span style="color:#008000">// instead of aud
+</span><span style="color:#008000"></span>		<span style="color:#00f">if</span> v, ok := claims[<span style="color:#a31515">&#34;client_id&#34;</span>].(<span style="color:#2b91af">string</span>); ok {
+			<span style="color:#00f">if</span> v != userPoolClientID {
+				<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;token has invalid audience&#34;</span>)
 			}
-		} <span style="color:#ff79c6">else</span> {
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;failed to get claims[client_id]&#34;</span>)
+		} <span style="color:#00f">else</span> {
+			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;failed to get claims[client_id]&#34;</span>)
 		}
-		<span style="color:#ff79c6">if</span> v, ok <span style="color:#ff79c6">:=</span> claims[<span style="color:#f1fa8c">&#34;iss&#34;</span>].(<span style="color:#8be9fd">string</span>); ok {
-			<span style="color:#ff79c6">if</span> v <span style="color:#ff79c6">!=</span> fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;https://cognito-idp.%s.amazonaws.com/%s&#34;</span>, region, userPoolID) {
-				<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;token has invalid issuer&#34;</span>)
+		<span style="color:#00f">if</span> v, ok := claims[<span style="color:#a31515">&#34;iss&#34;</span>].(<span style="color:#2b91af">string</span>); ok {
+			<span style="color:#00f">if</span> v != fmt.Sprintf(<span style="color:#a31515">&#34;https://cognito-idp.%s.amazonaws.com/%s&#34;</span>, region, userPoolID) {
+				<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;token has invalid issuer&#34;</span>)
 			}
-		} <span style="color:#ff79c6">else</span> {
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;failed to get claims[iss]&#34;</span>)
+		} <span style="color:#00f">else</span> {
+			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;failed to get claims[iss]&#34;</span>)
 		}
 
-		<span style="color:#ff79c6">return</span> claims, <span style="color:#ff79c6">nil</span>
+		<span style="color:#00f">return</span> claims, <span style="color:#00f">nil</span>
 	}
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;token is invalid&#34;</span>)
+	<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;token is invalid&#34;</span>)
 }
 
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">getKey</span>(token <span style="color:#ff79c6">*</span>jwt.Token, userPoolID <span style="color:#8be9fd">string</span>, region <span style="color:#8be9fd">string</span>) (<span style="color:#8be9fd;font-style:italic">interface</span>{}, <span style="color:#8be9fd">error</span>) {
-	set, err <span style="color:#ff79c6">:=</span> jwk.<span style="color:#50fa7b">FetchHTTP</span>(
-		fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json&#34;</span>, region, userPoolID),
+<span style="color:#00f">func</span> getKey(token *jwt.Token, userPoolID <span style="color:#2b91af">string</span>, region <span style="color:#2b91af">string</span>) (<span style="color:#00f">interface</span>{}, <span style="color:#2b91af">error</span>) {
+	set, err := jwk.FetchHTTP(
+		fmt.Sprintf(<span style="color:#a31515">&#34;https://cognito-idp.%s.amazonaws.com/%s/.well-known/jwks.json&#34;</span>, region, userPoolID),
 	)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
+		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
 	}
 
-	keyID, ok <span style="color:#ff79c6">:=</span> token.Header[<span style="color:#f1fa8c">&#34;kid&#34;</span>].(<span style="color:#8be9fd">string</span>)
-	<span style="color:#ff79c6">if</span> !ok {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;expecting JWT header to have string kid&#34;</span>)
+	keyID, ok := token.Header[<span style="color:#a31515">&#34;kid&#34;</span>].(<span style="color:#2b91af">string</span>)
+	<span style="color:#00f">if</span> !ok {
+		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;expecting JWT header to have string kid&#34;</span>)
 	}
 
-	<span style="color:#ff79c6">if</span> key <span style="color:#ff79c6">:=</span> set.<span style="color:#50fa7b">LookupKeyID</span>(keyID); <span style="color:#8be9fd;font-style:italic">len</span>(key) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">1</span> {
-		<span style="color:#ff79c6">return</span> key[<span style="color:#bd93f9">0</span>].<span style="color:#50fa7b">Materialize</span>()
+	<span style="color:#00f">if</span> key := set.LookupKeyID(keyID); len(key) == 1 {
+		<span style="color:#00f">return</span> key[0].Materialize()
 	}
 
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;unable to find key&#34;</span>)
+	<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, errors.New(<span style="color:#a31515">&#34;unable to find key&#34;</span>)
 }
 </code></pre></div>
     </div>

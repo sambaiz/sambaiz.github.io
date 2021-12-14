@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -440,18 +441,18 @@
 <h3 id="loading-and-displaying-the-model-graph">Loading and displaying the model graph</h3>
 <p>学習済みネットワークのprotobufファイルが用意されていて、これをダウンロードして使う。
 ただ<code>gcr.io/tensorflow/tensorflow</code>にwgetもunzipも入っていなかったので、中に入ってapt-getした。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">model_fn <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;tensorflow_inception_graph.pb&#39;</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">model_fn = <span style="color:#a31515">&#39;tensorflow_inception_graph.pb&#39;</span>
 
-<span style="color:#6272a4"># creating TensorFlow session and loading the model</span>
-graph <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>Graph()
-sess <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>InteractiveSession(graph<span style="color:#ff79c6">=</span>graph)
-<span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>gfile<span style="color:#ff79c6">.</span>FastGFile(model_fn, <span style="color:#f1fa8c">&#39;rb&#39;</span>) <span style="color:#ff79c6">as</span> f:
-    graph_def <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>GraphDef()
-    graph_def<span style="color:#ff79c6">.</span>ParseFromString(f<span style="color:#ff79c6">.</span>read())
-t_input <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(np<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;input&#39;</span>) <span style="color:#6272a4"># define the input tensor</span>
-imagenet_mean <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">117.0</span>
-t_preprocessed <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>expand_dims(t_input<span style="color:#ff79c6">-</span>imagenet_mean, <span style="color:#bd93f9">0</span>)
-tf<span style="color:#ff79c6">.</span>import_graph_def(graph_def, {<span style="color:#f1fa8c">&#39;input&#39;</span>:t_preprocessed})
+<span style="color:#008000"># creating TensorFlow session and loading the model</span>
+graph = tf.Graph()
+sess = tf.InteractiveSession(graph=graph)
+<span style="color:#00f">with</span> tf.gfile.FastGFile(model_fn, <span style="color:#a31515">&#39;rb&#39;</span>) <span style="color:#00f">as</span> f:
+    graph_def = tf.GraphDef()
+    graph_def.ParseFromString(f.read())
+t_input = tf.placeholder(np.float32, name=<span style="color:#a31515">&#39;input&#39;</span>) <span style="color:#008000"># define the input tensor</span>
+imagenet_mean = 117.0
+t_preprocessed = tf.expand_dims(t_input-imagenet_mean, 0)
+tf.import_graph_def(graph_def, {<span style="color:#a31515">&#39;input&#39;</span>:t_preprocessed})
 </code></pre></div><p><code>tf.gfile.FastGFile</code>のドキュメントが見つからないので
 <a href="https://github.com/tensorflow/tensorflow/blob/568092d4507996d8aff0c46d6c57488a26596dd5/tensorflow/python/platform/gfile.py#L218">ソース</a>
 を探したところFile I/Oのラッパーのようだ。これでprotobufファイルを読み、ParseFromStringでGraphDefにする。</p>
@@ -459,10 +460,10 @@ tf<span style="color:#ff79c6">.</span>import_graph_def(graph_def, {<span style="
 渡すことで<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/framework.html#import_graph_def">Graphに取り込む</a>。</p>
 <p><code>tf.expand_dims</code>は<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/array_ops.html#expand_dims">値が1の次元を指定の場所に挿入する</a>
 もの。なんでそんなことをしたり、<code>imagenet_mean</code>を引いているのかは説明がなかった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">layers <span style="color:#ff79c6">=</span> [op<span style="color:#ff79c6">.</span>name <span style="color:#ff79c6">for</span> op <span style="color:#ff79c6">in</span> graph<span style="color:#ff79c6">.</span>get_operations() <span style="color:#ff79c6">if</span> op<span style="color:#ff79c6">.</span>type<span style="color:#ff79c6">==</span><span style="color:#f1fa8c">&#39;Conv2D&#39;</span> <span style="color:#ff79c6">and</span> <span style="color:#f1fa8c">&#39;import/&#39;</span> <span style="color:#ff79c6">in</span> op<span style="color:#ff79c6">.</span>name]
-feature_nums <span style="color:#ff79c6">=</span> [<span style="color:#8be9fd;font-style:italic">int</span>(graph<span style="color:#ff79c6">.</span>get_tensor_by_name(name<span style="color:#ff79c6">+</span><span style="color:#f1fa8c">&#39;:0&#39;</span>)<span style="color:#ff79c6">.</span>get_shape()[<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>]) <span style="color:#ff79c6">for</span> name <span style="color:#ff79c6">in</span> layers]
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">layers = [op.name <span style="color:#00f">for</span> op <span style="color:#00f">in</span> graph.get_operations() <span style="color:#00f">if</span> op.type==<span style="color:#a31515">&#39;Conv2D&#39;</span> <span style="color:#00f">and</span> <span style="color:#a31515">&#39;import/&#39;</span> <span style="color:#00f">in</span> op.name]
+feature_nums = [int(graph.get_tensor_by_name(name+<span style="color:#a31515">&#39;:0&#39;</span>).get_shape()[-1]) <span style="color:#00f">for</span> name <span style="color:#00f">in</span> layers]
 </code></pre></div><p>このlayersに入っているのはこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import/conv2d0_pre_relu/conv
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">import/conv2d0_pre_relu/conv
 import/conv2d1_pre_relu/conv
 import/conv2d2_pre_relu/conv
 import/mixed3a_1x1_pre_relu/conv
@@ -472,56 +473,56 @@ import/mixed3a_5x5_bottleneck_pre_relu/conv
 import/mixed3a_5x5_pre_relu/conv
 ...
 </code></pre></div><p>これらのレイヤーのうち、<code>mixed4d_3x3_bottleneck_pre_relu</code>を可視化してみる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">layer <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;mixed4d_3x3_bottleneck_pre_relu&#39;</span>
-channel <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">139</span> <span style="color:#6272a4"># picking some feature channel to visualize</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">layer = <span style="color:#a31515">&#39;mixed4d_3x3_bottleneck_pre_relu&#39;</span>
+channel = 139 <span style="color:#008000"># picking some feature channel to visualize</span>
 
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">T</span>(layer):
-    <span style="color:#f1fa8c">&#39;&#39;&#39;Helper for getting layer output tensor&#39;&#39;&#39;</span>
-    <span style="color:#ff79c6">return</span> graph<span style="color:#ff79c6">.</span>get_tensor_by_name(<span style="color:#f1fa8c">&#34;import/</span><span style="color:#f1fa8c">%s</span><span style="color:#f1fa8c">:0&#34;</span><span style="color:#ff79c6">%</span>layer)
+<span style="color:#00f">def</span> T(layer):
+    <span style="color:#a31515">&#39;&#39;&#39;Helper for getting layer output tensor&#39;&#39;&#39;</span>
+    <span style="color:#00f">return</span> graph.get_tensor_by_name(<span style="color:#a31515">&#34;import/</span><span style="color:#a31515">%s</span><span style="color:#a31515">:0&#34;</span>%layer)
 
 render_naive(T(layer)[:,:,:,channel])
 </code></pre></div><p><code>mixed4d_3x3_bottleneck_pre_relu'</code>は144チャンネルのフィルターで、今回はそのうち139番目のチャンネルを選んでいる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">print</span>(T(layer))
-<span style="color:#ff79c6">-&gt;</span> Tensor(<span style="color:#f1fa8c">&#34;import/mixed4d_3x3_bottleneck_pre_relu:0&#34;</span>, shape<span style="color:#ff79c6">=</span>(?, ?, ?, <span style="color:#bd93f9">144</span>), dtype<span style="color:#ff79c6">=</span>float32, device<span style="color:#ff79c6">=/</span>device:CPU:<span style="color:#bd93f9">0</span>)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">print</span>(T(layer))
+-&gt; Tensor(<span style="color:#a31515">&#34;import/mixed4d_3x3_bottleneck_pre_relu:0&#34;</span>, shape=(<span style="">?</span>, <span style="">?</span>, <span style="">?</span>, 144), dtype=float32, device=/device:CPU:0)
 </code></pre></div><p>初期値はRGB100(グレー)にノイズを加えた画像。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#6272a4"># start with a gray image with a little noise</span>
-img_noise <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>random<span style="color:#ff79c6">.</span>uniform(size<span style="color:#ff79c6">=</span>(<span style="color:#bd93f9">224</span>,<span style="color:#bd93f9">224</span>,<span style="color:#bd93f9">3</span>)) <span style="color:#ff79c6">+</span> <span style="color:#bd93f9">100.0</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#008000"># start with a gray image with a little noise</span>
+img_noise = np.random.uniform(size=(224,224,3)) + 100.0
 </code></pre></div><p>スコアはそのチャンネルの値の平均で、これが高くなるように画像を変化させていく。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">render_naive</span>(t_obj, img0<span style="color:#ff79c6">=</span>img_noise, iter_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">20</span>, step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.0</span>):
-    t_score <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_mean(t_obj) <span style="color:#6272a4"># defining the optimization objective</span>
-    t_grad <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>gradients(t_score, t_input)[<span style="color:#bd93f9">0</span>] <span style="color:#6272a4"># behold the power of automatic differentiation!</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">def</span> render_naive(t_obj, img0=img_noise, iter_n=20, step=1.0):
+    t_score = tf.reduce_mean(t_obj) <span style="color:#008000"># defining the optimization objective</span>
+    t_grad = tf.gradients(t_score, t_input)[0] <span style="color:#008000"># behold the power of automatic differentiation!</span>
 
-    img <span style="color:#ff79c6">=</span> img0<span style="color:#ff79c6">.</span>copy()
-    <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(iter_n):
-        g, score <span style="color:#ff79c6">=</span> sess<span style="color:#ff79c6">.</span>run([t_grad, t_score], {t_input:img})
-        <span style="color:#6272a4"># normalizing the gradient, so the same step size should work</span>
-        g <span style="color:#ff79c6">/=</span> g<span style="color:#ff79c6">.</span>std()<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1e-8</span>         <span style="color:#6272a4"># for different layers and networks</span>
-        img <span style="color:#ff79c6">+=</span> g<span style="color:#ff79c6">*</span>step
-        <span style="color:#ff79c6">print</span>(score, end <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39; &#39;</span>)
+    img = img0.copy()
+    <span style="color:#00f">for</span> i <span style="color:#00f">in</span> range(iter_n):
+        g, score = sess.run([t_grad, t_score], {t_input:img})
+        <span style="color:#008000"># normalizing the gradient, so the same step size should work</span>
+        g /= g.std()+1e-8         <span style="color:#008000"># for different layers and networks</span>
+        img += g*step
+        <span style="color:#00f">print</span>(score, end = <span style="color:#a31515">&#39; &#39;</span>)
     clear_output()
     showarray(visstd(img))
 </code></pre></div><p><code>tf.gradients(ys,xs)</code>で
 <a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/train.html#gradients">xそれぞれで偏微分したyの和</a>が得られる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">a <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>Variable(tf<span style="color:#ff79c6">.</span>constant([
-            [<span style="color:#bd93f9">1.</span>, <span style="color:#bd93f9">2.</span>],
-            [<span style="color:#bd93f9">3.</span>, <span style="color:#bd93f9">4.</span>]]))
-b <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>Variable(tf<span style="color:#ff79c6">.</span>constant([
-            [<span style="color:#bd93f9">2.</span>, <span style="color:#bd93f9">3.</span>],
-            [<span style="color:#bd93f9">4.</span>, <span style="color:#bd93f9">5.</span>]]))
-c <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>matmul(a, b)
-​
-grad <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>gradients(c, a)[<span style="color:#bd93f9">0</span>]
-init <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>initialize_all_variables()
-<span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>Session() <span style="color:#ff79c6">as</span> sess:
-    sess<span style="color:#ff79c6">.</span>run(init)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">a = tf.Variable(tf.constant([
+            [1., 2.],
+            [3., 4.]]))
+b = tf.Variable(tf.constant([
+            [2., 3.],
+            [4., 5.]]))
+c = tf.matmul(a, b)
+<span style="">​</span>
+grad = tf.gradients(c, a)[0]
+init = tf.initialize_all_variables()
+<span style="color:#00f">with</span> tf.Session() <span style="color:#00f">as</span> sess:
+    sess.run(init)
 
-    <span style="color:#ff79c6">print</span>(sess<span style="color:#ff79c6">.</span>run(c))
-    <span style="color:#6272a4"># [[ 10.  13.]</span>
-    <span style="color:#6272a4"># [ 22.  29.]]</span>
+    <span style="color:#00f">print</span>(sess.run(c))
+    <span style="color:#008000"># [[ 10.  13.]</span>
+    <span style="color:#008000"># [ 22.  29.]]</span>
 
-    <span style="color:#ff79c6">print</span>(sess<span style="color:#ff79c6">.</span>run(grad))
-    <span style="color:#6272a4"># [[ 5.  9.]</span>
-    <span style="color:#6272a4"># [ 5.  9.]]</span>
+    <span style="color:#00f">print</span>(sess.run(grad))
+    <span style="color:#008000"># [[ 5.  9.]</span>
+    <span style="color:#008000"># [ 5.  9.]]</span>
 </code></pre></div><p>入力画像にこれをを加算していくと、その状態からスコアが上がるパラメータが増え、下がるパラメータが減るため、勾配を上っていくことになる。
 スコアが上昇するに従って、そのフィルターによる模様が浮かんできた。</p>
 <p><a href="https://www.sambaiz.net/article/21">続く</a>。</p>

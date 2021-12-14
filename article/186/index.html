@@ -212,7 +212,7 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
     }
@@ -220,6 +220,7 @@
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
+        background-color: ;
     }
 
     .single img {
@@ -435,10 +436,10 @@ Istioにも含まれていて、これを使って<a href="https://letsencrypt.o
 <p>デフォルトではcert-managerは入らないのでenabled=trueにしてインストールする。
 最初に入るLet&rsquo;s EncryptのClusterIssuerはエラーになったので消す。</p>
 <p><a href="https://www.sambaiz.net/article/185/">IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set certmanager.enabled=true
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set certmanager.enabled=true
 $ kubectl delete ClusterIssuer --all
 </code></pre></div><p>確認用にBookInfoを動かす。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl label namespace default istio-injection=enabled
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl label namespace default istio-injection=enabled
 $ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
 $ kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml
 </code></pre></div><p>Let&rsquo;s Encryptで使われている<a href="https://github.com/ietf-wg-acme/acme">ACME</a>プロトコルのドメイン認証(Challenge)には
@@ -448,62 +449,62 @@ HTTP Challengeは手軽に達成できる一方、CAからアクセスできる�
 cert-managerはCloud DNSやRoute53などに<a href="http://docs.cert-manager.io/en/latest/reference/issuers/acme/dns01.html">対応</a>していて、今回はCloudflareを使う。</p>
 <p>DNSに書き込めるようにするためCloudflareのMy ProfileからGlobal API Keyを持ってきてBase64デコードしSecretに入れる。
 改行コードが含まれないように<code>-n</code>を付ける。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ echo -n ***** | base64
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">apiVersion</span>: v1
-<span style="color:#ff79c6">kind</span>: Secret
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: cloudflare-api-key
-  <span style="color:#ff79c6">namespace</span>: istio-system
-<span style="color:#ff79c6">type</span>: Opaque
-<span style="color:#ff79c6">data</span>:
-  <span style="color:#ff79c6">api-key</span>: <span style="color:#ff79c6">*****</span>
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ echo -n ***** | base64
+</code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare-api-key
+  namespace: istio-system
+type: Opaque
+data:
+  api-key: <span style="color:#00f">*****</span>
 </code></pre></div><p>Let&rsquo;s EncryptのClusterIssuerと証明書を生成するドメインのCertificateを作成する。
 serverのURLは<a href="https://letsencrypt.status.io/">Status</a>のページから確認できる。
 本番のURLは<a href="https://letsencrypt.org/docs/rate-limits/">レート制限</a>があるので、まずはFakeの証明書が生成されるstgで試すとよい。</p>
 <p>証明書を書くsecretNameは<code>istio-system</code>ネームスペースの<code>istio-ingressgateway-certs</code>にする<a href="https://istio.io/docs/tasks/traffic-management/secure-ingress/#configure-a-tls-ingress-gateway">必要がある</a>。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">apiVersion</span>: certmanager.k8s.io/v1alpha1
-<span style="color:#ff79c6">kind</span>: ClusterIssuer
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: letsencrypt-dns01
-  <span style="color:#ff79c6">namespace</span>: istio-system
-<span style="color:#ff79c6">spec</span>:
-  <span style="color:#ff79c6">acme</span>:
-    <span style="color:#ff79c6">server</span>: https://acme-v02.api.letsencrypt.org/directory
-    <span style="color:#ff79c6">email</span>: aaa@example.com
-    <span style="color:#ff79c6">privateKeySecretRef</span>:
-      <span style="color:#ff79c6">name</span>: letsencrypt-dns01
-    <span style="color:#ff79c6">dns01</span>:
-      <span style="color:#ff79c6">providers</span>:
-      - <span style="color:#ff79c6">name</span>: cloudflare
-        <span style="color:#ff79c6">cloudflare</span>:
-          <span style="color:#ff79c6">email</span>: aaa@example.com
-          <span style="color:#ff79c6">apiKeySecretRef</span>:
-            <span style="color:#ff79c6">name</span>: cloudflare-api-key
-            <span style="color:#ff79c6">key</span>: api-key
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">apiVersion: certmanager.k8s.io/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns01
+  namespace: istio-system
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: aaa@example.com
+    privateKeySecretRef:
+      name: letsencrypt-dns01
+    dns01:
+      providers:
+      - name: cloudflare
+        cloudflare:
+          email: aaa@example.com
+          apiKeySecretRef:
+            name: cloudflare-api-key
+            key: api-key
 ---
-<span style="color:#ff79c6">apiVersion</span>: certmanager.k8s.io/v1alpha1
-<span style="color:#ff79c6">kind</span>: Certificate
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: xxx-example-com
-  <span style="color:#ff79c6">namespace</span>: istio-system
-<span style="color:#ff79c6">spec</span>:
-  <span style="color:#ff79c6">secretName</span>: istio-ingressgateway-certs
-  <span style="color:#ff79c6">issuerRef</span>:
-    <span style="color:#ff79c6">name</span>: letsencrypt-dns01
-    <span style="color:#ff79c6">kind</span>: ClusterIssuer
-  <span style="color:#ff79c6">commonName</span>: xxx.example.com
-  <span style="color:#ff79c6">dnsNames</span>:
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: xxx-example-com
+  namespace: istio-system
+spec:
+  secretName: istio-ingressgateway-certs
+  issuerRef:
+    name: letsencrypt-dns01
+    kind: ClusterIssuer
+  commonName: xxx.example.com
+  dnsNames:
   - xxx.example.com
-  <span style="color:#ff79c6">acme</span>:
-    <span style="color:#ff79c6">config</span>:
-    - <span style="color:#ff79c6">dns01</span>:
-        <span style="color:#ff79c6">provider</span>: cloudflare
-      <span style="color:#ff79c6">domains</span>:
+  acme:
+    config:
+    - dns01:
+        provider: cloudflare
+      domains:
       - xxx.example.com
 </code></pre></div><p>これをapplyするとcertmanagerのログが流れ始める。何か間違いがあるとエラーになるのでなんとかする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl -n istio-system logs -f $(kubectl -n istio-system get pods -l app=certmanager -o jsonpath=&#39;{.items[0].metadata.name}&#39;)
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl -n istio-system logs -f $(kubectl -n istio-system get pods -l app=certmanager -o jsonpath=&#39;{.items[0].metadata.name}&#39;)
 </code></pre></div><p>証明書と秘密鍵のSecretはこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl describe secret istio-ingressgateway-certs -n istio-system
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl describe secret istio-ingressgateway-certs -n istio-system
 Name:         istio-ingressgateway-certs
 Namespace:    istio-system
 Labels:       &lt;none&gt;
@@ -520,32 +521,32 @@ tls.key:  1675 bytes
 tls.crt:  3805 bytes
 </code></pre></div><p><code>ingressgateway-certs</code>は自動で<code>/etc/istio/ingressgateway-certs</code>にマウントされる。
 このGatewayをapplyするとHTTPでアクセスした場合はリダイレクトし、HTTPSで正常にアクセスできるようになる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
-<span style="color:#ff79c6">kind</span>: Gateway
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: bookinfo-gateway
-<span style="color:#ff79c6">spec</span>:
-  <span style="color:#ff79c6">selector</span>:
-    <span style="color:#ff79c6">istio</span>: ingressgateway
-  <span style="color:#ff79c6">servers</span>:
-  - <span style="color:#ff79c6">port</span>:
-      <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">80</span>
-      <span style="color:#ff79c6">name</span>: http
-      <span style="color:#ff79c6">protocol</span>: HTTP
-    <span style="color:#ff79c6">hosts</span>:
+<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: bookinfo-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
     - xxx.example.com
-    <span style="color:#ff79c6">tls</span>:
-      <span style="color:#ff79c6">httpsRedirect</span>: <span style="color:#ff79c6">true</span>
-  - <span style="color:#ff79c6">port</span>:
-      <span style="color:#ff79c6">number</span>: <span style="color:#bd93f9">443</span>
-      <span style="color:#ff79c6">name</span>: https
-      <span style="color:#ff79c6">protocol</span>: HTTPS
-    <span style="color:#ff79c6">hosts</span>:
+    tls:
+      httpsRedirect: <span style="color:#00f">true</span>
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
     - xxx.example.com
-    <span style="color:#ff79c6">tls</span>:
-      <span style="color:#ff79c6">mode</span>: SIMPLE
-      <span style="color:#ff79c6">serverCertificate</span>: /etc/istio/ingressgateway-certs/tls.crt
-      <span style="color:#ff79c6">privateKey</span>: /etc/istio/ingressgateway-certs/tls.key
+    tls:
+      mode: SIMPLE
+      serverCertificate: /etc/istio/ingressgateway-certs/tls.crt
+      privateKey: /etc/istio/ingressgateway-certs/tls.key
 </code></pre></div>
     </div>
     <div class="share">
