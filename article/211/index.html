@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -438,31 +442,31 @@
 今のところHTTPSエンドポイントにしか対応していないようで、ユーザー名・パスワードまたはトークンといった個人に紐づく認証情報が必要になる。
 今回はこの機能を使わずに、ライフサイクル設定でssh鍵を置き、これでpush/pullできるようにする。</p>
 <p>パスフレーズなしの鍵を作って公開鍵を対象リポジトリのDeployKeyに登録してread/writeできるようにする。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ mkdir sagemaker-sshkey
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ mkdir sagemaker-sshkey
 $ cd sagemaker-sshkey
 $ ssh-keygen -t rsa -b 4096 -f id_rsa -N &#34;&#34;
 $ pbcopy &lt; id_rsa.pub
 </code></pre></div><p>秘密鍵はSSMのParameter Storeに登録する。</p>
 <p><a href="https://www.sambaiz.net/article/204/">AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net</a></p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ aws ssm put-parameter --name &#34;sagemaker-sshkey&#34; --value &#34;`cat id_rsa`&#34; --type String --overwrite
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ aws ssm put-parameter --name &#34;sagemaker-sshkey&#34; --value &#34;`cat id_rsa`&#34; --type String --overwrite
 $ aws ssm get-parameters --names &#34;sagemaker-sshkey&#34;
 </code></pre></div><p>ライフサイクル設定でノートブック開始時に次のスクリプトが実行されるようにする。
 このスクリプトはrootで実行される。Parameter Storeが読める権限をNotebookのIAMに付けておく。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh"><span style="color:#00f">#!/bin/bash
-</span><span style="color:#00f"></span>
-set -e
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh"><span style="color:#ff79c6">#!/bin/bash
+</span><span style="color:#ff79c6"></span>
+<span style="color:#8be9fd;font-style:italic">set</span> -e
 
-su - ec2-user <span style="color:#a31515">&lt;&lt;EOF
-</span><span style="color:#a31515">cd /home/ec2-user
-</span><span style="color:#a31515">aws ssm get-parameters --names &#34;sagemaker-sshkey&#34; | jq -r &#34;.Parameters[0].Value&#34; &gt; .ssh/id_rsa
-</span><span style="color:#a31515">echo -e &#34;Host github.com\n\tStrictHostKeyChecking no&#34; &gt; .ssh/config
-</span><span style="color:#a31515">chmod 600 .ssh/*
-</span><span style="color:#a31515">git config --global user.name &#34;Sagemaker&#34;
-</span><span style="color:#a31515">cd SageMaker
-</span><span style="color:#a31515">if [ ! -e &#34;sagemaker-pytorch-example&#34; ]; then
-</span><span style="color:#a31515">  git clone git@github.com:sambaiz/sagemaker-pytorch-example.git
-</span><span style="color:#a31515">fi
-</span><span style="color:#a31515">EOF</span>
+su - ec2-user <span style="color:#f1fa8c">&lt;&lt;EOF
+</span><span style="color:#f1fa8c">cd /home/ec2-user
+</span><span style="color:#f1fa8c">aws ssm get-parameters --names &#34;sagemaker-sshkey&#34; | jq -r &#34;.Parameters[0].Value&#34; &gt; .ssh/id_rsa
+</span><span style="color:#f1fa8c">echo -e &#34;Host github.com\n\tStrictHostKeyChecking no&#34; &gt; .ssh/config
+</span><span style="color:#f1fa8c">chmod 600 .ssh/*
+</span><span style="color:#f1fa8c">git config --global user.name &#34;Sagemaker&#34;
+</span><span style="color:#f1fa8c">cd SageMaker
+</span><span style="color:#f1fa8c">if [ ! -e &#34;sagemaker-pytorch-example&#34; ]; then
+</span><span style="color:#f1fa8c">  git clone git@github.com:sambaiz/sagemaker-pytorch-example.git
+</span><span style="color:#f1fa8c">fi
+</span><span style="color:#f1fa8c">EOF</span>
 </code></pre></div><p>あとはノートブック作成時にこのライフサイクル設定を選べば、最初からリポジトリがpullされ、左のGitタブからpush/pullできる状態で立ち上がる。</p>
 <p><img src="https://www.sambaiz.net/images/211-git.png" alt="Git"></p>
 

@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -438,7 +442,7 @@
 <h2 id="fluentdで送る">fluentdで送る</h2>
 <p><a href="https://github.com/awslabs/aws-fluent-plugin-kinesis">aws-fluent-plugin-kinesis</a>で<code>kinesis_producer</code>を指定するとKPLを使って送信する。</p>
 <p><code>&lt;kinesis_producer&gt;</code>の中にKPLの設定を書くことができる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;kinesis_producer&gt;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;kinesis_producer&gt;
     record_max_buffered_time 10
 &lt;/kinesis_producer&gt;
 </code></pre></div><p><a href="https://github.com/awslabs/amazon-kinesis-producer/blob/v0.10.2/java/amazon-kinesis-producer-sample/default_config.properties#L239">record_max_bufferd_time</a>
@@ -453,7 +457,7 @@
 コンソールのメトリクスからstream名で検索すると
 <code>KinesisProducerLibrary</code>に<code>UserRecordsPerKinesisRecord</code>や、<code>UserRecordsDataPut</code>、<code>BufferingTime</code>、<code>RequestTime</code>などいろいろ表示される。</p>
 <p>とりあえず試しにこんな設定で送ってみる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;match hoge.log&gt;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;match hoge.log&gt;
   @type kinesis_producer
   region ap-northeast-1
   stream_name teststream
@@ -468,45 +472,45 @@
 </code></pre></div><h2 id="lambdaで読む">Lambdaで読む</h2>
 <p>まとめられたレコードを<a href="https://github.com/awslabs/kinesis-aggregation">kinesis-aggregation</a>で分解して読む。
 今回は<a href="https://github.com/awslabs/kinesis-aggregation/tree/master/node">Node.js</a>でやる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm install --save aws-kinesis-agg
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm install --save aws-kinesis-agg
 </code></pre></div><p>注意する必要があるのは<a href="https://github.com/awslabs/kinesis-aggregation/issues/16">ドキュメントの情報が古く</a>て、
 関数の引数が足りないこと。第二引数のcomputeChecksumsが抜けているので気付かないと一つずつずれていくことになる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js"><span style="color:#a31515">&#39;use strict&#39;</span>;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js"><span style="color:#f1fa8c">&#39;use strict&#39;</span>;
 
-<span style="color:#00f">const</span> agg = require(<span style="color:#a31515">&#39;aws-kinesis-agg&#39;</span>);
+<span style="color:#ff79c6">const</span> agg <span style="color:#ff79c6">=</span> require(<span style="color:#f1fa8c">&#39;aws-kinesis-agg&#39;</span>);
 
-exports.handler = (event, context, callback) =&gt; {
-    Promise.all(
+exports.handler <span style="color:#ff79c6">=</span> (event, context, callback) =&gt; {
+    <span style="color:#8be9fd;font-style:italic">Promise</span>.all(
         event.Records.map(
             (record) =&gt; deaggregate(record)
         )
     ).then(
         (records) =&gt; {
-            <span style="color:#008000">// LambdaのNode.jsはまだ4.3なのでSpread operatorが使えない・・・
-</span><span style="color:#008000"></span>            <span style="color:#008000">// const message = `${[].concat(...records).length} came in`; 
-</span><span style="color:#008000"></span>            <span style="color:#00f">let</span> sumCount = 0;
-            records.forEach((r) =&gt; sumCount += r.length);
-            <span style="color:#00f">const</span> message = <span style="color:#a31515">`</span><span style="color:#a31515">${</span>records.length<span style="color:#a31515">}</span><span style="color:#a31515"> aggregated records and </span><span style="color:#a31515">${</span>sumCount<span style="color:#a31515">}</span><span style="color:#a31515"> records come in`</span>; 
+            <span style="color:#6272a4">// LambdaのNode.jsはまだ4.3なのでSpread operatorが使えない・・・
+</span><span style="color:#6272a4"></span>            <span style="color:#6272a4">// const message = `${[].concat(...records).length} came in`; 
+</span><span style="color:#6272a4"></span>            <span style="color:#8be9fd;font-style:italic">let</span> sumCount <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0</span>;
+            records.forEach((r) =&gt; sumCount <span style="color:#ff79c6">+=</span> r.length);
+            <span style="color:#ff79c6">const</span> message <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>records.length<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c"> aggregated records and </span><span style="color:#f1fa8c">${</span>sumCount<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c"> records come in`</span>; 
             console.log(message);
-            callback(<span style="color:#00f">null</span>, message);
+            callback(<span style="color:#ff79c6">null</span>, message);
         },
         (err) =&gt; callback(err)
     );
 };
 
-<span style="color:#00f">function</span> deaggregate(record){
-    <span style="color:#00f">return</span> <span style="color:#00f">new</span> Promise((resolve, reject) =&gt; {
-        agg.deaggregateSync(record.kinesis, <span style="color:#00f">true</span>, (err, userRecords) =&gt; {
-            <span style="color:#00f">if</span> (err) {
+<span style="color:#8be9fd;font-style:italic">function</span> deaggregate(record){
+    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> <span style="color:#8be9fd;font-style:italic">Promise</span>((resolve, reject) =&gt; {
+        agg.deaggregateSync(record.kinesis, <span style="color:#ff79c6">true</span>, (err, userRecords) =&gt; {
+            <span style="color:#ff79c6">if</span> (err) {
                 reject(err);
-            } <span style="color:#00f">else</span> {
+            } <span style="color:#ff79c6">else</span> {
                 resolve(userRecords);
             }
         });
     });
 }
 </code></pre></div><p>175レコードが10レコードにまとめられた。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">10 aggregated records and 175 records come in
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">10 aggregated records and 175 records come in
 </code></pre></div><h2 id="参考">参考</h2>
 <p><a href="http://dev.classmethod.jp/cloud/aws/high-throughput-messaging-system-with-kinesis-kpl-fluentd-lambda/">Kinesis Producer Library(KPL)とfluentdとLambdaを連携してKinesisのスループットを上げる ｜ Developers.IO</a></p>
 

@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -435,218 +439,218 @@
 <p><a href="https://www.sambaiz.net/article/327/">Amazon Forecastで時系列データの予測を行う - sambaiz-net</a></p>
 <h2 id="datasetの作成">Datasetの作成</h2>
 <p>以前と同じく電力消費量のデータセットを、予測対象の時系列データ(<code>DatasetTypeTargetTimeSeries</code>)として登録する。データの頻度は1時間でドメインはCustom。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (f Forecast) CreateDataset(ctx context.Context, name <span style="color:#2b91af">string</span>) (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-	<span style="color:#00f">return</span> f.skipIfAlreadyExists(<span style="color:#a31515">&#34;dataset&#34;</span>, name, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-		dataset, err := f.svc.CreateDataset(ctx, &amp;forecast.CreateDatasetInput{
-			DatasetName:   aws.String(name),
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (f Forecast) <span style="color:#50fa7b">CreateDataset</span>(ctx context.Context, name <span style="color:#8be9fd">string</span>) (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+	<span style="color:#ff79c6">return</span> f.<span style="color:#50fa7b">skipIfAlreadyExists</span>(<span style="color:#f1fa8c">&#34;dataset&#34;</span>, name, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+		dataset, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">CreateDataset</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.CreateDatasetInput{
+			DatasetName:   aws.<span style="color:#50fa7b">String</span>(name),
 			DatasetType:   types.DatasetTypeTargetTimeSeries,
-			DataFrequency: aws.String(<span style="color:#a31515">&#34;H&#34;</span>),
+			DataFrequency: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;H&#34;</span>),
 			Domain:        types.DomainCustom,
-			Schema: &amp;types.Schema{
+			Schema: <span style="color:#ff79c6">&amp;</span>types.Schema{
 				Attributes: []types.SchemaAttribute{
 					{
-						AttributeName: aws.String(<span style="color:#a31515">&#34;timestamp&#34;</span>),
+						AttributeName: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;timestamp&#34;</span>),
 						AttributeType: types.AttributeTypeTimestamp,
 					},
 					{
-						AttributeName: aws.String(<span style="color:#a31515">&#34;target_value&#34;</span>),
+						AttributeName: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;target_value&#34;</span>),
 						AttributeType: types.AttributeTypeFloat,
 					},
 					{
-						AttributeName: aws.String(<span style="color:#a31515">&#34;item_id&#34;</span>),
+						AttributeName: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;item_id&#34;</span>),
 						AttributeType: types.AttributeTypeString,
 					},
 				},
 			},
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> dataset.DatasetArn, <span style="color:#00f">nil</span>
+		<span style="color:#ff79c6">return</span> dataset.DatasetArn, <span style="color:#ff79c6">nil</span>
 	})
 }
 </code></pre></div><p><code>DatasetImport/ForecastExport Job</code>や<code>Predictor</code>、<code>Forecast</code>はリソースを作成してから使えるようになるまで時間がかかるので、DescribeしてStatusがActiveになるのを待っている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (f Forecast) waitForActive(ctx context.Context, name <span style="color:#2b91af">string</span>, h <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, *<span style="color:#2b91af">int64</span>, <span style="color:#2b91af">error</span>)) <span style="color:#2b91af">error</span> {
-	ticker := time.NewTicker(time.Minute * 1)
-	<span style="color:#00f">defer</span> ticker.Stop()
-	<span style="color:#00f">for</span> {
-		<span style="color:#00f">select</span> {
-		<span style="color:#00f">case</span> &lt;-ticker.C:
-			status, remainingMin, err := h()
-			<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-				<span style="color:#00f">return</span> err
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (f Forecast) <span style="color:#50fa7b">waitForActive</span>(ctx context.Context, name <span style="color:#8be9fd">string</span>, h <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>, <span style="color:#8be9fd">error</span>)) <span style="color:#8be9fd">error</span> {
+	ticker <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">NewTicker</span>(time.Minute <span style="color:#ff79c6">*</span> <span style="color:#bd93f9">1</span>)
+	<span style="color:#ff79c6">defer</span> ticker.<span style="color:#50fa7b">Stop</span>()
+	<span style="color:#ff79c6">for</span> {
+		<span style="color:#ff79c6">select</span> {
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ticker.C:
+			status, remainingMin, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">h</span>()
+			<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+				<span style="color:#ff79c6">return</span> err
 			}
-			<span style="color:#00f">if</span> *status == <span style="color:#a31515">&#34;ACTIVE&#34;</span> {
-				<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
-			} <span style="color:#00f">else</span> <span style="color:#00f">if</span> !strings.HasPrefix(*status, <span style="color:#a31515">&#34;CREATE&#34;</span>) {
-				<span style="color:#00f">return</span> fmt.Errorf(<span style="color:#a31515">&#34;%s is not creating but %s&#34;</span>, name, *status)
-			} <span style="color:#00f">else</span> <span style="color:#00f">if</span> *status == <span style="color:#a31515">&#34;CREATE_FAILED&#34;</span> {
-				<span style="color:#00f">return</span> errors.New(<span style="color:#a31515">&#34;creating is failed&#34;</span>)
+			<span style="color:#ff79c6">if</span> <span style="color:#ff79c6">*</span>status <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;ACTIVE&#34;</span> {
+				<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+			} <span style="color:#ff79c6">else</span> <span style="color:#ff79c6">if</span> !strings.<span style="color:#50fa7b">HasPrefix</span>(<span style="color:#ff79c6">*</span>status, <span style="color:#f1fa8c">&#34;CREATE&#34;</span>) {
+				<span style="color:#ff79c6">return</span> fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s is not creating but %s&#34;</span>, name, <span style="color:#ff79c6">*</span>status)
+			} <span style="color:#ff79c6">else</span> <span style="color:#ff79c6">if</span> <span style="color:#ff79c6">*</span>status <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;CREATE_FAILED&#34;</span> {
+				<span style="color:#ff79c6">return</span> errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;creating is failed&#34;</span>)
 			}
-			<span style="color:#00f">if</span> remainingMin != <span style="color:#00f">nil</span> {
-				log.Printf(<span style="color:#a31515">&#34;%s&#39;s status is %s. remaining %d mins&#34;</span>, name, *status, *remainingMin)
+			<span style="color:#ff79c6">if</span> remainingMin <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+				log.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;%s&#39;s status is %s. remaining %d mins&#34;</span>, name, <span style="color:#ff79c6">*</span>status, <span style="color:#ff79c6">*</span>remainingMin)
 			}
-		<span style="color:#00f">case</span> &lt;-ctx.Done():
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
 		}
 	}
 }
 
-<span style="color:#00f">func</span> (f Forecast) CreateDatasetImportJob(ctx context.Context, name, datasetName, datasetArn <span style="color:#2b91af">string</span>, src *types.S3Config) (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-	arn, err := f.skipIfAlreadyExists(fmt.Sprintf(<span style="color:#a31515">&#34;dataset-import-job/%s&#34;</span>, datasetName), name, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-		job, err := f.svc.CreateDatasetImportJob(ctx, &amp;forecast.CreateDatasetImportJobInput{
-			DatasetImportJobName: aws.String(name),
-			DatasetArn:           &amp;datasetArn,
-			TimeZone:             aws.String(<span style="color:#a31515">&#34;America/Los_Angeles&#34;</span>),
-			DataSource: &amp;types.DataSource{
+<span style="color:#8be9fd;font-style:italic">func</span> (f Forecast) <span style="color:#50fa7b">CreateDatasetImportJob</span>(ctx context.Context, name, datasetName, datasetArn <span style="color:#8be9fd">string</span>, src <span style="color:#ff79c6">*</span>types.S3Config) (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+	arn, err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">skipIfAlreadyExists</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;dataset-import-job/%s&#34;</span>, datasetName), name, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+		job, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">CreateDatasetImportJob</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.CreateDatasetImportJobInput{
+			DatasetImportJobName: aws.<span style="color:#50fa7b">String</span>(name),
+			DatasetArn:           <span style="color:#ff79c6">&amp;</span>datasetArn,
+			TimeZone:             aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;America/Los_Angeles&#34;</span>),
+			DataSource: <span style="color:#ff79c6">&amp;</span>types.DataSource{
 				S3Config: src,
 			},
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> job.DatasetImportJobArn, <span style="color:#00f">nil</span>
+		<span style="color:#ff79c6">return</span> job.DatasetImportJobArn, <span style="color:#ff79c6">nil</span>
 	})
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
 
-	<span style="color:#00f">if</span> err := f.waitForActive(ctx, <span style="color:#a31515">&#34;dataset-import-job&#34;</span>, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, *<span style="color:#2b91af">int64</span>, <span style="color:#2b91af">error</span>) {
-		desc, err := f.svc.DescribeDatasetImportJob(ctx, &amp;forecast.DescribeDatasetImportJobInput{
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">waitForActive</span>(ctx, <span style="color:#f1fa8c">&#34;dataset-import-job&#34;</span>, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>, <span style="color:#8be9fd">error</span>) {
+		desc, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">DescribeDatasetImportJob</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.DescribeDatasetImportJobInput{
 			DatasetImportJobArn: arn,
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> desc.Status, desc.EstimatedTimeRemainingInMinutes, <span style="color:#00f">nil</span>
-	}); err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">return</span> desc.Status, desc.EstimatedTimeRemainingInMinutes, <span style="color:#ff79c6">nil</span>
+	}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
-	<span style="color:#00f">return</span> arn, <span style="color:#00f">nil</span>
+	<span style="color:#ff79c6">return</span> arn, <span style="color:#ff79c6">nil</span>
 }
 </code></pre></div><h2 id="datasetgroupの作成">DatasetGroupの作成</h2>
 <p>登録した<code>Dataset</code>で<code>DatasetGroup</code>を作成する。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (f Forecast) CreateDatasetGroup(ctx context.Context, name <span style="color:#2b91af">string</span>, datasetArns []<span style="color:#2b91af">string</span>) (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-	<span style="color:#00f">return</span> f.skipIfAlreadyExists(<span style="color:#a31515">&#34;dataset-group&#34;</span>, name, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-		datasetGroup, err := f.svc.CreateDatasetGroup(ctx, &amp;forecast.CreateDatasetGroupInput{
-			DatasetGroupName: aws.String(name),
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (f Forecast) <span style="color:#50fa7b">CreateDatasetGroup</span>(ctx context.Context, name <span style="color:#8be9fd">string</span>, datasetArns []<span style="color:#8be9fd">string</span>) (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+	<span style="color:#ff79c6">return</span> f.<span style="color:#50fa7b">skipIfAlreadyExists</span>(<span style="color:#f1fa8c">&#34;dataset-group&#34;</span>, name, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+		datasetGroup, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">CreateDatasetGroup</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.CreateDatasetGroupInput{
+			DatasetGroupName: aws.<span style="color:#50fa7b">String</span>(name),
 			DatasetArns:      datasetArns,
 			Domain:           types.DomainCustom,
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> datasetGroup.DatasetGroupArn, <span style="color:#00f">nil</span>
+		<span style="color:#ff79c6">return</span> datasetGroup.DatasetGroupArn, <span style="color:#ff79c6">nil</span>
 	})
 }
 </code></pre></div><h2 id="predictorの学習">Predictorの学習</h2>
 <p>AutoMLで、USの祝日を有効にして学習を始める。予測期間は72時間。Activeになるまで180分ほどかかった。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (f Forecast) CreatePredictor(ctx context.Context, name, datasetGroupArn <span style="color:#2b91af">string</span>) (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-	arn, err := f.skipIfAlreadyExists(<span style="color:#a31515">&#34;predictor&#34;</span>, name, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-		predictor, err := f.svc.CreatePredictor(ctx, &amp;forecast.CreatePredictorInput{
-			PredictorName:   aws.String(name),
-			ForecastHorizon: aws.Int32(72), <span style="color:#008000">// 3 days 2015-01-01T00:00:00 - 2015-01-04T00:00:00
-</span><span style="color:#008000"></span>			FeaturizationConfig: &amp;types.FeaturizationConfig{
-				ForecastFrequency: aws.String(<span style="color:#a31515">&#34;H&#34;</span>),
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (f Forecast) <span style="color:#50fa7b">CreatePredictor</span>(ctx context.Context, name, datasetGroupArn <span style="color:#8be9fd">string</span>) (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+	arn, err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">skipIfAlreadyExists</span>(<span style="color:#f1fa8c">&#34;predictor&#34;</span>, name, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+		predictor, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">CreatePredictor</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.CreatePredictorInput{
+			PredictorName:   aws.<span style="color:#50fa7b">String</span>(name),
+			ForecastHorizon: aws.<span style="color:#50fa7b">Int32</span>(<span style="color:#bd93f9">72</span>), <span style="color:#6272a4">// 3 days 2015-01-01T00:00:00 - 2015-01-04T00:00:00
+</span><span style="color:#6272a4"></span>			FeaturizationConfig: <span style="color:#ff79c6">&amp;</span>types.FeaturizationConfig{
+				ForecastFrequency: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;H&#34;</span>),
 			},
-			PerformAutoML: aws.Bool(<span style="color:#00f">true</span>),
-			InputDataConfig: &amp;types.InputDataConfig{
-				DatasetGroupArn: aws.String(datasetGroupArn),
+			PerformAutoML: aws.<span style="color:#50fa7b">Bool</span>(<span style="color:#ff79c6">true</span>),
+			InputDataConfig: <span style="color:#ff79c6">&amp;</span>types.InputDataConfig{
+				DatasetGroupArn: aws.<span style="color:#50fa7b">String</span>(datasetGroupArn),
 				SupplementaryFeatures: []types.SupplementaryFeature{
 					{
-						Name:  aws.String(<span style="color:#a31515">&#34;holiday&#34;</span>),
-						Value: aws.String(<span style="color:#a31515">&#34;US&#34;</span>),
+						Name:  aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;holiday&#34;</span>),
+						Value: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;US&#34;</span>),
 					},
 				},
 			},
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> predictor.PredictorArn, <span style="color:#00f">nil</span>
+		<span style="color:#ff79c6">return</span> predictor.PredictorArn, <span style="color:#ff79c6">nil</span>
 	})
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
 
-	<span style="color:#00f">if</span> err := f.waitForActive(ctx, <span style="color:#a31515">&#34;predictor&#34;</span>, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, *<span style="color:#2b91af">int64</span>, <span style="color:#2b91af">error</span>) {
-		desc, err := f.svc.DescribePredictor(ctx, &amp;forecast.DescribePredictorInput{
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">waitForActive</span>(ctx, <span style="color:#f1fa8c">&#34;predictor&#34;</span>, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>, <span style="color:#8be9fd">error</span>) {
+		desc, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">DescribePredictor</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.DescribePredictorInput{
 			PredictorArn: arn,
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> desc.Status, desc.EstimatedTimeRemainingInMinutes, <span style="color:#00f">nil</span>
-	}); err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">return</span> desc.Status, desc.EstimatedTimeRemainingInMinutes, <span style="color:#ff79c6">nil</span>
+	}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
-	<span style="color:#00f">return</span> arn, err
+	<span style="color:#ff79c6">return</span> arn, err
 }
 </code></pre></div><h2 id="forecastの生成">Forecastの生成</h2>
 <p>学習した<code>Predictor</code>で予測する。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (f Forecast) CreateForecast(ctx context.Context, name, predictorArn <span style="color:#2b91af">string</span>) (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-	arn, err := f.skipIfAlreadyExists(<span style="color:#a31515">&#34;forecast&#34;</span>, name, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-		forecast, err := f.svc.CreateForecast(ctx, &amp;forecast.CreateForecastInput{
-			ForecastName: aws.String(name),
-			PredictorArn: aws.String(predictorArn),
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (f Forecast) <span style="color:#50fa7b">CreateForecast</span>(ctx context.Context, name, predictorArn <span style="color:#8be9fd">string</span>) (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+	arn, err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">skipIfAlreadyExists</span>(<span style="color:#f1fa8c">&#34;forecast&#34;</span>, name, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+		forecast, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">CreateForecast</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.CreateForecastInput{
+			ForecastName: aws.<span style="color:#50fa7b">String</span>(name),
+			PredictorArn: aws.<span style="color:#50fa7b">String</span>(predictorArn),
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> forecast.ForecastArn, <span style="color:#00f">nil</span>
+		<span style="color:#ff79c6">return</span> forecast.ForecastArn, <span style="color:#ff79c6">nil</span>
 	})
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
 
-	<span style="color:#00f">if</span> err := f.waitForActive(ctx, <span style="color:#a31515">&#34;forecast&#34;</span>, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, *<span style="color:#2b91af">int64</span>, <span style="color:#2b91af">error</span>) {
-		desc, err := f.svc.DescribeForecast(ctx, &amp;forecast.DescribeForecastInput{
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">waitForActive</span>(ctx, <span style="color:#f1fa8c">&#34;forecast&#34;</span>, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>, <span style="color:#8be9fd">error</span>) {
+		desc, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">DescribeForecast</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.DescribeForecastInput{
 			ForecastArn: arn,
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> desc.Status, desc.EstimatedTimeRemainingInMinutes, <span style="color:#00f">nil</span>
-	}); err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">return</span> desc.Status, desc.EstimatedTimeRemainingInMinutes, <span style="color:#ff79c6">nil</span>
+	}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
-	<span style="color:#00f">return</span> arn, <span style="color:#00f">nil</span>
+	<span style="color:#ff79c6">return</span> arn, <span style="color:#ff79c6">nil</span>
 }
 </code></pre></div><p>予測結果をS3にExportする。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (f Forecast) CreateForecastExportJob(ctx context.Context, name, forecastName, forecastArn <span style="color:#2b91af">string</span>, dest *types.S3Config) (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-	arn, err := f.skipIfAlreadyExists(fmt.Sprintf(<span style="color:#a31515">&#34;forecast-export-job/%s&#34;</span>, forecastName), name, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-		job, err := f.svc.CreateForecastExportJob(ctx, &amp;forecast.CreateForecastExportJobInput{
-			ForecastExportJobName: aws.String(name),
-			ForecastArn:           aws.String(forecastArn),
-			Destination: &amp;types.DataDestination{
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (f Forecast) <span style="color:#50fa7b">CreateForecastExportJob</span>(ctx context.Context, name, forecastName, forecastArn <span style="color:#8be9fd">string</span>, dest <span style="color:#ff79c6">*</span>types.S3Config) (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+	arn, err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">skipIfAlreadyExists</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;forecast-export-job/%s&#34;</span>, forecastName), name, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+		job, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">CreateForecastExportJob</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.CreateForecastExportJobInput{
+			ForecastExportJobName: aws.<span style="color:#50fa7b">String</span>(name),
+			ForecastArn:           aws.<span style="color:#50fa7b">String</span>(forecastArn),
+			Destination: <span style="color:#ff79c6">&amp;</span>types.DataDestination{
 				S3Config: dest,
 			},
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> job.ForecastExportJobArn, <span style="color:#00f">nil</span>
+		<span style="color:#ff79c6">return</span> job.ForecastExportJobArn, <span style="color:#ff79c6">nil</span>
 	})
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
 
-	<span style="color:#00f">if</span> f.waitForActive(ctx, <span style="color:#a31515">&#34;forecast-export-job&#34;</span>, <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, *<span style="color:#2b91af">int64</span>, <span style="color:#2b91af">error</span>) {
-		desc, err := f.svc.DescribeForecastExportJob(ctx, &amp;forecast.DescribeForecastExportJobInput{
+	<span style="color:#ff79c6">if</span> f.<span style="color:#50fa7b">waitForActive</span>(ctx, <span style="color:#f1fa8c">&#34;forecast-export-job&#34;</span>, <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#ff79c6">*</span><span style="color:#8be9fd">int64</span>, <span style="color:#8be9fd">error</span>) {
+		desc, err <span style="color:#ff79c6">:=</span> f.svc.<span style="color:#50fa7b">DescribeForecastExportJob</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecast.DescribeForecastExportJobInput{
 			ForecastExportJobArn: arn,
 		})
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, <span style="color:#ff79c6">nil</span>, err
 		}
-		<span style="color:#00f">return</span> desc.Status, aws.Int64(0), <span style="color:#00f">nil</span>
-	}); err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+		<span style="color:#ff79c6">return</span> desc.Status, aws.<span style="color:#50fa7b">Int64</span>(<span style="color:#bd93f9">0</span>), <span style="color:#ff79c6">nil</span>
+	}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
-	<span style="color:#00f">return</span> arn, <span style="color:#00f">nil</span>
+	<span style="color:#ff79c6">return</span> arn, <span style="color:#ff79c6">nil</span>
 }
 </code></pre></div><p>完了すると指定したパスに次のようなcsvが保存される。</p>
 <p><img src="https://www.sambaiz.net/images/380.png" alt="S3のオブジェクト"></p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">item_id,date,p10,p50,p90
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">item_id,date,p10,p50,p90
 client_355,2015-01-01T01:00:00Z,12.408531189,14.5442657471,16.5890808105
 client_355,2015-01-01T02:00:00Z,11.4778079987,13.4856367111,15.8068180084
 client_355,2015-01-01T03:00:00Z,12.2634305954,14.1838378906,17.9517936707
@@ -664,47 +668,47 @@ client_355,2015-01-01T14:00:00Z,21.8753509521,31.9131622314,48.4647483826
 client_355,2015-01-01T15:00:00Z,20.5444030762,31.8455886841,49.697052002
 </code></pre></div><h2 id="clean-up">Clean up</h2>
 <p>依存しているリソースが残っていると削除に失敗するので作成した逆順で削除していく。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">if</span> err := f.DeleteForecastExportJob(ctx, *forecastExportJobArn); err != <span style="color:#00f">nil</span> {
-  log.Fatal(err)
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">DeleteForecastExportJob</span>(ctx, <span style="color:#ff79c6">*</span>forecastExportJobArn); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+  log.<span style="color:#50fa7b">Fatal</span>(err)
 }
-<span style="color:#00f">if</span> err := f.DeleteForecast(ctx, *forecastArn); err != <span style="color:#00f">nil</span> {
-  log.Fatal(err)
+<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">DeleteForecast</span>(ctx, <span style="color:#ff79c6">*</span>forecastArn); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+  log.<span style="color:#50fa7b">Fatal</span>(err)
 }
-<span style="color:#00f">if</span> err := f.DeletePredictor(ctx, *predictorArn); err != <span style="color:#00f">nil</span> {
-  log.Fatal(err)
+<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">DeletePredictor</span>(ctx, <span style="color:#ff79c6">*</span>predictorArn); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+  log.<span style="color:#50fa7b">Fatal</span>(err)
 }
-<span style="color:#00f">if</span> err := f.DeleteDatasetGroup(ctx, *datasetGroupArn); err != <span style="color:#00f">nil</span> {
-  log.Fatal(err)
+<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">DeleteDatasetGroup</span>(ctx, <span style="color:#ff79c6">*</span>datasetGroupArn); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+  log.<span style="color:#50fa7b">Fatal</span>(err)
 }
-<span style="color:#00f">if</span> err := f.DeleteDatasetImportJob(ctx, *datasetImportJobArn); err != <span style="color:#00f">nil</span> {
-  log.Fatal(err)
+<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">DeleteDatasetImportJob</span>(ctx, <span style="color:#ff79c6">*</span>datasetImportJobArn); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+  log.<span style="color:#50fa7b">Fatal</span>(err)
 }
-<span style="color:#00f">if</span> err := f.DeleteDataset(ctx, *datasetArn); err != <span style="color:#00f">nil</span> {
-  log.Fatal(err)
+<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> f.<span style="color:#50fa7b">DeleteDataset</span>(ctx, <span style="color:#ff79c6">*</span>datasetArn); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+  log.<span style="color:#50fa7b">Fatal</span>(err)
 }
 </code></pre></div><p>リソースを削除する際も若干時間がかかるので同様にStatusを見ている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> (f Forecast) waitForDeleted(ctx context.Context, name <span style="color:#2b91af">string</span>, h <span style="color:#00f">func</span>() (*<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>)) <span style="color:#2b91af">error</span> {
-	ticker := time.NewTicker(time.Minute * 1)
-	<span style="color:#00f">defer</span> ticker.Stop()
-	<span style="color:#00f">for</span> {
-		<span style="color:#00f">select</span> {
-		<span style="color:#00f">case</span> &lt;-ticker.C:
-			status, err := h()
-			<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-				<span style="color:#00f">var</span> notFound *types.ResourceNotFoundException
-				<span style="color:#00f">if</span> errors.As(err, &amp;notFound) {
-					<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> (f Forecast) <span style="color:#50fa7b">waitForDeleted</span>(ctx context.Context, name <span style="color:#8be9fd">string</span>, h <span style="color:#8be9fd;font-style:italic">func</span>() (<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>)) <span style="color:#8be9fd">error</span> {
+	ticker <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">NewTicker</span>(time.Minute <span style="color:#ff79c6">*</span> <span style="color:#bd93f9">1</span>)
+	<span style="color:#ff79c6">defer</span> ticker.<span style="color:#50fa7b">Stop</span>()
+	<span style="color:#ff79c6">for</span> {
+		<span style="color:#ff79c6">select</span> {
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ticker.C:
+			status, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">h</span>()
+			<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+				<span style="color:#8be9fd;font-style:italic">var</span> notFound <span style="color:#ff79c6">*</span>types.ResourceNotFoundException
+				<span style="color:#ff79c6">if</span> errors.<span style="color:#50fa7b">As</span>(err, <span style="color:#ff79c6">&amp;</span>notFound) {
+					<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
 				}
-				<span style="color:#00f">return</span> err
+				<span style="color:#ff79c6">return</span> err
 			}
-			<span style="color:#00f">if</span> !strings.HasPrefix(*status, <span style="color:#a31515">&#34;DELETE&#34;</span>) {
-				<span style="color:#00f">return</span> fmt.Errorf(<span style="color:#a31515">&#34;%s is not deleting but %s&#34;</span>, name, *status)
-			} <span style="color:#00f">else</span> <span style="color:#00f">if</span> *status == <span style="color:#a31515">&#34;DELTE_FAILED&#34;</span> {
-				<span style="color:#00f">return</span> errors.New(<span style="color:#a31515">&#34;creating is failed&#34;</span>)
+			<span style="color:#ff79c6">if</span> !strings.<span style="color:#50fa7b">HasPrefix</span>(<span style="color:#ff79c6">*</span>status, <span style="color:#f1fa8c">&#34;DELETE&#34;</span>) {
+				<span style="color:#ff79c6">return</span> fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;%s is not deleting but %s&#34;</span>, name, <span style="color:#ff79c6">*</span>status)
+			} <span style="color:#ff79c6">else</span> <span style="color:#ff79c6">if</span> <span style="color:#ff79c6">*</span>status <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;DELTE_FAILED&#34;</span> {
+				<span style="color:#ff79c6">return</span> errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;creating is failed&#34;</span>)
 			}
-			log.Printf(<span style="color:#a31515">&#34;%s&#39;s status is %s&#34;</span>, name, *status)
-		<span style="color:#00f">case</span> &lt;-ctx.Done():
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
+			log.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;%s&#39;s status is %s&#34;</span>, name, <span style="color:#ff79c6">*</span>status)
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
 		}
 	}
 }

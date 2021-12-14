@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -434,51 +438,51 @@
       <p><a href="https://www.sambaiz.net/article/52/">ElasticsearchをDockerで動かしてGrafanaで可視化する - sambaiz.net</a></p>
 <p>ESに送られるデータの量が増えてくるとGrafanaのDashboardにグラフが表示されなくなってしまった。
 表示されたエラーはこういうの。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json"><span style="color:#a31515">&#34;root_cause&#34;</span><span style="">:</span> [
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json"><span style="color:#f1fa8c">&#34;root_cause&#34;</span>: [
     {
-        &#34;type&#34;: <span style="color:#a31515">&#34;circuit_breaking_exception&#34;</span>,
-        &#34;reason&#34;: <span style="color:#a31515">&#34;[request] Data too large, data for [] would be larger than limit of [8998512230/8.3gb]&#34;</span>,
-        &#34;bytes_wanted&#34;: 10464007168,
-        &#34;bytes_limit&#34;: 8998512230
+        <span style="color:#ff79c6">&#34;type&#34;</span>: <span style="color:#f1fa8c">&#34;circuit_breaking_exception&#34;</span>,
+        <span style="color:#ff79c6">&#34;reason&#34;</span>: <span style="color:#f1fa8c">&#34;[request] Data too large, data for [] would be larger than limit of [8998512230/8.3gb]&#34;</span>,
+        <span style="color:#ff79c6">&#34;bytes_wanted&#34;</span>: <span style="color:#bd93f9">10464007168</span>,
+        <span style="color:#ff79c6">&#34;bytes_limit&#34;</span>: <span style="color:#bd93f9">8998512230</span>
     }
-]<span style="">,</span>
+],
 </code></pre></div><p>これは1リクエストの集計などで使うメモリ量がしきい値をこえて
 <a href="https://www.elastic.co/guide/en/elasticsearch/reference/5.2/circuit-breaker.html">Circuit Breaker</a>が発動したということ。
 メモリを食いつぶしてOutOfMemoryになる前に焼き切れるようになっている。</p>
 <p>情報は<a href="https://www.elastic.co/guide/en/elasticsearch/reference/5.2/cluster-nodes-stats.html">stats</a>のapiでも取得できる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json"><span style="">$</span> <span style="">curl</span> <span style="">localhost:</span>9200<span style="">/_nodes/stats</span> <span style="">|</span> <span style="">jq</span> <span style="">.nodes</span>[]<span style="">.breakers.request</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ curl localhost:<span style="color:#bd93f9">9200</span>/_nodes/stats | jq .nodes[].breakers.request
 {
-  &#34;limit_size_in_bytes&#34;: 8998512230,
-  &#34;limit_size&#34;: <span style="color:#a31515">&#34;8.3gb&#34;</span>,
-  &#34;estimated_size_in_bytes&#34;: 10348347504,
-  &#34;estimated_size&#34;: <span style="color:#a31515">&#34;9.6gb&#34;</span>,
-  &#34;overhead&#34;: 1,
-  &#34;tripped&#34;: 470
+  <span style="color:#ff79c6">&#34;limit_size_in_bytes&#34;</span>: <span style="color:#bd93f9">8998512230</span>,
+  <span style="color:#ff79c6">&#34;limit_size&#34;</span>: <span style="color:#f1fa8c">&#34;8.3gb&#34;</span>,
+  <span style="color:#ff79c6">&#34;estimated_size_in_bytes&#34;</span>: <span style="color:#bd93f9">10348347504</span>,
+  <span style="color:#ff79c6">&#34;estimated_size&#34;</span>: <span style="color:#f1fa8c">&#34;9.6gb&#34;</span>,
+  <span style="color:#ff79c6">&#34;overhead&#34;</span>: <span style="color:#bd93f9">1</span>,
+  <span style="color:#ff79c6">&#34;tripped&#34;</span>: <span style="color:#bd93f9">470</span>
 }
 </code></pre></div><p>今回ひっかかったのは<code>indices.breaker.request.limit</code>。デフォルトではJVMのヒープメモリの60%になっているが、
 これを80%にまで緩和する。併せてparent-levelのbreakerも上げる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json"><span style="">$</span> <span style="">curl</span> <span style="">-XPUT</span> <span style="">localhost:</span>9200<span style="">/_cluster/settings</span> <span style="">-d</span> <span style="">&#39;</span>{
-    &#34;persistent&#34; : {
-        &#34;indices.breaker.request.limit&#34;: <span style="color:#a31515">&#34;80%&#34;</span>,
-        &#34;indices.breaker.total.limit&#34;: <span style="color:#a31515">&#34;80%&#34;</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ curl -XPUT localhost:<span style="color:#bd93f9">9200</span>/_cluster/settings -d &#39;{
+    <span style="color:#ff79c6">&#34;persistent&#34;</span> : {
+        <span style="color:#ff79c6">&#34;indices.breaker.request.limit&#34;</span>: <span style="color:#f1fa8c">&#34;80%&#34;</span>,
+        <span style="color:#ff79c6">&#34;indices.breaker.total.limit&#34;</span>: <span style="color:#f1fa8c">&#34;80%&#34;</span>
     }
-}<span style="">&#39;</span>
-</code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json"><span style="">$</span> <span style="">curl</span> <span style="">-XPUT</span> <span style="">localhost:</span>9200<span style="">/_cluster/settings</span> <span style="">-d</span> <span style="">&#39;</span>{
-    &#34;persistent&#34; : {
-        &#34;indices.breaker.request.limit&#34;: <span style="color:#a31515">&#34;80%&#34;</span>,
-        &#34;indices.breaker.total.limit&#34;: <span style="color:#a31515">&#34;80%&#34;</span>
+}&#39;
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ curl -XPUT localhost:<span style="color:#bd93f9">9200</span>/_cluster/settings -d &#39;{
+    <span style="color:#ff79c6">&#34;persistent&#34;</span> : {
+        <span style="color:#ff79c6">&#34;indices.breaker.request.limit&#34;</span>: <span style="color:#f1fa8c">&#34;80%&#34;</span>,
+        <span style="color:#ff79c6">&#34;indices.breaker.total.limit&#34;</span>: <span style="color:#f1fa8c">&#34;80%&#34;</span>
     }
-}<span style="">&#39;</span>
+}&#39;
 </code></pre></div><p>必要なメモリ量を上回ったのでひとまずは返せるようになった。
 これは一時しのぎで、定常的に大量にメモリが必要なリクエストを処理する必要があるなら、そもそもメモリが足りないので増やさなければならない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json"><span style="">$</span> <span style="">curl</span> <span style="">localhost:</span>9200<span style="">/_nodes/stats</span> <span style="">|</span> <span style="">jq</span> <span style="">.nodes</span>[]<span style="">.breakers.request</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ curl localhost:<span style="color:#bd93f9">9200</span>/_nodes/stats | jq .nodes[].breakers.request
 {
-  &#34;limit_size_in_bytes&#34;: 11998016307,
-  &#34;limit_size&#34;: <span style="color:#a31515">&#34;11.1gb&#34;</span>,
-  &#34;estimated_size_in_bytes&#34;: 10473078896,
-  &#34;estimated_size&#34;: <span style="color:#a31515">&#34;9.7gb&#34;</span>,
-  &#34;overhead&#34;: 1,
-  &#34;tripped&#34;: 470
+  <span style="color:#ff79c6">&#34;limit_size_in_bytes&#34;</span>: <span style="color:#bd93f9">11998016307</span>,
+  <span style="color:#ff79c6">&#34;limit_size&#34;</span>: <span style="color:#f1fa8c">&#34;11.1gb&#34;</span>,
+  <span style="color:#ff79c6">&#34;estimated_size_in_bytes&#34;</span>: <span style="color:#bd93f9">10473078896</span>,
+  <span style="color:#ff79c6">&#34;estimated_size&#34;</span>: <span style="color:#f1fa8c">&#34;9.7gb&#34;</span>,
+  <span style="color:#ff79c6">&#34;overhead&#34;</span>: <span style="color:#bd93f9">1</span>,
+  <span style="color:#ff79c6">&#34;tripped&#34;</span>: <span style="color:#bd93f9">470</span>
 }
 </code></pre></div>
     </div>

@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -444,46 +448,46 @@ rootなしで動く<a href="https://github.com/indigo-dc/udocker">udocker</a>で
 <h2 id="taskへのパラメータの受け渡し">Taskへのパラメータの受け渡し</h2>
 <p><code>runTask</code>の<code>containerOverrides</code>でコマンドの引数としてlambdaに来たリクエストをそのまま渡そうとしたところ、<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/APIReference/API_RunTask.html">8192文字</a>文字の上限に当たってしまったので
 SQSで受け渡すことにした。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">sess := session.New()
-sqsSvc := sqs.New(sess)
-<span style="color:#00f">if</span> _, err := sqsSvc.SendMessage(&amp;sqs.SendMessageInput{
-    MessageBody:    aws.String(string(payload)),
-    QueueUrl:       aws.String(os.Getenv(<span style="color:#a31515">&#34;OPERATION_QUEUE_URL&#34;</span>)),
-    MessageGroupId: aws.String(<span style="color:#a31515">&#34;group&#34;</span>),
-}); err != <span style="color:#00f">nil</span> {
-    fmt.Println(err.Error())
-    <span style="color:#00f">return</span> response{
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">sess <span style="color:#ff79c6">:=</span> session.<span style="color:#50fa7b">New</span>()
+sqsSvc <span style="color:#ff79c6">:=</span> sqs.<span style="color:#50fa7b">New</span>(sess)
+<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> sqsSvc.<span style="color:#50fa7b">SendMessage</span>(<span style="color:#ff79c6">&amp;</span>sqs.SendMessageInput{
+    MessageBody:    aws.<span style="color:#50fa7b">String</span>(<span style="color:#8be9fd;font-style:italic">string</span>(payload)),
+    QueueUrl:       aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_QUEUE_URL&#34;</span>)),
+    MessageGroupId: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;group&#34;</span>),
+}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+    fmt.<span style="color:#50fa7b">Println</span>(err.<span style="color:#50fa7b">Error</span>())
+    <span style="color:#ff79c6">return</span> response{
         StatusCode: http.StatusInternalServerError,
     }, err
 }
 </code></pre></div><h2 id="同時実行数を制限する">同時実行数を制限する</h2>
 <p>アプリケーションの特性上、同時実行されないようにしたい。
 そこで普段はTask0のServiceを作成し、実行するときは要求Taskを1にして、Queueが空になるまで実行させ、最後に0に戻すようにした。Taskがない場合は立ち上がりにやや時間がかかるが、元々Lambdaで動いていたこともあって常に料金が発生する常駐リソースをなるべく使いたくなかった。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">sess := session.New()
-sqsSvc := sqs.New(sess)
-<span style="color:#00f">for</span> {
-    res, err := sqsSvc.ReceiveMessage(&amp;sqs.ReceiveMessageInput{
-        QueueUrl:            aws.String(os.Getenv(<span style="color:#a31515">&#34;OPERATION_QUEUE_URL&#34;</span>)),
-        MaxNumberOfMessages: aws.Int64(1),
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">sess <span style="color:#ff79c6">:=</span> session.<span style="color:#50fa7b">New</span>()
+sqsSvc <span style="color:#ff79c6">:=</span> sqs.<span style="color:#50fa7b">New</span>(sess)
+<span style="color:#ff79c6">for</span> {
+    res, err <span style="color:#ff79c6">:=</span> sqsSvc.<span style="color:#50fa7b">ReceiveMessage</span>(<span style="color:#ff79c6">&amp;</span>sqs.ReceiveMessageInput{
+        QueueUrl:            aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_QUEUE_URL&#34;</span>)),
+        MaxNumberOfMessages: aws.<span style="color:#50fa7b">Int64</span>(<span style="color:#bd93f9">1</span>),
     })
-    <span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-        logger.Error(<span style="color:#a31515">&#34;receive message error&#34;</span>, zap.Error(err))
-        <span style="color:#00f">break</span>
+    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+        logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;receive message error&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
+        <span style="color:#ff79c6">break</span>
     }
 
-    <span style="color:#00f">if</span> len(res.Messages) == 0 {
-        <span style="color:#00f">break</span>
+    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(res.Messages) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span> {
+        <span style="color:#ff79c6">break</span>
     }
-    ...
+    <span style="color:#ff79c6">...</span>
 }
 
-ecsSvc := ecs.New(sess)
-<span style="color:#00f">if</span> _, err := ecsSvc.UpdateService(&amp;ecs.UpdateServiceInput{
-    Cluster:      aws.String(os.Getenv(<span style="color:#a31515">&#34;TASK_ECS_CLUSTER_ARN&#34;</span>)),
-    DesiredCount: aws.Int64(0),
-    Service:      aws.String(os.Getenv(<span style="color:#a31515">&#34;OPERATION_SERVICE_ARN&#34;</span>)),
-}); err != <span style="color:#00f">nil</span> {
-    logger.Error(<span style="color:#a31515">&#34;shutdown task error&#34;</span>, zap.Error(err))
+ecsSvc <span style="color:#ff79c6">:=</span> ecs.<span style="color:#50fa7b">New</span>(sess)
+<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> ecsSvc.<span style="color:#50fa7b">UpdateService</span>(<span style="color:#ff79c6">&amp;</span>ecs.UpdateServiceInput{
+    Cluster:      aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;TASK_ECS_CLUSTER_ARN&#34;</span>)),
+    DesiredCount: aws.<span style="color:#50fa7b">Int64</span>(<span style="color:#bd93f9">0</span>),
+    Service:      aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_SERVICE_ARN&#34;</span>)),
+}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+    logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;shutdown task error&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
 }
 </code></pre></div>
     </div>

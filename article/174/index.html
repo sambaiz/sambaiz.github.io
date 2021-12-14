@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -433,13 +437,13 @@
       </div>
       <p><a href="https://github.com/grpc/grpc-go">grpc-go</a>はInterceptor(Middleware)でhandlerの前後で処理を行うことができる。
 UnaryとStreamで<a href="https://github.com/grpc/grpc-go/blob/master/interceptor.go#L60">シグネチャ</a>が異なる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">type</span> UnaryServerInterceptor <span style="color:#00f">func</span>(ctx context.Context, req <span style="color:#00f">interface</span>{}, info *UnaryServerInfo, handler UnaryHandler) (resp <span style="color:#00f">interface</span>{}, err <span style="color:#2b91af">error</span>)
-<span style="color:#00f">type</span> StreamServerInterceptor <span style="color:#00f">func</span>(srv <span style="color:#00f">interface</span>{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) <span style="color:#2b91af">error</span>
-</code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> UnaryServerInterceptor(opts ...Option) grpc.UnaryServerInterceptor {
-    <span style="color:#00f">return</span> <span style="color:#00f">func</span>(ctx context.Context, req <span style="color:#00f">interface</span>{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp <span style="color:#00f">interface</span>{}, err <span style="color:#2b91af">error</span>) {
-        resp, err := handler(newCtx, req)
-        fmt.Println(resp)
-        <span style="color:#00f">return</span> resp, err
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">type</span> UnaryServerInterceptor <span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context, req <span style="color:#8be9fd;font-style:italic">interface</span>{}, info <span style="color:#ff79c6">*</span>UnaryServerInfo, handler UnaryHandler) (resp <span style="color:#8be9fd;font-style:italic">interface</span>{}, err <span style="color:#8be9fd">error</span>)
+<span style="color:#8be9fd;font-style:italic">type</span> StreamServerInterceptor <span style="color:#8be9fd;font-style:italic">func</span>(srv <span style="color:#8be9fd;font-style:italic">interface</span>{}, ss ServerStream, info <span style="color:#ff79c6">*</span>StreamServerInfo, handler StreamHandler) <span style="color:#8be9fd">error</span>
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">UnaryServerInterceptor</span>(opts <span style="color:#ff79c6">...</span>Option) grpc.UnaryServerInterceptor {
+    <span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">func</span>(ctx context.Context, req <span style="color:#8be9fd;font-style:italic">interface</span>{}, info <span style="color:#ff79c6">*</span>grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp <span style="color:#8be9fd;font-style:italic">interface</span>{}, err <span style="color:#8be9fd">error</span>) {
+        resp, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">handler</span>(newCtx, req)
+        fmt.<span style="color:#50fa7b">Println</span>(resp)
+        <span style="color:#ff79c6">return</span> resp, err
 	}
 }
 </code></pre></div><p>今回は良く使う<a href="https://github.com/grpc-ecosystem/go-grpc-middleware">go-grpc-middleware</a>の</p>
@@ -452,60 +456,60 @@ UnaryとStreamで<a href="https://github.com/grpc/grpc-go/blob/master/intercepto
 <p>Interceptorの挙動を確認する。</p>
 <h2 id="proto">proto</h2>
 <p>UnaryなRPCとBidirectional streaming(client, server共にstream)なRPCを一つずつ用意する。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-proto" data-lang="proto"><span style="">$</span> cat protos/sample/service.proto<span style="">
-</span><span style=""></span>syntax = <span style="color:#a31515">&#34;proto3&#34;</span>;<span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">package</span> sample;<span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">message</span> <span style="color:#2b91af">SampleRequest</span> {<span style="">
-</span><span style=""></span>  <span style="color:#2b91af">string</span> sampleInput = 1;<span style="">
-</span><span style=""></span>}<span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">message</span> <span style="color:#2b91af">SampleResponse</span> {<span style="">
-</span><span style=""></span>  <span style="color:#2b91af">string</span> sampleOutput = 1;<span style="">
-</span><span style=""></span>}<span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">service</span> SampleService {<span style="">
-</span><span style=""></span>  <span style="color:#00f">rpc</span> SampleUnary (SampleRequest) <span style="color:#00f">returns</span> (SampleResponse) {}<span style="">
-</span><span style=""></span>  <span style="color:#00f">rpc</span> SampleStream (stream SampleRequest) <span style="color:#00f">returns</span> (stream SampleResponse) {}<span style="">
-</span><span style=""></span>}<span style="">
-</span><span style="">
-</span><span style="">$</span> go get -u github.com/golang/protobuf/protoc-gen-go<span style="">
-</span><span style="">$</span> mkdir go<span style="">
-</span><span style="">$</span> protoc --go_out=plugins=grpc:./go --proto_path=./protos protos/<span style="">*</span>/<span style="">*</span>.proto<span style="">
-</span><span style="">$</span> ls go/sample<span style="">
-</span><span style=""></span>service.pb.go<span style="">
-</span></code></pre></div><h2 id="service">Service</h2>
-<p>Unaryの方でcontextからユーザー名を取り出しているのと、
-Streamの方では&quot;panic&quot;という入力が来たときにpanicになるようにしている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">type</span> sampleService <span style="color:#00f">struct</span>{}
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-proto" data-lang="proto">$ cat protos<span style="color:#ff79c6">/</span>sample<span style="color:#ff79c6">/</span>service.proto
+syntax <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;proto3&#34;</span>;
 
-<span style="color:#00f">type</span> ctxKey <span style="color:#2b91af">string</span>
+<span style="color:#ff79c6">package</span> sample;
 
-<span style="color:#00f">var</span> ctxKeyUserName = <span style="color:#a31515">&#34;userNames&#34;</span>
-
-<span style="color:#00f">func</span> (s *sampleService) SampleUnary(ctx context.Context, in *sample.SampleRequest) (*sample.SampleResponse, <span style="color:#2b91af">error</span>) {
-	<span style="color:#00f">return</span> &amp;sample.SampleResponse{SampleOutput: ctx.Value(ctxKeyUserName).(<span style="color:#2b91af">string</span>)}, <span style="color:#00f">nil</span>
+<span style="color:#8be9fd;font-style:italic">message</span> <span style="color:#50fa7b">SampleRequest</span> {
+  <span style="color:#8be9fd">string</span> sampleInput <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
 }
 
-<span style="color:#00f">func</span> (s *sampleService) SampleStream(stream sample.SampleService_SampleStreamServer) <span style="color:#2b91af">error</span> {
-	<span style="color:#00f">for</span> {
-		in, err := stream.Recv()
-		<span style="color:#00f">if</span> err == io.EOF {
-			<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
+<span style="color:#8be9fd;font-style:italic">message</span> <span style="color:#50fa7b">SampleResponse</span> {
+  <span style="color:#8be9fd">string</span> sampleOutput <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
+}
+
+<span style="color:#8be9fd;font-style:italic">service</span> SampleService {
+  <span style="color:#ff79c6">rpc</span> SampleUnary (SampleRequest) <span style="color:#ff79c6">returns</span> (SampleResponse) {}
+  <span style="color:#ff79c6">rpc</span> SampleStream (stream SampleRequest) <span style="color:#ff79c6">returns</span> (stream SampleResponse) {}
+}
+
+$ go get <span style="color:#ff79c6">-</span>u github.com<span style="color:#ff79c6">/</span>golang<span style="color:#ff79c6">/</span>protobuf<span style="color:#ff79c6">/</span>protoc<span style="color:#ff79c6">-</span>gen<span style="color:#ff79c6">-</span>go
+$ mkdir go
+$ protoc <span style="color:#ff79c6">--</span>go_out<span style="color:#ff79c6">=</span>plugins<span style="color:#ff79c6">=</span>grpc<span style="color:#ff79c6">:./</span>go <span style="color:#ff79c6">--</span>proto_path<span style="color:#ff79c6">=./</span>protos protos<span style="color:#ff79c6">/</span>*<span style="color:#ff79c6">/</span>*<span style="color:#ff79c6">.</span>proto
+$ ls go<span style="color:#ff79c6">/</span>sample
+service.pb.go
+</code></pre></div><h2 id="service">Service</h2>
+<p>Unaryの方でcontextからユーザー名を取り出しているのと、
+Streamの方では&quot;panic&quot;という入力が来たときにpanicになるようにしている。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">type</span> sampleService <span style="color:#8be9fd;font-style:italic">struct</span>{}
+
+<span style="color:#8be9fd;font-style:italic">type</span> ctxKey <span style="color:#8be9fd">string</span>
+
+<span style="color:#8be9fd;font-style:italic">var</span> ctxKeyUserName = <span style="color:#f1fa8c">&#34;userNames&#34;</span>
+
+<span style="color:#8be9fd;font-style:italic">func</span> (s <span style="color:#ff79c6">*</span>sampleService) <span style="color:#50fa7b">SampleUnary</span>(ctx context.Context, in <span style="color:#ff79c6">*</span>sample.SampleRequest) (<span style="color:#ff79c6">*</span>sample.SampleResponse, <span style="color:#8be9fd">error</span>) {
+	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>sample.SampleResponse{SampleOutput: ctx.<span style="color:#50fa7b">Value</span>(ctxKeyUserName).(<span style="color:#8be9fd">string</span>)}, <span style="color:#ff79c6">nil</span>
+}
+
+<span style="color:#8be9fd;font-style:italic">func</span> (s <span style="color:#ff79c6">*</span>sampleService) <span style="color:#50fa7b">SampleStream</span>(stream sample.SampleService_SampleStreamServer) <span style="color:#8be9fd">error</span> {
+	<span style="color:#ff79c6">for</span> {
+		in, err <span style="color:#ff79c6">:=</span> stream.<span style="color:#50fa7b">Recv</span>()
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">==</span> io.EOF {
+			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
 		}
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			<span style="color:#00f">return</span> err
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#ff79c6">return</span> err
 		}
-		<span style="color:#00f">if</span> in.SampleInput == <span style="color:#a31515">&#34;panic&#34;</span> {
-			panic(<span style="color:#a31515">&#34;received panic&#34;</span>)
+		<span style="color:#ff79c6">if</span> in.SampleInput <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;panic&#34;</span> {
+			<span style="color:#8be9fd;font-style:italic">panic</span>(<span style="color:#f1fa8c">&#34;received panic&#34;</span>)
 		}
-		inputRunes := []rune(in.SampleInput)
-		<span style="color:#00f">for</span> i := 0; i &lt; len(inputRunes); i++ {
-			<span style="color:#00f">if</span> err := stream.Send(&amp;sample.SampleResponse{
-				SampleOutput: string(inputRunes[i]),
-			}); err != <span style="color:#00f">nil</span> {
-				<span style="color:#00f">return</span> err
+		inputRunes <span style="color:#ff79c6">:=</span> []<span style="color:#8be9fd;font-style:italic">rune</span>(in.SampleInput)
+		<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; <span style="color:#8be9fd;font-style:italic">len</span>(inputRunes); i<span style="color:#ff79c6">++</span> {
+			<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> stream.<span style="color:#50fa7b">Send</span>(<span style="color:#ff79c6">&amp;</span>sample.SampleResponse{
+				SampleOutput: <span style="color:#8be9fd;font-style:italic">string</span>(inputRunes[i]),
+			}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+				<span style="color:#ff79c6">return</span> err
 			}
 		}
 	}
@@ -516,171 +520,171 @@ prometheusはさらに<a href="https://github.com/grpc-ecosystem/go-grpc-prometh
 <p>zapには<a href="https://github.com/uber-go/zap/blob/v1.8.0/logger.go#L93">NewProduction()</a>のloggerをそのまま渡しているのでログはstderrに<a href="https://github.com/uber-go/zap/blob/7307fae54f855761db01409a36e87fe18ebd8ef4/config.go#L124">出力される</a>。
 これを<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/91d9dda9fdb0440370fd55356f216a6293cbeb95/logging/zap/grpclogger.go#L15">ReplaceGrpcLogger()</a>でも渡しているのでgRPCライブラリ内部のエラーも出る。</p>
 <p><a href="https://www.sambaiz.net/article/104/">Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる - sambaiz-net</a></p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">package</span> main
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
 
-<span style="color:#00f">import</span> (
-	<span style="color:#a31515">&#34;context&#34;</span>
-	<span style="color:#a31515">&#34;fmt&#34;</span>
-	<span style="color:#a31515">&#34;io&#34;</span>
-	<span style="color:#a31515">&#34;math&#34;</span>
-	<span style="color:#a31515">&#34;net&#34;</span>
-	<span style="color:#a31515">&#34;net/http&#34;</span>
+<span style="color:#ff79c6">import</span> (
+	<span style="color:#f1fa8c">&#34;context&#34;</span>
+	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+	<span style="color:#f1fa8c">&#34;io&#34;</span>
+	<span style="color:#f1fa8c">&#34;math&#34;</span>
+	<span style="color:#f1fa8c">&#34;net&#34;</span>
+	<span style="color:#f1fa8c">&#34;net/http&#34;</span>
 
-	<span style="color:#a31515">&#34;github.com/grpc-ecosystem/go-grpc-middleware&#34;</span>
-	<span style="color:#a31515">&#34;github.com/grpc-ecosystem/go-grpc-middleware/auth&#34;</span>
-	<span style="color:#a31515">&#34;github.com/grpc-ecosystem/go-grpc-middleware/logging/zap&#34;</span>
-	<span style="color:#a31515">&#34;github.com/grpc-ecosystem/go-grpc-middleware/recovery&#34;</span>
-	<span style="color:#a31515">&#34;github.com/grpc-ecosystem/go-grpc-prometheus&#34;</span>
-	<span style="color:#a31515">&#34;github.com/sambaiz/grpc-interceptors/go/sample&#34;</span>
-	<span style="color:#a31515">&#34;github.com/prometheus/client_golang/prometheus/promhttp&#34;</span>
-	<span style="color:#a31515">&#34;go.uber.org/zap&#34;</span>
-	<span style="color:#a31515">&#34;google.golang.org/grpc&#34;</span>
-	<span style="color:#a31515">&#34;google.golang.org/grpc/codes&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/grpc-ecosystem/go-grpc-middleware&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/grpc-ecosystem/go-grpc-middleware/auth&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/grpc-ecosystem/go-grpc-middleware/logging/zap&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/grpc-ecosystem/go-grpc-middleware/recovery&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/grpc-ecosystem/go-grpc-prometheus&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/sambaiz/grpc-interceptors/go/sample&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/prometheus/client_golang/prometheus/promhttp&#34;</span>
+	<span style="color:#f1fa8c">&#34;go.uber.org/zap&#34;</span>
+	<span style="color:#f1fa8c">&#34;google.golang.org/grpc&#34;</span>
+	<span style="color:#f1fa8c">&#34;google.golang.org/grpc/codes&#34;</span>
 )
 
-<span style="color:#00f">func</span> main() {
-	zapLogger, err := zap.NewProduction()
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		panic(err)
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+	zapLogger, err <span style="color:#ff79c6">:=</span> zap.<span style="color:#50fa7b">NewProduction</span>()
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 	}
-	grpc_zap.ReplaceGrpcLogger(zapLogger)
-	grpcServer := grpc.NewServer(
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			grpc_recovery.StreamServerInterceptor(),
-			grpc_zap.StreamServerInterceptor(zapLogger),
-			grpc_auth.StreamServerInterceptor(auth),
+	grpc_zap.<span style="color:#50fa7b">ReplaceGrpcLogger</span>(zapLogger)
+	grpcServer <span style="color:#ff79c6">:=</span> grpc.<span style="color:#50fa7b">NewServer</span>(
+		grpc.<span style="color:#50fa7b">StreamInterceptor</span>(grpc_middleware.<span style="color:#50fa7b">ChainStreamServer</span>(
+			grpc_recovery.<span style="color:#50fa7b">StreamServerInterceptor</span>(),
+			grpc_zap.<span style="color:#50fa7b">StreamServerInterceptor</span>(zapLogger),
+			grpc_auth.<span style="color:#50fa7b">StreamServerInterceptor</span>(auth),
 			grpc_prometheus.StreamServerInterceptor,
 		)),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			grpc_recovery.UnaryServerInterceptor(),
-			grpc_zap.UnaryServerInterceptor(zapLogger),
-			grpc_auth.UnaryServerInterceptor(auth),
+		grpc.<span style="color:#50fa7b">UnaryInterceptor</span>(grpc_middleware.<span style="color:#50fa7b">ChainUnaryServer</span>(
+			grpc_recovery.<span style="color:#50fa7b">UnaryServerInterceptor</span>(),
+			grpc_zap.<span style="color:#50fa7b">UnaryServerInterceptor</span>(zapLogger),
+			grpc_auth.<span style="color:#50fa7b">UnaryServerInterceptor</span>(auth),
 			grpc_prometheus.UnaryServerInterceptor,
 		)),
-		grpc.MaxRecvMsgSize(math.MaxInt32))
+		grpc.<span style="color:#50fa7b">MaxRecvMsgSize</span>(math.MaxInt32))
 
-	grpc_prometheus.EnableHandlingTimeHistogram()
-	grpc_prometheus.Register(grpcServer)
-	http.Handle(<span style="color:#a31515">&#34;/metrics&#34;</span>, promhttp.Handler())
-	<span style="color:#00f">go</span> <span style="color:#00f">func</span>() {
-		<span style="color:#00f">if</span> err := http.ListenAndServe(<span style="color:#a31515">&#34;:8081&#34;</span>, <span style="color:#00f">nil</span>); err != <span style="color:#00f">nil</span> {
-			panic(err)
+	grpc_prometheus.<span style="color:#50fa7b">EnableHandlingTimeHistogram</span>()
+	grpc_prometheus.<span style="color:#50fa7b">Register</span>(grpcServer)
+	http.<span style="color:#50fa7b">Handle</span>(<span style="color:#f1fa8c">&#34;/metrics&#34;</span>, promhttp.<span style="color:#50fa7b">Handler</span>())
+	<span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">ListenAndServe</span>(<span style="color:#f1fa8c">&#34;:8081&#34;</span>, <span style="color:#ff79c6">nil</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 		}
 	}()
 
-	sample.RegisterSampleServiceServer(grpcServer, &amp;sampleService{})
+	sample.<span style="color:#50fa7b">RegisterSampleServiceServer</span>(grpcServer, <span style="color:#ff79c6">&amp;</span>sampleService{})
 
-	port := 8080
-	listener, err := net.Listen(<span style="color:#a31515">&#34;tcp&#34;</span>, fmt.Sprintf(<span style="color:#a31515">&#34;:%d&#34;</span>, port))
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span>
+	port <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">8080</span>
+	listener, err <span style="color:#ff79c6">:=</span> net.<span style="color:#50fa7b">Listen</span>(<span style="color:#f1fa8c">&#34;tcp&#34;</span>, fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;:%d&#34;</span>, port))
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span>
 	}
-	fmt.Printf(<span style="color:#a31515">&#34;GRPC server started on :%d\n&#34;</span>, port)
-	grpcServer.Serve(listener)
+	fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;GRPC server started on :%d\n&#34;</span>, port)
+	grpcServer.<span style="color:#50fa7b">Serve</span>(listener)
 }
 </code></pre></div><p>authに渡している関数では<a href="https://github.com/grpc-ecosystem/go-grpc-middleware/blob/v1.0.0/auth/metadata.go#L24">AuthFromMD()</a>でmetadataのauthorizationのトークンを取得しユーザー名に変換してcontextに入れている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> auth(ctx context.Context) (context.Context, <span style="color:#2b91af">error</span>) {
-	token, err := grpc_auth.AuthFromMD(ctx, <span style="color:#a31515">&#34;basic&#34;</span>)
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, err
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">auth</span>(ctx context.Context) (context.Context, <span style="color:#8be9fd">error</span>) {
+	token, err <span style="color:#ff79c6">:=</span> grpc_auth.<span style="color:#50fa7b">AuthFromMD</span>(ctx, <span style="color:#f1fa8c">&#34;basic&#34;</span>)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
 	}
-	users := <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>]<span style="color:#2b91af">string</span>{
-		<span style="color:#a31515">&#34;aaaaaa&#34;</span>: <span style="color:#a31515">&#34;sam&#34;</span>,
+	users <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd">string</span>{
+		<span style="color:#f1fa8c">&#34;aaaaaa&#34;</span>: <span style="color:#f1fa8c">&#34;sam&#34;</span>,
 	}
-	userName, ok := users[token]
-	<span style="color:#00f">if</span> !ok {
-		<span style="color:#00f">return</span> <span style="color:#00f">nil</span>, grpc.Errorf(codes.Unauthenticated, <span style="color:#a31515">&#34;invalid auth token&#34;</span>)
+	userName, ok <span style="color:#ff79c6">:=</span> users[token]
+	<span style="color:#ff79c6">if</span> !ok {
+		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, grpc.<span style="color:#50fa7b">Errorf</span>(codes.Unauthenticated, <span style="color:#f1fa8c">&#34;invalid auth token&#34;</span>)
 	}
-	newCtx := context.WithValue(ctx, ctxKeyUserName, userName)
-	<span style="color:#00f">return</span> newCtx, <span style="color:#00f">nil</span>
+	newCtx <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">WithValue</span>(ctx, ctxKeyUserName, userName)
+	<span style="color:#ff79c6">return</span> newCtx, <span style="color:#ff79c6">nil</span>
 }
 </code></pre></div><h2 id="client">Client</h2>
 <p>UnaryとStreamのRPCにそれぞれリクエストを送る。</p>
 <p><a href="https://github.com/grpc/grpc-go/blob/v1.13.0/clientconn.go#L325">WithPerRPCCredentials()</a>で各RPCでauthorizationがmetadataとして渡るようにしている。
 <a href="https://github.com/grpc/grpc-go/blob/v1.13.0/metadata/metadata.go#L155">AppendToOutgoingContext</a>で都度含めることもできる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">ctx = metadata.AppendToOutgoingContext(ctx, key, value)
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">ctx = metadata.<span style="color:#50fa7b">AppendToOutgoingContext</span>(ctx, key, value)
 </code></pre></div><p>メトリクスは出していないがprometheusのClientのInterceptorを付けている。
 このようにIntercpetorによってはClient用のものも用意されている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">package</span> main
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
 
-<span style="color:#00f">import</span> (
-	<span style="color:#a31515">&#34;context&#34;</span>
-	<span style="color:#a31515">&#34;fmt&#34;</span>
+<span style="color:#ff79c6">import</span> (
+	<span style="color:#f1fa8c">&#34;context&#34;</span>
+	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
 
-	<span style="color:#a31515">&#34;github.com/grpc-ecosystem/go-grpc-prometheus&#34;</span>
-	<span style="color:#a31515">&#34;github.com/sambaiz/grpc-interceptors/go/sample&#34;</span>
-	<span style="color:#a31515">&#34;google.golang.org/grpc&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/grpc-ecosystem/go-grpc-prometheus&#34;</span>
+	<span style="color:#f1fa8c">&#34;github.com/sambaiz/grpc-interceptors/go/sample&#34;</span>
+	<span style="color:#f1fa8c">&#34;google.golang.org/grpc&#34;</span>
 )
 
-<span style="color:#00f">type</span> cred <span style="color:#00f">struct</span>{}
+<span style="color:#8be9fd;font-style:italic">type</span> cred <span style="color:#8be9fd;font-style:italic">struct</span>{}
 
-<span style="color:#00f">func</span> (c *cred) GetRequestMetadata(ctx context.Context, uri ...<span style="color:#2b91af">string</span>) (<span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>]<span style="color:#2b91af">string</span>, <span style="color:#2b91af">error</span>) {
-	<span style="color:#00f">return</span> <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>]<span style="color:#2b91af">string</span>{
-		<span style="color:#a31515">&#34;authorization&#34;</span>: <span style="color:#a31515">&#34;basic aaaaaa&#34;</span>,
-	}, <span style="color:#00f">nil</span>
+<span style="color:#8be9fd;font-style:italic">func</span> (c <span style="color:#ff79c6">*</span>cred) <span style="color:#50fa7b">GetRequestMetadata</span>(ctx context.Context, uri <span style="color:#ff79c6">...</span><span style="color:#8be9fd">string</span>) (<span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+	<span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd">string</span>{
+		<span style="color:#f1fa8c">&#34;authorization&#34;</span>: <span style="color:#f1fa8c">&#34;basic aaaaaa&#34;</span>,
+	}, <span style="color:#ff79c6">nil</span>
 }
 
-<span style="color:#00f">func</span> (c *cred) RequireTransportSecurity() <span style="color:#2b91af">bool</span> {
-	<span style="color:#00f">return</span> <span style="color:#00f">false</span>
+<span style="color:#8be9fd;font-style:italic">func</span> (c <span style="color:#ff79c6">*</span>cred) <span style="color:#50fa7b">RequireTransportSecurity</span>() <span style="color:#8be9fd">bool</span> {
+	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">false</span>
 }
 
-<span style="color:#00f">func</span> main() {
-	conn, err := grpc.Dial(
-		<span style="color:#a31515">&#34;localhost:8080&#34;</span>,
-		grpc.WithInsecure(),
-		grpc.WithPerRPCCredentials(&amp;cred{}),
-		grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor),
-		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+	conn, err <span style="color:#ff79c6">:=</span> grpc.<span style="color:#50fa7b">Dial</span>(
+		<span style="color:#f1fa8c">&#34;localhost:8080&#34;</span>,
+		grpc.<span style="color:#50fa7b">WithInsecure</span>(),
+		grpc.<span style="color:#50fa7b">WithPerRPCCredentials</span>(<span style="color:#ff79c6">&amp;</span>cred{}),
+		grpc.<span style="color:#50fa7b">WithUnaryInterceptor</span>(grpc_prometheus.UnaryClientInterceptor),
+		grpc.<span style="color:#50fa7b">WithStreamInterceptor</span>(grpc_prometheus.StreamClientInterceptor),
 	)
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		panic(err)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 	}
-	client := sample.NewSampleServiceClient(conn)
+	client <span style="color:#ff79c6">:=</span> sample.<span style="color:#50fa7b">NewSampleServiceClient</span>(conn)
 
-	fmt.Println(<span style="color:#a31515">&#34;- Unary -&#34;</span>)
-	unaryResult, err := client.SampleUnary(context.Background(), &amp;sample.SampleRequest{
-		SampleInput: <span style="color:#a31515">&#34;hello&#34;</span>,
+	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;- Unary -&#34;</span>)
+	unaryResult, err <span style="color:#ff79c6">:=</span> client.<span style="color:#50fa7b">SampleUnary</span>(context.<span style="color:#50fa7b">Background</span>(), <span style="color:#ff79c6">&amp;</span>sample.SampleRequest{
+		SampleInput: <span style="color:#f1fa8c">&#34;hello&#34;</span>,
 	})
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		panic(err)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 	}
-	fmt.Println(unaryResult.SampleOutput)
-	streamClient, err := client.SampleStream(context.Background())
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		panic(err)
+	fmt.<span style="color:#50fa7b">Println</span>(unaryResult.SampleOutput)
+	streamClient, err <span style="color:#ff79c6">:=</span> client.<span style="color:#50fa7b">SampleStream</span>(context.<span style="color:#50fa7b">Background</span>())
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 	}
-	<span style="color:#00f">defer</span> streamClient.CloseSend()
+	<span style="color:#ff79c6">defer</span> streamClient.<span style="color:#50fa7b">CloseSend</span>()
 
-	fmt.Println(<span style="color:#a31515">&#34;- Stream -&#34;</span>)
-	<span style="color:#00f">if</span> err := streamClient.Send(&amp;sample.SampleRequest{
-		SampleInput: <span style="color:#a31515">&#34;he&#34;</span>,
-	}); err != <span style="color:#00f">nil</span> {
-		panic(err)
+	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;- Stream -&#34;</span>)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> streamClient.<span style="color:#50fa7b">Send</span>(<span style="color:#ff79c6">&amp;</span>sample.SampleRequest{
+		SampleInput: <span style="color:#f1fa8c">&#34;he&#34;</span>,
+	}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 	}
-	<span style="color:#00f">if</span> err := streamClient.Send(&amp;sample.SampleRequest{
-		SampleInput: <span style="color:#a31515">&#34;llo&#34;</span>,
-	}); err != <span style="color:#00f">nil</span> {
-		panic(err)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> streamClient.<span style="color:#50fa7b">Send</span>(<span style="color:#ff79c6">&amp;</span>sample.SampleRequest{
+		SampleInput: <span style="color:#f1fa8c">&#34;llo&#34;</span>,
+	}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 	}
-	<span style="color:#00f">if</span> err := streamClient.Send(&amp;sample.SampleRequest{
-		SampleInput: <span style="color:#a31515">&#34;panic&#34;</span>,
-	}); err != <span style="color:#00f">nil</span> {
-		panic(err)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> streamClient.<span style="color:#50fa7b">Send</span>(<span style="color:#ff79c6">&amp;</span>sample.SampleRequest{
+		SampleInput: <span style="color:#f1fa8c">&#34;panic&#34;</span>,
+	}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 	}
-	<span style="color:#00f">for</span> {
-		response, err := streamClient.Recv()
-		<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-			fmt.Println(err)
-			<span style="color:#00f">break</span>
-		} <span style="color:#00f">else</span> {
-			fmt.Println(response.SampleOutput)
+	<span style="color:#ff79c6">for</span> {
+		response, err <span style="color:#ff79c6">:=</span> streamClient.<span style="color:#50fa7b">Recv</span>()
+		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+			fmt.<span style="color:#50fa7b">Println</span>(err)
+			<span style="color:#ff79c6">break</span>
+		} <span style="color:#ff79c6">else</span> {
+			fmt.<span style="color:#50fa7b">Println</span>(response.SampleOutput)
 		}
 	}
 }
 </code></pre></div><h2 id="実行結果">実行結果</h2>
 <p>authによってユーザー名がcontextに入っている。
 recoveryがrecoverしているのでpanicしてもサーバーは落ちていない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go run client.go
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go run client.go
 - Unary -
 sam
 - Stream -
@@ -696,14 +700,14 @@ $ go run main.go
 sam
 ...
 </code></pre></div><p>zapでログが出ている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">GRPC server started on :8080
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">GRPC server started on :8080
 {&#34;level&#34;:&#34;info&#34;,&#34;ts&#34;:1530020624.963142,&#34;caller&#34;:&#34;zap/server_interceptors.go:40&#34;,&#34;msg&#34;:&#34;finished unary call with code OK&#34;,&#34;grpc.start_time&#34;:&#34;2018-06-26T22:43:44+09:00&#34;,&#34;system&#34;:&#34;grpc&#34;,&#34;span.kind&#34;:&#34;server&#34;,&#34;grpc.service&#34;:&#34;sample.SampleService&#34;,&#34;grpc.method&#34;:&#34;SampleUnary&#34;,&#34;grpc.code&#34;:&#34;OK&#34;,&#34;grpc.time_ms&#34;:0.27799999713897705}
 {&#34;level&#34;:&#34;info&#34;,&#34;ts&#34;:1530020624.9652505,&#34;caller&#34;:&#34;zap/grpclogger.go:41&#34;,&#34;msg&#34;:&#34;transport: loopyWriter.run returning. connection error: desc = \&#34;transport is closing\&#34;&#34;,&#34;system&#34;:&#34;grpc&#34;,&#34;grpc_log&#34;:true}
 </code></pre></div><p>prometheusのInterceptorでCounterのメトリクスが追加されている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">grpc_server_handled_total{grpc_code=&#34;OK&#34;,grpc_method=&#34;SampleUnary&#34;,grpc_service=&#34;sample.SampleService&#34;,grpc_type=&#34;unary&#34;} 1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">grpc_server_handled_total{grpc_code=&#34;OK&#34;,grpc_method=&#34;SampleUnary&#34;,grpc_service=&#34;sample.SampleService&#34;,grpc_type=&#34;unary&#34;} 1
 grpc_server_msg_sent_total{grpc_method=&#34;SampleStream&#34;,grpc_service=&#34;sample.SampleService&#34;,grpc_type=&#34;bidi_stream&#34;} 5
 </code></pre></div><p><code>EnableHandlingTimeHistogram()</code>でHistogramsのメトリクスも追加されている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">grpc_server_handling_seconds_bucket{grpc_method=&#34;SampleUnary&#34;,grpc_service=&#34;sample.SampleService&#34;,grpc_type=&#34;unary&#34;,le=&#34;0.005&#34;} 1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">grpc_server_handling_seconds_bucket{grpc_method=&#34;SampleUnary&#34;,grpc_service=&#34;sample.SampleService&#34;,grpc_type=&#34;unary&#34;,le=&#34;0.005&#34;} 1
 grpc_server_handling_seconds_bucket{grpc_method=&#34;SampleUnary&#34;,grpc_service=&#34;sample.SampleService&#34;,grpc_type=&#34;unary&#34;,le=&#34;0.01&#34;} 1
 grpc_server_handling_seconds_bucket{grpc_method=&#34;SampleUnary&#34;,grpc_service=&#34;sample.SampleService&#34;,grpc_type=&#34;unary&#34;,le=&#34;0.025&#34;} 1
 grpc_server_handling_seconds_sum{grpc_method=&#34;SampleStream&#34;,grpc_service=&#34;sample.SampleService&#34;,grpc_type=&#34;bidi_stream&#34;} 271.267611998

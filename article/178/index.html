@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -434,80 +438,80 @@
       <p>GCPのマネージドなQueueサービスとしてGAEのTaskQueueがあることを教えてもらったので動かしてみる。
 PushQueueとPullQueueがあって、それぞれおおよそAWSのSNSとSQSに相当する。PushQueueの場合はHTTPのリクエストとしてGAEのサービスに投げられる。PullQueueは<a href="https://cloud.google.com/appengine/docs/standard/python/taskqueue/rest/">Cloud Tasks API</a>を使えばGAE外からも使えるらしいがまだalpha。</p>
 <p>設定ファイル<a href="https://cloud.google.com/appengine/docs/standard/go/config/queueref">queue.yaml</a>はこんな感じ。bucket_sizeは最大同時実行数で空いていたらrateで埋められていく。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">queue:
-- name: default
-  rate: 10/m
-  bucket_size: 5
-  retry_parameters:
-    min_backoff_seconds: 10
-    max_backoff_seconds: 300
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">queue</span>:
+- <span style="color:#ff79c6">name</span>: default
+  <span style="color:#ff79c6">rate</span>: <span style="color:#bd93f9">10</span>/m
+  <span style="color:#ff79c6">bucket_size</span>: <span style="color:#bd93f9">5</span>
+  <span style="color:#ff79c6">retry_parameters</span>:
+    <span style="color:#ff79c6">min_backoff_seconds</span>: <span style="color:#bd93f9">10</span>
+    <span style="color:#ff79c6">max_backoff_seconds</span>: <span style="color:#bd93f9">300</span>
 </code></pre></div><p>bucket_sizeの最大は500なのでこれ以上の性能が必要な場合は複数のQueueに分けるか
 <a href="https://cloud.google.com/pubsub/">Cloud Pub/Sub</a>を使うことになる。ただし、<a href="https://cloud.google.com/pubsub/faq?hl=ja#duplicates">At-Least-Once</a>なのでレコードが重複しても問題ないように作る必要がある。SQSも<a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/standard-queues.html#standard-queues-at-least-once-delivery">同じ</a>。</p>
 <p><a href="https://www.sambaiz.net/article/180/">GCPのCloud Pub/Sub - sambaiz-net</a></p>
 <h2 id="アプリケーション">アプリケーション</h2>
 <p>/にアクセスすると2つのTaskをdefaultのTaskQueueにDelay25秒でPOSTする。
 Taskによるリクエストは/workerで受け、30%の確率で500エラーを返すようにしている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">package</span> main
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
 
-<span style="color:#00f">import</span> (
-	<span style="color:#a31515">&#34;fmt&#34;</span>
-	<span style="color:#a31515">&#34;io/ioutil&#34;</span>
-	<span style="color:#a31515">&#34;math/rand&#34;</span>
-	<span style="color:#a31515">&#34;net/http&#34;</span>
-	<span style="color:#a31515">&#34;net/url&#34;</span>
-	<span style="color:#a31515">&#34;strconv&#34;</span>
-	<span style="color:#a31515">&#34;time&#34;</span>
+<span style="color:#ff79c6">import</span> (
+	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+	<span style="color:#f1fa8c">&#34;io/ioutil&#34;</span>
+	<span style="color:#f1fa8c">&#34;math/rand&#34;</span>
+	<span style="color:#f1fa8c">&#34;net/http&#34;</span>
+	<span style="color:#f1fa8c">&#34;net/url&#34;</span>
+	<span style="color:#f1fa8c">&#34;strconv&#34;</span>
+	<span style="color:#f1fa8c">&#34;time&#34;</span>
 
-	<span style="color:#a31515">&#34;google.golang.org/appengine&#34;</span>
-	<span style="color:#a31515">&#34;google.golang.org/appengine/log&#34;</span>
-	<span style="color:#a31515">&#34;google.golang.org/appengine/taskqueue&#34;</span>
+	<span style="color:#f1fa8c">&#34;google.golang.org/appengine&#34;</span>
+	<span style="color:#f1fa8c">&#34;google.golang.org/appengine/log&#34;</span>
+	<span style="color:#f1fa8c">&#34;google.golang.org/appengine/taskqueue&#34;</span>
 )
 
-<span style="color:#00f">func</span> main() {
-	http.HandleFunc(<span style="color:#a31515">&#34;/&#34;</span>, handler)
-	http.HandleFunc(<span style="color:#a31515">&#34;/worker&#34;</span>, handlerQueue)
-	appengine.Main()
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+	http.<span style="color:#50fa7b">HandleFunc</span>(<span style="color:#f1fa8c">&#34;/&#34;</span>, handler)
+	http.<span style="color:#50fa7b">HandleFunc</span>(<span style="color:#f1fa8c">&#34;/worker&#34;</span>, handlerQueue)
+	appengine.<span style="color:#50fa7b">Main</span>()
 }
 
-<span style="color:#00f">func</span> handler(w http.ResponseWriter, r *http.Request) {
-	ctx := appengine.NewContext(r)
-	<span style="color:#008000">// POST body: name=a%26&amp;value=20
-</span><span style="color:#008000"></span>	t := taskqueue.NewPOSTTask(<span style="color:#a31515">&#34;/worker&#34;</span>, <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>][]<span style="color:#2b91af">string</span>{<span style="color:#a31515">&#34;name&#34;</span>: {<span style="color:#a31515">&#34;a&amp;&#34;</span>}, <span style="color:#a31515">&#34;time&#34;</span>: {strconv.FormatInt(time.Now().UnixNano(), 10)}})
-	t.Delay = time.Second * 25
-	<span style="color:#008000">// POST body: name=a&amp;name=b
-</span><span style="color:#008000"></span>	t2 := taskqueue.NewPOSTTask(<span style="color:#a31515">&#34;/worker&#34;</span>, <span style="color:#00f">map</span>[<span style="color:#2b91af">string</span>][]<span style="color:#2b91af">string</span>{<span style="color:#a31515">&#34;name&#34;</span>: {<span style="color:#a31515">&#34;a&#34;</span>, <span style="color:#a31515">&#34;b&#34;</span>}})
-	<span style="color:#00f">if</span> _, err := taskqueue.AddMulti(ctx, []*taskqueue.Task{t, t2}, <span style="color:#a31515">&#34;&#34;</span>); err != <span style="color:#00f">nil</span> {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		<span style="color:#00f">return</span>
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">handler</span>(w http.ResponseWriter, r <span style="color:#ff79c6">*</span>http.Request) {
+	ctx <span style="color:#ff79c6">:=</span> appengine.<span style="color:#50fa7b">NewContext</span>(r)
+	<span style="color:#6272a4">// POST body: name=a%26&amp;value=20
+</span><span style="color:#6272a4"></span>	t <span style="color:#ff79c6">:=</span> taskqueue.<span style="color:#50fa7b">NewPOSTTask</span>(<span style="color:#f1fa8c">&#34;/worker&#34;</span>, <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>][]<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;name&#34;</span>: {<span style="color:#f1fa8c">&#34;a&amp;&#34;</span>}, <span style="color:#f1fa8c">&#34;time&#34;</span>: {strconv.<span style="color:#50fa7b">FormatInt</span>(time.<span style="color:#50fa7b">Now</span>().<span style="color:#50fa7b">UnixNano</span>(), <span style="color:#bd93f9">10</span>)}})
+	t.Delay = time.Second <span style="color:#ff79c6">*</span> <span style="color:#bd93f9">25</span>
+	<span style="color:#6272a4">// POST body: name=a&amp;name=b
+</span><span style="color:#6272a4"></span>	t2 <span style="color:#ff79c6">:=</span> taskqueue.<span style="color:#50fa7b">NewPOSTTask</span>(<span style="color:#f1fa8c">&#34;/worker&#34;</span>, <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>][]<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;name&#34;</span>: {<span style="color:#f1fa8c">&#34;a&#34;</span>, <span style="color:#f1fa8c">&#34;b&#34;</span>}})
+	<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> taskqueue.<span style="color:#50fa7b">AddMulti</span>(ctx, []<span style="color:#ff79c6">*</span>taskqueue.Task{t, t2}, <span style="color:#f1fa8c">&#34;&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		http.<span style="color:#50fa7b">Error</span>(w, err.<span style="color:#50fa7b">Error</span>(), http.StatusInternalServerError)
+		<span style="color:#ff79c6">return</span>
 	}
-	fmt.Fprintln(w, <span style="color:#a31515">&#34;ok&#34;</span>)
+	fmt.<span style="color:#50fa7b">Fprintln</span>(w, <span style="color:#f1fa8c">&#34;ok&#34;</span>)
 }
 
-<span style="color:#00f">func</span> handlerQueue(w http.ResponseWriter, r *http.Request) {
-	ctx := appengine.NewContext(r)
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">handlerQueue</span>(w http.ResponseWriter, r <span style="color:#ff79c6">*</span>http.Request) {
+	ctx <span style="color:#ff79c6">:=</span> appengine.<span style="color:#50fa7b">NewContext</span>(r)
 
-	bodyb, err := ioutil.ReadAll(r.Body)
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		<span style="color:#00f">return</span>
+	bodyb, err <span style="color:#ff79c6">:=</span> ioutil.<span style="color:#50fa7b">ReadAll</span>(r.Body)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		http.<span style="color:#50fa7b">Error</span>(w, err.<span style="color:#50fa7b">Error</span>(), http.StatusInternalServerError)
+		<span style="color:#ff79c6">return</span>
 	}
-	body := string(bodyb)
-	log.Infof(ctx, <span style="color:#a31515">&#34;%s\n&#34;</span>, body)
+	body <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">string</span>(bodyb)
+	log.<span style="color:#50fa7b">Infof</span>(ctx, <span style="color:#f1fa8c">&#34;%s\n&#34;</span>, body)
 
-	values, err := url.ParseQuery(body)
-	<span style="color:#00f">if</span> err != <span style="color:#00f">nil</span> {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		<span style="color:#00f">return</span>
+	values, err <span style="color:#ff79c6">:=</span> url.<span style="color:#50fa7b">ParseQuery</span>(body)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		http.<span style="color:#50fa7b">Error</span>(w, err.<span style="color:#50fa7b">Error</span>(), http.StatusInternalServerError)
+		<span style="color:#ff79c6">return</span>
 	}
-	log.Infof(ctx, <span style="color:#a31515">&#34;%#+v\n&#34;</span>, values)
-	<span style="color:#00f">if</span> rand.Float64() &lt; 0.3 {
-		http.Error(w, <span style="color:#a31515">&#34;random fail&#34;</span>, http.StatusInternalServerError)
-		<span style="color:#00f">return</span>
+	log.<span style="color:#50fa7b">Infof</span>(ctx, <span style="color:#f1fa8c">&#34;%#+v\n&#34;</span>, values)
+	<span style="color:#ff79c6">if</span> rand.<span style="color:#50fa7b">Float64</span>() &lt; <span style="color:#bd93f9">0.3</span> {
+		http.<span style="color:#50fa7b">Error</span>(w, <span style="color:#f1fa8c">&#34;random fail&#34;</span>, http.StatusInternalServerError)
+		<span style="color:#ff79c6">return</span>
 	}
-	fmt.Fprintln(w, <span style="color:#a31515">&#34;ok&#34;</span>)
+	fmt.<span style="color:#50fa7b">Fprintln</span>(w, <span style="color:#f1fa8c">&#34;ok&#34;</span>)
 }
 </code></pre></div><p>デプロイして何度かアクセスする。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ gcloud app deploy queue.yaml
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ gcloud app deploy queue.yaml
 $ gcloud app deploy
 $ gcloud app browse
 </code></pre></div><p>TaskがQueueに入り、エラーの場合はリトライしていることが確認できる。</p>

@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -435,19 +439,19 @@
 前者は認証が走り実行者の権限で動くが、後者は認証を行わずデプロイユーザーの権限で動かすこともできるのでパブリックなAPIとして使うことができる。
 当然、不正な操作が行われないように注意する必要があり、GASの<a href="https://developers.google.com/apps-script/guides/services/quotas">Quotaやhard limit</a>も気にする必要がある。無料で運用することができるが、レイテンシやエラーハンドリング、監視などの上で本番環境で動かすイメージはあまり湧いていない。</p>
 <p>ウェブアプリでは<code>doGet(e)</code>と<code>doPost(e)</code>を実装することでそれぞれのメソッドのリクエストをハンドリングできる。これ以外のメソッドには対応していない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js"><span style="color:#00f">function</span> doGet(e) {
-  <span style="color:#00f">return</span> ContentService.createTextOutput(JSON.stringify(e.parameter))
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js"><span style="color:#8be9fd;font-style:italic">function</span> doGet(e) {
+  <span style="color:#ff79c6">return</span> ContentService.createTextOutput(JSON.stringify(e.parameter))
 }
 
-<span style="color:#00f">function</span> doPost(e) {
-  <span style="color:#00f">return</span> ContentService.createTextOutput(e.postData.contents)
+<span style="color:#8be9fd;font-style:italic">function</span> doPost(e) {
+  <span style="color:#ff79c6">return</span> ContentService.createTextOutput(e.postData.contents)
 }
 </code></pre></div><p>claspでデプロイする際は一度画面上でウェブアプリとして公開した後、そのDeplymentsを更新するとそのまま反映できる。ただしDeploymentsに紐づくVersionに限りがあるので一旦undeployしている。</p>
 <p><a href="https://www.sambaiz.net/article/315/">claspでGoogle Apps Scriptをローカルで開発しデプロイする - sambaiz-net</a></p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ clasp push &amp;&amp; clasp undeploy --all &amp;&amp; clasp deploy -V 1
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ clasp push &amp;&amp; clasp undeploy --all &amp;&amp; clasp deploy -V 1
 </code></pre></div><p>ウェブアプリのURLにリクエストを送ると <code>https://script.googleusercontent.com/macros/echo?user_content_key=****</code> にリダイレクトするので、curlでリクエストする際は<code>-L</code>フラグを付ける必要がある。
 また、POSTする際は<code>-X POST</code>を付けると<a href="https://developer.mozilla.org/ja/docs/Web/HTTP/Redirections">ステータスコードに関わらず</a>リダイレクト先に<a href="https://stackoverflow.com/a/41890653">POSTでリクエストし</a>、Not Foundとなってしまうので付けない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl -L https://script.google.com/macros/s/*****/exec?aaa=bbb
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl -L https://script.google.com/macros/s/*****/exec?aaa=bbb
 {&#34;aaa&#34;:&#34;bbb&#34;}
 
 $ $ curl -d &#39;aaaa&#39; -L https://script.google.com/macros/s/*****/exec
@@ -455,47 +459,47 @@ $ $ curl -d &#39;aaaa&#39; -L https://script.google.com/macros/s/*****/exec
 </code></pre></div><p>GETとPOSTしか対応してないということは、OPTIONSメソッドによるCORSのpreflightリクエストも送れないということになる。
 したがって、preflightリクエストが<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#Simple_requests">送られないように</a>、余分なHeaderを付けずに <code>Content-Type</code>を<code>application/x-www-form-urlencoded</code>、<code>multipart/form-data</code>、<code>text/plain</code>のいずれかで送る必要がある。
 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Request/mode">Request.mode</a>を<code>no-cors</code>にすると送られるHeaderが制限されてエラーにはならなくなるが、レスポンスをスクリプトから取ることができない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-html" data-lang="html">$ cat test.html
-&lt;script&gt;
-  (<span style="color:#00f">async</span> () =&gt; {
-    <span style="color:#00f">const</span> resp = <span style="color:#00f">await</span> fetch(<span style="color:#a31515">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
-      method: <span style="color:#a31515">&#39;POST&#39;</span>,
-      body: JSON.stringify({<span style="color:#a31515">&#34;req&#34;</span>: 1})
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-html" data-lang="html">$ cat test.html
+&lt;<span style="color:#ff79c6">script</span>&gt;
+  (<span style="color:#ff79c6">async</span> () =&gt; {
+    <span style="color:#ff79c6">const</span> resp <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">await</span> fetch(<span style="color:#f1fa8c">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
+      method<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;POST&#39;</span>,
+      body<span style="color:#ff79c6">:</span> JSON.stringify({<span style="color:#f1fa8c">&#34;req&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">1</span>})
     })
-    console.log(<span style="color:#a31515">`1: </span><span style="color:#a31515">${</span><span style="color:#00f">await</span> resp.text()<span style="color:#a31515">}</span><span style="color:#a31515">`</span>) <span style="color:#008000">// OK
-</span><span style="color:#008000"></span>  })();
-  (<span style="color:#00f">async</span> () =&gt; {
-    <span style="color:#00f">const</span> resp = <span style="color:#00f">await</span> fetch(<span style="color:#a31515">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
-      method: <span style="color:#a31515">&#39;POST&#39;</span>,
-      body: JSON.stringify({<span style="color:#a31515">&#34;req&#34;</span>: 2}),
-      headers: {
-        <span style="color:#a31515">&#39;Content-Type&#39;</span>: <span style="color:#a31515">&#39;text/plain&#39;</span>
+    console.log(<span style="color:#f1fa8c">`1: </span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">await</span> resp.text()<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>) <span style="color:#6272a4">// OK
+</span><span style="color:#6272a4"></span>  })();
+  (<span style="color:#ff79c6">async</span> () =&gt; {
+    <span style="color:#ff79c6">const</span> resp <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">await</span> fetch(<span style="color:#f1fa8c">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
+      method<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;POST&#39;</span>,
+      body<span style="color:#ff79c6">:</span> JSON.stringify({<span style="color:#f1fa8c">&#34;req&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">2</span>}),
+      headers<span style="color:#ff79c6">:</span> {
+        <span style="color:#f1fa8c">&#39;Content-Type&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;text/plain&#39;</span>
       }
     })
-    console.log(<span style="color:#a31515">`2: </span><span style="color:#a31515">${</span><span style="color:#00f">await</span> resp.text()<span style="color:#a31515">}</span><span style="color:#a31515">`</span>) <span style="color:#008000">// OK
-</span><span style="color:#008000"></span>  })();
-  (<span style="color:#00f">async</span> () =&gt; {
-    <span style="color:#00f">const</span> resp = <span style="color:#00f">await</span> fetch(<span style="color:#a31515">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
-      method: <span style="color:#a31515">&#39;POST&#39;</span>,
-      body: JSON.stringify({<span style="color:#a31515">&#34;req&#34;</span>: 3}),
-      headers: {
-        <span style="color:#a31515">&#39;Content-Type&#39;</span>: <span style="color:#a31515">&#39;application/json&#39;</span>
+    console.log(<span style="color:#f1fa8c">`2: </span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">await</span> resp.text()<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>) <span style="color:#6272a4">// OK
+</span><span style="color:#6272a4"></span>  })();
+  (<span style="color:#ff79c6">async</span> () =&gt; {
+    <span style="color:#ff79c6">const</span> resp <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">await</span> fetch(<span style="color:#f1fa8c">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
+      method<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;POST&#39;</span>,
+      body<span style="color:#ff79c6">:</span> JSON.stringify({<span style="color:#f1fa8c">&#34;req&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">3</span>}),
+      headers<span style="color:#ff79c6">:</span> {
+        <span style="color:#f1fa8c">&#39;Content-Type&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;application/json&#39;</span>
       }
     })
-    console.log(<span style="color:#a31515">`3: </span><span style="color:#a31515">${</span><span style="color:#00f">await</span> resp.text()<span style="color:#a31515">}</span><span style="color:#a31515">`</span>) <span style="color:#008000">// CORS error
-</span><span style="color:#008000"></span>  })();
-  (<span style="color:#00f">async</span> () =&gt; {
-    <span style="color:#00f">const</span> resp = <span style="color:#00f">await</span> fetch(<span style="color:#a31515">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
-      method: <span style="color:#a31515">&#39;POST&#39;</span>,
-      mode: <span style="color:#a31515">&#39;no-cors&#39;</span>,
-      body: JSON.stringify({<span style="color:#a31515">&#34;req&#34;</span>: 4}),
-      headers: {
-        <span style="color:#a31515">&#39;Content-Type&#39;</span>: <span style="color:#a31515">&#39;application/json&#39;</span>
+    console.log(<span style="color:#f1fa8c">`3: </span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">await</span> resp.text()<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>) <span style="color:#6272a4">// CORS error
+</span><span style="color:#6272a4"></span>  })();
+  (<span style="color:#ff79c6">async</span> () =&gt; {
+    <span style="color:#ff79c6">const</span> resp <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">await</span> fetch(<span style="color:#f1fa8c">&#39;https://script.google.com/macros/s/*****/exec&#39;</span>, {
+      method<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;POST&#39;</span>,
+      mode<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;no-cors&#39;</span>,
+      body<span style="color:#ff79c6">:</span> JSON.stringify({<span style="color:#f1fa8c">&#34;req&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">4</span>}),
+      headers<span style="color:#ff79c6">:</span> {
+        <span style="color:#f1fa8c">&#39;Content-Type&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;application/json&#39;</span>
       }
     })
-    console.log(<span style="color:#a31515">`4: </span><span style="color:#a31515">${</span><span style="color:#00f">await</span> resp.text()<span style="color:#a31515">}</span><span style="color:#a31515">`</span>) <span style="color:#008000">// OK but text() is empty
-</span><span style="color:#008000"></span>  })();
-&lt;/script&gt;
+    console.log(<span style="color:#f1fa8c">`4: </span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">await</span> resp.text()<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>) <span style="color:#6272a4">// OK but text() is empty
+</span><span style="color:#6272a4"></span>  })();
+&lt;/<span style="color:#ff79c6">script</span>&gt;
 
 $ npx http-server .
 $ open http://127.0.0.1:8080/test.html

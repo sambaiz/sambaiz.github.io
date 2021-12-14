@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -435,20 +439,20 @@
 <a href="https://github.com/sambaiz/npm-lambda-layer">GitHub</a>にある。</p>
 <p><a href="https://www.sambaiz.net/article/232/">Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net</a></p>
 <p>まずは<code>/usr/bin/npm</code>をそのまま入れて実行してみた。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#00f">FROM</span><span style="color:#a31515"> lambci/lambda-base:build</span><span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">WORKDIR</span><span style="color:#a31515"> /opt</span><span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">RUN</span> curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    yum install -y nodejs &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    mkdir bin &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    cp /usr/bin/node bin/node &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    cp /usr/bin/npm bin/ &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    zip -yr /tmp/npm-layer.zip ./*<span style="">
-</span></code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker build -t npmbin .
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#ff79c6">FROM</span><span style="color:#f1fa8c"> lambci/lambda-base:build</span>
+
+<span style="color:#ff79c6">WORKDIR</span><span style="color:#f1fa8c"> /opt</span>
+
+<span style="color:#ff79c6">RUN</span> curl -sL https://rpm.nodesource.com/setup_12.x | bash - <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    yum install -y nodejs <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    mkdir bin <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    cp /usr/bin/node bin/node <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    cp /usr/bin/npm bin/ <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    zip -yr /tmp/npm-layer.zip ./*
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker build -t npmbin .
 $ docker run npmbin cat /tmp/npm-layer.zip &gt; npm-layer.zip &amp;&amp; unzip npm-layer.zip -d layer
 </code></pre></div><p>相対パスでの参照に失敗したようだが対象のパスが見当たらない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">internal/modules/cjs/loader.js:628
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">internal/modules/cjs/loader.js:628
     throw err;
     ^
 
@@ -470,77 +474,77 @@ Require stack:
 }
  exit status 1
 </code></pre></div><p>というのもnpmはシンボリックリンクで、その参照先に対象のパスがあった。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ls -l /usr/bin/npm 
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ls -l /usr/bin/npm 
 lrwxrwxrwx 1 root root 38 Jul 23 09:34 /usr/bin/npm -&gt; ../lib/node_modules/npm/bin/npm-cli.js
 </code></pre></div><p>これごとLayerに含めることにした。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#00f">FROM</span><span style="color:#a31515"> lambci/lambda-base:build</span><span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">WORKDIR</span><span style="color:#a31515"> /opt</span><span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">RUN</span> curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    yum install -y nodejs &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    mkdir bin nodejs &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    cp /usr/bin/node bin/node &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    zip -yr /tmp/npm-layer.zip ./*<span style="">
-</span></code></pre></div><p>すると次のエラーに変わった。Lambdaは<code>/tmp</code>にしかwriteできないのに$HOMEに書こうとしているようだ。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Unhandled rejection Error: EACCES: permission denied, mkdir &#39;/home/sbx_user1051&#39;
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#ff79c6">FROM</span><span style="color:#f1fa8c"> lambci/lambda-base:build</span>
+
+<span style="color:#ff79c6">WORKDIR</span><span style="color:#f1fa8c"> /opt</span>
+
+<span style="color:#ff79c6">RUN</span> curl -sL https://rpm.nodesource.com/setup_12.x | bash - <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    yum install -y nodejs <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    mkdir bin nodejs <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    cp /usr/bin/node bin/node <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    cp -r /usr/lib/node_modules ./nodejs/node_modules <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    zip -yr /tmp/npm-layer.zip ./*
+</code></pre></div><p>すると次のエラーに変わった。Lambdaは<code>/tmp</code>にしかwriteできないのに$HOMEに書こうとしているようだ。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Unhandled rejection Error: EACCES: permission denied, mkdir &#39;/home/sbx_user1051&#39;
 npm ERR! cb() never called!
 
 npm ERR! This is an error with npm itself. Please report this error at:
 npm ERR!     &lt;https://npm.community&gt;
 exit status 1
 </code></pre></div><p>npm configのデフォルト値をみてみたところ、いくつか$HOMEを参照している。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm config ls -l | grep $HOME
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ npm config ls -l | grep $HOME
 cache = &#34;/root/.npm&#34;
 init-module = &#34;/root/.npm-init.js&#34;
 userconfig = &#34;/root/.npmrc&#34;
 </code></pre></div><p>そこでこれらの値を書き換えたnpmrcを含めた。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#00f">ENV</span> NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc<span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">RUN</span> ...<span style="">
-</span><span style=""></span>    npm config set cache /tmp/.npm &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    npm config set init-module /tmp/.npm-init.js &amp;&amp; <span style="color:#a31515">\ </span><span style="">
-</span><span style=""></span>    npm config set update-notifier false &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    chmod a+r $NPM_CONFIG_USERCONFIG &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    zip -yr /tmp/npm-layer.zip ./*<span style="">
-</span></code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">func</span> handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, <span style="color:#2b91af">error</span>) {
-	<span style="color:#00f">if</span> err := os.Setenv(<span style="color:#a31515">&#34;NPM_CONFIG_USERCONFIG&#34;</span>, <span style="color:#a31515">&#34;/opt/nodejs/.npmrc&#34;</span>); err != <span style="color:#00f">nil</span> {
-		<span style="color:#00f">return</span> events.APIGatewayProxyResponse{
-			Body:       err.Error(),
-			StatusCode: 500,
-		}, <span style="color:#00f">nil</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#ff79c6">ENV</span> NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
+
+<span style="color:#ff79c6">RUN</span> ...
+    npm config <span style="color:#8be9fd;font-style:italic">set</span> cache /tmp/.npm <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    npm config <span style="color:#8be9fd;font-style:italic">set</span> init-module /tmp/.npm-init.js <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\ </span>
+    npm config <span style="color:#8be9fd;font-style:italic">set</span> update-notifier <span style="color:#8be9fd;font-style:italic">false</span> <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    chmod a+r <span style="color:#8be9fd;font-style:italic">$NPM_CONFIG_USERCONFIG</span> <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    ln -s ../nodejs/node_modules/npm/bin/npm-cli.js ./bin/npm <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    zip -yr /tmp/npm-layer.zip ./*
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">handler</span>(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, <span style="color:#8be9fd">error</span>) {
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">Setenv</span>(<span style="color:#f1fa8c">&#34;NPM_CONFIG_USERCONFIG&#34;</span>, <span style="color:#f1fa8c">&#34;/opt/nodejs/.npmrc&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		<span style="color:#ff79c6">return</span> events.APIGatewayProxyResponse{
+			Body:       err.<span style="color:#50fa7b">Error</span>(),
+			StatusCode: <span style="color:#bd93f9">500</span>,
+		}, <span style="color:#ff79c6">nil</span>
 	}
-	...
+	<span style="color:#ff79c6">...</span>
 }
 </code></pre></div><p>これでlocalでうまくいくことが確認できたのでデプロイしてみたところ、
 <code>Error: Cannot find module '../lib/utils/unsupported.js'</code> が再発してしまった。
 原因はシンボリックリンクがコピーになっているためで、<a href="https://github.com/awslabs/aws-sam-cli/pull/1140">PR</a>が上がっている。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">out, err = exec.Command(<span style="color:#a31515">&#34;ls&#34;</span>, <span style="color:#a31515">&#34;-l&#34;</span>, <span style="color:#a31515">&#34;/opt/bin/npm&#34;</span>).CombinedOutput()
-<span style="color:#008000">// =&gt; ls: -rwxr-xr-x 1 root root 4566 Jul 24 2019 /opt/bin/npm
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">out, err = exec.<span style="color:#50fa7b">Command</span>(<span style="color:#f1fa8c">&#34;ls&#34;</span>, <span style="color:#f1fa8c">&#34;-l&#34;</span>, <span style="color:#f1fa8c">&#34;/opt/bin/npm&#34;</span>).<span style="color:#50fa7b">CombinedOutput</span>()
+<span style="color:#6272a4">// =&gt; ls: -rwxr-xr-x 1 root root 4566 Jul 24 2019 /opt/bin/npm
 </span></code></pre></div><p>代わりにshell scriptを置くことにした。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#00f">FROM</span><span style="color:#a31515"> lambci/lambda-base:build</span><span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">WORKDIR</span><span style="color:#a31515"> /opt</span><span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">ENV</span> NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc<span style="">
-</span><span style="">
-</span><span style=""></span><span style="color:#00f">RUN</span> curl -sL https://rpm.nodesource.com/setup_12.x | bash - &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    yum install -y nodejs &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    mkdir bin nodejs &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    cp /usr/bin/node bin/node &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    cp -r /usr/lib/node_modules ./nodejs/node_modules &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    npm config set cache /tmp/.npm &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    npm config set init-module /tmp/.npm-init.js &amp;&amp; <span style="color:#a31515">\ </span><span style="">
-</span><span style=""></span>    npm config set update-notifier false &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    chmod a+r $NPM_CONFIG_USERCONFIG &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    echo -e <span style="color:#a31515">&#34;#!/bin/sh\n/opt/nodejs/node_modules/npm/bin/npm-cli.js \$@&#34;</span> &gt; ./bin/npm &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    chmod a+x ./bin/npm &amp;&amp; <span style="color:#a31515">\
-</span><span style="color:#a31515"></span>    zip -yr /tmp/npm-layer.zip ./*<span style="">
-</span></code></pre></div><p>あとはタイムアウト対策のためMemorySizeを1024に増やしてようやく返ってくるようになった。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">npm notice created a lockfile as package-lock.json. You should commit this file.
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#ff79c6">FROM</span><span style="color:#f1fa8c"> lambci/lambda-base:build</span>
+
+<span style="color:#ff79c6">WORKDIR</span><span style="color:#f1fa8c"> /opt</span>
+
+<span style="color:#ff79c6">ENV</span> NPM_CONFIG_USERCONFIG /opt/nodejs/.npmrc
+
+<span style="color:#ff79c6">RUN</span> curl -sL https://rpm.nodesource.com/setup_12.x | bash - <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    yum install -y nodejs <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    mkdir bin nodejs <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    cp /usr/bin/node bin/node <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    cp -r /usr/lib/node_modules ./nodejs/node_modules <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    npm config <span style="color:#8be9fd;font-style:italic">set</span> cache /tmp/.npm <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    npm config <span style="color:#8be9fd;font-style:italic">set</span> init-module /tmp/.npm-init.js <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\ </span>
+    npm config <span style="color:#8be9fd;font-style:italic">set</span> update-notifier <span style="color:#8be9fd;font-style:italic">false</span> <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    chmod a+r <span style="color:#8be9fd;font-style:italic">$NPM_CONFIG_USERCONFIG</span> <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">echo</span> -e <span style="color:#f1fa8c">&#34;#!/bin/sh\n/opt/nodejs/node_modules/npm/bin/npm-cli.js \$@&#34;</span> &gt; ./bin/npm <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    chmod a+x ./bin/npm <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    zip -yr /tmp/npm-layer.zip ./*
+</code></pre></div><p>あとはタイムアウト対策のためMemorySizeを1024に増やしてようやく返ってくるようになった。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">npm notice created a lockfile as package-lock.json. You should commit this file.
 npm WARN tmp@1.0.0 No description
 npm WARN tmp@1.0.0 No repository field.
 

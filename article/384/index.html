@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -450,58 +454,58 @@
         <a class="tag" href='/tags/spark/'>spark</a><a class="tag" href='/tags/python/'>python</a>
       </div>
       <p>Sparkでschemaを指定せずjsonなどを<a href="https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.DataFrameReader.json.html">読み込むと</a>次のように入力データから自動で決定される。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py"><span style="color:#008000"># {&#34;aaa&#34;:123,&#34;ccc&#34;:[123],&#34;eee&#34;:{&#34;fff&#34;:123},&#34;hhh&#34;:null}</span>
-df = spark.read.json(<span style="color:#a31515">&#34;s3://hogefuga/testjson/&#34;</span>)
-df.printSchema()
-<span style="color:#a31515">&#39;&#39;&#39;
-</span><span style="color:#a31515">root
-</span><span style="color:#a31515"> |-- aaa: long (nullable = true)
-</span><span style="color:#a31515"> |-- ccc: array (nullable = true)
-</span><span style="color:#a31515"> |    |-- element: long (containsNull = true)
-</span><span style="color:#a31515"> |-- eee: struct (nullable = true)
-</span><span style="color:#a31515"> |    |-- fff: long (nullable = true)
-</span><span style="color:#a31515"> |-- hhh: string (nullable = true)
-</span><span style="color:#a31515">&#39;&#39;&#39;</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py"><span style="color:#6272a4"># {&#34;aaa&#34;:123,&#34;ccc&#34;:[123],&#34;eee&#34;:{&#34;fff&#34;:123},&#34;hhh&#34;:null}</span>
+df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>read<span style="color:#ff79c6">.</span>json(<span style="color:#f1fa8c">&#34;s3://hogefuga/testjson/&#34;</span>)
+df<span style="color:#ff79c6">.</span>printSchema()
+<span style="color:#f1fa8c">&#39;&#39;&#39;
+</span><span style="color:#f1fa8c">root
+</span><span style="color:#f1fa8c"> |-- aaa: long (nullable = true)
+</span><span style="color:#f1fa8c"> |-- ccc: array (nullable = true)
+</span><span style="color:#f1fa8c"> |    |-- element: long (containsNull = true)
+</span><span style="color:#f1fa8c"> |-- eee: struct (nullable = true)
+</span><span style="color:#f1fa8c"> |    |-- fff: long (nullable = true)
+</span><span style="color:#f1fa8c"> |-- hhh: string (nullable = true)
+</span><span style="color:#f1fa8c">&#39;&#39;&#39;</span>
 </code></pre></div><p>これは大抵の場合うまくはたらくが、mapを想定したフィールドがstruct判定されたり、フィールドにnullしか含まれてないためにstring判定されたりすると、関数の入力に合わず処理に失敗することがある。<a href="https://spark.apache.org/docs/3.1.1/api/sql/index.html#explode">explode()</a>はarrayやmapを複数行に展開する関数。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py">df.createOrReplaceTempView(<span style="color:#a31515">&#34;tbl&#34;</span>)
-<span style="color:#00f">print</span>(spark.sql(<span style="color:#a31515">&#34;SELECT v FROM tbl LATERAL VIEW explode(ccc) as v&#34;</span>).head()) <span style="color:#008000"># Row(v=123)</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py">df<span style="color:#ff79c6">.</span>createOrReplaceTempView(<span style="color:#f1fa8c">&#34;tbl&#34;</span>)
+<span style="color:#ff79c6">print</span>(spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT v FROM tbl LATERAL VIEW explode(ccc) as v&#34;</span>)<span style="color:#ff79c6">.</span>head()) <span style="color:#6272a4"># Row(v=123)</span>
 
-<span style="color:#00f">print</span>(spark.sql(<span style="color:#a31515">&#34;SELECT k, v FROM tbl LATERAL VIEW explode(eee) as k, v&#34;</span>).head()) 
-<span style="color:#008000"># cannot resolve &#39;explode(tbl.`eee`)&#39; due to data type mismatch: input to function explode should be array or map type, not struct&lt;fff:bigint&gt;</span>
+<span style="color:#ff79c6">print</span>(spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT k, v FROM tbl LATERAL VIEW explode(eee) as k, v&#34;</span>)<span style="color:#ff79c6">.</span>head()) 
+<span style="color:#6272a4"># cannot resolve &#39;explode(tbl.`eee`)&#39; due to data type mismatch: input to function explode should be array or map type, not struct&lt;fff:bigint&gt;</span>
 
-<span style="color:#00f">print</span>(spark.sql(<span style="color:#a31515">&#34;SELECT v FROM tbl LATERAL VIEW explode(CAST(eee AS map&lt;string,long&gt;)) as v&#34;</span>).head()) 
-<span style="color:#008000"># cannot resolve &#39;tbl.`eee`&#39; due to data type mismatch: cannot cast struct&lt;fff:bigint&gt; to map&lt;string,bigint&gt;</span>
+<span style="color:#ff79c6">print</span>(spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT v FROM tbl LATERAL VIEW explode(CAST(eee AS map&lt;string,long&gt;)) as v&#34;</span>)<span style="color:#ff79c6">.</span>head()) 
+<span style="color:#6272a4"># cannot resolve &#39;tbl.`eee`&#39; due to data type mismatch: cannot cast struct&lt;fff:bigint&gt; to map&lt;string,bigint&gt;</span>
 </code></pre></div><p>そこで明示的にDataFrameReaderにschemaを渡してやる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py"><span style="color:#00f">from</span> pyspark.sql.types <span style="color:#00f">import</span> StructType, StructField, LongType, ArrayType, MapType, StringType, LongType
-schema = StructType([
-    StructField(<span style="color:#a31515">&#34;aaa&#34;</span>, LongType()),
-    StructField(<span style="color:#a31515">&#34;ccc&#34;</span>, ArrayType(LongType())),
-    StructField(<span style="color:#a31515">&#34;eee&#34;</span>, MapType(StringType(), LongType())),
-    StructField(<span style="color:#a31515">&#34;hhh&#34;</span>, LongType()),
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py"><span style="color:#ff79c6">from</span> pyspark.sql.types <span style="color:#ff79c6">import</span> StructType, StructField, LongType, ArrayType, MapType, StringType, LongType
+schema <span style="color:#ff79c6">=</span> StructType([
+    StructField(<span style="color:#f1fa8c">&#34;aaa&#34;</span>, LongType()),
+    StructField(<span style="color:#f1fa8c">&#34;ccc&#34;</span>, ArrayType(LongType())),
+    StructField(<span style="color:#f1fa8c">&#34;eee&#34;</span>, MapType(StringType(), LongType())),
+    StructField(<span style="color:#f1fa8c">&#34;hhh&#34;</span>, LongType()),
 ])
-df2 = spark.read.schema(schema).json(<span style="color:#a31515">&#34;s3://hogefuga/testjson/&#34;</span>)
-df2.printSchema()
-<span style="color:#a31515">&#39;&#39;&#39;
-</span><span style="color:#a31515">root
-</span><span style="color:#a31515"> |-- aaa: long (nullable = true)
-</span><span style="color:#a31515"> |-- ccc: array (nullable = true)
-</span><span style="color:#a31515"> |    |-- element: long (containsNull = true)
-</span><span style="color:#a31515"> |-- eee: map (nullable = true)
-</span><span style="color:#a31515"> |    |-- key: string
-</span><span style="color:#a31515"> |    |-- value: long (valueContainsNull = true)
-</span><span style="color:#a31515"> |-- hhh: long (nullable = true)
-</span><span style="color:#a31515"> &#39;&#39;&#39;</span>
+df2 <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>read<span style="color:#ff79c6">.</span>schema(schema)<span style="color:#ff79c6">.</span>json(<span style="color:#f1fa8c">&#34;s3://hogefuga/testjson/&#34;</span>)
+df2<span style="color:#ff79c6">.</span>printSchema()
+<span style="color:#f1fa8c">&#39;&#39;&#39;
+</span><span style="color:#f1fa8c">root
+</span><span style="color:#f1fa8c"> |-- aaa: long (nullable = true)
+</span><span style="color:#f1fa8c"> |-- ccc: array (nullable = true)
+</span><span style="color:#f1fa8c"> |    |-- element: long (containsNull = true)
+</span><span style="color:#f1fa8c"> |-- eee: map (nullable = true)
+</span><span style="color:#f1fa8c"> |    |-- key: string
+</span><span style="color:#f1fa8c"> |    |-- value: long (valueContainsNull = true)
+</span><span style="color:#f1fa8c"> |-- hhh: long (nullable = true)
+</span><span style="color:#f1fa8c"> &#39;&#39;&#39;</span>
 
-df2.createOrReplaceTempView(<span style="color:#a31515">&#34;tbl2&#34;</span>)
-<span style="color:#00f">print</span>(spark.sql(<span style="color:#a31515">&#34;SELECT k, v FROM tbl2 LATERAL VIEW explode(eee) as k, v&#34;</span>).head()) <span style="color:#008000"># Row(k=&#39;fff&#39;, v=123)</span>
+df2<span style="color:#ff79c6">.</span>createOrReplaceTempView(<span style="color:#f1fa8c">&#34;tbl2&#34;</span>)
+<span style="color:#ff79c6">print</span>(spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT k, v FROM tbl2 LATERAL VIEW explode(eee) as k, v&#34;</span>)<span style="color:#ff79c6">.</span>head()) <span style="color:#6272a4"># Row(k=&#39;fff&#39;, v=123)</span>
 </code></pre></div><p>なお、既存のrddからschemaを指定して<a href="https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.SparkSession.createDataFrame.html">createDataFrame()</a>するとmapへの変換に失敗する。cast()も同様。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py">spark.createDataFrame(spark.read.json(<span style="color:#a31515">&#34;s3://hogefuga/testjson/&#34;</span>).rdd, schema)
-<span style="color:#008000"># TypeError: field eee: MapType(StringType,LongType,true) can not accept object Row(fff=123) in type &lt;class &#39;pyspark.sql.types.Row&#39;&gt;</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py">spark<span style="color:#ff79c6">.</span>createDataFrame(spark<span style="color:#ff79c6">.</span>read<span style="color:#ff79c6">.</span>json(<span style="color:#f1fa8c">&#34;s3://hogefuga/testjson/&#34;</span>)<span style="color:#ff79c6">.</span>rdd, schema)
+<span style="color:#6272a4"># TypeError: field eee: MapType(StringType,LongType,true) can not accept object Row(fff=123) in type &lt;class &#39;pyspark.sql.types.Row&#39;&gt;</span>
 </code></pre></div><p>データ構造が大きく全てのschemaを指定するのが面倒な場合は、<a href="https://spark.apache.org/docs/3.1.1/sql-ref-functions-udf-scalar.html">UDF (User Defined Function)</a>で<a href="https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.Row.asDict.html">Row.asDict()</a>して変換する方法もある。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py"><span style="color:#00f">from</span> pyspark.sql <span style="color:#00f">import</span> functions <span style="color:#00f">as</span> F
-struct_to_string_long_map = F.udf(<span style="color:#00f">lambda</span> row: row.asDict()), MapType(StringType(), LongType()))
-spark.udf.register(<span style="color:#a31515">&#34;struct_to_string_long_map&#34;</span>, struct_to_string_long_map)
-<span style="color:#00f">print</span>(spark.sql(<span style="color:#a31515">&#34;SELECT k, v FROM tbl LATERAL VIEW explode(struct_to_string_long_map(eee)) as k, v&#34;</span>).head()) <span style="color:#008000"># Row(k=&#39;fff&#39;, v=123)</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py"><span style="color:#ff79c6">from</span> pyspark.sql <span style="color:#ff79c6">import</span> functions <span style="color:#ff79c6">as</span> F
+struct_to_string_long_map <span style="color:#ff79c6">=</span> F<span style="color:#ff79c6">.</span>udf(<span style="color:#ff79c6">lambda</span> row: row<span style="color:#ff79c6">.</span>asDict()), MapType(StringType(), LongType()))
+spark<span style="color:#ff79c6">.</span>udf<span style="color:#ff79c6">.</span>register(<span style="color:#f1fa8c">&#34;struct_to_string_long_map&#34;</span>, struct_to_string_long_map)
+<span style="color:#ff79c6">print</span>(spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT k, v FROM tbl LATERAL VIEW explode(struct_to_string_long_map(eee)) as k, v&#34;</span>)<span style="color:#ff79c6">.</span>head()) <span style="color:#6272a4"># Row(k=&#39;fff&#39;, v=123)</span>
 </code></pre></div><h2 id="参考">参考</h2>
 <p><a href="http://tech-blog.tsukaby.com/archives/1333">Spark DataFrameのschemaにまつわる罠とschemaの補正 | つかびーの技術日記</a></p>
 <p><a href="https://blog.amedama.jp/entry/2018/01/31/210755">PySpark の UDF (User Defined Function) を試す - CUBE SUGAR CONTAINER</a></p>

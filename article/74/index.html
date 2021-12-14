@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -434,129 +438,129 @@
       <p><a href="https://www.sambaiz.net/article/61/">Goのnet/httpとKeep-Alive - sambaiz.net</a>でやったように、
 あるエンドポイントに連続してGoroutineでリクエストを投げると、リクエスト数を増やしたときにタイムアウトが頻発するようになった。</p>
 <p>まず、2000リクエストを投げてみた結果。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">[RESULT] request: 2000, ok: 2000, ng: 0, time(ms) 138
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">[RESULT] request: 2000, ok: 2000, ng: 0, time(ms) 138
 </code></pre></div><p>一応全部捌けてはいるけど、おおよそ同時にリクエストを送っているのにタイムアウト(100ms)時間を超えてしまっている。これをさらに3000に増やしてみる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">[RESULT] request: 3000, ok: 13, ng: 2987, time(ms) 372
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">[RESULT] request: 3000, ok: 13, ng: 2987, time(ms) 372
 </code></pre></div><p>ほぼ全滅してしまった・・・。時間もおかしいのでGoroutineでの処理に遅延が発生しているようだ。
 そこで、都度Goroutineを生成してリクエストを投げるのではなく、
 一定数のWorkerに処理させることで、同時に作られるGoroutineの数を抑制する。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">type</span> Req <span style="color:#00f">struct</span> {
-	Okch <span style="color:#00f">chan</span> <span style="color:#2b91af">int</span>
-	Ngch <span style="color:#00f">chan</span> <span style="color:#2b91af">int</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">type</span> Req <span style="color:#8be9fd;font-style:italic">struct</span> {
+	Okch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">int</span>
+	Ngch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">int</span>
 }
 
-<span style="color:#00f">func</span> startWorker(ctx context.Context, num <span style="color:#2b91af">int</span>) (requestch <span style="color:#00f">chan</span> *Req) {
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">startWorker</span>(ctx context.Context, num <span style="color:#8be9fd">int</span>) (requestch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req) {
 
-	requestch = make(<span style="color:#00f">chan</span> *Req)
+	requestch = <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req)
 
-	<span style="color:#00f">for</span> i := 0; i &lt; num; i++ {
-		<span style="color:#00f">go</span> <span style="color:#00f">func</span>() {
-			<span style="color:#00f">for</span> {
-				<span style="color:#00f">select</span> {
-				<span style="color:#00f">case</span> req := &lt;-requestch:
-					request(req.Okch, req.Ngch)
-				<span style="color:#00f">case</span> &lt;-ctx.Done():
-					<span style="color:#00f">return</span>
+	<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; num; i<span style="color:#ff79c6">++</span> {
+		<span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+			<span style="color:#ff79c6">for</span> {
+				<span style="color:#ff79c6">select</span> {
+				<span style="color:#ff79c6">case</span> req <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>requestch:
+					<span style="color:#50fa7b">request</span>(req.Okch, req.Ngch)
+				<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+					<span style="color:#ff79c6">return</span>
 				}
 			}
 		}()
 	}
 
-	<span style="color:#00f">return</span>
+	<span style="color:#ff79c6">return</span>
 }
 
-<span style="color:#00f">func</span> main(){
-    ...
-    ctx, cancel := context.WithCancel(context.Background())
-	<span style="color:#00f">defer</span> cancel()
-	requestch := startWorker(ctx, 1000)
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>(){
+    <span style="color:#ff79c6">...</span>
+    ctx, cancel <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">WithCancel</span>(context.<span style="color:#50fa7b">Background</span>())
+	<span style="color:#ff79c6">defer</span> <span style="color:#50fa7b">cancel</span>()
+	requestch <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">startWorker</span>(ctx, <span style="color:#bd93f9">1000</span>)
 
-    requestch &lt;- req
-    ...
+    requestch <span style="color:#ff79c6">&lt;-</span> req
+    <span style="color:#ff79c6">...</span>
 }
 </code></pre></div><p>結果、すべてのリクエストをタイムアウトせずに送れるようになった。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 157
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 157
 [RESULT] request: 5000, ok: 5000, ng: 0, time(ms) 239
 </code></pre></div><p>上のコードではWorkerを作るにあたって単純にWorkerの数分goroutineを生成して共通のチャネルに入ってきたものを読んで処理させているが、
 以下の記事のようにDispatcherを用意してWorkerPool(chan chan Job)からWorkerのjobChannel(chan Job)を取り出して送る方法も紹介されていたので
 これとも比較してみた。今回は入力するチャネルだけ分けて終了方法はStartで渡したcontextに一任しているので上の方法とさほど変わらず、むしろ冗長に見えるが、
 実際はWorkerそれぞれがquitするチャネルなどを持っていて、独立して終了させることができるため、Workerの数を動的にコントロールしやすいのが特長だと考えている。</p>
 <p><a href="http://marcio.io/2015/07/handling-1-million-requests-per-minute-with-golang/">Handling 1 Million Requests per Minute with Go  · marcio.io</a></p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#00f">type</span> Dispatcher <span style="color:#00f">struct</span>{
-	Requestch <span style="color:#00f">chan</span> *Req
-	workerPool <span style="color:#00f">chan</span> <span style="color:#00f">chan</span> *Req
-	workerNum <span style="color:#2b91af">int</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">type</span> Dispatcher <span style="color:#8be9fd;font-style:italic">struct</span>{
+	Requestch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req
+	workerPool <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req
+	workerNum <span style="color:#8be9fd">int</span>
 }
 
-<span style="color:#00f">func</span> NewDispatcher(workerNum <span style="color:#2b91af">int</span>) *Dispatcher{
-	<span style="color:#00f">return</span> &amp;Dispatcher{
-		Requestch: make(<span style="color:#00f">chan</span> *Req),
-		workerPool: make(<span style="color:#00f">chan</span> <span style="color:#00f">chan</span> *Req, workerNum),
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">NewDispatcher</span>(workerNum <span style="color:#8be9fd">int</span>) <span style="color:#ff79c6">*</span>Dispatcher{
+	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>Dispatcher{
+		Requestch: <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req),
+		workerPool: <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req, workerNum),
 		workerNum: workerNum,
 	}
 }
 
 
-<span style="color:#00f">func</span> (d *Dispatcher) Start(ctx context.Context) <span style="color:#2b91af">error</span>{
-	poolLength := len(d.workerPool)
-	<span style="color:#00f">if</span> poolLength != 0{
-		<span style="color:#00f">return</span> errors.New(<span style="color:#a31515">&#34;already started&#34;</span>)
+<span style="color:#8be9fd;font-style:italic">func</span> (d <span style="color:#ff79c6">*</span>Dispatcher) <span style="color:#50fa7b">Start</span>(ctx context.Context) <span style="color:#8be9fd">error</span>{
+	poolLength <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">len</span>(d.workerPool)
+	<span style="color:#ff79c6">if</span> poolLength <span style="color:#ff79c6">!=</span> <span style="color:#bd93f9">0</span>{
+		<span style="color:#ff79c6">return</span> errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;already started&#34;</span>)
 	}
-	<span style="color:#00f">for</span> i := 0; i &lt; d.workerNum; i++{
-		startWorker(ctx, 1, d.workerPool)
+	<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; d.workerNum; i<span style="color:#ff79c6">++</span>{
+		<span style="color:#50fa7b">startWorker</span>(ctx, <span style="color:#bd93f9">1</span>, d.workerPool)
 	}
 
-	<span style="color:#00f">go</span> d.dispatch(ctx)
+	<span style="color:#ff79c6">go</span> d.<span style="color:#50fa7b">dispatch</span>(ctx)
 
-	<span style="color:#00f">return</span> <span style="color:#00f">nil</span>
+	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
 }
 
-<span style="color:#00f">func</span> (d *Dispatcher) dispatch(ctx context.Context){
-	<span style="color:#00f">for</span>{
-		<span style="color:#00f">select</span>{
-		<span style="color:#00f">case</span> req := &lt;- d.Requestch:
-            <span style="color:#008000">// workerPoolからchanを取り出しreqを入れる
-</span><span style="color:#008000"></span>			worker := &lt;- d.workerPool
-			worker &lt;- req
-		<span style="color:#00f">case</span> &lt;-ctx.Done():
-			<span style="color:#00f">return</span> 
+<span style="color:#8be9fd;font-style:italic">func</span> (d <span style="color:#ff79c6">*</span>Dispatcher) <span style="color:#50fa7b">dispatch</span>(ctx context.Context){
+	<span style="color:#ff79c6">for</span>{
+		<span style="color:#ff79c6">select</span>{
+		<span style="color:#ff79c6">case</span> req <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span> d.Requestch:
+            <span style="color:#6272a4">// workerPoolからchanを取り出しreqを入れる
+</span><span style="color:#6272a4"></span>			worker <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span> d.workerPool
+			worker <span style="color:#ff79c6">&lt;-</span> req
+		<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+			<span style="color:#ff79c6">return</span> 
 		}
 	}
 }
 
-<span style="color:#00f">func</span> startWorker(ctx context.Context, num <span style="color:#2b91af">int</span>, workerPool <span style="color:#00f">chan</span> <span style="color:#00f">chan</span> *Req) {
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">startWorker</span>(ctx context.Context, num <span style="color:#8be9fd">int</span>, workerPool <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req) {
 
-	requestch := make(<span style="color:#00f">chan</span> *Req)
+	requestch <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req)
 
-	<span style="color:#00f">for</span> i := 0; i &lt; num; i++ {
-		<span style="color:#00f">go</span> <span style="color:#00f">func</span>() {
-			<span style="color:#00f">for</span> {
-                <span style="color:#008000">// workerPoolにchanを入れる(終わったらまだ戻る)
-</span><span style="color:#008000"></span>				workerPool &lt;- requestch
-				<span style="color:#00f">select</span> {
-				<span style="color:#00f">case</span> req := &lt;-requestch:
-					request(req.Okch, req.Ngch)
-				<span style="color:#00f">case</span> &lt;-ctx.Done():
-					<span style="color:#00f">return</span>
+	<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; num; i<span style="color:#ff79c6">++</span> {
+		<span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+			<span style="color:#ff79c6">for</span> {
+                <span style="color:#6272a4">// workerPoolにchanを入れる(終わったらまだ戻る)
+</span><span style="color:#6272a4"></span>				workerPool <span style="color:#ff79c6">&lt;-</span> requestch
+				<span style="color:#ff79c6">select</span> {
+				<span style="color:#ff79c6">case</span> req <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&lt;-</span>requestch:
+					<span style="color:#50fa7b">request</span>(req.Okch, req.Ngch)
+				<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+					<span style="color:#ff79c6">return</span>
 				}
 			}
 		}()
 	}
 
-	<span style="color:#00f">return</span>
+	<span style="color:#ff79c6">return</span>
 }
 
-<span style="color:#00f">func</span> main(){
-    ...
-    dispatcher := NewDispatcher(1000)
-	<span style="color:#00f">if</span> err := dispatcher.Start(ctx); err != <span style="color:#00f">nil</span>{
-		panic(err)
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>(){
+    <span style="color:#ff79c6">...</span>
+    dispatcher <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">NewDispatcher</span>(<span style="color:#bd93f9">1000</span>)
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> dispatcher.<span style="color:#50fa7b">Start</span>(ctx); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span>{
+		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
 	}
 
-    dispatcher.requestch &lt;- req
+    dispatcher.requestch <span style="color:#ff79c6">&lt;-</span> req
 }
 </code></pre></div><p>ほとんど変わらず。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 169
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 169
 [RESULT] request: 5000, ok: 5000, ng: 0, time(ms) 246
 </code></pre></div>
     </div>

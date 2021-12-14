@@ -212,15 +212,14 @@
     }
 
     .single .highlight {
-        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
-        margin-block-start: 0.83rem;
-        margin-block-end: 0.83rem;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.1) inset;
+        margin-block-start: 1rem;
+        margin-block-end: 1rem;
     }
 
     .single .highlight>pre {
         padding: 10px;
         overflow-x: auto;
-        background-color: ;
     }
 
     .single img {
@@ -233,6 +232,11 @@
         padding: 1rem 0 1rem 1rem;
         margin-block-start: 0.83rem;
         margin-block-end: 0.83rem;
+    }
+
+    .single blockquote > p {
+        margin-block-start: 0;
+        margin-block-end: 0;
     }
 
     .single hr {
@@ -449,58 +453,58 @@ Cloud TPUを直に使うとVMから接続して使うことになるので、TPU
 <p>初めは比較的低レベルのAPIを使おうとしていたが、XLA(Accelerated Linear Algebra)によるコンパイルがうまくいかないなど様々な問題にあたって大変だったので使っておくと良いと思う。
 それでもトライアンドエラーの繰り返しで、典型的なものは<a href="https://cloud.google.com/tpu/docs/troubleshooting">Troubleshooting</a>にあるが、ないものは調べるなりしてなんとかやっていくしかない。</p>
 <p>定数などの定義。BATCH_SIZEはCloud TPUのシャード数の8で割り切れる値にする必要がある。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">import</span> pandas <span style="color:#00f">as</span> pd
-<span style="color:#00f">from</span> sklearn.model_selection <span style="color:#00f">import</span> train_test_split
-<span style="color:#00f">import</span> tensorflow <span style="color:#00f">as</span> tf
-<span style="color:#00f">import</span> numpy <span style="color:#00f">as</span> np
-flags = tf.app.flags
-flags.DEFINE_boolean(<span style="color:#a31515">&#39;use_tpu&#39;</span>, True, <span style="color:#a31515">&#39;use tpu or not&#39;</span>)
-tf.app.flags.DEFINE_string(<span style="color:#a31515">&#39;f&#39;</span>, <span style="color:#a31515">&#39;&#39;</span>, <span style="color:#a31515">&#39;kernel&#39;</span>)
-FLAGS = flags.FLAGS
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">import</span> pandas <span style="color:#ff79c6">as</span> pd
+<span style="color:#ff79c6">from</span> sklearn.model_selection <span style="color:#ff79c6">import</span> train_test_split
+<span style="color:#ff79c6">import</span> tensorflow <span style="color:#ff79c6">as</span> tf
+<span style="color:#ff79c6">import</span> numpy <span style="color:#ff79c6">as</span> np
+flags <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>app<span style="color:#ff79c6">.</span>flags
+flags<span style="color:#ff79c6">.</span>DEFINE_boolean(<span style="color:#f1fa8c">&#39;use_tpu&#39;</span>, True, <span style="color:#f1fa8c">&#39;use tpu or not&#39;</span>)
+tf<span style="color:#ff79c6">.</span>app<span style="color:#ff79c6">.</span>flags<span style="color:#ff79c6">.</span>DEFINE_string(<span style="color:#f1fa8c">&#39;f&#39;</span>, <span style="color:#f1fa8c">&#39;&#39;</span>, <span style="color:#f1fa8c">&#39;kernel&#39;</span>)
+FLAGS <span style="color:#ff79c6">=</span> flags<span style="color:#ff79c6">.</span>FLAGS
 
-EPOCH_NUM = 100
-BATCH_SIZE = 800 <span style="color:#008000"># must be divisible by number of replicas 8</span>
-EVAL_BATCH_SIZE = 800
-SHARD_NUM = 8 <span style="color:#008000"># A single Cloud TPU has 8 shards.</span>
-ITERATION_NUM = 100 <span style="color:#008000"># Number of training steps to run on the Cloud TPU before returning control.</span>
+EPOCH_NUM <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">100</span>
+BATCH_SIZE <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">800</span> <span style="color:#6272a4"># must be divisible by number of replicas 8</span>
+EVAL_BATCH_SIZE <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">800</span>
+SHARD_NUM <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">8</span> <span style="color:#6272a4"># A single Cloud TPU has 8 shards.</span>
+ITERATION_NUM <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">100</span> <span style="color:#6272a4"># Number of training steps to run on the Cloud TPU before returning control.</span>
 </code></pre></div><h3 id="入力データの準備">入力データの準備</h3>
 <p>入力は関数で渡し、tf.data APIのdatasetを返せばイテレートしてくれる。</p>
 <p><a href="https://www.sambaiz.net/article/195/">TensorFlowのtf.data API - sambaiz-net</a></p>
 <p>batch()でdrop_remainderをTrueにして端数を切り捨てないと、shapeが確定せずコンパイルできない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">from</span> google.colab <span style="color:#00f">import</span> auth
-<span style="color:#00f">from</span> googleapiclient.discovery <span style="color:#00f">import</span> build
-<span style="color:#00f">from</span> io <span style="color:#00f">import</span> BytesIO
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> google.colab <span style="color:#ff79c6">import</span> auth
+<span style="color:#ff79c6">from</span> googleapiclient.discovery <span style="color:#ff79c6">import</span> build
+<span style="color:#ff79c6">from</span> io <span style="color:#ff79c6">import</span> BytesIO
 
-auth.authenticate_user()
-bucket = <span style="color:#a31515">&#34;&lt;bucket_name&gt;&#34;</span>
-gcs_service = build(<span style="color:#a31515">&#39;storage&#39;</span>, <span style="color:#a31515">&#39;v1&#39;</span>)
-train_data = gcs_service.objects().get_media(bucket=bucket, object=<span style="color:#a31515">&#39;train.csv&#39;</span>).execute()
-train = pd.read_csv(BytesIO(train_data))
+auth<span style="color:#ff79c6">.</span>authenticate_user()
+bucket <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;&lt;bucket_name&gt;&#34;</span>
+gcs_service <span style="color:#ff79c6">=</span> build(<span style="color:#f1fa8c">&#39;storage&#39;</span>, <span style="color:#f1fa8c">&#39;v1&#39;</span>)
+train_data <span style="color:#ff79c6">=</span> gcs_service<span style="color:#ff79c6">.</span>objects()<span style="color:#ff79c6">.</span>get_media(bucket<span style="color:#ff79c6">=</span>bucket, <span style="color:#8be9fd;font-style:italic">object</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;train.csv&#39;</span>)<span style="color:#ff79c6">.</span>execute()
+train <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(BytesIO(train_data))
 
-MODEL_DIR = <span style="color:#a31515">&#39;gs://{}/model/tpu&#39;</span>.format(bucket)
+MODEL_DIR <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;gs://{}/model/tpu&#39;</span><span style="color:#ff79c6">.</span>format(bucket)
 
-(x_train, x_valid, y_train, y_valid) = train_test_split(
-    train.drop(<span style="color:#a31515">&#39;label&#39;</span>, axis=1).values.reshape((-1, 28, 28, 1)).astype(np.float32), 
-    np.identity(10)[train[<span style="color:#a31515">&#39;label&#39;</span>]].astype(np.float32), 
-    test_size = 0.1, random_state = 100)
+(x_train, x_valid, y_train, y_valid) <span style="color:#ff79c6">=</span> train_test_split(
+    train<span style="color:#ff79c6">.</span>drop(<span style="color:#f1fa8c">&#39;label&#39;</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)<span style="color:#ff79c6">.</span>values<span style="color:#ff79c6">.</span>reshape((<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">1</span>))<span style="color:#ff79c6">.</span>astype(np<span style="color:#ff79c6">.</span>float32), 
+    np<span style="color:#ff79c6">.</span>identity(<span style="color:#bd93f9">10</span>)[train[<span style="color:#f1fa8c">&#39;label&#39;</span>]]<span style="color:#ff79c6">.</span>astype(np<span style="color:#ff79c6">.</span>float32), 
+    test_size <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0.1</span>, random_state <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">100</span>)
 
-<span style="color:#00f">def</span> train_input_fn(params):
-    dataset = tf.data.Dataset.from_tensor_slices(({<span style="color:#a31515">&#39;x&#39;</span>: x_train}, y_train)) <span style="color:#008000"># (features, labels)</span>
-    dataset = dataset.shuffle(buffer_size=1000)
-    dataset = dataset.batch(params[<span style="color:#a31515">&#39;batch_size&#39;</span>], drop_remainder=True)
-    <span style="color:#00f">return</span> dataset
+<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train_input_fn</span>(params):
+    dataset <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>data<span style="color:#ff79c6">.</span>Dataset<span style="color:#ff79c6">.</span>from_tensor_slices(({<span style="color:#f1fa8c">&#39;x&#39;</span>: x_train}, y_train)) <span style="color:#6272a4"># (features, labels)</span>
+    dataset <span style="color:#ff79c6">=</span> dataset<span style="color:#ff79c6">.</span>shuffle(buffer_size<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1000</span>)
+    dataset <span style="color:#ff79c6">=</span> dataset<span style="color:#ff79c6">.</span>batch(params[<span style="color:#f1fa8c">&#39;batch_size&#39;</span>], drop_remainder<span style="color:#ff79c6">=</span>True)
+    <span style="color:#ff79c6">return</span> dataset
 
-<span style="color:#00f">def</span> valid_input_fn(params):
-    dataset = tf.data.Dataset.from_tensor_slices(({<span style="color:#a31515">&#39;x&#39;</span>: x_valid}, y_valid))
-    dataset = dataset.batch(params[<span style="color:#a31515">&#39;batch_size&#39;</span>], drop_remainder=True)
-    <span style="color:#00f">return</span> dataset
+<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">valid_input_fn</span>(params):
+    dataset <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>data<span style="color:#ff79c6">.</span>Dataset<span style="color:#ff79c6">.</span>from_tensor_slices(({<span style="color:#f1fa8c">&#39;x&#39;</span>: x_valid}, y_valid))
+    dataset <span style="color:#ff79c6">=</span> dataset<span style="color:#ff79c6">.</span>batch(params[<span style="color:#f1fa8c">&#39;batch_size&#39;</span>], drop_remainder<span style="color:#ff79c6">=</span>True)
+    <span style="color:#ff79c6">return</span> dataset
 </code></pre></div><p>入出力するファイルはローカルではなくGCSなどに置く必要があるのでCloud TPUからも読み書きできるようにする。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">{
-    &#34;domain&#34;: <span style="color:#a31515">&#34;global&#34;</span>,
-    &#34;reason&#34;: <span style="color:#a31515">&#34;forbidden&#34;</span>,
-    &#34;message&#34;: <span style="color:#a31515">&#34;service-******@cloud-tpu.iam.gserviceaccount.com does not have storage.objects.create access to &lt;bucket_name&gt;.&#34;</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">{
+    <span style="color:#ff79c6">&#34;domain&#34;</span>: <span style="color:#f1fa8c">&#34;global&#34;</span>,
+    <span style="color:#ff79c6">&#34;reason&#34;</span>: <span style="color:#f1fa8c">&#34;forbidden&#34;</span>,
+    <span style="color:#ff79c6">&#34;message&#34;</span>: <span style="color:#f1fa8c">&#34;service-******@cloud-tpu.iam.gserviceaccount.com does not have storage.objects.create access to &lt;bucket_name&gt;.&#34;</span>
 }
-</code></pre></div><div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">!gsutil acl ch -u service-*****@cloud-tpu.iam.gserviceaccount.com:WRITER gs://&lt;bucket_name&gt;
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">!gsutil acl ch -u service-*****@cloud-tpu.iam.gserviceaccount.com:WRITER gs://&lt;bucket_name&gt;
 </code></pre></div><h3 id="モデルの作成">モデルの作成</h3>
 <p>Estimatorには次のシグネチャのmodel_fnを渡す。
 引数のfeaturesとlabelsはinput_fnの返り値で、
@@ -508,138 +512,138 @@ modeは<a href="https://www.tensorflow.org/api_docs/python/tf/estimator/ModeKeys
 paramsはEstimator生成時に渡せるパラメータ。
 optimizerは<a href="https://www.tensorflow.org/api_docs/python/tf/contrib/tpu/CrossShardOptimizer">CrossShardOptimizer</a>で<a href="https://www.tensorflow.org/guide/using_tpu#optimizer">wrapする</a>。</p>
 <p>TPUに対応している<a href="https://cloud.google.com/tpu/docs/tensorflow-ops">op</a>で作る必要がある。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">def</span> model_fn(features, labels, mode, params):
-    <span style="color:#00f">def</span> metric_fn(labels, logits):
-        <span style="color:#00f">return</span> {
-            <span style="color:#a31515">&#39;accuracy&#39;</span>: tf.metrics.accuracy(
-                labels=tf.argmax(labels, axis=1), predictions=tf.argmax(logits, axis=1))
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">model_fn</span>(features, labels, mode, params):
+    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">metric_fn</span>(labels, logits):
+        <span style="color:#ff79c6">return</span> {
+            <span style="color:#f1fa8c">&#39;accuracy&#39;</span>: tf<span style="color:#ff79c6">.</span>metrics<span style="color:#ff79c6">.</span>accuracy(
+                labels<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>argmax(labels, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>), predictions<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>argmax(logits, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>))
          }
-    is_training = tf.equal(mode, tf.estimator.ModeKeys.TRAIN)
-    conv1 = tf.layers.conv2d(
-        inputs=features[<span style="color:#a31515">&#39;x&#39;</span>],
-        filters=32, 
-        kernel_size=[5, 5], 
-        padding=<span style="color:#a31515">&#34;same&#34;</span>, 
-        activation=tf.nn.relu)
-    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
-    conv2 = tf.layers.conv2d(
-        inputs=pool1, 
-        filters=64, 
-        kernel_size=[5, 5],
-        padding=<span style="color:#a31515">&#34;same&#34;</span>, 
-        activation=tf.nn.relu)
-    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
-    pool2_flat = tf.layers.flatten(pool2)
-    dense = tf.layers.dense(inputs=pool2_flat, units=128, activation=tf.nn.relu)
-    dropout = tf.layers.dropout(
-        inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
-    logits = tf.layers.dense(inputs=dropout, units=10)
+    is_training <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>equal(mode, tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>ModeKeys<span style="color:#ff79c6">.</span>TRAIN)
+    conv1 <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>conv2d(
+        inputs<span style="color:#ff79c6">=</span>features[<span style="color:#f1fa8c">&#39;x&#39;</span>],
+        filters<span style="color:#ff79c6">=</span><span style="color:#bd93f9">32</span>, 
+        kernel_size<span style="color:#ff79c6">=</span>[<span style="color:#bd93f9">5</span>, <span style="color:#bd93f9">5</span>], 
+        padding<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;same&#34;</span>, 
+        activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu)
+    pool1 <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>max_pooling2d(inputs<span style="color:#ff79c6">=</span>conv1, pool_size<span style="color:#ff79c6">=</span>[<span style="color:#bd93f9">2</span>, <span style="color:#bd93f9">2</span>], strides<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>)
+    conv2 <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>conv2d(
+        inputs<span style="color:#ff79c6">=</span>pool1, 
+        filters<span style="color:#ff79c6">=</span><span style="color:#bd93f9">64</span>, 
+        kernel_size<span style="color:#ff79c6">=</span>[<span style="color:#bd93f9">5</span>, <span style="color:#bd93f9">5</span>],
+        padding<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;same&#34;</span>, 
+        activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu)
+    pool2 <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>max_pooling2d(inputs<span style="color:#ff79c6">=</span>conv2, pool_size<span style="color:#ff79c6">=</span>[<span style="color:#bd93f9">2</span>, <span style="color:#bd93f9">2</span>], strides<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>)
+    pool2_flat <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>flatten(pool2)
+    dense <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>dense(inputs<span style="color:#ff79c6">=</span>pool2_flat, units<span style="color:#ff79c6">=</span><span style="color:#bd93f9">128</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu)
+    dropout <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>dropout(
+        inputs<span style="color:#ff79c6">=</span>dense, rate<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0.4</span>, training<span style="color:#ff79c6">=</span>mode <span style="color:#ff79c6">==</span> tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>ModeKeys<span style="color:#ff79c6">.</span>TRAIN)
+    logits <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>dense(inputs<span style="color:#ff79c6">=</span>dropout, units<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>)
 
-    loss = tf.losses.softmax_cross_entropy(
-        onehot_labels=labels, logits=logits)
+    loss <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>losses<span style="color:#ff79c6">.</span>softmax_cross_entropy(
+        onehot_labels<span style="color:#ff79c6">=</span>labels, logits<span style="color:#ff79c6">=</span>logits)
     
-    <span style="color:#00f">if</span> mode == tf.estimator.ModeKeys.EVAL:
-        <span style="color:#00f">return</span> tf.contrib.tpu.TPUEstimatorSpec(mode, loss=loss, 
-                                               eval_metrics=(metric_fn, [labels, logits]))
+    <span style="color:#ff79c6">if</span> mode <span style="color:#ff79c6">==</span> tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>ModeKeys<span style="color:#ff79c6">.</span>EVAL:
+        <span style="color:#ff79c6">return</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>tpu<span style="color:#ff79c6">.</span>TPUEstimatorSpec(mode, loss<span style="color:#ff79c6">=</span>loss, 
+                                               eval_metrics<span style="color:#ff79c6">=</span>(metric_fn, [labels, logits]))
 
-    optimizer = tf.train.AdamOptimizer(0.01)
-    <span style="color:#00f">if</span> FLAGS.use_tpu:
-        optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
+    optimizer <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>AdamOptimizer(<span style="color:#bd93f9">0.01</span>)
+    <span style="color:#ff79c6">if</span> FLAGS<span style="color:#ff79c6">.</span>use_tpu:
+        optimizer <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>tpu<span style="color:#ff79c6">.</span>CrossShardOptimizer(optimizer)
 
-    <span style="color:#00f">return</span> tf.contrib.tpu.TPUEstimatorSpec(
-        mode=mode,
-        loss=loss,
-        predictions={
-            <span style="color:#a31515">&#39;pred&#39;</span>: tf.argmax(logits, axis=1)
+    <span style="color:#ff79c6">return</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>tpu<span style="color:#ff79c6">.</span>TPUEstimatorSpec(
+        mode<span style="color:#ff79c6">=</span>mode,
+        loss<span style="color:#ff79c6">=</span>loss,
+        predictions<span style="color:#ff79c6">=</span>{
+            <span style="color:#f1fa8c">&#39;pred&#39;</span>: tf<span style="color:#ff79c6">.</span>argmax(logits, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)
         },
-        train_op=optimizer.minimize(loss, tf.train.get_or_create_global_step()))
+        train_op<span style="color:#ff79c6">=</span>optimizer<span style="color:#ff79c6">.</span>minimize(loss, tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>get_or_create_global_step()))
 </code></pre></div><h3 id="tpuestimatorの生成">TPUEstimatorの生成</h3>
 <p>TPUのアドレスが環境変数COLAB_TPU_ADDRに入るのでこれをmasterとする。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">if</span> FLAGS.use_tpu:
-    master = <span style="color:#a31515">&#39;grpc://&#39;</span> + os.environ[<span style="color:#a31515">&#39;COLAB_TPU_ADDR&#39;</span>]
-    run_config = tf.contrib.tpu.RunConfig(
-        master=master,
-        session_config=tf.ConfigProto(
-            allow_soft_placement=True, log_device_placement=True),
-        tpu_config=tf.contrib.tpu.TPUConfig(ITERATION_NUM, SHARD_NUM))
-<span style="color:#00f">else</span>:
-    run_config = tf.contrib.tpu.RunConfig()
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">if</span> FLAGS<span style="color:#ff79c6">.</span>use_tpu:
+    master <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;grpc://&#39;</span> <span style="color:#ff79c6">+</span> os<span style="color:#ff79c6">.</span>environ[<span style="color:#f1fa8c">&#39;COLAB_TPU_ADDR&#39;</span>]
+    run_config <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>tpu<span style="color:#ff79c6">.</span>RunConfig(
+        master<span style="color:#ff79c6">=</span>master,
+        session_config<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>ConfigProto(
+            allow_soft_placement<span style="color:#ff79c6">=</span>True, log_device_placement<span style="color:#ff79c6">=</span>True),
+        tpu_config<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>tpu<span style="color:#ff79c6">.</span>TPUConfig(ITERATION_NUM, SHARD_NUM))
+<span style="color:#ff79c6">else</span>:
+    run_config <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>tpu<span style="color:#ff79c6">.</span>RunConfig()
 
-classifier = tf.contrib.tpu.TPUEstimator(
-    model_fn=model_fn,
-    model_dir=MODEL_DIR,
-    config=run_config,
-    params={},
-    train_batch_size=BATCH_SIZE,
-    eval_batch_size=EVAL_BATCH_SIZE,
-    predict_batch_size=BATCH_SIZE,
-    use_tpu=FLAGS.use_tpu)
+classifier <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>tpu<span style="color:#ff79c6">.</span>TPUEstimator(
+    model_fn<span style="color:#ff79c6">=</span>model_fn,
+    model_dir<span style="color:#ff79c6">=</span>MODEL_DIR,
+    config<span style="color:#ff79c6">=</span>run_config,
+    params<span style="color:#ff79c6">=</span>{},
+    train_batch_size<span style="color:#ff79c6">=</span>BATCH_SIZE,
+    eval_batch_size<span style="color:#ff79c6">=</span>EVAL_BATCH_SIZE,
+    predict_batch_size<span style="color:#ff79c6">=</span>BATCH_SIZE,
+    use_tpu<span style="color:#ff79c6">=</span>FLAGS<span style="color:#ff79c6">.</span>use_tpu)
 </code></pre></div><h3 id="学習">学習</h3>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">for</span> epoch <span style="color:#00f">in</span> range(EPOCH_NUM):
-  max_steps = len(x_train)*(epoch+1)//BATCH_SIZE
-  valid_steps = len(x_valid)//EVAL_BATCH_SIZE
-  <span style="color:#00f">if</span> FLAGS.use_tpu: 
-    max_steps //= SHARD_NUM
-  train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=max_steps)
-  eval_spec = tf.estimator.EvalSpec(input_fn=valid_input_fn, steps=valid_steps)
-  result = tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
-  <span style="color:#00f">if</span> result[0] <span style="color:#00f">is</span> <span style="color:#00f">not</span> None:
-    <span style="color:#00f">print</span>(<span style="color:#a31515">&#39;epoch: {}, loss: {} accuracy: {}&#39;</span>.format(epoch+1, result[0][<span style="color:#a31515">&#39;loss&#39;</span>], result[0][<span style="color:#a31515">&#39;accuracy&#39;</span>]))
-  <span style="color:#00f">else</span>:
-    <span style="color:#00f">print</span>(<span style="color:#a31515">&#39;epoch: {} is already trained&#39;</span>.format(epoch+1))
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">for</span> epoch <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(EPOCH_NUM):
+  max_steps <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x_train)<span style="color:#ff79c6">*</span>(epoch<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1</span>)<span style="color:#ff79c6">//</span>BATCH_SIZE
+  valid_steps <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x_valid)<span style="color:#ff79c6">//</span>EVAL_BATCH_SIZE
+  <span style="color:#ff79c6">if</span> FLAGS<span style="color:#ff79c6">.</span>use_tpu: 
+    max_steps <span style="color:#ff79c6">//=</span> SHARD_NUM
+  train_spec <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>TrainSpec(input_fn<span style="color:#ff79c6">=</span>train_input_fn, max_steps<span style="color:#ff79c6">=</span>max_steps)
+  eval_spec <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>EvalSpec(input_fn<span style="color:#ff79c6">=</span>valid_input_fn, steps<span style="color:#ff79c6">=</span>valid_steps)
+  result <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>train_and_evaluate(classifier, train_spec, eval_spec)
+  <span style="color:#ff79c6">if</span> result[<span style="color:#bd93f9">0</span>] <span style="color:#ff79c6">is</span> <span style="color:#ff79c6">not</span> None:
+    <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#39;epoch: {}, loss: {} accuracy: {}&#39;</span><span style="color:#ff79c6">.</span>format(epoch<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1</span>, result[<span style="color:#bd93f9">0</span>][<span style="color:#f1fa8c">&#39;loss&#39;</span>], result[<span style="color:#bd93f9">0</span>][<span style="color:#f1fa8c">&#39;accuracy&#39;</span>]))
+  <span style="color:#ff79c6">else</span>:
+    <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#39;epoch: {} is already trained&#39;</span><span style="color:#ff79c6">.</span>format(epoch<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1</span>))
 </code></pre></div><h3 id="colabでtensorboardを開く">ColabでTensorBoardを開く</h3>
 <p>このスクリプトを実行するとTensorBoardを立ち上げてngrokで外に開いてくれる。</p>
 <p><a href="https://github.com/mixuala/colab_utils">mixuala/colab_utils</a></p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="">!</span>git clone https://github.com/mixuala/colab_utils
-<span style="color:#00f">import</span> os
-<span style="color:#00f">import</span> colab_utils.tboard
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">!git clone https:<span style="color:#ff79c6">//</span>github<span style="color:#ff79c6">.</span>com<span style="color:#ff79c6">/</span>mixuala<span style="color:#ff79c6">/</span>colab_utils
+<span style="color:#ff79c6">import</span> os
+<span style="color:#ff79c6">import</span> colab_utils.tboard
 
-<span style="color:#008000"># set paths</span>
-ROOT = %pwd
-colab_utils.tboard.launch_tensorboard(bin_dir=ROOT, log_dir=MODEL_DIR)
+<span style="color:#6272a4"># set paths</span>
+ROOT <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">%</span>pwd
+colab_utils<span style="color:#ff79c6">.</span>tboard<span style="color:#ff79c6">.</span>launch_tensorboard(bin_dir<span style="color:#ff79c6">=</span>ROOT, log_dir<span style="color:#ff79c6">=</span>MODEL_DIR)
 </code></pre></div><h2 id="結果">結果</h2>
 <p>学習させて実行時間を計測する。計測はセルの頭に<code>%%time</code>を付けるとできる。</p>
 <h3 id="cpu">CPU</h3>
 <p>ベースライン。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 18min 28s, sys: 32.8 s, total: 19min 1s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 18min 28s, sys: 32.8 s, total: 19min 1s
 Wall time: 14min 33s
 </code></pre></div><h3 id="gpu">GPU</h3>
 <p>ランタイムからアクセラレータをGPUに設定。使われるGPUはNVIDIAの<a href="https://www.nvidia.co.jp/object/tesla-k80-jp.html">Tesla K80</a>。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">from</span> tensorflow.python.client <span style="color:#00f">import</span> device_lib
-device_lib.list_local_devices()
-<span style="color:#008000"># ...</span>
-<span style="color:#008000"># physical_device_desc: &#34;device: 0, name: Tesla K80, pci bus id: 0000:00:04.0, compute capability: 3.7&#34;]</span>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> tensorflow.python.client <span style="color:#ff79c6">import</span> device_lib
+device_lib<span style="color:#ff79c6">.</span>list_local_devices()
+<span style="color:#6272a4"># ...</span>
+<span style="color:#6272a4"># physical_device_desc: &#34;device: 0, name: Tesla K80, pci bus id: 0000:00:04.0, compute capability: 3.7&#34;]</span>
 </code></pre></div><p>結果。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min 2s, sys: 24.2 s, total: 3min 26s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min 2s, sys: 24.2 s, total: 3min 26s
 Wall time: 8min 6s
 </code></pre></div><h3 id="tpu">TPU</h3>
 <p>アクセラレータをTPUに変更。
 GPUより速くなることを期待したが、むしろCPUよりも遅くなってしまった。その上精度の伸びも遅くて良いところがない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min, sys: 23.8 s, total: 3min 24s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min, sys: 23.8 s, total: 3min 24s
 Wall time: 15min
 </code></pre></div><h2 id="再チャレンジ">再チャレンジ</h2>
 <p>エポックの立ち上がりが遅いので学習を切らずに続けて行わせてみる。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#00f">def</span> train_input_fn(params):
-    dataset = tf.data.Dataset.from_tensor_slices(({<span style="color:#a31515">&#39;x&#39;</span>: x_train}, y_train)) <span style="color:#008000"># (features, labels)</span>
-    dataset = dataset.shuffle(buffer_size=1000)
-    dataset = dataset.batch(params[<span style="color:#a31515">&#39;batch_size&#39;</span>], drop_remainder=True)
-    dataset = dataset.repeat(EPOCH_NUM)
-    <span style="color:#00f">return</span> dataset
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train_input_fn</span>(params):
+    dataset <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>data<span style="color:#ff79c6">.</span>Dataset<span style="color:#ff79c6">.</span>from_tensor_slices(({<span style="color:#f1fa8c">&#39;x&#39;</span>: x_train}, y_train)) <span style="color:#6272a4"># (features, labels)</span>
+    dataset <span style="color:#ff79c6">=</span> dataset<span style="color:#ff79c6">.</span>shuffle(buffer_size<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1000</span>)
+    dataset <span style="color:#ff79c6">=</span> dataset<span style="color:#ff79c6">.</span>batch(params[<span style="color:#f1fa8c">&#39;batch_size&#39;</span>], drop_remainder<span style="color:#ff79c6">=</span>True)
+    dataset <span style="color:#ff79c6">=</span> dataset<span style="color:#ff79c6">.</span>repeat(EPOCH_NUM)
+    <span style="color:#ff79c6">return</span> dataset
 
-epoch = EPOCH_NUM-1
-max_steps = len(x_train)*(epoch+1)/BATCH_SIZE
-valid_steps = len(x_valid)//EVAL_BATCH_SIZE
-<span style="color:#00f">if</span> FLAGS.use_tpu: 
-  max_steps //= SHARD_NUM
-train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn, max_steps=max_steps)
-eval_spec = tf.estimator.EvalSpec(input_fn=valid_input_fn, steps=valid_steps)
-result = tf.estimator.train_and_evaluate(classifier, train_spec, eval_spec)
-<span style="color:#00f">if</span> result[0] <span style="color:#00f">is</span> <span style="color:#00f">not</span> None:
-  <span style="color:#00f">print</span>(<span style="color:#a31515">&#39;epoch: {}, loss: {} accuracy: {}&#39;</span>.format(epoch+1, result[0][<span style="color:#a31515">&#39;loss&#39;</span>],  result[0][<span style="color:#a31515">&#39;accuracy&#39;</span>]))
-<span style="color:#00f">else</span>:
-  <span style="color:#00f">print</span>(<span style="color:#a31515">&#39;epoch: {} is already trained&#39;</span>.format(epoch+1))
+epoch <span style="color:#ff79c6">=</span> EPOCH_NUM<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>
+max_steps <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x_train)<span style="color:#ff79c6">*</span>(epoch<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1</span>)<span style="color:#ff79c6">/</span>BATCH_SIZE
+valid_steps <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">len</span>(x_valid)<span style="color:#ff79c6">//</span>EVAL_BATCH_SIZE
+<span style="color:#ff79c6">if</span> FLAGS<span style="color:#ff79c6">.</span>use_tpu: 
+  max_steps <span style="color:#ff79c6">//=</span> SHARD_NUM
+train_spec <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>TrainSpec(input_fn<span style="color:#ff79c6">=</span>train_input_fn, max_steps<span style="color:#ff79c6">=</span>max_steps)
+eval_spec <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>EvalSpec(input_fn<span style="color:#ff79c6">=</span>valid_input_fn, steps<span style="color:#ff79c6">=</span>valid_steps)
+result <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>estimator<span style="color:#ff79c6">.</span>train_and_evaluate(classifier, train_spec, eval_spec)
+<span style="color:#ff79c6">if</span> result[<span style="color:#bd93f9">0</span>] <span style="color:#ff79c6">is</span> <span style="color:#ff79c6">not</span> None:
+  <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#39;epoch: {}, loss: {} accuracy: {}&#39;</span><span style="color:#ff79c6">.</span>format(epoch<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1</span>, result[<span style="color:#bd93f9">0</span>][<span style="color:#f1fa8c">&#39;loss&#39;</span>],  result[<span style="color:#bd93f9">0</span>][<span style="color:#f1fa8c">&#39;accuracy&#39;</span>]))
+<span style="color:#ff79c6">else</span>:
+  <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#39;epoch: {} is already trained&#39;</span><span style="color:#ff79c6">.</span>format(epoch<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1</span>))
 </code></pre></div><p>これを実行したところGPUと同程度には速くなった。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback"># GPU
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback"># GPU
 CPU times: user 40.9 s, sys: 7.8 s, total: 48.7 s
 Wall time: 1min 43s
 
@@ -649,12 +653,12 @@ Wall time: 1min 34s
 </code></pre></div><p>さらにEPOCH_NUMを5から100にして再計測する。</p>
 <h2 id="結果-1">結果</h2>
 <h3 id="gpu-1">GPU</h3>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min 27s, sys: 2min, total: 5min 28s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 3min 27s, sys: 2min, total: 5min 28s
 Wall time: 6min 5s
 </code></pre></div><h3 id="tpu-1">TPU</h3>
 <p>エポック数を大幅に増やしたのにも関わらずほとんど実行時間が変わらずとても速い。
 CPU時間も変わっていないので演算がTPUで完結していてCPU-TPU間のデータの受け渡しが最小限で済んでいるのかもしれない。</p>
-<div class="highlight"><pre style="background-color:#fff;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 34.5 s, sys: 7.32 s, total: 41.8 s
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">CPU times: user 34.5 s, sys: 7.32 s, total: 41.8 s
 Wall time: 1min 38s
 </code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://medium.com/deep-learning-turkey/google-colab-free-gpu-tutorial-e113627b9f5d">Google Colab Free GPU Tutorial – Deep Learning Turkey – Medium</a></p>
