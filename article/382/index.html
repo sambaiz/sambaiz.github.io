@@ -469,7 +469,15 @@
       <p>Sparkの<a href="https://spark.apache.org/docs/latest/web-ui.html">Web UI</a>はJobやExecutorをモニタリングするためのツール。</p>
 <p><a href="https://github.com/aws-samples/aws-glue-samples/tree/b76ad0583bdc66e9e5a903f9da3a953c9f6aac4f">aws-glue-samples</a>から <code>maven:3.6-amazoncorretto-8</code> ベースでSparkを動かすDockerfileを持ってきて、
 <a href="https://spark.apache.org/docs/latest/monitoring.html">History Server</a>を<a href="https://docs.aws.amazon.com/glue/latest/dg/monitor-spark-ui-history.html#monitor-spark-ui-history-local">起動する</a>。Glueで出力されたEventLogのパスと認証情報を渡している。</p>
-<p><img src="https://www.sambaiz.net/images/382-5.png" alt="EventLogの出力設定"></p>
+
+
+
+
+<a href="/article/382/images/eventlog-settings.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/382/images/eventlog-settings_hu41c5a02b845e5146a7f0fa920fe5fe03_19460_600x370_fit_lanczos_2.png" width="385" height="167" alt="EventLogの出力設定">
+</a>
+
+
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ git clone https://github.com/aws-samples/aws-glue-samples.git
 $ <span style="color:#8be9fd;font-style:italic">cd</span> aws-glue-samples/utilities/Spark_UI/glue-3_0/
 $ docker build -t glue/sparkui:latest .
@@ -477,20 +485,52 @@ $ docker run -it -e <span style="color:#8be9fd;font-style:italic">SPARK_HISTORY_
 </span><span style="color:#f1fa8c">-Dspark.hadoop.fs.s3a.access.key=</span><span style="color:#8be9fd;font-style:italic">$AWS_ACCESS_KEY_ID</span><span style="color:#f1fa8c"> -Dspark.hadoop.fs.s3a.secret.key=</span><span style="color:#8be9fd;font-style:italic">$AWS_SECRET_ACCESS_KEY</span><span style="color:#f1fa8c">&#34;</span> 
 -p 18080:18080 glue/sparkui:latest <span style="color:#f1fa8c">&#34;/opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer&#34;</span>
 </code></pre></div><p>これで <code>http://localhost:18080</code> にアクセスしApplicationを選択するとJob実行やExecutor追加のタイムラインが表示される。</p>
-<p><img src="https://www.sambaiz.net/images/382-1.png" alt="Job実行やExecutor起動のタイムライン"></p>
+
+
+
+
+<a href="/article/382/images/job-execution-timeline.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/382/images/job-execution-timeline_huc93f10f16e379b596961aa5f727001ff_56166_600x370_fit_lanczos_2.png" width="600" height="234" alt="Job実行やExecutor起動のタイムライン">
+</a>
+
+
 <p>各Jobをクリックすると次のようにStageとDAG(Directed Acyclic Graph)が表示される。
 <code>WholeStageCodeGen</code>は高速化のため処理ごとではなくStage単位でCode Generationする処理。
 ただ生成されるコードが大きいとJVMがJITコンパイルしなくなるのでかえって遅くなることもあるそうだ。</p>
 <p>Stageはコストが大きいシャッフルを必要としない実行単位なので少ない方が良い。
 Joinのためにかさんでいるのであれば、パラメータを調整するなどしてシャッフルしない<a href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#converting-sort-merge-join-to-broadcast-join">Broadcast Hash Join</a>にできないか検討する。</p>
 <p><a href="https://www.sambaiz.net/article/208/">Apache SparkのRDD, DataFrame, DataSetとAction, Transformation - sambaiz-net</a></p>
-<p><img src="https://www.sambaiz.net/images/382-2.png" alt="StageごとのDAG"></p>
+
+
+
+
+<a href="/article/382/images/stages-dag.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/382/images/stages-dag_hu63a55f2de3cfcbc33d355082716a61f2_85029_600x370_fit_lanczos_2.png" width="528" height="370" alt="StageごとのDAG">
+</a>
+
+
 <p>さらにStageをクリックすると各ExecutorごとのTaskのタイムラインが表示される。
 ほとんどの時間をComputing Timeに割けていて、Taskの実行時間やExecutorへのInput Recordsの統計も概ね均一で、うまく分散できているように見える。</p>
-<p><img src="https://www.sambaiz.net/images/382-3.png" alt="Executorが実行しているTaskのタイムライン"></p>
+
+
+
+
+<a href="/article/382/images/task-timeline.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/382/images/task-timeline_hu474a162631f8a79cb80ea51023f83a0e_79171_600x370_fit_lanczos_2.png" width="600" height="286" alt="Executorが実行しているTaskのタイムライン">
+</a>
+
+
 <p>SQLのタブを見るとOptimizerによって最適化されたクエリのLogical planや、
 実際に実行されるPhysical plan、そのどこにどれくらい時間がかかっているかを確認できる。</p>
-<p><img src="https://www.sambaiz.net/images/382-4.png" alt="SQLのPhysical plan"></p>
+
+
+
+
+<a href="/article/382/images/sql-physical-plan.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/382/images/sql-physical-plan_hu3fed74e6bbc426f154b9655fd03fea05_130440_600x370_fit_lanczos_2.png" width="236" height="370" alt="SQLのPhysical plan">
+</a>
+
+
 <h2 id="参考">参考</h2>
 <p><a href="https://logmi.jp/tech/articles/321475">Apache Sparkコミッターが教える、Spark SQLの詳しい仕組みとパフォーマンスチューニング Part2 - ログミーTech</a></p>
 
