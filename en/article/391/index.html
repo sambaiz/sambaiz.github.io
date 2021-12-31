@@ -532,10 +532,76 @@ The number of <code>tcpds1</code> is a <a href="https://github.com/awslabs/aws-a
 </a>
 
 
-<p>I ran UNLOAD <code>tcpds250.catalog_sales</code> but it timed out even if I increased the memory of Lambda to max 10GB, so it is not suitable for generating files of huge datasets.</p>
+<p>It can be saved with UNLOAD.</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql">UNLOAD (<span style="color:#ff79c6">select</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#34;lambda:tpcds_catalog&#34;</span>.tpcds250.catalog_sales) 
 <span style="color:#ff79c6">TO</span> <span style="color:#f1fa8c">&#39;s3://&lt;BUCKET_NAME&gt;/tpcds_data/&#39;</span> 
 <span style="color:#ff79c6">WITH</span> ( format <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;JSON&#39;</span>, compression <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;gzip&#39;</span>)
+</code></pre></div><p>So I tried to UNLOAD all the tables of <code>tcpds250</code>, but it timed out at <code>catalog_sales</code> even if I increased the memory of Lambda to the maximum of 10GB, so it is not suitable to generate files of a huge dataset.</p>
+<p><a href="https://www.sambaiz.net/article/309/">GoでAthenaのクエリを実行する - sambaiz-net</a></p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
+
+<span style="color:#ff79c6">import</span> (
+	<span style="color:#f1fa8c">&#34;database/sql&#34;</span>
+	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+	<span style="color:#f1fa8c">&#34;log&#34;</span>
+	<span style="color:#f1fa8c">&#34;os&#34;</span>
+
+	_ <span style="color:#f1fa8c">&#34;github.com/segmentio/go-athena&#34;</span>
+)
+
+<span style="color:#8be9fd;font-style:italic">var</span> tables = []<span style="color:#8be9fd">string</span>{
+	<span style="color:#f1fa8c">&#34;call_center&#34;</span>,
+	<span style="color:#f1fa8c">&#34;catalog_page&#34;</span>,
+	<span style="color:#f1fa8c">&#34;catalog_returns&#34;</span>,
+	<span style="color:#f1fa8c">&#34;catalog_sales&#34;</span>,
+	<span style="color:#f1fa8c">&#34;customer&#34;</span>,
+	<span style="color:#f1fa8c">&#34;customer_address&#34;</span>,
+	<span style="color:#f1fa8c">&#34;customer_demographics&#34;</span>,
+	<span style="color:#f1fa8c">&#34;date_dim&#34;</span>,
+	<span style="color:#f1fa8c">&#34;dbgen_version&#34;</span>,
+	<span style="color:#f1fa8c">&#34;household_demographics&#34;</span>,
+	<span style="color:#f1fa8c">&#34;income_band&#34;</span>,
+	<span style="color:#f1fa8c">&#34;inventory&#34;</span>,
+	<span style="color:#f1fa8c">&#34;item&#34;</span>,
+	<span style="color:#f1fa8c">&#34;promotion&#34;</span>,
+	<span style="color:#f1fa8c">&#34;reason&#34;</span>,
+	<span style="color:#f1fa8c">&#34;ship_mode&#34;</span>,
+	<span style="color:#f1fa8c">&#34;store&#34;</span>,
+	<span style="color:#f1fa8c">&#34;store_returns&#34;</span>,
+	<span style="color:#f1fa8c">&#34;store_sales&#34;</span>,
+	<span style="color:#f1fa8c">&#34;time_dim&#34;</span>,
+	<span style="color:#f1fa8c">&#34;warehouse&#34;</span>,
+	<span style="color:#f1fa8c">&#34;web_page&#34;</span>,
+	<span style="color:#f1fa8c">&#34;web_returns&#34;</span>,
+	<span style="color:#f1fa8c">&#34;web_sales&#34;</span>,
+	<span style="color:#f1fa8c">&#34;web_site&#34;</span>,
+}
+
+<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+	unloadBucket <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;UNLOAD_BUCKET&#34;</span>)
+	scaleFactor <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;SCALE_FACTOR&#34;</span>)
+	queryResultBucket <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;QUERY_RESULT_BUCKET&#34;</span>)
+	db, err <span style="color:#ff79c6">:=</span> sql.<span style="color:#50fa7b">Open</span>(<span style="color:#f1fa8c">&#34;athena&#34;</span>, fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;db=default&amp;output_location=%s&#34;</span>, fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;s3://%s&#34;</span>, queryResultBucket)))
+	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+		log.<span style="color:#50fa7b">Fatal</span>(err)
+	}
+
+	<span style="color:#ff79c6">for</span> _, format <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> []<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;JSON&#34;</span>, <span style="color:#f1fa8c">&#34;PARQUET&#34;</span>} {
+		<span style="color:#ff79c6">for</span> i, table <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> tables {
+			fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;%s [%d/%d] unload %s\n&#34;</span>, format, i<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1</span>, <span style="color:#8be9fd;font-style:italic">len</span>(tables), table)
+			_, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Query</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">`
+</span><span style="color:#f1fa8c">		UNLOAD (select * from &#34;lambda:tpcds_catalog&#34;.tpcds%s.%s) 
+</span><span style="color:#f1fa8c">		TO &#39;s3://%s/tcpds%s/%s/%s/&#39; 
+</span><span style="color:#f1fa8c">		WITH ( format = &#39;%s&#39;, compression = &#39;gzip&#39;)`</span>,
+				scaleFactor, table,
+				unloadBucket, scaleFactor, format, table,
+				format))
+			<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+				<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+			}
+		}
+	}
+}
 </code></pre></div><h2 id="references">References</h2>
 <p><a href="https://www.slideshare.net/kaigai/tpcdspostgresql">TPC-DSから学ぶPostgreSQLの弱点と今後の展望</a></p>
 <p><a href="https://qiita.com/niwasawa/items/5b2154103ff7087c7e0b">Java 8 (OpenJDK: Amazon Corretto) を Homebrew で macOS にインストールする - Qiita</a></p>
