@@ -6,7 +6,20 @@
     <description>Recent content in aws on sambaiz-net</description>
     <generator>Hugo -- gohugo.io</generator>
     <copyright>sambaiz-net</copyright>
-    <lastBuildDate>Sun, 26 Dec 2021 22:03:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/aws/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Tue, 18 Jan 2022 21:26:00 +0900</lastBuildDate><atom:link href="https://www.sambaiz.net/tags/aws/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>GlueのTPC-DS Connectorでデータを生成する</title>
+      <link>https://www.sambaiz.net/article/393/</link>
+      <pubDate>Tue, 18 Jan 2022 21:26:00 +0900</pubDate>
+      
+      <guid>https://www.sambaiz.net/article/393/</guid>
+      <description>AthenaのTPC-DS Connectorで250GBのデータを生成してS3に出力しようとしたところ最大までLambdaのリソースを上げてもタイムアウトしてしまったのでGlueで行う。
+AthenaのFederated QueryでTPC-DS Connectorを用いてデータを生成する - sambaiz-net
+GlueのTPC-DS connectorをSubscribeしてActivateする。
+ スクリプトはこんな感じで必要なパラメータを外から渡せるようにした。scaleはAthenaのものと同じくGB単位。 アップロード時にカタログにテーブルが追加されるようにしている。
+from socket import create_connection import sys from awsglue.transforms import * from awsglue.utils import getResolvedOptions from pyspark.context import SparkContext from awsglue.context import GlueContext from awsglue.job import Job args = getResolvedOptions(sys.argv, [&amp;#34;JOB_NAME&amp;#34;, &amp;#34;BUCKET_NAME&amp;#34;, &amp;#34;DATABASE_NAME&amp;#34;, &amp;#34;SCALE&amp;#34;, &amp;#34;NUM_PARTITIONS&amp;#34;, &amp;#34;FORMAT&amp;#34;, &amp;#34;CONNECTION_NAME&amp;#34;]) sc = SparkContext() glueContext = GlueContext(sc) spark = glueContext.spark_session job = Job(glueContext) job.init(args[&amp;#34;JOB_NAME&amp;#34;], args) bucketName = args[&amp;#34;BUCKET_NAME&amp;#34;] tables = [ &amp;#34;call_center&amp;#34;, &amp;#34;catalog_page&amp;#34;, &amp;#34;catalog_returns&amp;#34;, &amp;#34;catalog_sales&amp;#34;, &amp;#34;customer&amp;#34;, &amp;#34;customer_address&amp;#34;, &amp;#34;customer_demographics&amp;#34;, &amp;#34;date_dim&amp;#34;, &amp;#34;dbgen_version&amp;#34;, &amp;#34;household_demographics&amp;#34;, &amp;#34;income_band&amp;#34;, &amp;#34;inventory&amp;#34;, &amp;#34;item&amp;#34;, &amp;#34;promotion&amp;#34;, &amp;#34;reason&amp;#34;, &amp;#34;ship_mode&amp;#34;, &amp;#34;store&amp;#34;, &amp;#34;store_returns&amp;#34;, &amp;#34;store_sales&amp;#34;, &amp;#34;time_dim&amp;#34;, &amp;#34;warehouse&amp;#34;, &amp;#34;web_page&amp;#34;, &amp;#34;web_returns&amp;#34;, &amp;#34;web_sales&amp;#34;, &amp;#34;web_site&amp;#34; ] for table in tables: df = glueContext.</description>
+    </item>
+    
     <item>
       <title>Redshift Serverlessと他のサーバーレス集計サービス、Glue Data Catalogのテーブルへのクエリ実行</title>
       <link>https://www.sambaiz.net/article/392/</link>
@@ -14,14 +27,14 @@
       
       <guid>https://www.sambaiz.net/article/392/</guid>
       <description>Redshift Serverless Redshift Serverlessは今年のre:Inventで発表された、インスタンスを立てることなく従量課金でペタバイトスケールのDWHであるRedshiftを使える機能。 S3のデータを直接参照できるRedshift SpectrumやRDSへのFederated Query、機械学習のRedshift MLも使える。 分析のような不定期に発生する需要のためにインスタンスを立てておくのはコストの上でハードルが高かったのでこのアップデートは嬉しい。
-料金は最低1分のオートスケールするRPU (2vCPU, 16GiBメモリ)時間とストレージに対してかかり、オレゴンリージョンなどが$0.45/RPU hourなのに対して東京はなぜか$0.70/RPU hourと少し割高な設定になっている。2vCPU, 15 GiBメモリのインスタンスdc2.largeがオンデマンドで$0.314/hourなので、利用頻度が少なかったり不定期なために平均40%以上リソースが使えていない場合のコストは抑えられそうだ。RIが最大まで効いている場合は$0.110/hourとなり15%まで閾値が下がるが、スケールを気にしなくて良いのは運用の上でもメリットがある。ストレージとコンピューティングリソースを分離したRA3インスタンスでも また、Redshift Spectrumのロード量に対する課金は発生しない。
+料金は最低1分のオートスケールするRPU (2vCPU, 16GiBメモリ)時間とストレージに対してかかり、オレゴンリージョンなどが$0.45/RPU hourなのに対して東京はなぜか$0.70/RPU hourと少し割高な設定になっている。2vCPU, 15 GiBメモリのインスタンスdc2.largeがオンデマンドで$0.314/hourなので、利用頻度が少なかったり不定期なために平均40%以上リソースが使えていない場合のコストは抑えられそうだ。RIが最大まで効いている場合は$0.110/hourとなり15%まで閾値が下がるが、スケールを気にしなくて良いのは運用の上でもメリットがある。また、Redshift Spectrumのロード量に対する課金は発生しない。
 他のサーバーレス集計サービス サーバーレスで集計を行える他のサービスとしてはPrestoのマネージドサービスであるAthenaやSparkのマネージドサービスであるGlueがあって、前者は手軽にクエリを実行できロード量による課金も分かりやすいが、実行時間や同時実行数などの制約があり、後者は時間のかかる集計も行うことができるがジョブを作る必要があってアドホックな実行にはあまり向かない。
 これらはHive Metastoreに対応しており、その互換サービスであるGlue Data Catalogでスキーマを共有できるので用途に応じて使い分けることもできるが、使える文法に差があったり、同じクエリを実行しても異なる結果を返すことがあったりと、移植する際には注意する必要がある。
 Athena(Presto)とGlue(Spark)で同じクエリを実行した際に異なる値が返る原因 - sambaiz-net
 また、いずれもRDSに加えてDynamoDBやMongoDBなどのコネクタが用意されており、カスタムコネクタを用いることで他のデータソースにも接続することができる。
 AthenaのFederated QueryでTPC-DS Connectorを用いてデータを生成する - sambaiz-net
 GlueのカスタムコネクタでBigQueryに接続する - sambaiz-net
- 同じく今年のre:Inventで発表されたEMR Serverlessもある。Glueでも手に負えない規模の集計に使いたい。
+ 同じく今年のre:Inventで発表されたEMR Serverlessもある。 巨大なデータに対して重い集計やrepartition()を行ったりするとOOMやNo space left on deviceになることがあるが、Glueだとスケールアップできないため物理的に解決が難しいことがあり、そのような場合はEMRを検討することになる。
 サードパーティにも目を向ければ各クラウドにホストされるSnowflakeがある。コストやスケールの容易さのためにRedshiftからSnowflakeに移行した事例もあり良い評判を目にするが、立ち位置が近いRedshift Serverlessが発表されたことでこれからの技術選定に影響があるかもしれない。料金はプランによって単価が異なるSnowflake Creditとストレージに対してかかる。
 他にはAnthosを用いてマルチクラウドでクエリエンジンを動かすBigQuery Omniもある。今年の10月にGAになったばかりで、対応リージョンがまだ少なく、料金も従量課金でないので他と同様に使うイメージではないが、データを転送することなくAWS上でBigQueryのクエリを実行できるのは待望の機能なので今後の動きが気になる。
 Glue Data Catalogのテーブルにクエリを実行する CDKでData CatalogのDatabaseとTable、それらにアクセスできるRoleを作成する。
