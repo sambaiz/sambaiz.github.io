@@ -145,7 +145,7 @@ import tensorflow as tf def build_signature(signature_inputs, signature_outputs)
 チュートリアルで扱ったのは語彙数分の単語、つまり離散的な値だったが、今回は連続的な値を取る場合のモデルを作る。 全体のコードはここ。
 入力 以下の関数によって生成した1次元のデータ列。 これをstrideした最後のデータ、つまり時系列的に次に来るものを予測させる。
 def make_time_series_data(size): data = [] for i in range(size): data.append(sin(random.normalvariate(i,0.1)*0.1)) return np.reshape(np.array(data, dtype=np.float32), (size,1)) def make_batch(data, batch_size, num_steps, num_dimensions, name=None): epoch_size = data.size // (batch_size*num_steps*num_dimensions) data = np.lib.stride_tricks.as_strided( data, shape= (epoch_size, batch_size, num_steps+1, num_dimensions), strides=( 4*batch_size*num_steps*num_dimensions, 4*num_steps*num_dimensions, 4*num_dimensions, 4 # bytes ), writeable=False ) return data[:, :, :-1], data[:, :, 1:] モデル input layerでLSTMのhidden_sizeに合わせて、output layerで予測値を得ている。 lossはMSE(Mean squared error)。OptimizerはGradientDecentOptimizerを使っている。
-チュートリアルでは自力で各time_stepの値を入れていたけど、 今回はdynamic_rnn()に任せている。
+チュートリアルでは自力で各time_stepの値を入れていたが、 今回はdynamic_rnn()に任せている。
 class Model(object): def __init__(self, config, is_training=False): # config self.</description>
     </item>
     
@@ -193,7 +193,7 @@ Tensorflowでは以下の活性化関数が用意されている。
 sigmoid 値域は(0,1)でシグマの語末系ςに似たS字を描く。 微分係数がそれほど大きくないので何層もこの関数を適用すると、バックプロバゲーションで微分係数を掛けていった結果、勾配が消失する問題がありあまり使われない。値域が(-1,1)で似たグラフを描くtanh(Hyperbolic tangent)もある。
 softsign tanhと比べて漸近線に近づく速度が遅くなっている。 それほど性能は変わらないが、初期化においてロバストになるはたらきがあるようだ。
 softplus ReLUに続く。
-ReLU(Rectified Linear Unit) 単純だけど最有力。勾配消失も起きにくい。x=0で微分できないが0か1として扱われる。
+ReLU(Rectified Linear Unit) 単純だが最有力。勾配消失も起きにくい。x=0で微分できないが0か1として扱われる。
 def deriv_relu(x): return np.where(x &amp;gt; 0, 1, 0) softplusと比べてexpやlogを含まない分高速に計算できるので、 膨大で複雑なデータセットに対して多くの層を用いることができる。
 0以下は等しく0になるため、学習中に落ちてしまうとニューロンが死んでしまう。 これを避けるため0以下のときy = exp(x) - 1にするELU(Exponential Linear Unit) というのもある。
 比較的起きにくいとはいえ、層を深くすると勾配消失する可能性は高まる。 活性化関数ごとに異なる重みの初期値によってこれを緩和でき、ReLUでは入力次元数によるHe Initializationというのが提案されている。
@@ -208,10 +208,10 @@ Understanding the difficulty of training deep feedforward neural networks</descr
       <pubDate>Sun, 06 Aug 2017 23:54:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/124/</guid>
-      <description>AlphaGoを開発したGoogle DeepMind社のTensorFlowライブラリSonnetを使う。 当初はPython2しか対応していないようだったけど、今は3にも対応している。
-準備 TensorFlowを使うライブラリはほかにもいくつかあるのだけど、 Kerasと比較してみると、 KerasがTensorFlowの部分を完全にラップしているのに対して、 Sonnetは必要に応じてTensorFlowの関数も呼ぶ、比較的抽象度が低いライブラリのようだ。
+      <description>AlphaGoを開発したGoogle DeepMind社のTensorFlowライブラリSonnetを使う。 当初はPython2しか対応していないようだったが、今は3にも対応している。
+準備 TensorFlowを使うライブラリはほかにもいくつかあるのだが、 Kerasと比較してみると、 KerasがTensorFlowの部分を完全にラップしているのに対して、 Sonnetは必要に応じてTensorFlowの関数も呼ぶ、比較的抽象度が低いライブラリのようだ。
 SonnetとTensorFlowとPython3入りイメージをDockerHubに上げた。 Dockerfileはここ。
-内容は基本的にREADME通りだけど、 configureのところで対話的に聞かれないように前もって環境変数で設定を与えている。 あとは、TensorFlowのビルドに使われているGCCのバージョンが古いようで、sonnetをimportするときに以下のエラーが出たため、bazelのオプションに--copt=&amp;quot;-D_GLIBCXX_USE_CXX11_ABI=0&amp;quot;を付けている。
+内容は基本的にREADME通りだが、 configureのところで対話的に聞かれないように前もって環境変数で設定を与えている。 あとは、TensorFlowのビルドに使われているGCCのバージョンが古いようで、sonnetをimportするときに以下のエラーが出たため、bazelのオプションに--copt=&amp;quot;-D_GLIBCXX_USE_CXX11_ABI=0&amp;quot;を付けている。
 tensorflow.python.framework.errors_impl.NotFoundError: /usr/local/lib/python3.5/dist-packages/sonnet/python/ops/_resampler.so: undefined symbol: _ZN10tensorflow7strings6StrCatB5cxx11ERKNS0_8AlphaNumES3_S3_S3_ 起動。
 $ docker run -itd --name sonnet -p 6006:6006 -p 8888:8888 sambaiz/sonnet $ docker logs sonnet ... Copy/paste this URL into your browser when you connect for the first time, to login with a token: http://localhost:8888/?token=***** Jupyter Notebookを開いてSonnetとTensorFlowがimportできることを確認する。
 import sonnet as snt import tensorflow as tf snt.resampler(tf.constant([0.]), tf.constant([0.])) # =&amp;gt; &amp;lt;tf.Tensor &amp;#39;resampler/Resampler:0&amp;#39; shape=(1,) dtype=float32&amp;gt; MNIST TensorFlowのチュートリアルのデータを使って、畳み込みを行わない簡単なMNISTをやってみる。 このデータはtrain、validation、test用に最初から分かれていて、 それぞれピクセル濃度配列の画像データと、その画像がどの数字なのかを表すone-hot vectorのラベルを含んでいる。</description>

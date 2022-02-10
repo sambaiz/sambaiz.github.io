@@ -148,7 +148,7 @@ resource &amp;#34;datadog_integration_aws&amp;#34; &amp;#34;test&amp;#34; { acco
       
       <guid>https://www.sambaiz.net/article/141/</guid>
       <description>RedashはOSSのデータ可視化ツール。 BIツールのようにパラメータを変えながら指標を探っていくというよりは、分かっている指標を見るのに使うイメージ。 比較的機能が少ない分処理がわかりやすく、 クエリが自動生成されないため時間がかかるものを実行する前にある程度気づけるのが良いと思う。
-docker-composeで立ち上げることもできるけど、 AWSの各リージョンにAMIが用意されているのでそれで立ち上げる。
+docker-composeで立ち上げることもできるが、 AWSの各リージョンにAMIが用意されているのでそれで立ち上げる。
 sshで入って以下のようなのを必要に応じて設定する。 メールを送る場合はSESでメールアドレスをVerifyしてやるのが簡単。 GSuiteを使っている場合、OAuthのClientID、Secretを発行しドメインを登録するとそれで認証できる。
 $ ssh ubuntu@***** $ sudo vi /opt/redash/.env export REDASH_MAIL_SERVER=&amp;#34;email-smtp.us-east-1.amazonaws.com&amp;#34; export REDASH_MAIL_USE_TLS=&amp;#34;true&amp;#34; export REDASH_MAIL_USERNAME=&amp;#34;*****&amp;#34; export REDASH_MAIL_PASSWORD=&amp;#34;*****&amp;#34; export REDASH_MAIL_DEFAULT_SENDER=&amp;#34;*****&amp;#34; # Email address to send from export REDASH_GOOGLE_CLIENT_ID=&amp;#34;&amp;#34; export REDASH_GOOGLE_CLIENT_SECRET=&amp;#34;&amp;#34; $ cd /opt/redash/current $ sudo -u redash bin/run ./manage.py org set_google_apps_domains {{domains}} $ sudo supervisorctl restart all HTTPS対応するのに/etc/nginx/sites-available/redashを編集する。crtとkeyの場所は変える。
 upstream rd_servers { server 127.0.0.1:5000; } server { server_tokens off; listen 80 default; access_log /var/log/nginx/rd.access.log; gzip on; gzip_types *; gzip_proxied any; location /ping { proxy_set_header Host $http_host; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; proxy_pass http://rd_servers; } location / { return 301 https://$host$request_uri; } } server { listen 443 ssl; # Make sure to set paths to your certificate .</description>
@@ -177,12 +177,12 @@ upstream rd_servers { server 127.0.0.1:5000; } server { server_tokens off; liste
 負荷分散 TCPの24224(設定による)が通るようにEC2,ELBのSGとリスナーの設定をする必要があって、 ELBのSGのアウトバウンドの設定が見落とされがち。ELBのクロスゾーン分散は有効になっている。
 まず、ELBに3台、それぞれ別のAZ(1b, 1c, 1d)に配置されている状態でログを送り始めるとそれぞれ均等にログが届いた。 その状態から4台(1b * 2, 1c, 1d)にすると、2つのインスタンス(1b, 1c)のみに均等にログが届くようになった。 4台になると(1b, 1c)と(1b, 1d)に分けられてELBのノードがそれらの組に紐づいたということだと思う。 各ノードにはDNSラウンドロビンするようになっている。実際restartすると今度は別の組の方に送られた。
 では、なぜ一度送り始めると同じ方にしか飛ばないかというと、forwardプラグインのexpire_dns_cacheがデフォルトでnilになっていて、 heartbeatが届いている間は無期限にDNSキャッシュするようになっているため。これに0(キャッシュしない)か秒数を指定すると、 その間隔で他の組のインスタンスにもログが届くようになった。 expire_dns_cacheしなくても複数のインスタンスからラウンドロビンされるため全体でいえば分散される。
-heartbeat ELB配下のEC2を全て落としてもheartbeatに失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまうようだ。 ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。 全てのインスタンスが同時に落ちるというのは滅多に起きないだろうけど、少なくとも検知できるようにはしておく。
+heartbeat ELB配下のEC2を全て落としてもheartbeatに失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまうようだ。 ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。 全てのインスタンスが同時に落ちるというのは滅多に起きないだろうが、少なくとも検知できるようにはしておく。
 &amp;lt;server&amp;gt; name td1 host autoscale-td1.us-east-1.elasticbeanstalk.com port 24224 &amp;lt;/server&amp;gt; &amp;lt;server&amp;gt; name td2 host autoscale-td2.us-east-1.elasticbeanstalk.com port 24224 standby &amp;lt;/server&amp;gt; Blue/Green Deployment Blue-Green Deploymentというのは、2つの系を用意し、activeでない方にデプロイし、 スワップして反映させるもの。ダウンタイムなしで問題が起きた際にもすぐに切り戻すことができる。 スワップして向き先を変えるにはexpire_dns_cacheを設定する必要がある。
-Auto Scaling 増えるのはいいとして減るときに、 送り先で一時的に障害が起きていたりするとバッファをflushできずにログがロストする可能性がある。 それでいうとログの送り元でも同じことが起こりうるんだけど、通常Aggregatorにしか送らないので比較的問題になりにくい。
+Auto Scaling 増えるのはいいとして減るときに、 送り先で一時的に障害が起きていたりするとバッファをflushできずにログがロストする可能性がある。 それでいうとログの送り元でも同じことが起こりうるんだが、通常Aggregatorにしか送らないので比較的問題になりにくい。
 これを避けたい場合、Auto Scalingグループの設定で スケールインから保護を有効にして これから立ち上がるインスタンスはスケールインしなくすることができる。 それまでに立ち上がっていたインスタンスには適用されないので注意。
 スケールインしないということは最大の台数で止まってしまうので、 ピークを過ぎたらスワップしてバッファが全て掃けたことを確認してからTerminateすることになる。 これを日常的にやるのは面倒なので、実際は予期しない流量の増加に備えて一応設定しておき、 普段はしきい値にひっかからないような最低台数で待ち構えておくことにするかな。
-あとはヘルスチェックによって潰される可能性はなくもないけど、それはもうやむなし・・・。
+あとはヘルスチェックによって潰される可能性はなくもないが、それはもうやむなし・・・。
 参考 AWS ELBの社内向け構成ガイドを公開してみる 負荷分散編 – Cross-Zone Routingを踏まえて ｜ Developers.</description>
     </item>
     
@@ -208,12 +208,12 @@ $ docker exec norikra norikra-client query add lottery_agg &amp;#39; SELECT COUN
       
       <guid>https://www.sambaiz.net/article/109/</guid>
       <description>NorikraはTD社のtagomoris氏が作った、 スキーマレスのストリーミングデータを処理するOSS。
-モチベーションとしてはfluentdでElasticsearchにログを送って可視化していたのだけど、 流量が増えてきてピーク帯に耐えられなくなってしまったため、前もって集計してから送ることで流量を減らそうというもの。
+モチベーションとしてはfluentdでElasticsearchにログを送って可視化していたのだが、 流量が増えてきてピーク帯に耐えられなくなってしまったため、前もって集計してから送ることで流量を減らそうというもの。
 Norikraを立ち上げてクエリを実行する 公式で紹介されているDockerイメージがあったのでこれで動かしてみる。
-$ docker run -e &amp;#34;TZ=Asia/Tokyo&amp;#34; -p 26578:26578 -p 26571:26571 -v `pwd`:/var/tmp/norikra:rw -d myfinder/docker-norikra norikra start --stats /var/tmp/norikra/stats.json -l /var/tmp/norikra ほかのオプションとして-Xmsや-XmxでJVMのヒープメモリの量を設定したり、Experimentalではあるけど--shutoffでヒープメモリが一杯になる前に弾いて OutOfMemoryを防ぐことができる。 また、Norikraのコアエンジンで使われているOSSの CEP (Complex event processing)エンジン、 Esper のパフォーマンスチューニングとして--microや--smallなどを渡すこともできるけど試していない。
+$ docker run -e &amp;#34;TZ=Asia/Tokyo&amp;#34; -p 26578:26578 -p 26571:26571 -v `pwd`:/var/tmp/norikra:rw -d myfinder/docker-norikra norikra start --stats /var/tmp/norikra/stats.json -l /var/tmp/norikra ほかのオプションとして-Xmsや-XmxでJVMのヒープメモリの量を設定したり、Experimentalではあるが--shutoffでヒープメモリが一杯になる前に弾いて OutOfMemoryを防ぐことができる。 また、Norikraのコアエンジンで使われているOSSの CEP (Complex event processing)エンジン、 Esper のパフォーマンスチューニングとして--microや--smallなどを渡すこともできるが試していない。
 公式サイトの例に従ってクライアントからデータを入れてクエリを実行してみる。
 まずはtargetをopenする。targetというのはスキーマレスのイベントストリームのこと。 ここで定義したフィールドは必須になる。
-$ norikra-client target open www path:string status:integer referer:string agent:string userid:integer $ norikra-client target list TARGET	AUTO_FIELD www	true 次にクエリを追加する。一見普通のSQLのように見えるけど、EsperのクエリであるEPL(Event Processing Language)。 ただしSELECTしか使えないのも含めてクエリにいくらかの制限がある。
+$ norikra-client target open www path:string status:integer referer:string agent:string userid:integer $ norikra-client target list TARGET	AUTO_FIELD www	true 次にクエリを追加する。一見普通のSQLのように見えるが、EsperのクエリであるEPL(Event Processing Language)。 ただしSELECTしか使えないのも含めてクエリにいくらかの制限がある。
 このクエリではwin:time_batchで10秒のWindowを定義し、eventをgroup byして、その数をeventとして出力する。
 $ norikra-client query add www.toppageviews &amp;#39;SELECT count(*) AS cnt FROM www.</description>
     </item>
@@ -228,7 +228,7 @@ $ norikra-client query add www.toppageviews &amp;#39;SELECT count(*) AS cnt FROM
 空でもいいのでroleをつけておく必要がある。
 $ git clone https://github.com/awslabs/aws-fluent-plugin-kinesis.git $ cd aws-fluent-plugin-kinesis $ yum install -y ruby-devel gcc $ echo &amp;#39;gem &amp;#34;io-console&amp;#34;&amp;#39; &amp;gt;&amp;gt; Gemfile $ make $ make benchmark RATEを指定しなければデフォルトで秒間1000レコードが送られる設定。 fluentdを起動してから10秒後にプロセスをkillし、そのレコード数などを出力している。
 t2.microでデフォルト(RATE=1000)で実行した結果がこれ。 固める分producerの方はややパフォーマンスが落ちる。
-bundle exec rake benchmark TYPE=streams Results: requets: 20, raw_records: 9400, records: 9400 bundle exec rake benchmark TYPE=producer Results: requets: 14, raw_records: 1005, records: 8900 RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。 streamsだとシャードを増やしていく必要があるけど、producerの方は当分大丈夫そうだ。
+bundle exec rake benchmark TYPE=streams Results: requets: 20, raw_records: 9400, records: 9400 bundle exec rake benchmark TYPE=producer Results: requets: 14, raw_records: 1005, records: 8900 RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。 streamsだとシャードを増やしていく必要があるが、producerの方は当分大丈夫そうだ。
 bundle exec rake benchmark TYPE=streams Results: requets: 57, raw_records: 27600, records: 27600 bundle exec rake benchmark TYPE=producer Results: requets: 12, raw_records: 241, records: 25200 RATE=10000のとき。raw_records, requestの圧縮率はさらに上がり、 パフォーマンスの差が大きくなってきている。</description>
     </item>
     
@@ -311,7 +311,7 @@ $ sudo yum install –y aws-kinesis-agent /etc/aws-kinesis/agent.jsonを編集�
       <pubDate>Thu, 09 Feb 2017 21:00:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/62/</guid>
-      <description>Dynamic mappingがあるので、自分で設定しなくてもデータは入るけど、 自分でやるとindexやanalyzerなどの設定が詳細にできるし、意図しないmappingを避けることもできる。 バージョンは5.2。
+      <description>Dynamic mappingがあるので、自分で設定しなくてもデータは入るが、 自分でやるとindexやanalyzerなどの設定が詳細にできるし、意図しないmappingを避けることもできる。 バージョンは5.2。
 $ curl -XPOST &amp;#39;localhost:9200/test_hoge/fuga?pretty&amp;#39; -d&amp;#39; { &amp;#34;name&amp;#34;: 0 } &amp;#39; $ curl -XPOST &amp;#39;localhost:9200/test_hoge/fuga?pretty&amp;#39; -d&amp;#39; { &amp;#34;name&amp;#34;: &amp;#34;sambaiz&amp;#34; } &amp;#39; { &amp;#34;error&amp;#34; : { &amp;#34;root_cause&amp;#34; : [ { &amp;#34;type&amp;#34; : &amp;#34;mapper_parsing_exception&amp;#34;, &amp;#34;reason&amp;#34; : &amp;#34;failed to parse [name]&amp;#34; } ], &amp;#34;type&amp;#34; : &amp;#34;mapper_parsing_exception&amp;#34;, &amp;#34;reason&amp;#34; : &amp;#34;failed to parse [name]&amp;#34;, &amp;#34;caused_by&amp;#34; : { &amp;#34;type&amp;#34; : &amp;#34;number_format_exception&amp;#34;, &amp;#34;reason&amp;#34; : &amp;#34;For input string: \&amp;#34;sambaiz\&amp;#34;&amp;#34; } }, &amp;#34;status&amp;#34; : 400 } Mapping parameters index falseにするとindexしない。クエリで必要ないものはfalseにする。</description>
     </item>
     
@@ -397,7 +397,7 @@ $ echo &amp;#34;aaaa&amp;#34; &amp;gt; /var/log/app.log $ logrotate -f /etc/logr
       <pubDate>Sun, 06 Nov 2016 11:17:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/32/</guid>
-      <description>$td-agent --version td-agent 0.12.26 td-agentって書いてあるけど、これがfluentdのバージョンらしい。
+      <description>$td-agent --version td-agent 0.12.26 td-agentって書いてあるが、これがfluentdのバージョンらしい。
 fluentdはv0.14からナノ秒で時間を持つようになった。 ただ、現行のtd-agent(v2.3.2)は上の通り古いバージョンを使っている。 0.14になるtd-agent-3はまだリリースされていないので、 自分でfluentdをv0.14.8に上げてビルドすることにした。
 FROMubuntu:14.04 WORKDIR/tmp RUN apt-get update &amp;amp;&amp;amp; \  apt-get install -y git software-properties-common build-essential curl &amp;amp;&amp;amp; \  add-apt-repository -y ppa:brightbox/ruby-ng &amp;amp;&amp;amp; \  apt-get update &amp;amp;&amp;amp; \  apt-get install -y ruby2.3 ruby2.3-dev &amp;amp;&amp;amp; \  gem install bundler &amp;amp;&amp;amp; \  git clone https://github.com/treasure-data/omnibus-td-agent WORKDIR/tmp/omnibus-td-agent RUN sed -ie &amp;#34;s/^default_version.*$/default_version &amp;#39;3d1dd53f31d1fe49508f230a71a2b4c2ceb20f47&amp;#39;/&amp;#34; config/software/fluentd.rb &amp;amp;&amp;amp; \  sed -ie &amp;#34;s/^license_file.*$/license_file &amp;#39;LICENSE&amp;#39;/&amp;#34; config/projects/td-agent2.rb &amp;amp;&amp;amp; \  bundle install --binstubs &amp;amp;&amp;amp; \  bin/gem_downloader core_gems.</description>
     </item>

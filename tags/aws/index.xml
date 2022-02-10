@@ -218,7 +218,8 @@ Unable to load an HTTP implementation from any provider in the chain. You must d
  レイテンシを抑えるために常にプロビジョニングされるコンテナインスタンスのメモリ量: 0.009 USD/GB リクエストを処理するアクティブなコンテナインスタンスのCPUとメモリ量: 0.081 USD/vCPU, 0.009 USD/GB  およびビルド時間で算出される。 Lambda(+ API Gateway)と異なりリクエストが来なくても最小インスタンスのメモリ分のコストは発生するのと、 Fargateが0.05056 USD/vCPU, 0.00553 USD/GBであることを考えると少し割高に見えるが、 Lambdaの制約を受けずに、リクエストが来ない時間帯はコストが抑えられるのは良さそうだ。
 FargateでECSを使う - sambaiz-net
 コンテナアプリケーション管理のCLIツールAWS CopilotもApp Runnerに対応していて、 Environmentを作成するとVPCが作られるが、現状App RunnerはVPCに対応していない。 private subnetのRDSにアクセスしたり、ドキュメントでも言及されているようにElastiCacheにキャッシュを持てるようになるので対応されると嬉しい。
-CloudFormationのResourceは現状AWS::AppRunner::Serviceのみで、 これと必要なRoleだけ作れば最低限動き、https://h2w86ea3gf.ap-northeast-1.awsapprunner.com/ のようなURLでアクセスできる。 まだリリースされたばかりでAutoScalingのResourceがなかったりするので、今後のアップデートに期待している。
+ (追記 2022-02-09) VPC対応された。
+ CloudFormationのResourceは現状AWS::AppRunner::Serviceのみで、 これと必要なRoleだけ作れば最低限動き、https://h2w86ea3gf.ap-northeast-1.awsapprunner.com/ のようなURLでアクセスできる。 まだリリースされたばかりでAutoScalingのResourceがなかったりするので、今後のアップデートに期待している。
 Resources: AccessRole: Type: AWS::IAM::Role Properties: AssumeRolePolicyDocument: Version: &amp;#39;2008-10-17&amp;#39; Statement: - Effect: Allow Principal: Service: - build.apprunner.amazonaws.com Action: sts:AssumeRole ManagedPolicyArns: - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess TestService: Type: AWS::AppRunner::Service Properties: ServiceName: test-service SourceConfiguration: AuthenticationConfiguration: AccessRoleArn: !</description>
     </item>
     
@@ -1025,7 +1026,7 @@ $ cat sesrverless.yml service: testservice provider: name: aws profile: foobar r
       
       <guid>https://www.sambaiz.net/article/152/</guid>
       <description>最近朝が寒くて布団から出るのがつらい。雨や雪が降っていたら尚更のこと、それならそれで現状を把握する必要がある。 そこで、無料から使える気象API OpenWeatherMapのデータをdatadogに送って、特に寒い日や雨雪が降るような朝にはアラートを飛ばすことにした。
-インスタンスが立っていたらDataDog AgentのDogStatsD経由で送ることができ、 そうでなければ通常はAPIを呼ぶことになるんだけど、Lambdaでは、AWS Integrationを設定すると有効になるLambda Integrationによって MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。
+インスタンスが立っていたらDataDog AgentのDogStatsD経由で送ることができ、 そうでなければ通常はAPIを呼ぶことになるんだが、Lambdaでは、AWS Integrationを設定すると有効になるLambda Integrationによって MONITORING|unix_epoch_timestamp|value|metric_type|my.metric.name|#tag1:value,tag2のフォーマットでconsole.logするだけでメトリクスが送られるようになっている。
  追記 (2020-12-07): 今はDatadog Forwaderを通して送ることができる。
  const axios = require(&amp;#39;axios&amp;#39;); const CITY = &amp;#39;Shibuya&amp;#39;; const API_KEY = &amp;#39;*****&amp;#39;; const WEATHER_API = `http://api.openweathermap.org/data/2.5/weather?q=${CITY}&amp;amp;units=metric&amp;amp;appid=${API_KEY}`; const METRIC_COUNTER = &amp;#39;counter&amp;#39;; const METRIC_GAUGE = &amp;#39;gauge&amp;#39;; const monitor = (metricName, metricType, value, tags) =&amp;gt; { const unixEpochTimestamp = Math.floor(new Date().getTime()); console.log(`MONITORING|${unixEpochTimestamp}|${value}|${metricType}|${metricName}|#${tags.join(&amp;#39;,&amp;#39;)}`); }; exports.handler = async (event, context, callback) =&amp;gt; { const data = (await axios.get(WEATHER_API)).data const namePrefix = &amp;#39;livinginfo.</description>
     </item>
@@ -1038,8 +1039,8 @@ $ cat sesrverless.yml service: testservice provider: name: aws profile: foobar r
       <guid>https://www.sambaiz.net/article/145/</guid>
       <description>https://github.com/sambaiz/athena-admin
 AthenaはS3をデータソースとするマネージドなデータ分析基盤。Prestoベースで標準SQLを実行できる。
-料金はスキャンしたデータ量にかかり、$5/TB。1MB切り上げで、10MB以下のクエリは10MBになる。 データ量に対してかなり安く使えるものの、フルスキャンしてしまうとBigQueryと同様にお金が溶けてしまうので、大抵はパーティションを切ることになるのだけど都度locationを指定してADD PARTITIONを実行するのは大変。さらにスキーマを変更するのにもALTER TABLE ADD COLUMNSなどはないのでテーブルを作り直すことになるが、当然パーティションも全部作り直すことになる。
-ではどうしようもないかというとMSCK REPAIR TABLEというのがあって、 これはS3のObjectのdt=YYYY-MM-DDのようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだけど、勝手にYYYY/MM/DD/HHのprefixを付けてしまうFirehoseのようなのもある。
+料金はスキャンしたデータ量にかかり、$5/TB。1MB切り上げで、10MB以下のクエリは10MBになる。 データ量に対してかなり安く使えるものの、フルスキャンしてしまうとBigQueryと同様にお金が溶けてしまうので、大抵はパーティションを切ることになるのだが都度locationを指定してADD PARTITIONを実行するのは大変。さらにスキーマを変更するのにもALTER TABLE ADD COLUMNSなどはないのでテーブルを作り直すことになるが、当然パーティションも全部作り直すことになる。
+ではどうしようもないかというとMSCK REPAIR TABLEというのがあって、 これはS3のObjectのdt=YYYY-MM-DDのようなkey=valueのprefixを認識してパーティションを作るもの。作り直す際もこれ1クエリで終わる。それなら最初からそういう風に置けばよいのではというところだが、勝手にYYYY/MM/DD/HHのprefixを付けてしまうFirehoseのようなのもある。
 今回作ったathena-adminは以下のような定義ファイルから、 パーティションのkey=valueのprefixが付くように置き換えたり、変更があったらmigrationする。 このファイルを書き換えるだけで基本的にどうにかなるし、バージョン管理すればテーブル定義の変更を追うことができる。
 { &amp;#34;general&amp;#34;: { &amp;#34;athenaRegion&amp;#34;: &amp;#34;ap-northeast-1&amp;#34;, &amp;#34;databaseName&amp;#34;: &amp;#34;aaaa&amp;#34;, &amp;#34;saveDefinitionLocation&amp;#34;: &amp;#34;s3://saveDefinitionBucket/aaaa.json&amp;#34; }, &amp;#34;tables&amp;#34;: { &amp;#34;sample_data&amp;#34;: { &amp;#34;columns&amp;#34;: { &amp;#34;user_id&amp;#34;: &amp;#34;int&amp;#34;, &amp;#34;value&amp;#34;: { &amp;#34;score&amp;#34;: &amp;#34;int&amp;#34;, &amp;#34;category&amp;#34;: &amp;#34;string&amp;#34; } /* &amp;#34;struct&amp;lt;score:int,category:string&amp;gt;&amp;#34; のように書くこともできる */ }, &amp;#34;srcLocation&amp;#34;: &amp;#34;s3://src/location/&amp;#34;, &amp;#34;partition&amp;#34;: { &amp;#34;prePartitionLocation&amp;#34;: &amp;#34;s3://pre/partition/&amp;#34;, /* optional */ &amp;#34;regexp&amp;#34;: &amp;#34;(\\d{4})/(\\d{2})/(\\d{2})/&amp;#34;, /* optional */ &amp;#34;keys&amp;#34;: [ { &amp;#34;name&amp;#34;: &amp;#34;dt&amp;#34;, &amp;#34;type&amp;#34;: &amp;#34;string&amp;#34;, &amp;#34;format&amp;#34;: &amp;#34;{1}-{2}-{3}&amp;#34;, /* optional */ } ] } } } } 使い方はこんな感じ。使い方によってはmigrate()だけ呼ぶこともあると思う。 replaceObjects()にはmatchedHandlerというのを渡すこともできて、 UTCからJSTに変換するといったこともできる。</description>
     </item>
@@ -1050,7 +1051,7 @@ AthenaはS3をデータソースとするマネージドなデータ分析基盤
       <pubDate>Sun, 12 Nov 2017 22:23:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/144/</guid>
-      <description>Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。 これを手作業で行うこともできるのだけど、せっかくなのでアプリケーションと一緒に管理したい。 そんなときのためにterraformコマンドをラップしたapex infraが用意されている。
+      <description>Apexでfunctionをデプロイするとトリガーが登録されないのであとで追加することになる。 これを手作業で行うこともできるのだが、せっかくなのでアプリケーションと一緒に管理したい。 そんなときのためにterraformコマンドをラップしたapex infraが用意されている。
 TerraformでVPCを管理するmoduleを作る - sambaiz-net
 functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。 その下に環境ごとのディレクトリを作成することもできて、その場合は--envで指定した環境のものが使われる。
 - functions - infrastructure main.tf variables.tf - modules - cloudwatch_schedule main.tf variables.tf project.json functionをデプロイするとそのARNが変数で取れるようになる。
@@ -1065,7 +1066,7 @@ $ apex list --tfvars apex_function_hello=&amp;#34;arn:aws:lambda:ap-northeast-1:
       
       <guid>https://www.sambaiz.net/article/141/</guid>
       <description>RedashはOSSのデータ可視化ツール。 BIツールのようにパラメータを変えながら指標を探っていくというよりは、分かっている指標を見るのに使うイメージ。 比較的機能が少ない分処理がわかりやすく、 クエリが自動生成されないため時間がかかるものを実行する前にある程度気づけるのが良いと思う。
-docker-composeで立ち上げることもできるけど、 AWSの各リージョンにAMIが用意されているのでそれで立ち上げる。
+docker-composeで立ち上げることもできるが、 AWSの各リージョンにAMIが用意されているのでそれで立ち上げる。
 sshで入って以下のようなのを必要に応じて設定する。 メールを送る場合はSESでメールアドレスをVerifyしてやるのが簡単。 GSuiteを使っている場合、OAuthのClientID、Secretを発行しドメインを登録するとそれで認証できる。
 $ ssh ubuntu@***** $ sudo vi /opt/redash/.env export REDASH_MAIL_SERVER=&amp;#34;email-smtp.us-east-1.amazonaws.com&amp;#34; export REDASH_MAIL_USE_TLS=&amp;#34;true&amp;#34; export REDASH_MAIL_USERNAME=&amp;#34;*****&amp;#34; export REDASH_MAIL_PASSWORD=&amp;#34;*****&amp;#34; export REDASH_MAIL_DEFAULT_SENDER=&amp;#34;*****&amp;#34; # Email address to send from export REDASH_GOOGLE_CLIENT_ID=&amp;#34;&amp;#34; export REDASH_GOOGLE_CLIENT_SECRET=&amp;#34;&amp;#34; $ cd /opt/redash/current $ sudo -u redash bin/run ./manage.py org set_google_apps_domains {{domains}} $ sudo supervisorctl restart all HTTPS対応するのに/etc/nginx/sites-available/redashを編集する。crtとkeyの場所は変える。
 upstream rd_servers { server 127.0.0.1:5000; } server { server_tokens off; listen 80 default; access_log /var/log/nginx/rd.access.log; gzip on; gzip_types *; gzip_proxied any; location /ping { proxy_set_header Host $http_host; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; proxy_pass http://rd_servers; } location / { return 301 https://$host$request_uri; } } server { listen 443 ssl; # Make sure to set paths to your certificate .</description>
@@ -1095,7 +1096,7 @@ $ apex init --profile apex Project name: try-apex Project description: test [+] 
       <description>PuppeteerでHeadless Chromeを動かすコードを Lambda上で動かすStarter Kitを作った。
 puppeteer-lambda-starter-kit
 Chromeの準備 Puppeteerのインストール時に落としてくるChromeをLambda上で動かそうとしても Lambdaにないshared libraryに依存しているため失敗する。
-error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory Lambda上でHeadless Chromeを動かす例がないか調べたらserverless-chromeというのがあって、 Headless用の設定でChromeをビルドしていた。 ほかにはchromelessというのもあるけど これはserverless-chromeに 依存している。 最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。
+error while loading shared libraries: libpangocairo-1.0.so.0: cannot open shared object file: No such file or directory Lambda上でHeadless Chromeを動かす例がないか調べたらserverless-chromeというのがあって、 Headless用の設定でChromeをビルドしていた。 ほかにはchromelessというのもあるが これはserverless-chromeに 依存している。 最小構成でPuppeteerを使いたかったので、今回はこれらを使わず一から作ることにした。
 serverless-chromeにもビルドしたものが置いてあるが、少しバージョンが古いようだったので最新版でビルドした。 基本的には書いてある 通りやればうまくいく。他のプロセスとのshared memoryとして/dev/shmを使っているのを、/tmpに置き換える ようにしないと、実行時のpage.goto()でFailed Provisional Load: ***, error_code: -12になる。
 ビルドしたheadless_shellには問題になった依存は含まれていないようだ。
 $ ldd headless_shell linux-vdso.so.1 =&amp;gt; (0x00007ffcb6fed000) libpthread.so.0 =&amp;gt; /lib64/libpthread.so.0 (0x00007f5f17dbe000) libdl.so.2 =&amp;gt; /lib64/libdl.so.2 (0x00007f5f17bba000) librt.so.1 =&amp;gt; /lib64/librt.so.1 (0x00007f5f179b1000) libnss3.so =&amp;gt; /usr/lib64/libnss3.so (0x00007f5f17692000) libnssutil3.so =&amp;gt; /usr/lib64/libnssutil3.so (0x00007f5f17466000) libsmime3.so =&amp;gt; /usr/lib64/libsmime3.</description>
@@ -1109,7 +1110,7 @@ $ ldd headless_shell linux-vdso.so.1 =&amp;gt; (0x00007ffcb6fed000) libpthread.s
       <guid>https://www.sambaiz.net/article/121/</guid>
       <description>Terraform
 $ brew install terraform $ terraform -v Terraform v0.9.11 Terraformの設定要素 provider IaaS(e.g. AWS)、PaaS(e.g. Heroku)、SaaS(e.g. CloudFlare)など。
-AWS Providerはこんな感じ。 ここに直接access_keyやsecret_keyを書くこともできるけど、誤って公開されてしまわないように環境変数か variableで渡す。
+AWS Providerはこんな感じ。 ここに直接access_keyやsecret_keyを書くこともできるが、誤って公開されてしまわないように環境変数か variableで渡す。
 provider &amp;#34;aws&amp;#34; {# access_key = &amp;#34;${var.access_key}&amp;#34; # secret_key = &amp;#34;${var.secret_key}&amp;#34;  region = &amp;#34;us-east-1&amp;#34; } $ export AWS_ACCESS_KEY_ID=&amp;#34;anaccesskey&amp;#34; $ export AWS_SECRET_ACCESS_KEY=&amp;#34;asecretkey&amp;#34; varibale CLIでオーバーライドできるパラメーター。typeにはstringのほかにmapやlistを渡すことができ、 何も渡さないとdefault値のものが、それもなければstringになる。
 variable &amp;#34;key&amp;#34; { type = &amp;#34;string&amp;#34; default = &amp;#34;value&amp;#34; description = &amp;#34;description&amp;#34; } 値を渡す方法はTF_VAR_をprefixとする環境変数、-var、-var-fileがある。 また、moduleのinputとして渡されることもある。
 $ export TF_VAR_somelist=&amp;#39;[&amp;#34;ami-abc123&amp;#34;, &amp;#34;ami-bcd234&amp;#34;]&amp;#39; $ terraform apply -var foo=bar -var foo=baz $ terraform apply -var-file=foo.</description>
@@ -1125,12 +1126,12 @@ $ export TF_VAR_somelist=&amp;#39;[&amp;#34;ami-abc123&amp;#34;, &amp;#34;ami-bc
 負荷分散 TCPの24224(設定による)が通るようにEC2,ELBのSGとリスナーの設定をする必要があって、 ELBのSGのアウトバウンドの設定が見落とされがち。ELBのクロスゾーン分散は有効になっている。
 まず、ELBに3台、それぞれ別のAZ(1b, 1c, 1d)に配置されている状態でログを送り始めるとそれぞれ均等にログが届いた。 その状態から4台(1b * 2, 1c, 1d)にすると、2つのインスタンス(1b, 1c)のみに均等にログが届くようになった。 4台になると(1b, 1c)と(1b, 1d)に分けられてELBのノードがそれらの組に紐づいたということだと思う。 各ノードにはDNSラウンドロビンするようになっている。実際restartすると今度は別の組の方に送られた。
 では、なぜ一度送り始めると同じ方にしか飛ばないかというと、forwardプラグインのexpire_dns_cacheがデフォルトでnilになっていて、 heartbeatが届いている間は無期限にDNSキャッシュするようになっているため。これに0(キャッシュしない)か秒数を指定すると、 その間隔で他の組のインスタンスにもログが届くようになった。 expire_dns_cacheしなくても複数のインスタンスからラウンドロビンされるため全体でいえば分散される。
-heartbeat ELB配下のEC2を全て落としてもheartbeatに失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまうようだ。 ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。 全てのインスタンスが同時に落ちるというのは滅多に起きないだろうけど、少なくとも検知できるようにはしておく。
+heartbeat ELB配下のEC2を全て落としてもheartbeatに失敗しないため、standyに移行せずELBのバックエンド接続エラーになってログがロストしてしまうようだ。 ログにも出ず、以下のようにactive-standbyの設定をしてもstandbyに移行しない。 全てのインスタンスが同時に落ちるというのは滅多に起きないだろうが、少なくとも検知できるようにはしておく。
 &amp;lt;server&amp;gt; name td1 host autoscale-td1.us-east-1.elasticbeanstalk.com port 24224 &amp;lt;/server&amp;gt; &amp;lt;server&amp;gt; name td2 host autoscale-td2.us-east-1.elasticbeanstalk.com port 24224 standby &amp;lt;/server&amp;gt; Blue/Green Deployment Blue-Green Deploymentというのは、2つの系を用意し、activeでない方にデプロイし、 スワップして反映させるもの。ダウンタイムなしで問題が起きた際にもすぐに切り戻すことができる。 スワップして向き先を変えるにはexpire_dns_cacheを設定する必要がある。
-Auto Scaling 増えるのはいいとして減るときに、 送り先で一時的に障害が起きていたりするとバッファをflushできずにログがロストする可能性がある。 それでいうとログの送り元でも同じことが起こりうるんだけど、通常Aggregatorにしか送らないので比較的問題になりにくい。
+Auto Scaling 増えるのはいいとして減るときに、 送り先で一時的に障害が起きていたりするとバッファをflushできずにログがロストする可能性がある。 それでいうとログの送り元でも同じことが起こりうるんだが、通常Aggregatorにしか送らないので比較的問題になりにくい。
 これを避けたい場合、Auto Scalingグループの設定で スケールインから保護を有効にして これから立ち上がるインスタンスはスケールインしなくすることができる。 それまでに立ち上がっていたインスタンスには適用されないので注意。
 スケールインしないということは最大の台数で止まってしまうので、 ピークを過ぎたらスワップしてバッファが全て掃けたことを確認してからTerminateすることになる。 これを日常的にやるのは面倒なので、実際は予期しない流量の増加に備えて一応設定しておき、 普段はしきい値にひっかからないような最低台数で待ち構えておくことにするかな。
-あとはヘルスチェックによって潰される可能性はなくもないけど、それはもうやむなし・・・。
+あとはヘルスチェックによって潰される可能性はなくもないが、それはもうやむなし・・・。
 参考 AWS ELBの社内向け構成ガイドを公開してみる 負荷分散編 – Cross-Zone Routingを踏まえて ｜ Developers.</description>
     </item>
     
@@ -1144,7 +1145,7 @@ Auto Scaling 増えるのはいいとして減るときに、 送り先で一時
 空でもいいのでroleをつけておく必要がある。
 $ git clone https://github.com/awslabs/aws-fluent-plugin-kinesis.git $ cd aws-fluent-plugin-kinesis $ yum install -y ruby-devel gcc $ echo &amp;#39;gem &amp;#34;io-console&amp;#34;&amp;#39; &amp;gt;&amp;gt; Gemfile $ make $ make benchmark RATEを指定しなければデフォルトで秒間1000レコードが送られる設定。 fluentdを起動してから10秒後にプロセスをkillし、そのレコード数などを出力している。
 t2.microでデフォルト(RATE=1000)で実行した結果がこれ。 固める分producerの方はややパフォーマンスが落ちる。
-bundle exec rake benchmark TYPE=streams Results: requets: 20, raw_records: 9400, records: 9400 bundle exec rake benchmark TYPE=producer Results: requets: 14, raw_records: 1005, records: 8900 RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。 streamsだとシャードを増やしていく必要があるけど、producerの方は当分大丈夫そうだ。
+bundle exec rake benchmark TYPE=streams Results: requets: 20, raw_records: 9400, records: 9400 bundle exec rake benchmark TYPE=producer Results: requets: 14, raw_records: 1005, records: 8900 RATE=3000のとき。producerではraw_recordsが1/100、リクエスト数は1/5。 streamsだとシャードを増やしていく必要があるが、producerの方は当分大丈夫そうだ。
 bundle exec rake benchmark TYPE=streams Results: requets: 57, raw_records: 27600, records: 27600 bundle exec rake benchmark TYPE=producer Results: requets: 12, raw_records: 241, records: 25200 RATE=10000のとき。raw_records, requestの圧縮率はさらに上がり、 パフォーマンスの差が大きくなってきている。</description>
     </item>
     
@@ -1258,7 +1259,7 @@ $ sudo yum install –y aws-kinesis-agent /etc/aws-kinesis/agent.jsonを編集�
 セカンダリインデックス パーティションキーのグローバルセカンダリインデックス(GSI)と ソートキーのローカルセカンダリインデックス(LSI)がある。 射影されるフィールドを選択でき、ここに含まれないフィールドは返さない。 ただし、すべてをインデックスに書き込むのはコストが高いのでなるべく絞る。
 キャパシティユニット  1読み込みキャパシティユニット: 4kbを超えないデータを1秒に1~2回(整合性による)読み込める 1書き込みキャパシティユニット: 1kbを超えないデータを1秒に1回書き込める  ユニットに応じて1時間あたりで課金される。
 未使用のキャパシティがある場合、最大5分保持してバーストに備えてくれる。
-読み書きする aws-sdk-goを直接使ってもいいけど、簡単に扱えるラッパー guregu/dynamo を使うことにした。
+読み書きする aws-sdk-goを直接使ってもいいが、簡単に扱えるラッパー guregu/dynamo を使うことにした。
 type Data struct { ID int64 `dynamo:&amp;#34;id&amp;#34;` Name string Age int } db := dynamo.New(session.New(), &amp;amp;aws.Config{Region: aws.String(&amp;#34;ap-northeast-1&amp;#34;)}) table := db.Table(&amp;#34;testtable&amp;#34;) Create &amp;amp; Update d := Data{ID: 1, Name: &amp;#34;hogefuga&amp;#34;, Age: 123} if err := table.Put(d).Run(); err != nil { return err } if err := table.</description>
     </item>
     
