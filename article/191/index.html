@@ -343,6 +343,14 @@
   
 
   
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.css" integrity="sha384-R4558gYOUz8mP9YWpZJjofhk+zx0AS11p36HnD2ZKj/6JR5z27gSSULCNHIRReVs" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.js" integrity="sha384-z1fJDqw8ZApjGO3/unPWUPsIymfsJmyrDVWC8Tv/a1HeOtGmkwNd/7xUS0Xcnvsx" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"
+        onload="renderMathInElement(document.body);"></script>
+  <style>
+    .katex-display { margin: 1.5rem 0; }
+  </style>
+  
 <script type="application/ld+json">
   {
     "@context": "http://schema.org",
@@ -466,40 +474,68 @@
         <a class="tag" href='/tags/machinelearning/'>machinelearning</a>
       </div>
       <h2 id="ロジスティック回帰">ロジスティック回帰</h2>
-<p>単純パーセプトロンの活性化関数を0/1のステップ関数ではなく0~1のシグモイド関数σにしたモデルで、分類の確率を返すことができる。</p>
+<p>単純パーセプトロンの活性化関数を、0か1の値を取るステップ関数ではなく値域\((0,1)\)のシグモイド関数\(\sigma\)にすることで
+確率を返せるようにしたモデル。</p>
+<p>$$ p = \frac{1}{1+e^{-(w^Tx + b)}} $$</p>
 <p><a href="https://www.sambaiz.net/article/133/">ニューラルネットワークと活性化関数 - sambaiz-net</a></p>
-<p>線形分離不可能な場合はうまくいかない。入力と出力の間に隠れ層があるMLPでは非線形分離もできる。</p>
+<p>シグモイド関数という非線形の関数を通すので非線形分離できそうな気もするが
+上の式を変形すると次のようになり線形分離モデルであることが分かる。
+例えば閾値を0.5とすると\(w^Tx + b = 0\)が境界となる。
+層を増やせば非線形分離できるようになる。</p>
 <p><a href="https://www.sambaiz.net/article/192/">MLPと誤差逆伝搬法(Backpropagation) - sambaiz-net</a></p>
+<p>$$ \begin{align*}
+p &amp;= 1 - \frac{1}{1+e^{w^Tx + b}} \because \sigma(-x) = 1 - \sigma(x) \\
+\frac{1}{1-p} &amp;= 1 + e^{w^Tx + b} \\
+\ln \frac{p}{1-p} &amp;= w^Tx + b
+\end{align*} $$</p>
+<p>この左辺をロジットといい\([0,1]\)の確率から実数\([-\infty, \infty]\)への写像となっている。
+また、対数を取っている\(\frac{p}{1-p}\)をオッズといい、
+事象の起こりやすさを比較する際に用いられるオッズ比はこの比となっている。</p>
 <h2 id="尤度関数と交差エントロピー誤差関数">尤度関数と交差エントロピー誤差関数</h2>
-<p>尤度(likelihood)関数はXという事象が観察されたときにC=tである尤もらしさを表す関数。
-例えば、6面ダイスを2回振って両方1の目が出た(X)ときに1の目が出る確率が1/6(C)である尤度は(1/6)*(1/6)=1/36となる。</p>
-<p><img src="https://www.sambaiz.net/images/191-likelihood.png" alt="尤度関数"></p>
-<p>学習ではモデルのパラメータw,bを、各入力x(x1,x2,&hellip;,xn)に対して正解であるC=tの尤度の和が最大になるように最適化していく。
-通常のロジスティック回帰では二値分類を行うので正解データtは{0,1}とし、<code>P(C=1) = 1-P(C=0)</code>となる。</p>
-<p><img src="https://www.sambaiz.net/images/191-l.png" alt="ロジスティック回帰の尤度関数"></p>
-<p>ただ、このままだと積になっていて計算しづらいので、対数を取って和にして、
-損失として扱うため負の数にする。これを交差エントロピー誤差関数という。
+<p>尤度関数(likelihood function)はある前提条件に従って事象が起きる場合に、
+観測された事象から推測される前提条件の尤もらしさを表す尤度を返す関数。</p>
+<p>例えばコインを3回投げて2回表が出た場合、前提条件である表が出る確率を\(p\)とすると
+尤度関数は</p>
+<p>$$ L(p) = p^2(1-p) $$</p>
+<p>となり、これを微分すると</p>
+<p>$$ \begin{align*}
+\frac{dL}{dp} &amp;= 2p - 3p^2 = 0 \\
+p &amp;= \frac{2}{3}
+\end{align*} $$</p>
+<p>となるので限られたサンプルより\(p\)の最も尤もらしいと考えられる値は\(\frac{2}{3}\)ということになる。</p>
+<p>モデルの学習ではパラメータを、各入力に対する正解データの確率の尤度の和が最大になるように最適化していく。
+通常のロジスティック回帰では二値分類を行うので正解データ\(t\)は\(0,1\)とし、\(y = p(1)\)とする。
+ちなみに他クラス分類を行う際は正解データは\(0,1,2\)のようにするのではなく正解のindexだけ1でほかは0のone-hot vectorにする。</p>
+<p>$$ \begin{align*}
+L(w,b) &amp;= \sum p_{x_n}(t_n)
+&amp;= y{_n}^{t_n} (1-y_n)^{1-t_n}
+\end{align*} $$</p>
+<p>ただ、このままだと積になっていて計算しづらいので対数を取って和にして、
+減らすべき誤差として扱うため負の数にする。これを交差エントロピー誤差関数という。
 この値を最小化させるということは尤度を最大化させることになる。</p>
-<p><img src="https://www.sambaiz.net/images/191-e.png" alt="交差エントロピー"></p>
+<p>$$ \begin{align*}
+E(w,b) &amp;= -\log L(w,b) \\
+&amp;= -\sum {(t_n\log y_n + (1-t_n)\log (1-y_n))}
+\end{align*} $$</p>
 <p><a href="https://www.sambaiz.net/article/134/">自己情報量、エントロピー、KL情報量、交差エントロピー - sambaiz-net</a></p>
 <h2 id="勾配降下法">勾配降下法</h2>
-<p>誤差をw,bでそれぞれ偏微分したのを引いてパラメータを更新していき、
+<p>誤差を\(w,b\)でそれぞれ偏微分したのを引いてパラメータを更新していき、
 勾配が0になるような値を探す。</p>
-<p>ηは学習率で正の小さな値にする。
-大きすぎると収束しないが、小さすぎても収束に必要なステップ数が増え、さらに局所最適解で止まってしまう可能性が高まるので
+<p>学習率\(\eta\)は大きすぎると収束しないが、小さすぎても収束に必要なステップ数が増え、さらに局所最適解で止まってしまう可能性が高まるので
 最初は大きくして徐々に小さくしていったりする。</p>
-<p><img src="https://www.sambaiz.net/images/191-gradient.png" alt="勾配降下法"></p>
-<p>ほかに局所最適解で止まるのを避ける手法として、サンプル全体ではなく毎回異なる一部を使う(Minibatch)確率的勾配降下法(SGD: Stochastic Gradient Descent)や、SGDに慣性を追加したMomentumなどがある。</p>
-<h2 id="多クラスロジスティック回帰">多クラスロジスティック回帰</h2>
-<p>活性化関数をsoftmax関数にすると多クラス分類できる。</p>
-<p><img src="https://www.sambaiz.net/images/191-softmax.png" alt="多クラスでの確率"></p>
-<p>多クラスの場合の正解データtは{0,1,2,&hellip;}といったようにはせず
-正解のindexだけ1でほかは0のone-hot vectorで表し、尤度関数、交差エントロピー誤差関数は以下のようになる。</p>
-<p><img src="https://www.sambaiz.net/images/191-le2.png" alt="多クラスでの尤度関数と交差エントロピー誤差関数"></p>
-<p>偏微分するとこうなる。</p>
-<p><img src="https://www.sambaiz.net/images/191-gradient2.png" alt="交差エントロピー誤差関数の偏微分"></p>
-<p>あとは同様に勾配降下法でパラメータを更新していく。</p>
+<p>$$ \begin{align*}
+w^{k+1} &amp;= w^k - \eta \frac{\partial E(w,b)}{\partial w} \\
+&amp;= w^k - \eta \Sigma \frac{\partial E_n}{\partial y_n}\frac{\partial y_n}{\partial w} \\
+&amp;= w^k + \eta \Sigma(\frac{t_n}{y_n} - \frac{1-t_n}{1-y_n})y_n(1-y_n)x_n \because \sigma^\prime(x) = \sigma(x)(1 - \sigma(x)) \\
+&amp;= w^k + \eta \Sigma(t_n - y_n)x_n \\
+b^{k+1} &amp;= b^k - \eta \frac{\partial E(w,b)}{\partial b} \\
+&amp;= &hellip; \\
+&amp;= b^k + \eta \Sigma(t_n - y_n)
+\end{align*} $$</p>
+<p>ほかに局所最適解で止まるのを避ける手法として、サンプル全体ではなく毎回異なるMinibatchを用いる確率的勾配降下法(SGD: Stochastic Gradient Descent)や、SGDに慣性を追加したMomentumなどがある。</p>
 <h2 id="参考">参考</h2>
+<p><a href="https://ocw.tsukuba.ac.jp/wp/wp-content/uploads/2019/10/e279a56fc6a000e67d6370309f9374c1.pdf">機械学習6 カーネル・確率的識別モデル1.pptx</a></p>
+<p><a href="http://leo.ec.t.kanazawa-u.ac.jp/~nakayama/edu/file/info_math-10_pr.pdf">情報数学</a></p>
 <p><a href="https://www.amazon.co.jp/%E8%A9%B3%E8%A7%A3-%E3%83%87%E3%82%A3%E3%83%BC%E3%83%97%E3%83%A9%E3%83%BC%E3%83%8B%E3%83%B3%E3%82%B0-TensorFlow%E3%83%BBKeras%E3%81%AB%E3%82%88%E3%82%8B%E6%99%82%E7%B3%BB%E5%88%97%E3%83%87%E3%83%BC%E3%82%BF%E5%87%A6%E7%90%86-%E5%B7%A3%E7%B1%A0-%E6%82%A0%E8%BC%94/dp/4839962510">詳解 ディープラーニング ~TensorFlow・Kerasによる時系列データ処理~</a></p>
 
     </div>
