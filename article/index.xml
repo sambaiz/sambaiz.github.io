@@ -37,14 +37,12 @@ package main import ( &amp;#34;context&amp;#34; &amp;#34;fmt&amp;#34; &amp;#34;l
       
       <guid>https://www.sambaiz.net/article/399/</guid>
       <description>New RelicはインフラやアプリケーションをモニタリングするSaaSで、同種のサービスとしてはDatadogがある。 2020年に製品や課金体系が変わり、転送量とユーザー数に対して課金されるようになったようだ。 ホストや機能に対して課金されるDatadogと比べると、少人数で多くのインスタンスを管理している場合に有利ということになる。また、Datadogの課金体系はやや複雑で頻繁に台数が増減する環境では請求がどの程度になるか読みづらいところがあるが、こちらは分かりやすい。新しい機能を使っても単価が上がることもないのでいろいろと試しやすいのも良いと思う。
-一方、大人数で管理していたり、捌くリクエストが膨大な場合APMの転送量がかさむことでDatadogより高くなるケースがある。 また、トラブルシューティングが比較的難しい印象があり、なぜかメトリクスが送られないといったことがあったり、古いドキュメントを参照してしまったりしたが、ライブラリやドキュメントはOSSになっており、いざとなれば実装を読んだり修正のPRを出すことができるので大きな問題は感じていない。
+一方、大人数で管理していたり、捌くリクエストが膨大な場合APMの転送量がかさむことでDatadogより高くなるケースがある。 多くの場合はユーザー課金の割合が大きくなるので、Full platform userの数を減らして半額のCore userや無料のBasic userにすればコストが抑えられるが、 DashboardやAlertについては全てのユーザーが使える一方APMの画面が見られるのはFull platform userのみだったりするのが悩ましい。 転送量についてはDrop dataすることで減らすことができるが現状画面からは設定できずNerdGraphを用いる必要がある。次はTerraformで設定を行う例。
+New RelicのGraphQL API、NerdGraphでリソースを取得する - sambaiz-net
+resource &amp;#34;newrelic_nrql_drop_rule&amp;#34; &amp;#34;heavy_path&amp;#34; { account_id = ***** description = &amp;#34;Drop transactions data&amp;#34; action = &amp;#34;drop_data&amp;#34; nrql = &amp;#34;SELECT * FROM Transaction WHERE `request.uri` = &amp;#39;/heavy_path&amp;#39;&amp;#34; } また、トラブルシューティングが比較的難しい印象があり、なぜかメトリクスが送られないといったことがあったり、古いドキュメントを参照してしまったりしたが、ライブラリやドキュメントはOSSになっており、いざとなれば実装を読んだり修正のPRを出すことができるので大きな問題は感じていない。
 AWS連携 New RelicのアカウントからAssumeRoleするReadOnlyAccessとbudgets:ViewBudgetを付与したRoleを作る。
 AWSのAssumeRole - sambaiz-net
-{ &amp;#34;Statement&amp;#34;: [ { &amp;#34;Action&amp;#34;: [ &amp;#34;budgets:ViewBudget&amp;#34; ], &amp;#34;Effect&amp;#34;: &amp;#34;Allow&amp;#34;, &amp;#34;Resource&amp;#34;: &amp;#34;*&amp;#34; } ], &amp;#34;Version&amp;#34;: &amp;#34;2012-10-17&amp;#34; } メトリクスの取得は従来の定期的にAPIを呼んでポーリングする方法と、FirehoseにストリーミングするCloudWatch Metric Steamsを用いる方法がサポートされていて、後者が推奨されている。用意されているCloudFormationのテンプレートにLicense Keyを渡してスタックを作成すると次のリソースが作成され、New Relicの画面上に各種リソースのメトリクスが表示されるようになる。
- 作成されたMetric Streamsの設定を見るとすべての名前空間のメトリクスが送られるようになっている。
- メトリクスが送られない場合は誤ったKeyやKey IDをコピーしていないか確認するとよい。
- infrastructure monitoring agentのインストール インスタンスのCPU使用率やネットワークI/Oなどを取得するAgentをインストールする。以下はAmazon Linux 2 (arm64)の例。
-$ echo &amp;#34;license_key: ****-&amp;#34; | sudo tee -a /etc/newrelic-infra.yml $ sudo curl -o /etc/yum.repos.d/newrelic-infra.repo https://download.newrelic.com/infrastructure_agent/linux/yum/amazonlinux/2/aarch64/newrelic-infra.repo $ sudo yum -q makecache -y --disablerepo=&amp;#39;*&amp;#39; --enablerepo=&amp;#39;newrelic-infra&amp;#39; $ sudo yum install newrelic-infra -y $ sudo systemctl start newrelic-infra   APM Goroutineの数やGCの実行時間といったランタイム情報や、X-Rayのようなリクエストトレースやそのサマリーを見ることができる。 C, Go, Java, .</description>
+{ &amp;#34;Statement&amp;#34;: [ { &amp;#34;Action&amp;#34;: [ &amp;#34;budgets:ViewBudget&amp;#34; ], &amp;#34;Effect&amp;#34;: &amp;#34;Allow&amp;#34;, &amp;#34;Resource&amp;#34;: &amp;#34;*&amp;#34; } ], &amp;#34;Version&amp;#34;: &amp;#34;2012-10-17&amp;#34; } メトリクスの取得は従来の定期的にAPIを呼んでポーリングする方法と、FirehoseにストリーミングするCloudWatch Metric Steamsを用いる方法がサポートされていて、後者が推奨されている。用意されているCloudFormationのテンプレートにLicense Keyを渡してスタックを作成すると次のリソースが作成され、New Relicの画面上に各種リソースのメトリクスが表示されるようになる。</description>
     </item>
     
     <item>
@@ -3860,7 +3858,7 @@ FROMamazonlinux:2017.03 WORKDIR/tmp RUN yum -y update &amp;amp;&amp;amp; \  yum 
       <guid>https://www.sambaiz.net/article/106/</guid>
       <description>User-Dataとは EC2インスタンス起動時に、シェルスクリプトを走らせたりcloud-initディレクティブを適用できる機能。 コンソールではインスタンスの詳細の設定の、高度な詳細のところから設定できる。
 BeanstalkでのUser-Data 実はBeanstalkでも使われていて、CloudFormationで設定されている。
-&amp;#34; /bin/bash /tmp/ebbootstrap.sh &amp;#34;, ... &amp;#34;Fn::FindInMap&amp;#34;: [ &amp;#34;AWSEBOptions&amp;#34;, &amp;#34;options&amp;#34;, &amp;#34;UserDataScript&amp;#34; ] &amp;#34; &amp;gt; /tmp/ebbootstrap.sh &amp;#34;, ... &amp;#34;AWSEBOptions&amp;#34;: { &amp;#34;options&amp;#34;: { &amp;#34;UserDataScript&amp;#34;: &amp;#34;https://s3-ap-northeast-1.amazonaws.com/elasticbeanstalk-env-resources-ap-northeast-1/stalks/eb_node_js_4.0.1.90.2/lib/UserDataScript.sh&amp;#34;, &amp;#34;guid&amp;#34;: &amp;#34;f08557fc43ac&amp;#34;, } } このshellの中では、時計を同期させたり、awsebユーザーを作成したりするほかに、 非Beanstalk AMI(is_baked=false)ではyum updateが走るようになっている。 そのため、AMIでのバージョンとBeanstalkで立ち上がったときのバージョンが異なることがあるようだ。
+&amp;#34; /bin/bash /tmp/ebbootstrap.sh &amp;#34;, ... &amp;#34;Fn::FindInMap&amp;#34;: [ &amp;#34;AWSEBOptions&amp;#34;, &amp;#34;options&amp;#34;, &amp;#34;UserDataScript&amp;#34; ] &amp;#34; &amp;gt; /tmp/ebbootstrap.sh &amp;#34;, ... &amp;#34;AWSEBOptions&amp;#34;: { &amp;#34;options&amp;#34;: { &amp;#34;UserDataScript&amp;#34;: &amp;#34;https://s3-ap-northeast-1.amazonaws.com/elasticbeanstalk-env-resources-ap-northeast-1/stalks/eb_node_js_4.0.1.90.2/lib/UserDataScript.sh&amp;#34;, &amp;#34;guid&amp;#34;: &amp;#34;f08557fc43ac&amp;#34;, } } このshellの中では、時計を同期させたり、awsebユーザーを作成したりするほかに、 User-Dataで渡しているguidとAMI作成時に焼かれたguidが一致していない(is_baked=false)場合yum updateが走るようになっている。 そのためAMIを変更するとAMIでのバージョンとBeanstalkで立ち上がったときのバージョンが異なることがあって、固定するにはUser-Dataのguidを併せて変更する必要がある。
 GUID=$7 function update_yum_packages { if is_baked update_yum_packages_$GUID; then log yum update has already been done. else log Updating yum packages. yum --exclude=aws-cfn-bootstrap update -y || echo Warning: cannot update yum packages. Continue... mark_installed update_yum_packages_$GUID # Update system-release RPM package will reset the .</description>
     </item>
     
