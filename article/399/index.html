@@ -464,11 +464,11 @@
           <a class="tag" href="/tags/infra/">
             infra</a>
           
-          <a class="tag" href="/tags/gcp/">
-            gcp</a>
-          
           <a class="tag" href="/tags/fluentd/">
             fluentd</a>
+          
+          <a class="tag" href="/tags/gcp/">
+            gcp</a>
           
           <a class="tag others" href="/tags/">...</a>
         </div>
@@ -481,7 +481,7 @@
       <div class="single-header">
         <h1>New Relicでインフラやアプリケーションをモニタリングする</h1>
         <time>2022-03-30</time>
-        <a class="tag" href='/tags/newrelic/'>newrelic</a><a class="tag" href='/tags/infra/'>infra</a><a class="tag" href='/tags/aws/'>aws</a><a class="tag" href='/tags/log/'>log</a><a class="tag" href='/tags/golang/'>golang</a>
+        <a class="tag" href='/tags/newrelic/'>newrelic</a><a class="tag" href='/tags/infra/'>infra</a><a class="tag" href='/tags/aws/'>aws</a><a class="tag" href='/tags/log/'>log</a><a class="tag" href='/tags/golang/'>golang</a><a class="tag" href='/tags/fluentd/'>fluentd</a>
       </div>
       <p><a href="https://newrelic.com/">New Relic</a>はインフラやアプリケーションをモニタリングするSaaSで、同種のサービスとしてはDatadogがある。
 2020年に製品や<a href="https://newrelic.com/pricing">課金体系</a>が<a href="https://newrelic.com/jp/blog/nerdlog/new-relic-one-observability-made-simple">変わり</a>、転送量とユーザー数に対して課金されるようになったようだ。
@@ -533,7 +533,7 @@ DashboardやAlertについては全てのユーザーが使える一方<a href="
 </a></div>
 
 
-<p>メトリクスが送られない場合は誤ったKeyやKey IDをコピーしていないか確認するとよい。</p>
+<p>メトリクスが送られない場合は誤ったKeyやKey IDをコピーしていないか確認すndる。</p>
 
 
 
@@ -559,7 +559,21 @@ $ sudo systemctl start newrelic-infra
 </a></div>
 
 
-<h2 id="apmhttpsdocsnewreliccomdocsapmagentsgo-agentget-startedintroduction-new-relic-go"><a href="https://docs.newrelic.com/docs/apm/agents/go-agent/get-started/introduction-new-relic-go">APM</a></h2>
+<h3 id="new-relic-flexhttpsdocsnewreliccomjpdocsinfrastructurehost-integrationshost-integrations-listflex-integration-tool-build-your-own-integration"><a href="https://docs.newrelic.com/jp/docs/infrastructure/host-integrations/host-integrations-list/flex-integration-tool-build-your-own-integration/">New Relic Flex</a></h3>
+<p><code>/etc/newrelic-infra/integrations.d</code> 下に次のようなyamlファイルを置くと<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/commands.md">コマンドの出力</a>や<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/url.md">HTTPのレスポンス</a>、<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/file.md">ファイルの内容</a>を定期的に送ることができる。</p>
+<p>Fluentdをモニタリングするのにmonitor_agentの値を<a href="https://docs.newrelic.com/docs/data-apis/ingest-apis/telemetry-sdks-report-custom-telemetry-data/">Telemetry SDK</a>で送ることもできるが、この機能を用いれば集約サーバーでアプリケーションを動かす必要がない。</p>
+<p><a href="https://www.sambaiz.net/article/66/">fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する - sambaiz-net</a></p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ cat /etc/newrelic-infra/integrations.d/fluentd.yml
+<span style="color:#ff79c6">integrations</span>:
+- <span style="color:#ff79c6">name</span>: nri-flex
+  <span style="color:#ff79c6">config</span>:
+    <span style="color:#ff79c6">name</span>: fluentd
+    <span style="color:#ff79c6">apis</span>:
+    - <span style="color:#ff79c6">event_type</span>: fluentd
+      <span style="color:#ff79c6">url</span>: http://localhost:24220/api/plugins.json?@type=forward
+</code></pre></div><p>次のようなNRQLで値を確認できる。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">FROM</span> fluentd <span style="color:#ff79c6">SELECT</span> rate(average(buffer_total_queued_size), <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">minute</span>) FACET <span style="color:#ff79c6">`</span>config.<span style="color:#ff79c6">@</span>id<span style="color:#ff79c6">`</span> TIMESERIES 
+</code></pre></div><h2 id="apmhttpsdocsnewreliccomdocsapmagentsgo-agentget-startedintroduction-new-relic-go"><a href="https://docs.newrelic.com/docs/apm/agents/go-agent/get-started/introduction-new-relic-go">APM</a></h2>
 <p>Goroutineの数やGCの実行時間といったランタイム情報や、X-Rayのようなリクエストトレースやそのサマリーを見ることができる。
 C, Go, Java, .NET, Node.js, PHP, Python, Rubyのライブラリが提供されている。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ go get github.com/newrelic/go-agent
@@ -610,7 +624,7 @@ response, err <span style="color:#ff79c6">:=</span> client.<span style="color:#5
 </a></div>
 
 
-<p><a href="https://docs.newrelic.com/docs/data-apis/understand-data/metric-data/query-apm-metric-timeslice-data-nrql/#wildcard">NRQL</a>では次のように<code>newrelic.timeslice.value</code>を参照する。</p>
+<p>NRQLでは次のように<code>newrelic.timeslice.value</code>を<a href="https://docs.newrelic.com/docs/data-apis/understand-data/metric-data/query-apm-metric-timeslice-data-nrql/#wildcard">参照する</a>。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">FROM</span> Metric <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">count</span>(newrelic.timeslice.value) 
   <span style="color:#ff79c6">WHERE</span> appName <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;MY APP&#39;</span> 
   <span style="color:#ff79c6">WITH</span> METRIC_FORMAT <span style="color:#f1fa8c">&#39;Custom/{name}&#39;</span> 
@@ -639,8 +653,10 @@ response, err <span style="color:#ff79c6">:=</span> client.<span style="color:#5
 	<span style="color:#50fa7b">metadataMapField</span>(m, KeyEntityGUID, md.EntityGUID)
 	<span style="color:#50fa7b">metadataMapField</span>(m, KeyHostname, md.Hostname)
 }
-</code></pre></div><p>ログを紐づけるとErrors Eventからも飛べるようになるので原因調査の際に便利だ。</p>
+</code></pre></div><p>ログを紐づけるとErrors Eventからも飛べるようになるので原因調査の際に役立つ。</p>
 <p><a href="https://www.sambaiz.net/article/401/">CloudWatch Logsを介さずにLambdaのテレメトリを行うnewrelic-lambda-extensionとその仕組み - sambaiz-net</a></p>
+<h2 id="参考">参考</h2>
+<p><a href="https://y-ohgi.blog/entry/2020/12/24/NewRelic_%E3%81%A7td-agent%28fluentd%29_%E3%81%AB%E3%83%A1%E3%83%88%E3%83%AA%E3%82%AF%E3%82%B9%E3%82%92%E7%9B%A3%E8%A6%96%E3%81%99%E3%82%8B">NewRelic でtd-agent(fluentd) にメトリクスを監視する - y-ohgi&rsquo;s blog</a></p>
 
     </div>
     <div class="share">

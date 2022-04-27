@@ -464,11 +464,11 @@
           <a class="tag" href="/tags/infra/">
             infra</a>
           
-          <a class="tag" href="/tags/gcp/">
-            gcp</a>
-          
           <a class="tag" href="/tags/fluentd/">
             fluentd</a>
+          
+          <a class="tag" href="/tags/gcp/">
+            gcp</a>
           
           <a class="tag others" href="/tags/">...</a>
         </div>
@@ -481,7 +481,7 @@
       <div class="single-header">
         <h1>Monitor infrastructure and applications with New Relic</h1>
         <time>2022-03-30</time>
-        <a class="tag" href='/en/tags/newrelic/'>newrelic</a><a class="tag" href='/en/tags/infra/'>infra</a><a class="tag" href='/en/tags/aws/'>aws</a><a class="tag" href='/en/tags/log/'>log</a><a class="tag" href='/en/tags/golang/'>golang</a>
+        <a class="tag" href='/en/tags/newrelic/'>newrelic</a><a class="tag" href='/en/tags/infra/'>infra</a><a class="tag" href='/en/tags/aws/'>aws</a><a class="tag" href='/en/tags/log/'>log</a><a class="tag" href='/en/tags/golang/'>golang</a><a class="tag" href='/en/tags/fluentd/'>fluentd</a>
       </div>
       <p><a href="https://newrelic.com/">New Relic</a> is a SaaS that monitors infrastructure and applications, and there is Datadog as a similar service.
 It seems that the <a href="https://newrelic.com/pricing">pricing plans</a> were <a href="https://newrelic.com/jp/blog/nerdlog/new-relic-one-observability-made-simple">changed</a> drastically in 2020, and it charges according to the transfer volume and the number of admin users. Therefore compared to Datadog, which <a href="https://www.datadoghq.com/ja/pricing/">charges</a> for hosts and additional features, there is an advantage when managing a large number of instances with a small number of people.
@@ -560,7 +560,21 @@ $ sudo systemctl start newrelic-infra
 </a></div>
 
 
-<h2 id="apmhttpsdocsnewreliccomdocsapmagentsgo-agentget-startedintroduction-new-relic-go"><a href="https://docs.newrelic.com/docs/apm/agents/go-agent/get-started/introduction-new-relic-go">APM</a></h2>
+<h3 id="new-relic-flexhttpsdocsnewreliccomdocsinfrastructurehost-integrationshost-integrations-listflex-integration-tool-build-your-own-integration"><a href="https://docs.newrelic.com/docs/infrastructure/host-integrations/host-integrations-list/flex-integration-tool-build-your-own-integration/">New Relic Flex</a></h3>
+<p>If following yaml file is put under <code>/etc/newrelic-infra/integrations.d</code>, <a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/commands.md">command outputs</a>, <a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/url.md">HTTP responses</a> or <a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/file.md">file contents</a> can be send on a regular basis.</p>
+<p>For monitoring Fluentd, the value of monitor_agent can be sent with <a href="https://docs.newrelic.com/docs/data-apis/ingest-apis/telemetry-sdks-report-custom-telemetry-data/">Telemetry SDK</a>, but if use this feature instead, an application to send it is not needed to run on log aggregator.</p>
+<p><a href="https://www.sambaiz.net/article/66/">fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する - sambaiz-net</a></p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ cat /etc/newrelic-infra/integrations.d/fluentd.yml
+<span style="color:#ff79c6">integrations</span>:
+- <span style="color:#ff79c6">name</span>: nri-flex
+  <span style="color:#ff79c6">config</span>:
+    <span style="color:#ff79c6">name</span>: fluentd
+    <span style="color:#ff79c6">apis</span>:
+    - <span style="color:#ff79c6">event_type</span>: fluentd
+      <span style="color:#ff79c6">url</span>: http://localhost:24220/api/plugins.json?@type=forward
+</code></pre></div><p>Check the data with following NRQL.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">FROM</span> fluentd <span style="color:#ff79c6">SELECT</span> rate(average(buffer_total_queued_size), <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">minute</span>) FACET <span style="color:#ff79c6">`</span>config.<span style="color:#ff79c6">@</span>id<span style="color:#ff79c6">`</span> TIMESERIES 
+</code></pre></div><h2 id="apmhttpsdocsnewreliccomdocsapmagentsgo-agentget-startedintroduction-new-relic-go"><a href="https://docs.newrelic.com/docs/apm/agents/go-agent/get-started/introduction-new-relic-go">APM</a></h2>
 <p>APM is a feature to collect runtime information such as the number of Goroutines and GC execution time, as well as X-Ray-like request traces and show their summaries. The agent libraries are provided in C, Go, Java, .NET, Node.js, PHP, Python ans Ruby.</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ go get github.com/newrelic/go-agent
 </code></pre></div><p>Integrations are provided for major WAFs such as echo and gin in Go, and this middleware writes <code>Transaction</code> associated with the request to the <code>Context</code> and make it retrievable with <code>nrecho.FromContext(c)</code>. <code>Transaction</code> that are not associated with a request are treated as <code>Background jobs</code>.</p>
@@ -599,7 +613,7 @@ response, err <span style="color:#ff79c6">:=</span> client.<span style="color:#5
 </code></pre></div><h3 id="custom-metricshttpsdocsnewreliccomdocsapmagentsmanage-apm-agentsagent-datacollect-custom-metrics"><a href="https://docs.newrelic.com/docs/apm/agents/manage-apm-agents/agent-data/collect-custom-metrics/">Custom metrics</a></h3>
 <p>When <a href="https://github.com/newrelic/go-agent/blob/v3.15.2/v3/newrelic/application.go#L61">app.RecordCustomMetric(key,value)</a> is called, metrics of <code>Custom/</code> prefix are sent.</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">app.<span style="color:#50fa7b">RecordCustomMetric</span>(<span style="color:#f1fa8c">&#34;CustomMetricName&#34;</span>, <span style="color:#bd93f9">132</span>)
-</code></pre></div><p>The metrics are not shown on Data explorer so you can see it on Metrics explorer of APM.</p>
+</code></pre></div><p>The metrics are not shown on Data explorer and you can see it on Metrics explorer of APM.</p>
 
 
 
@@ -609,7 +623,7 @@ response, err <span style="color:#ff79c6">:=</span> client.<span style="color:#5
 </a></div>
 
 
-<p>In <a href="https://docs.newrelic.com/docs/data-apis/understand-data/metric-data/query-apm-metric-timeslice-data-nrql/#wildcard">NRQL</a>, refer to <code>newrelic.timeslice.value</code> as follows.</p>
+<p>In NRQL, <a href="https://docs.newrelic.com/docs/data-apis/understand-data/metric-data/query-apm-metric-timeslice-data-nrql/#wildcard">refer</a> to <code>newrelic.timeslice.value</code> as follows.</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">FROM</span> Metric <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">count</span>(newrelic.timeslice.value) 
   <span style="color:#ff79c6">WHERE</span> appName <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;MY APP&#39;</span> 
   <span style="color:#ff79c6">WITH</span> METRIC_FORMAT <span style="color:#f1fa8c">&#39;Custom/{name}&#39;</span> 
