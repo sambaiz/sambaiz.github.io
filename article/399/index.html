@@ -161,7 +161,7 @@
     }
 
     .grid-cell>.title {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
         word-wrap: break-word;
     }
 
@@ -533,7 +533,7 @@ DashboardやAlertについては全てのユーザーが使える一方<a href="
 </a></div>
 
 
-<p>メトリクスが送られない場合は誤ったKeyやKey IDをコピーしていないか確認すndる。</p>
+<p>メトリクスが送られない場合は誤ったKeyやKey IDをコピーしていないか確認する。</p>
 
 
 
@@ -579,7 +579,6 @@ C, Go, Java, .NET, Node.js, PHP, Python, Rubyのライブラリが提供され�
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ go get github.com/newrelic/go-agent
 </code></pre></div><p>echoやginといった主要なWAFにはintegrationが<a href="https://docs.newrelic.com/docs/apm/agents/go-agent/get-started/go-agent-compatibility-requirements/">提供されていて</a>、この<a href="https://github.com/newrelic/go-agent/blob/v3.15.2/v3/integrations/nrecho-v4/nrecho.go">middleware</a>を使うとリクエストを紐づけた<code>Transaction</code>が<code>Context</code>に書き込まれ、<code>nrecho.FromContext(c)</code>で取り出せるようになる。
 リクエストが紐づいていない<code>Transaction</code>は<code>Background jobs</code>として扱われる。</p>
-<p><code>NewApplication()</code>するとデータを集めて送るgoroutineが<a href="https://github.com/newrelic/go-agent/blob/06c801d5571056abac8ac9dfa07cf12ca869e920/internal_app.go#L376">動き出す</a>ので<a href="https://github.com/newrelic/go-agent/blob/06c801d5571056abac8ac9dfa07cf12ca869e920/v3/newrelic/application.go#L102">Shutdown()</a>することなく都度<code>Application</code>を作成するとgoroutineがリークしてしまう。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">import</span> <span style="color:#f1fa8c">&#34;github.com/newrelic/go-agent/v3/integrations/nrecho-v4&#34;</span>
 app, err <span style="color:#ff79c6">:=</span> newrelic.<span style="color:#50fa7b">NewApplication</span>(
     newrelic.<span style="color:#50fa7b">ConfigAppName</span>(<span style="color:#f1fa8c">&#34;app_name&#34;</span>),
@@ -590,16 +589,19 @@ app, err <span style="color:#ff79c6">:=</span> newrelic.<span style="color:#50fa
 http.<span style="color:#50fa7b">HandleFunc</span>(newrelic.<span style="color:#50fa7b">WrapHandleFunc</span>(app, <span style="color:#f1fa8c">&#34;/users&#34;</span>, usersHandler))
 e.<span style="color:#50fa7b">Use</span>(nrecho.<span style="color:#50fa7b">Middleware</span>(app))
 
-<span style="color:#6272a4">// middleware
-</span><span style="color:#6272a4"></span>txn.<span style="color:#50fa7b">SetWebRequestHTTP</span>(c.<span style="color:#50fa7b">Request</span>())
-c.<span style="color:#50fa7b">Response</span>().Writer = txn.<span style="color:#50fa7b">SetWebResponse</span>(rw)
-c.<span style="color:#50fa7b">SetRequest</span>(c.<span style="color:#50fa7b">Request</span>().<span style="color:#50fa7b">WithContext</span>(newrelic.<span style="color:#50fa7b">NewContext</span>(c.<span style="color:#50fa7b">Request</span>().<span style="color:#50fa7b">Context</span>(), txn)))
+<span style="color:#6272a4">// in middleware
+</span><span style="color:#6272a4"></span><span style="color:#6272a4">/*
+</span><span style="color:#6272a4">txn.SetWebRequestHTTP(c.Request())
+</span><span style="color:#6272a4">c.Response().Writer = txn.SetWebResponse(rw)
+</span><span style="color:#6272a4">c.SetRequest(c.Request().WithContext(newrelic.NewContext(c.Request().Context(), txn)))
+</span><span style="color:#6272a4">*/</span>
 
 <span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">handler</span>(c echo.Context) <span style="color:#8be9fd">error</span> {
 	txn <span style="color:#ff79c6">:=</span> nrecho.<span style="color:#50fa7b">FromContext</span>(c)
 	<span style="color:#ff79c6">return</span> c.<span style="color:#50fa7b">String</span>(http.StatusOK, <span style="color:#f1fa8c">&#34;ok&#34;</span>)
 }
-</code></pre></div><p>Segmentを切るとその区間の実行時間がタイムライン上に表示される。</p>
+</code></pre></div><p><code>NewApplication()</code>するとデータを集めて送るgoroutineが<a href="https://github.com/newrelic/go-agent/blob/06c801d5571056abac8ac9dfa07cf12ca869e920/internal_app.go#L376">動き出す</a>ので<a href="https://github.com/newrelic/go-agent/blob/06c801d5571056abac8ac9dfa07cf12ca869e920/v3/newrelic/application.go#L102">Shutdown()</a>することなく都度<code>Application</code>を作成するとgoroutineがリークしてしまう。</p>
+<p>Segmentを切るとその区間の実行時間がタイムライン上に表示される。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">do</span>(ctx context.Context) {
   <span style="color:#ff79c6">defer</span> newrelic.<span style="color:#50fa7b">FromContext</span>(ctx).<span style="color:#50fa7b">StartSegment</span>(<span style="color:#f1fa8c">&#34;do&#34;</span>).<span style="color:#50fa7b">End</span>()
 }
@@ -655,6 +657,7 @@ response, err <span style="color:#ff79c6">:=</span> client.<span style="color:#5
 }
 </code></pre></div><p>ログを紐づけるとErrors Eventからも飛べるようになるので原因調査の際に役立つ。</p>
 <p><a href="https://www.sambaiz.net/article/401/">CloudWatch Logsを介さずにLambdaのテレメトリを行うnewrelic-lambda-extensionとその仕組み - sambaiz-net</a></p>
+<p><a href="https://www.sambaiz.net/article/403/">NewRelic CodeStreamでコードの質問やエラー調査を迅速に行う - sambaiz-net</a></p>
 <h2 id="参考">参考</h2>
 <p><a href="https://y-ohgi.blog/entry/2020/12/24/NewRelic_%E3%81%A7td-agent%28fluentd%29_%E3%81%AB%E3%83%A1%E3%83%88%E3%83%AA%E3%82%AF%E3%82%B9%E3%82%92%E7%9B%A3%E8%A6%96%E3%81%99%E3%82%8B">NewRelic でtd-agent(fluentd) にメトリクスを監視する - y-ohgi&rsquo;s blog</a></p>
 
