@@ -473,34 +473,27 @@
 <p>公開鍵がe,nで秘密鍵がd。nはとても大きく近くない素数p,qの積で、
 これを公開しても素因数分解できないのがこの暗号の前提になっている。
 768bit(10進数で232桁)では既に解読されているので、少なくとも1024bit以上にする。</p>
-<p>eは<a href="https://en.wikipedia.org/wiki/Euler%27s_totient_function">Euler totient function</a>(1~nまでの整数でnと互いに素なものの個数。今回の場合は<code>φ(n)=(p-1)(q-1)</code>)未満で互いに素な正の整数で、小さすぎても大きすぎてもだめ。<code>2^16 + 1 = 65537</code>がよく使われる。</p>
+<p>eは<a href="https://en.wikipedia.org/wiki/Euler%27s_totient_function">Euler totient function</a>(1~nまでの整数でnと互いに素なものの個数。今回の場合は<code>φ(n)=(p-1)(q-1)</code>)未満で互いに素な正の整数で、小さすぎても大きすぎても良くない。<code>2^16 + 1 = 65537</code>がよく使われる。</p>
 <p>dは<code>ed ≡ 1 (mod φ(n))</code>を満たすd。</p>
 <h2 id="例">例</h2>
-<p>例として(p,q)=(193,709)とするとこんな感じ。</p>
+<p>例として(p,q)=(193,709)とすると各変数は次のようになる。</p>
 <ul>
 <li>n = p * q = 136837</li>
 <li>φ(n) = (p-1)(q-1) = 135936</li>
 <li>e = 65537 &lt; φ(n)</li>
 </ul>
 <p>秘密鍵dは<code>65537*d ≡ 1 (mod 135936)</code>の式を変形した
-<code>65537*d - 135936*x = gcd(65537,135936) = 1</code>を、拡張されたユークリッドの互除法で解く。
-以下のように135936と65537を残しながら展開していく。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">135936 = 65537 * 2 + 4862 
-=&gt; 4862 = 135936 * 1 + 65537 * -2
+<code>65537*d - 135936*x = gcd(65537,135936) = 1</code>を、次のように135936と65537を残しながら展開していく、拡張されたユークリッドの互除法で求める。</p>
 
-65537 = 4862 * 13 + 2331 
-=&gt; 2331 = 65537 - (135936 * 1 + 65537 * -2) * 13
-        = 135936 * -13 + 65537 * 27
 
-4862 = 2331 * 2 + 200 
-=&gt; 200 = (135936 * 1 + 65537 * -2) - (135936 * -13 + 65537 * 27) * 2
-       = 135936 * 27 + 65537 * -56
 
-2331 = 200 * 11 + 131 
-=&gt; 131 = (135936 * -13 + 65537 * 27) - (135936 * 27 + 65537 * -56) * 11
-       = 135936 * -310 + 65537 * 643 
-...
-</code></pre></div><p>これをコードに表したのがこれ。</p>
+
+<div class="img_container"><a href="/article/135/images/euclidean.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/135/images/euclidean_hud82a0171aabdd56d89d082e20bcd08ec_159461_600x370_fit_lanczos_2.png" width="580" height="370" alt="拡張されたユークリッドの互除法">
+</a></div>
+
+
+<p>これをコードに表したのがこれ。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js"><span style="color:#ff79c6">const</span> d <span style="color:#ff79c6">=</span> (phi,e) =&gt; {
     <span style="color:#8be9fd;font-style:italic">let</span> history <span style="color:#ff79c6">=</span> {[phi]<span style="color:#ff79c6">:</span> [<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">0</span>], [e]<span style="color:#ff79c6">:</span>[<span style="color:#bd93f9">0</span>,<span style="color:#bd93f9">1</span>]} <span style="color:#6272a4">// [x,y] =&gt; φ * x + e * y
 </span><span style="color:#6272a4"></span>    <span style="color:#8be9fd;font-style:italic">let</span> x <span style="color:#ff79c6">=</span> phi
@@ -531,11 +524,9 @@ console.log(<span style="color:#f1fa8c">`1 = </span><span style="color:#f1fa8c">
   &#39;65537&#39;: [ 0, 1 ],
   &#39;135936&#39;: [ 1, 0 ] }
 1 = 135936*9503 + 65537*-19711
-</code></pre></div><p><code>135936*-65537 + 65537*135936 = 0</code>より
-<code>1 = 135936*(9503-65537) + 65537*(-19711 + 135936)</code>なので
-<code>d=116225</code>。実際<code>(65537*116225) % 135936 = 1</code>が成り立つ。</p>
-<p>平文が12345とすると、公開鍵で暗号化したのが<code>(12345 ** 65537) % 136837 = 6964</code>。
-これを秘密鍵で複合すると<code>(6964 ** 116225) % 136837 = 12345</code>のように平文が得られる。</p>
+</code></pre></div><p><code>1 = 135936*-65537 + 65537*135936 = 135936*(9503-65537) + 65537*(-19711 + 135936)</code>なので<code>d=116225</code>となる。</p>
+<p>平文が12345とすると、公開鍵e,nで暗号化したのが<code>(12345 ** 65537) % 136837 = 6964</code>で、
+これを秘密鍵dで復号すると<code>(6964 ** 116225) % 136837 = 12345</code>のように平文が得られる。</p>
 <h2 id="鍵ファイルの生成">鍵ファイルの生成</h2>
 <p>ssh-keygenで生成されるようなPEMファイルを作る。</p>
 <h3 id="用語">用語</h3>
