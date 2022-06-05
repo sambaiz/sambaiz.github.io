@@ -13,10 +13,7 @@
       <pubDate>Fri, 04 Dec 2020 12:30:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/317/</guid>
-      <description>mTLS (Mutual TLS)認証は、RFC8705に記載されている、TLSハンドシェイクの際にサーバーからだけではなくクライアントからも証明書を送ることで相互に認証を行う手法。クライアントは事前に自身の秘密鍵で生成したCSRをサーバーに送り、サーバーがルート認証局となって発行した証明書を取得しておく。 KubernetesではIstioのSidecarを通すことで透過的にmTLS認証を行うことができる。 実際に試してみる。なお、証明書はEnvoy SDS(secret discovery service) APIのリクエストによってCSRが定期的にistiodに送られて発行、更新されるらしい。
-Istio OperatorでIstioをインストールする。 以前はHelmで入れていたが今はこれがベストプラクティスのようだ。
-IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net
-$ curl -L https://istio.io/downloadIstio | sh - $ istio-1.8.0/bin/istioctl version no running Istio pods in &amp;#34;istio-system&amp;#34; 1.8.0 $ istioctl operator init Installing operator controller in namespace: istio-operator using image: docker.io/istio/operator:1.8.0 Operator controller will watch namespaces: istio-system ✔ Istio operator installed ✔ Installation complete $ kubectl get pods --namespace istio-operator NAME READY STATUS RESTARTS AGE istio-operator-76766bc79-lfm49 1/1 Running 0 2m32s $ kubectl create ns istio-system $ kubectl apply -f - &amp;lt;&amp;lt;EOF apiVersion: install.</description>
+      <description>mTLS (Mutual TLS)認証は、RFC8705に記載されている、TLSハンドシェイクの際にサーバーからだけではなくクライアントからも証明書を送ることで相</description>
     </item>
     
     <item>
@@ -25,13 +22,7 @@ $ curl -L https://istio.io/downloadIstio | sh - $ istio-1.8.0/bin/istioctl versi
       <pubDate>Thu, 13 Sep 2018 21:55:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/186/</guid>
-      <description>cert-managerはTLSの証明書を自動で生成し管理するK8sのアドオン。 Istioにも含まれていて、これを使ってLet&amp;rsquo;s Encryptで証明書を生成しGatewayに設定することでHTTPS対応することができる。
-デフォルトではcert-managerは入らないのでenabled=trueにしてインストールする。 最初に入るLet&amp;rsquo;s EncryptのClusterIssuerはエラーになったので消す。
-IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net
-$ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set certmanager.enabled=true $ kubectl delete ClusterIssuer --all 確認用にBookInfoを動かす。
-$ kubectl label namespace default istio-injection=enabled $ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml $ kubectl apply -f samples/bookinfo/networking/bookinfo-gateway.yaml Let&amp;rsquo;s Encryptで使われているACMEプロトコルのドメイン認証(Challenge)には /.well-known/acme-challenge/{token}でHTTPレスポンスを返すHTTP Challenge(http-01)と DNSのTXTレコードに書き込むDNS Challenge(dns-01)がある。 HTTP Challengeは手軽に達成できる一方、CAからアクセスできるようにする必要がある。今回はDNS Challengeでやる。 cert-managerはCloud DNSやRoute53などに対応していて、今回はCloudflareを使う。
-DNSに書き込めるようにするためCloudflareのMy ProfileからGlobal API Keyを持ってきてBase64デコードしSecretに入れる。 改行コードが含まれないように-nを付ける。
-$ echo -n ***** | base64 apiVersion: v1 kind: Secret metadata: name: cloudflare-api-key namespace: istio-system type: Opaque data: api-key: ***** Let&amp;rsquo;s EncryptのClusterIssuerと証明書を生成するドメインのCertificateを作成する。 serverのURLはStatusのページから確認できる。 本番のURLはレート制限があるので、まずはFakeの証明書が生成されるstgで試すとよい。</description>
+      <description>cert-managerはTLSの証明書を自動で生成し管理するK8sのアドオン。 Istioにも含まれていて、これを使ってLet&amp;rsquo;</description>
     </item>
     
     <item>
@@ -40,13 +31,7 @@ $ echo -n ***** | base64 apiVersion: v1 kind: Secret metadata: name: cloudflare-
       <pubDate>Sun, 02 Sep 2018 23:50:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/185/</guid>
-      <description>IstioはEnvoyというProxyをSidecarとしてPodに入れてトラフィックを通すことでマイクロサービスのRoutingやTelemetryをサービスのコードに手を入れずに行うことができるサービスメッシュ。 もともとEnvoy自体は単体で、コネクションを張りっぱなしのgRPC(HTTP/2)をK8sのServiceのL4ロードバランサーでは分散できない問題の解決方法の一つとして 各PodのIPの一覧を返すHeadless Serviceと使われていたが、各Manifestに入れたりConfigMapを編集したりする必要があり少し面倒だった。 Istioにするとそれらが省けて、さらに賢いRoutingやモニタリングの仕組みまで付いてくるのでとても便利だ。
-インストール IstioをダウンロードしてきてHelmでインストールする。Istioには様々なコンポーネントが含まれているが、パラメータでインストールするものを選択することができる。
-KubernetesのパッケージマネージャーHelmを使う - sambaiz-net
-今回はデフォルトではfalseになっているGrafana/Jaeger/Kialiをtrueにしてほぼ全て入るようにしている。
-RBACが有効な場合はServiceAccountを作ってcluster-adminあるいは必要なRoleをBindしておく。
-RBACが有効なGKEでHelmを使う - sambaiz-net
-$ curl -L https://git.io/getLatestIstio | sh - $ cd istio-1.0.1/ # helm init --service-account tiller $ helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set grafana.persist=true --set grafana.storageClassName=standard --set tracing.enabled=true --set kiali.enabled=true $ kubectl get pod -n istio-system NAME READY STATUS RESTARTS AGE grafana-598678cbb-bglbq 1/1 Running 0 3m istio-citadel-6f9887d776-tvdg8 1/1 Running 0 3m istio-egressgateway-84d78d84bf-zpxrq 1/1 Running 0 3m istio-galley-556f5558f5-hk2r8 1/1 Running 0 3m istio-ingressgateway-78cccbddbb-gh2xl 1/1 Running 0 3m istio-pilot-799845f56d-l777d 2/2 Running 0 3m istio-policy-7666fcd574-nbx8s 2/2 Running 0 3m istio-sidecar-injector-7b6589c9-m7x77 1/1 Running 0 3m istio-statsd-prom-bridge-55965ff9c8-s6dmj 1/1 Running 0 3m istio-telemetry-844c8d6bff-9trcf 2/2 Running 0 3m istio-tracing-77f9f94b98-g7v6f 1/1 Running 0 3m kiali-bdf7fdc78-9lpd4 1/1 Running 0 3m prometheus-7456f56c96-drhlq 1/1 Running 0 3m default namespaceにラベルを貼って自動でEnvoyが各PodにInjectionされるようにする。</description>
+      <description>IstioはEnvoyというProxyをSidecarとしてPodに入れてトラフィックを通すことでマイクロサービスのRoutingやTele</description>
     </item>
     
     <item>
@@ -55,17 +40,7 @@ $ curl -L https://git.io/getLatestIstio | sh - $ cd istio-1.0.1/ # helm init --s
       <pubDate>Tue, 29 May 2018 22:33:00 +0900</pubDate>
       
       <guid>https://www.sambaiz.net/article/167/</guid>
-      <description>追記(2018-09-01) v1.0となりHelmでのインストールも問題なくできるようになった。Istio-AuthがCitadelという名前になっていたりDeprecatedになってるAPIもある
-IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net
- Istioとは マイクロサービス間のネットワークの、ロードバランシングや認証、モニタリングなどを担うサービスメッシュのOSS。 概念は抽象化されていて、Kubernetes以外でもサポートされている。 通信をコントロールするdata-planeのEnvoyと、Envoyを管理するcontrol-planeのPilot, Mixer, Istio-Authからなる。
-Envoy Sidecarとしてデプロイされる、サービスメッシュでの全ての通信を通すプロキシ。 アプリケーションのコードに手を入れる必要がないので言語に縛られない。 CNCFのプロジェクトの一つで、 Istio用にオリジナルから拡張されている。 ロードバランシングやヘルスチェックなどを行い、メトリクスを取る。
-Mixer サービスメッシュ全体のアクセスコントロールや、Envoyからデータを集めてログに出したりモニタリングしたりする。 プラグインよってAWSやGCPといったインフラバックエンドの差異が吸収される。
-Pilot サービスディスカバリしてEnvoyのトラフィックを制御する。A/Bテストやカナリアリリースをする場合や、障害に対応して適切にルーティングを行うことができる。
-Istio-Auth サービスやエンドユーザーの認証を行い、ポリシーに従ってアクセス制御する。
-Istioのインストール ローカルのminikubeに環境を作る。 apiserver.Admission.PluginNamesでは立ち上がらなかったので代わりに apiserver.admission-controlを指定している。
-$ minikube version minikube version: v0.27.0 $ minikube start \ --extra-config=apiserver.admission-control=&amp;#34;NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota&amp;#34; \ --kubernetes-version=v1.9.0 $ kubectl config current-context minikube istioを持ってきてapplyする。 Helmも用意されていて将来的にそっちで入れるのが推奨になりそうだ。
-$ curl -L https://git.io/getLatestIstio | sh - $ cd istio-0.7.1/ $ kubectl apply -f install/kubernetes/istio-auth.yaml 作成されたserviceとpodはこんな感じ。
-$ kubectl get svc -o name -n istio-system NAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE istio-ingress LoadBalancer 10.</description>
+      <description>追記(2018-09-01) v1.0となりHelmでのインストールも問題なくできるようになった。Istio-AuthがCitadelという名</description>
     </item>
     
   </channel>
