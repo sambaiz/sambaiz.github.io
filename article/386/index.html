@@ -484,22 +484,55 @@
         <a class="tag" href='/tags/log/'>log</a><a class="tag" href='/tags/serialize/'>serialize</a><a class="tag" href='/tags/hadoop/'>hadoop</a>
       </div>
       <p><a href="https://github.com/apache/parquet-format">Parquet</a>は主にHadoopのエコシステムで使われるカラムナフォーマット。
-CSVのようなrow-basedのフォーマットと比べて、必要ないデータを読まずに済むため効率的にクエリを実行することができる。</p>
-<h2 id="構造">構造</h2>
-<p>データはいくつかの<a href="https://github.com/apache/parquet-format/blob/parquet-format-2.2.0-rc1/src/thrift/parquet.thrift#L490">Row Group</a>に水平分割される。カラムはいくつかの<a href="https://github.com/apache/parquet-format/blob/parquet-format-2.2.0-rc1/src/thrift/parquet.thrift#L474">Column Chunk</a>に切られ、圧縮やエンコーディングされる単位である<a href="https://github.com/apache/parquet-format/blob/parquet-format-2.2.0-rc1/src/thrift/parquet.thrift#L387">Page</a>に分けられる。</p>
-<p>ファイルの構造は<a href="https://github.com/apache/parquet-format#file-format">次のように</a>なっていて、カラムごとに1つのColumn Chunkを持ついくつかのRow Groupとそのメタデータが順に並んでいる。</p>
+CSVのようなrow-basedのフォーマットと比べて不必要なカラムを読まずに済み、また行に関しても絞るための仕組みがあるので効率的にクエリを実行することができる。</p>
+<h2 id="フォーマットhttpsgithubcomapacheparquet-formatblobmasterreadmemdfile-format"><a href="https://github.com/apache/parquet-format/blob/master/README.md#file-format">フォーマット</a></h2>
 
 
 
 <div class="img_container"><img style="max-width: 100%; width: auto; height: auto;" src="/article/386/images/format.gif" width="601" height="478" alt="https://github.com/apache/parquet-format#file-format"></div>
 
 
-<p>ネストしたスキーマにも対応していて、
-子要素をフラットにした後、Repetiton LevelとDefinition Levelで繰り返しや階層を<a href="https://github.com/julienledem/redelm/wiki/The-striping-and-assembly-algorithms-from-the-Dremel-paper">表している</a>。</p>
+<p>行はいくつかの<a href="https://github.com/apache/parquet-format/blob/parquet-format-2.2.0-rc1/src/thrift/parquet.thrift#L490">Row Group</a>に水平分割され、その中に各カラムの<a href="https://github.com/apache/parquet-format/blob/parquet-format-2.2.0-rc1/src/thrift/parquet.thrift#L474">Column Chunk</a>が順に並んでいる。Column Chunkはさらに<a href="https://github.com/apache/parquet-format/blob/parquet-format-2.2.0-rc1/src/thrift/parquet.thrift#L387">Page</a>に分けられ、その単位で圧縮やエンコーディングが行われる。</p>
+<p>一方向にファイルを書き込めるようにRowGroupの後にメタデータが来るようになっている。</p>
+<p>ネストしたスキーマにも対応していて、フラットにした後にRepetiton LevelとDefinition Levelで繰り返しや階層を<a href="https://github.com/julienledem/redelm/wiki/The-striping-and-assembly-algorithms-from-the-Dremel-paper">表している</a>。</p>
 <h2 id="readの最適化">Readの最適化</h2>
 <p><a href="https://github.com/apache/parquet-format/blob/parquet-format-2.2.0-rc1/src/thrift/parquet.thrift#L435">ColumnMetadata</a>にレコード数や最小最大値、圧縮コーデックやサイズが含まれているため、Readerは必要なものだけを展開して読むことができる。
 したがって取得するカラムを絞ったり、フィルタに用いるカラムをソートしておくと読むPageを減らすことができる。</p>
-<h2 id="参考">参考</h2>
+<h2 id="メタデータの例">メタデータの例</h2>
+<p>公式のCLIツールである<a href="https://github.com/apache/parquet-mr/tree/master/parquet-cli">parquet-cli</a>で実ファイルのメタデータを見てみる。
+<code>parquet-tools</code>というのもあるがすでに<a href="https://issues.apache.org/jira/browse/PARQUET-1666">deprecated</a>になっておりリポジトリからも消えている。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ brew install parquet-cli
+</code></pre></div><p>AWS Glueでjsonから変換したparquetを対象としている。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat test.json
+{&#34;A&#34;:&#34;aaaa&#34;,&#34;B&#34;:[&#34;b&#34;],&#34;C&#34;:{&#34;D&#34;:10}}
+
+$ parquet meta test.parquet
+
+File path:  test.parquet
+Created by: parquet-glue version 1.8.2
+Properties:
+  org.apache.spark.sql.parquet.row.metadata: {&#34;type&#34;:&#34;struct&#34;,&#34;fields&#34;:[{&#34;name&#34;:&#34;A&#34;,&#34;type&#34;:&#34;string&#34;,&#34;nullable&#34;:true,&#34;metadata&#34;:{}},{&#34;name&#34;:&#34;B&#34;,&#34;type&#34;:{&#34;type&#34;:&#34;array&#34;,&#34;elementType&#34;:&#34;string&#34;,&#34;containsNull&#34;:true},&#34;nullable&#34;:true,&#34;metadata&#34;:{}},{&#34;name&#34;:&#34;C&#34;,&#34;type&#34;:{&#34;type&#34;:&#34;struct&#34;,&#34;fields&#34;:[{&#34;name&#34;:&#34;D&#34;,&#34;type&#34;:&#34;integer&#34;,&#34;nullable&#34;:true,&#34;metadata&#34;:{}}]},&#34;nullable&#34;:true,&#34;metadata&#34;:{}}]}
+Schema:
+message glue_schema {
+  optional binary A (STRING);
+  optional group B (LIST) {
+    repeated group list {
+      optional binary element (STRING);
+    }
+  }
+  optional group C {
+    optional int32 D;
+  }
+}
+
+
+Row group 0:  count: 1  216.00 B records  start: 4  total: 216 B
+--------------------------------------------------------------------------------
+                type      encodings count     avg size   nulls   min / max
+A               BINARY    G   _     1         76.00 B    0       &#34;aaaa&#34; / &#34;aaaa&#34;
+B.list.element  BINARY    G   _     1         66.00 B    0       &#34;b&#34; / &#34;b&#34;
+C.D             INT32     G   _     1         74.00 B    0       &#34;10&#34; / &#34;10&#34;
+</code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://databricks.com/glossary/what-is-parquet">What is Apache Parquet? - Databricks</a></p>
 
     </div>
