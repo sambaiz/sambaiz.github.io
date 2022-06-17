@@ -466,26 +466,20 @@
         <a class="tag" href='/tags/hadoop/'>hadoop</a>
       </div>
       <h2 id="hiveとはhttpscwikiapacheorgconfluencedisplayhivehomehome-apachehive"><a href="https://cwiki.apache.org/confluence/display/Hive/Home#Home-ApacheHive">Hiveとは</a></h2>
-<p>Hadoop上で動くデータウェアハウスソフトウェア。
-SQLを拡張したHiveQLを書くとデータを処理するMapReduceやSpark、Tezのジョブが生成される。
-クエリの実行に時間がかかり、耐障害性があるのでDailyやHourlyのバッチで使われる。</p>
-<p>ちなみにAthenaにも使われている<a href="https://prestodb.io/">Presto</a>
-はタスクを並列に実行し、中間データをメモリ上に持つことで数分以内に結果が得られるので
-ダッシュボードなどの用途でアドホックに使える。中間データが大きいと<a href="https://aws.amazon.com/jp/blogs/news/top-10-performance-tuning-tips-for-amazon-athena/">時間がかかったり失敗する</a>。</p>
+<p>SQLを拡張したHiveQLでHDFSなどのデータソースにアクセスできるHadoopのデータウェアハウスソフトウェア。
+クエリを送るとMapReduceやSpark、Tezのジョブが実行される。
+耐障害性があり主にバッチ処理で用いられる。</p>
+<p><a href="https://www.sambaiz.net/article/126/">HDFS(Hadoop Distributed File System)とは - sambaiz-net</a></p>
+<p>同じくSQLでデータソースにアクセスできる<a href="https://prestodb.io/">Presto</a>は
+タスクを並列に実行し中間データをメモリ上に持つことでHiveよりも高速にクエリを実行することができアドホックな用途にも使うことができるが、中間データが大きいと<a href="https://aws.amazon.com/jp/blogs/news/top-10-performance-tuning-tips-for-amazon-athena/">時間がかかったり失敗することがある</a>。</p>
 <p><a href="https://www.cloudera.com/documentation/enterprise/5-5-x/topics/impala.html">Impala</a>はさらに速いがメモリの消費が激しいらしい。</p>
 <h2 id="cloudera-docker-imageを起動するhttpswwwclouderacomdocumentationenterpriselatesttopicsquickstart_docker_containerhtml"><a href="https://www.cloudera.com/documentation/enterprise/latest/topics/quickstart_docker_container.html">Cloudera Docker Imageを起動する</a></h2>
-<p>Cloudera Docker Imageには</p>
-<ul>
-<li><a href="https://www.cloudera.com/products/open-source/apache-hadoop/key-cdh-components.html">CDH</a>: Clouderaのディストリビューション。Hadoop、Hive、SparkなどのOSSで構成されている。</li>
-<li><a href="https://www.cloudera.com/documentation/enterprise/latest/topics/cloudera_manager.html">Cloudera Manager</a>: CDHクラスタを管理する。無料のExpressと有料のEnterpriseで使える機能に<a href="https://www.cloudera.com/content/dam/www/static/documents/datasheets/cloudera-enterprise-datasheet.pdf">差がある</a>。</li>
-</ul>
-<p>が含まれていて、これを起動すると諸々立ち上がる。CDHクラスタを組むのはサポートされていないようなのでテスト用らしい。</p>
+<p>Cloudera Docker ImageはHadoop、Hive、SparkなどのOSSで構成されているClouderaのディストリビューション、<a href="https://www.cloudera.com/products/open-source/apache-hadoop/key-cdh-components.html">CDH</a>に<a href="https://www.cloudera.com/documentation/enterprise/latest/topics/cloudera_manager.html">Cloudera Manager</a>を入れたもので、無料のExpressと有料のEnterpriseで使える機能に<a href="https://www.cloudera.com/content/dam/www/static/documents/datasheets/cloudera-enterprise-datasheet.pdf">差がある</a>らしいが、今回はExpressで動かす。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker pull cloudera/quickstart:latest
 $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 7180 -p 80 cloudera/quickstart /usr/bin/docker-quickstart
-</code></pre></div><p>80がチュートリアルで、8888がHadoopのWeb UIの<a href="https://github.com/cloudera/hue">Hue</a>、7180がCloudera Manager。Dockerに割り当てるメモリが2GBだと<code>Failed to contact an active Resource Manager</code>になってしまったので4GBにした。</p>
+</code></pre></div><p>80番ポートがチュートリアル用で、8888がHadoopのWeb UIである<a href="https://github.com/cloudera/hue">Hue</a>、7180がCloudera Managerのものとなっている。Dockerに割り当てるメモリが2GBだと<code>Failed to contact an active Resource Manager</code>になってしまったので4GBにした。</p>
 <h2 id="hiveのテーブルを作成して実行する">Hiveのテーブルを作成して実行する</h2>
-<p>チュートリアルでは<a href="http://sqoop.apache.org/">Sqoop</a>を使ってDBから取り込んでいるんだが、
-今回はjsonのログのテーブルを作成する。</p>
+<p>チュートリアルでは次のように<a href="http://sqoop.apache.org/">Sqoop</a>でMySQLからデータを取り込んでいるが今回はJSONのログを取り込む。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sqoop import-all-tables \
     -m 1 \
     --connect jdbc:mysql://localhost:3306/retail_db \
@@ -495,9 +489,9 @@ $ docker run --hostname=quickstart.cloudera --privileged=true -itd -p 8888 -p 71
     --as-parquetfile \
     --warehouse-dir=/user/hive/warehouse \
     --hive-import
-</code></pre></div><p>JSONを扱うにはStringから<code>LATERAL VIEW json_tuple(json_str, &quot;field1&quot;, &quot;field2&quot;) j AS field1, field2</code>のように実行時にパースする方法と、<a href="https://github.com/rcongiu/Hive-JSON-Serde">JSON SerDe</a>で最初から別カラムにいれる方法があるが、今回はSerDeでやる。</p>
+</code></pre></div><p>Stringとして取り込み実行時に<code>LATERAL VIEW json_tuple(json_str, &quot;field1&quot;, &quot;field2&quot;) j AS field1, field2</code>のようにパースする方法もあるが、今回は<a href="https://github.com/rcongiu/Hive-JSON-Serde">JSON SerDe</a>で最初から別カラムに格納する方法を取る。</p>
 <hr>
-<p>json_tupleを使う場合、配列はStringになってしまうのでこれをArrayにするには便利なUDF(User-Defined Functions)をまとめた<a href="https://github.com/klout/brickhouse">brickhouse</a>のjson_splitが使える。例えば、<code>SELECT col1 FROM table LATERAL VIEW explode(json_split('[&quot;a&quot;,&quot;b&quot;,&quot;c&quot; ]')) a as ja</code>のようにするとArrayになったStringがexplodeしてtableの各列に3種のカラムjaが並ぶ。</p>
+<p>なお、json_tupleでは配列はStringになってしまうが、便利なUDF(User-Defined Functions)をまとめた<a href="https://github.com/klout/brickhouse">brickhouse</a>のjson_splitを用いるとArrayにでき、<code>SELECT col1 FROM table LATERAL VIEW explode(json_split('[&quot;a&quot;,&quot;b&quot;,&quot;c&quot; ]')) a as ja</code>のようにするとArrayがexplodeされて各要素を行として扱うことができる。</p>
 <table>
 <thead>
 <tr>
@@ -575,7 +569,7 @@ CREATE EXTERNAL TABLE jinrou <span style="color:#ff79c6">(</span>
 5,villager,0.0
 6,fortune-teller,0.0
 6,villager,1.0
-</code></pre></div><p>テーブルの定義よりjsonのフィールドが多いと無視されて、ないものはNULLになる。</p>
+</code></pre></div><p>テーブル定義よりjsonのフィールドが多いと無視されて、ないものはNULLになる。</p>
 <h2 id="参考">参考</h2>
 <p><a href="http://blog-jp.treasuredata.com/entry/2014/07/10/150250">『Prestoとは何か，Prestoで何ができるか』 - トレジャーデータ（Treasure Data）公式ブログ</a></p>
 <p><a href="http://recruit.gmo.jp/engineer/jisedai/blog/presto_spark_hive/">スケールアウト可能なSQLエンジンのベンチマークテスト：Presto vs Spark SQL vs Hive on Tez | GMOインターネット 次世代システム研究室</a></p>
