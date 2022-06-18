@@ -474,12 +474,12 @@
 時間を遡るほど活性化関数の微分係数が再帰的に繰り返し掛けられるため勾配が消失や爆発しやすくなってしまう。
 また、時系列データのうちに発火したいものと発火したくないものが混在している場合、同じ重みにつながっているため更新を打ち消しあってしまう入力/出力重み衝突という問題もある。</p>
 <p>これらを解決するのがLSTM(Long Short Term Memory networks)で、
-勾配消失は活性化関数がxで重みが単位行列のニューロンのCEC(Constant Error Carousel)によって常に誤差に掛けられる係数を1にすることで防ぎ、
-入力/出力重み衝突は必要な入出力を通したり不必要な情報は忘れさせるために値域(0,1)の値を掛けるinput gate、forget gate、output gateによって回避する。gateは入力と前回の出力によって制御される。</p>
+勾配消失は活性化関数がxで重みが単位行列のニューロンの <strong>CEC(Constant Error Carousel)</strong> によって常に誤差に掛けられる係数を1にすることで防ぎ、
+入力/出力重み衝突は必要な入出力を通したり不必要な情報は忘れさせるために値域(0,1)の値を掛ける <strong>input gate</strong>、<strong>forget gate</strong>、<strong>output gate</strong> によって回避する。gateは入力と前回の出力によって制御される。</p>
 <p><img src="https://www.sambaiz.net/images/146-lstm.png" alt="RNN"></p>
-<p>TensorflowではいくつかLSTMの実装が用意されていて、<code>CudnnLSTM</code>や<code>BasicLSTMCell</code>、<code>LSTMBlockCell</code>などがある。
+<p>TensorflowではいくつかLSTMの実装が用意されていて、 CudnnLSTM や BasicLSTMCell、LSTMBlockCell などがある。
 <a href="https://developer.nvidia.com/cudnn">cuDNN</a>というのはNVIDIAのCUDAのDNNライブラリのこと。
-<code>LSTMBlockCell</code>はもう少し複雑なLSTMで<code>BasicLSTMCell</code>よりも速い。</p>
+LSTMBlockCell はもう少し複雑なLSTMで BasicLSTMCell よりも速い。</p>
 <h2 id="動かしてみる">動かしてみる</h2>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ git clone https://github.com/tensorflow/models.git
 $ cd models/tutorials/rnn/ptb/
@@ -612,16 +612,16 @@ embeddingから各stepの単語のものを抽出する。</p>
 
 output, state <span style="color:#ff79c6">=</span> self<span style="color:#ff79c6">.</span>_build_rnn_graph(inputs, config, is_training)
 </code></pre></div><h3 id="rnnのグラフ">RNNのグラフ</h3>
-<p><code>rnn_mode</code>で実装を選べるようになっている。</p>
+<p>rnn_mode で実装を選べるようになっている。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">_build_rnn_graph</span>(self, inputs, config, is_training):
   <span style="color:#ff79c6">if</span> config<span style="color:#ff79c6">.</span>rnn_mode <span style="color:#ff79c6">==</span> CUDNN:
     <span style="color:#ff79c6">return</span> self<span style="color:#ff79c6">.</span>_build_rnn_graph_cudnn(inputs, config, is_training)
   <span style="color:#ff79c6">else</span>:
     <span style="color:#ff79c6">return</span> self<span style="color:#ff79c6">.</span>_build_rnn_graph_lstm(inputs, config, is_training)
-</code></pre></div><p>Cellは<code>LSTMBlockCell</code>をDroopoutWrapperでラップしたもの。
-さらにこれをCellの出力が次のCellの入力になる<code>MultiRNNCell</code>で<code>num_layers</code>重ねている。</p>
+</code></pre></div><p>Cellは LSTMBlockCell を DroopoutWrapper でラップしたもの。
+さらにこれをCellの出力が次のCellの入力になる MultiRNNCell で num_layers の数重ねている。</p>
 <p>最初に<a href="https://www.tensorflow.org/api_docs/python/tf/contrib/rnn/BasicLSTMCell#zero_state">zero_state</a>の
-初期状態から<code>num_steps</code>まわして各stepでのoutputと最後のstateを返す。</p>
+初期状態から num_steps まわして各stepでのoutputと最後のstateを返す。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">_get_lstm_cell</span>(self, config, is_training):
   <span style="color:#ff79c6">if</span> config<span style="color:#ff79c6">.</span>rnn_mode <span style="color:#ff79c6">==</span> BASIC:
     <span style="color:#ff79c6">return</span> tf<span style="color:#ff79c6">.</span>contrib<span style="color:#ff79c6">.</span>rnn<span style="color:#ff79c6">.</span>BasicLSTMCell(
@@ -658,7 +658,7 @@ output, state <span style="color:#ff79c6">=</span> self<span style="color:#ff79c
   output <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reshape(tf<span style="color:#ff79c6">.</span>concat(outputs, <span style="color:#bd93f9">1</span>), [<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, config<span style="color:#ff79c6">.</span>hidden_size])
   <span style="color:#ff79c6">return</span> output, state
 </code></pre></div><h3 id="コスト">コスト</h3>
-<p>出力層を通したのをlogits(<code>log(p/(1-p)) (0≦p≦1)</code>)のシーケンスとして扱い、
+<p>出力層を通したのをlogits(log(p/(1-p)) (0≦p≦1))のシーケンスとして扱い、
 <a href="https://www.tensorflow.org/api_docs/python/tf/contrib/seq2seq/sequence_loss">sequence_loss</a>で
 それぞれ交差エントロピーを求め、その和をコストとする。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">output, state <span style="color:#ff79c6">=</span> self<span style="color:#ff79c6">.</span>_build_rnn_graph(inputs, config, is_training)
@@ -690,8 +690,7 @@ loss <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>
 self<span style="color:#ff79c6">.</span>_cost <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_sum(loss)
 self<span style="color:#ff79c6">.</span>_final_state <span style="color:#ff79c6">=</span> state
 </code></pre></div><h3 id="勾配">勾配</h3>
-<p><a href="https://www.tensorflow.org/api_docs/python/tf/trainable_variables">trainable_variables</a>で
-<code>trainable=True</code>(つまり_lr以外)のvariableを取得し、
+<p><a href="https://www.tensorflow.org/api_docs/python/tf/trainable_variables">trainable_variables</a>で trainable=True (つまり_lr以外)のvariableを取得し、
 <a href="https://www.tensorflow.org/api_docs/python/tf/gradients">gradients</a>で各variableに対しての勾配を求め、
 <a href="https://www.tensorflow.org/api_docs/python/tf/clip_by_global_norm">clip_by_global_norm</a>で大きさを抑える。
 これはgradient clippingと呼ばれる勾配爆発を防ぐための手法。</p>
@@ -729,7 +728,7 @@ grads, _ <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</s
   <span style="color:#6272a4"># = [25, 45, 65] * 2 / global_norm</span>
   <span style="color:#ff79c6">print</span>(list_clipped) <span style="color:#6272a4"># [0.60302269, 1.08544087, 1.56785905]</span>
 </code></pre></div><h3 id="optimize">Optimize</h3>
-<p>学習率_lrの<code>GradientDescenetOptimizer</code>でoptimizeする。
+<p>学習率_lrの GradientDescenetOptimizer でoptimizeする。
 <a href="https://www.tensorflow.org/api_docs/python/tf/train/GradientDescentOptimizer#apply_gradients">apply_gradients</a>するたびに
 global_stepがインクリメントされる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">optimizer <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>GradientDescentOptimizer(self<span style="color:#ff79c6">.</span>_lr)
@@ -741,7 +740,7 @@ self<span style="color:#ff79c6">.</span>_new_lr <span style="color:#ff79c6">=</s
   tf<span style="color:#ff79c6">.</span>float32, shape<span style="color:#ff79c6">=</span>[], name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;new_learning_rate&#34;</span>)
 self<span style="color:#ff79c6">.</span>_lr_update <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>assign(self<span style="color:#ff79c6">.</span>_lr, self<span style="color:#ff79c6">.</span>_new_lr)
 </code></pre></div><h3 id="run_epoch">run_epoch</h3>
-<p><code>session.run</code>する。</p>
+<p>session.run() する。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">fetches <span style="color:#ff79c6">=</span> {
   <span style="color:#f1fa8c">&#34;cost&#34;</span>: model<span style="color:#ff79c6">.</span>cost,
   <span style="color:#f1fa8c">&#34;final_state&#34;</span>: model<span style="color:#ff79c6">.</span>final_state,

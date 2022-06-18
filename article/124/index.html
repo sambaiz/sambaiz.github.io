@@ -476,7 +476,7 @@ Sonnetは必要に応じてTensorFlowの関数も呼ぶ、比較的抽象度が�
 Dockerfileは<a href="https://github.com/sambaiz/docker-sonnet">ここ</a>。</p>
 <p>内容は基本的にREADME通りだが、
 configureのところで対話的に聞かれないように前もって環境変数で設定を与えている。
-あとは、<a href="https://github.com/deepmind/sonnet/issues/25">TensorFlowのビルドに使われているGCCのバージョンが古い</a>ようで、sonnetをimportするときに以下のエラーが出たため、bazelのオプションに<code>--copt=&quot;-D_GLIBCXX_USE_CXX11_ABI=0&quot;</code>を付けている。</p>
+あとは、<a href="https://github.com/deepmind/sonnet/issues/25">TensorFlowのビルドに使われているGCCのバージョンが古い</a>ようで、sonnetをimportするときに以下のエラーが出たため、bazelのオプションに &ndash;copt=&quot;-D_GLIBCXX_USE_CXX11_ABI=0&quot; を付けている。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">tensorflow.python.framework.errors_impl.NotFoundError: /usr/local/lib/python3.5/dist-packages/sonnet/python/ops/_resampler.so: undefined symbol: _ZN10tensorflow7strings6StrCatB5cxx11ERKNS0_8AlphaNumES3_S3_S3_
 </code></pre></div><p>起動。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker run -itd --name sonnet -p 6006:6006 -p 8888:8888 sambaiz/sonnet
@@ -504,11 +504,10 @@ images, labels <span style="color:#ff79c6">=</span> mnist<span style="color:#ff7
 </code></pre></div><p>Sonnetではニューラルネットワークの一部をModuleとして表現し、それらをTensorFlowの計算グラフに接続していく。
 Moduleはグラフに複数回接続することができ、中の変数は共有される。
 素のTensorFlowだと<a href="https://www.tensorflow.org/programmers_guide/variable_scope">変数のスコープ</a>を作って共有するのに
-reuse=Trueで<code>tf.variable_scope</code>して<code>tf.get_variable</code>したりするが、そのあたりは抽象化されているので
-<code>tf.Variable</code>を含むような処理はModuleで行う。</p>
+reuse=Trueで tf.variable_scope して tf.get_variable したりするが、そのあたりは抽象化されているので tf.Variable を含むような処理はModuleで行う。</p>
 <p><a href="https://github.com/deepmind/sonnet/blob/v1.8/sonnet/python/modules/basic.py">Linear Module</a>は
 重みの乗算とバイアスの加算をするもの。
-これに<code>tf.Sigmoid</code>のような活性化関数を適用するのを繰り返し、最後に出力層とつなげるとMulti Layer Perceptronを構築できる。</p>
+これに tf.Sigmoid のような活性化関数を適用するのを繰り返し、最後に出力層とつなげるとMulti Layer Perceptronを構築できる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">import</span> sonnet <span style="color:#ff79c6">as</span> snt
 <span style="color:#ff79c6">import</span> tensorflow <span style="color:#ff79c6">as</span> tf
 <span style="color:#ff79c6">from</span> tensorflow.examples.tutorials.mnist <span style="color:#ff79c6">import</span> input_data
@@ -539,8 +538,8 @@ train_step <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.<
     <span style="color:#ff79c6">print</span>(sess<span style="color:#ff79c6">.</span>run(accuracy, feed_dict<span style="color:#ff79c6">=</span>{x: mnist<span style="color:#ff79c6">.</span>test<span style="color:#ff79c6">.</span>images, y_: mnist<span style="color:#ff79c6">.</span>test<span style="color:#ff79c6">.</span>labels}))
     <span style="color:#6272a4"># =&gt; 0.9307</span>
 </code></pre></div><h2 id="moduleを作る">Moduleを作る</h2>
-<p>Moduleを作るには<code>snt.AbstractModule</code>を継承し、
-スーパークラスのコンストラクタを呼んで、グラフに接続されるたびに呼ばれる<code>_build</code>メソッドを実装する。</p>
+<p>Moduleを作るには <strong>snt.AbstractModule</strong> を継承し、
+スーパークラスのコンストラクタを呼んで、グラフに接続されるたびに呼ばれる _build メソッドを実装する。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">MyMLP</span>(snt<span style="color:#ff79c6">.</span>AbstractModule):
   <span style="color:#f1fa8c">&#34;&#34;&#34;test mlp module&#34;&#34;&#34;</span>
   <span style="color:#ff79c6">def</span> __init__(self, hidden_size, output_size,

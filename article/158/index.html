@@ -466,7 +466,7 @@
         <a class="tag" href='/tags/database/'>database</a><a class="tag" href='/tags/mysql/'>mysql</a><a class="tag" href='/tags/docker/'>docker</a>
       </div>
       <p><a href="https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html">https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html</a></p>
-<p>トランザクション分離レベルはデフォルトの<code>REPEATABLE-READ</code>。</p>
+<p>トランザクション分離レベルはデフォルトのREPEATABLE-READ。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">@@</span><span style="color:#ff79c6">GLOBAL</span>.tx_isolation, <span style="color:#ff79c6">@@</span>tx_isolation;
 <span style="color:#ff79c6">+</span><span style="color:#6272a4">-----------------------+-----------------+
 </span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> <span style="color:#ff79c6">@@</span><span style="color:#ff79c6">GLOBAL</span>.tx_isolation <span style="color:#ff79c6">|</span> <span style="color:#ff79c6">@@</span>tx_isolation  <span style="color:#ff79c6">|</span>
@@ -515,14 +515,14 @@ docker run <span style="color:#6272a4">--name try-mysql-lock -p 4306:3306 -e &#3
 MySQL thread id <span style="color:#bd93f9">4</span>, OS thread handle <span style="color:#bd93f9">0</span>x7f5de21d8700, query id <span style="color:#bd93f9">147</span> <span style="color:#bd93f9">172</span>.<span style="color:#bd93f9">17</span>.<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">1</span> root init
 <span style="color:#ff79c6">SHOW</span> ENGINE INNODB STATUS
 ...
-</code></pre></div><p>ただのSELECTは分離レベルが<code>SERIALIZABLE</code>でない限りロックをとらない。
+</code></pre></div><p>ただのSELECTは分離レベルがSERIALIZABLEでない限りロックをとらない。
 ロックしないと、他のトランザクションのCOMMITで
 追加されたデータ(ファントム)を読んでしまったりするかというと、
-MySQLの<code>REPEATABLE-READ</code>ではそうはならず、最初にSELECTしたときのスナップショットを返すようになっている。
-ただし、<code>LOCK IN SHARE MODE</code>や<code>FOR UPDATE</code>を付けると<code>READ-COMMITED</code>のように最新の結果を返す。</p>
+MySQLのREPEATABLE-READではそうはならず、最初にSELECTしたときのスナップショットを返すようになっている。
+ただし、LOCK IN SHARE MODEやFOR UPDATEを付けるとREAD-COMMITEDのように最新の結果を返す。</p>
 <p><a href="http://nippondanji.blogspot.jp/2013/12/innodbrepeatable-readlocking-read.html">漢(オトコ)のコンピュータ道: InnoDBのREPEATABLE READにおけるLocking Readについての注意点</a></p>
 <h2 id="排他exclusiveロック">排他(eXclusive)ロック</h2>
-<p>その行に対して他がロックを取ることを許さない。SELECTできるかは分離レベルにより、<code>REPEATABLE READ</code>では<a href="https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_exclusive_lock">できる</a>。</p>
+<p>その行に対して他がロックを取ることを許さない。SELECTできるかは分離レベルにより、REPEATABLE READでは<a href="https://dev.mysql.com/doc/refman/5.7/en/glossary.html#glos_exclusive_lock">できる</a>。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#6272a4">-- Tx1
 </span><span style="color:#6272a4"></span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">FROM</span> a <span style="color:#ff79c6">WHERE</span> id <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">2</span> <span style="color:#ff79c6">FOR</span> <span style="color:#ff79c6">UPDATE</span>;
 </code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#6272a4">-- Tx2
@@ -559,11 +559,11 @@ MySQLの<code>REPEATABLE-READ</code>ではそうはならず、最初にSELECT�
 </span></code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#6272a4">-- Tx2
 </span><span style="color:#6272a4"></span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">INSERT</span> <span style="color:#ff79c6">INTO</span> a (id, name) VALUE (<span style="color:#bd93f9">5</span>, <span style="color:#f1fa8c">&#39;c&#39;</span>); <span style="color:#6272a4">-- 止まる
 </span><span style="color:#6272a4"></span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">UPDATE</span> a <span style="color:#ff79c6">SET</span> name <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;e&#39;</span> <span style="color:#ff79c6">WHERE</span> id <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">3</span>; <span style="color:#6272a4">-- 止まる
-</span></code></pre></div><p><code>INSERT IGNORE</code>しても同じ。そもそもこれは重複キー以外のエラーも無視した結果、変なデータが入ってしまうことがあるため、使わない方がよい。</p>
+</span></code></pre></div><p>INSERT IGNOREしても同じ。そもそもこれは重複キー以外のエラーも無視した結果、変なデータが入ってしまうことがあるため、使わない方がよい。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">INSERT</span> <span style="color:#ff79c6">INTO</span> a (name) VALUE (<span style="color:#ff79c6">NULL</span>);  <span style="color:#6272a4">-- Column &#39;name&#39; cannot be null
 </span><span style="color:#6272a4"></span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">INSERT</span> <span style="color:#ff79c6">IGNORE</span> <span style="color:#ff79c6">INTO</span> a (name) VALUE (<span style="color:#ff79c6">NULL</span>); <span style="color:#6272a4">-- Query OKで空文字が入ってしまう
 </span></code></pre></div><h3 id="update-delete">UPDATE, DELETE</h3>
-<p>排他ネクストキーロックがかかる。INSERTでの<code>ON DUPLICATE KEY UPDATE</code>も同様。</p>
+<p>排他ネクストキーロックがかかる。INSERTでの ON DUPLICATE KEY UPDATE も同様。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#6272a4">-- Tx1
 </span><span style="color:#6272a4"></span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">UPDATE</span> a <span style="color:#ff79c6">SET</span> name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;a&#39;</span> <span style="color:#ff79c6">WHERE</span> id <span style="color:#ff79c6">BETWEEN</span> <span style="color:#bd93f9">8</span> <span style="color:#ff79c6">AND</span> <span style="color:#bd93f9">9</span>; 
 </code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#6272a4">-- Tx2

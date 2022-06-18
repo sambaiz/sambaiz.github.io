@@ -469,7 +469,7 @@
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm version
 Client: &amp;version.Version{SemVer:&#34;v2.8.2&#34;, GitCommit:&#34;a80231648a1473929271764b920a8e346f6de844&#34;, GitTreeState:&#34;clean&#34;}
 Server: &amp;version.Version{SemVer:&#34;v2.8.2&#34;, GitCommit:&#34;a80231648a1473929271764b920a8e346f6de844&#34;, GitTreeState:&#34;clean&#34;}
-</code></pre></div><p>GKEで<code>helm init</code>して<code>helm install</code>したところ以下のエラーが返ってきた。</p>
+</code></pre></div><p>GKEで helm init して helm install したところ以下のエラーが返ってきた。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Error: release my-locust failed: namespaces &#34;default&#34; is forbidden: User &#34;system:serviceaccount:kube-system:default&#34; cannot get namespaces in the namespace &#34;default&#34;: Unknown user &#34;system:serviceaccount:kube-system:default&#34;
 </code></pre></div><p>GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が<a href="https://cloud.google.com/kubernetes-engine/docs/role-based-access-control">有効になっている</a>ため、<a href="https://github.com/kubernetes/helm/blob/master/docs/rbac.md">Tillerインスタンスに権限を与える</a>必要がある。</p>
 <p>ということでTiller用にnamespaceを切って、その中では好きにできる<a href="https://kubernetes.io/docs/admin/authorization/rbac/#role-and-clusterrole">Role</a>と、Tillerが使う<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/">ServiceAccount</a>を作成し、RoleBindingで紐づける。</p>
@@ -502,11 +502,11 @@ Server: &amp;version.Version{SemVer:&#34;v2.8.2&#34;, GitCommit:&#34;a80231648a1
   <span style="color:#ff79c6">kind</span>: Role
   <span style="color:#ff79c6">name</span>: tiller-manager
   <span style="color:#ff79c6">apiGroup</span>: rbac.authorization.k8s.io
-</code></pre></div><p>Roleを追加するため、自分自身にsuper-user相当の<code>cluster-admin</code>roleをbindする。</p>
+</code></pre></div><p>Roleを追加するため、自分自身にsuper-user相当のcluster-admin roleをbindする。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=&lt;email&gt;
 </code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl create namespace tiller-world
 $ kubectl create -f tiller-rbac.yaml
-</code></pre></div><p><code>helm init</code>時に作ったServiceAccountを渡す。</p>
+</code></pre></div><p>helm init時に作ったServiceAccountを渡す。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm init --tiller-namespace tiller-world --service-account tiller
 $ kubectl get deployment -n tiller-world
 NAME            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE

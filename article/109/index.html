@@ -472,15 +472,15 @@
 <h2 id="norikraを立ち上げてクエリを実行する">Norikraを立ち上げてクエリを実行する</h2>
 <p>公式で紹介されているDockerイメージがあったのでこれで動かしてみる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker run -e &#34;TZ=Asia/Tokyo&#34; -p 26578:26578 -p 26571:26571 -v `pwd`:/var/tmp/norikra:rw -d myfinder/docker-norikra norikra start --stats /var/tmp/norikra/stats.json -l /var/tmp/norikra 
-</code></pre></div><p>ほかの<a href="https://github.com/norikra/norikra/blob/master/lib/norikra/cli.rb">オプション</a>として<code>-Xms</code>や<code>-Xmx</code>でJVMのヒープメモリの量を設定したり、Experimentalではあるが<code>--shutoff</code>でヒープメモリが一杯になる前に弾いて
+</code></pre></div><p>ほかの<a href="https://github.com/norikra/norikra/blob/master/lib/norikra/cli.rb">オプション</a>として -Xms や -Xmx でJVMのヒープメモリの量を設定したり、Experimentalではあるが &ndash;shutoff でヒープメモリが一杯になる前に弾いて
 OutOfMemoryを防ぐことができる。
 また、Norikraのコアエンジンで使われているOSSの
 <a href="https://ja.wikipedia.org/wiki/%E8%A4%87%E5%90%88%E3%82%A4%E3%83%99%E3%83%B3%E3%83%88%E5%87%A6%E7%90%86">CEP</a>
 (Complex event processing)エンジン、
 <a href="http://www.espertech.com/products/esper.php">Esper</a>
-のパフォーマンスチューニングとして<code>--micro</code>や<code>--small</code>などを渡すこともできるが試していない。</p>
+のパフォーマンスチューニングとして &ndash;micro や &ndash;small などを渡すこともできるが試していない。</p>
 <p>公式サイトの例に従ってクライアントからデータを入れてクエリを実行してみる。</p>
-<p>まずはtargetをopenする。targetというのはスキーマレスのイベントストリームのこと。
+<p>まずは <strong>target</strong> をopenする。targetというのはスキーマレスのイベントストリームのこと。
 ここで定義したフィールドは必須になる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ norikra-client target open www path:string status:integer referer:string agent:string userid:integer
 $ norikra-client target list
@@ -488,14 +488,14 @@ TARGET	AUTO_FIELD
 www	true
 </code></pre></div><p>次にクエリを追加する。一見普通のSQLのように見えるが、EsperのクエリであるEPL(Event Processing Language)。
 ただしSELECTしか使えないのも含めてクエリにいくらかの制限がある。</p>
-<p>このクエリでは<code>win:time_batch</code>で10秒のWindowを定義し、eventをgroup byして、その数をeventとして出力する。</p>
+<p>このクエリでは win:time_batch で10秒のWindowを定義し、eventをgroup byして、その数をeventとして出力する。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ norikra-client query add www.toppageviews &#39;SELECT count(*) AS cnt FROM www.win:time_batch(10 sec) WHERE path=&#34;/&#34; AND status=200&#39;
 </code></pre></div><p>eventを流す。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ echo &#39;{<span style="color:#ff79c6">&#34;path&#34;</span>:<span style="color:#f1fa8c">&#34;/&#34;</span>, <span style="color:#ff79c6">&#34;status&#34;</span>:<span style="color:#bd93f9">200</span>, <span style="color:#ff79c6">&#34;referer&#34;</span>:<span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#ff79c6">&#34;agent&#34;</span>:<span style="color:#f1fa8c">&#34;MSIE&#34;</span>, <span style="color:#ff79c6">&#34;userid&#34;</span>:<span style="color:#bd93f9">3</span>}&#39; | norikra-client event send www
 $ echo &#39;{<span style="color:#ff79c6">&#34;path&#34;</span>:<span style="color:#f1fa8c">&#34;/login&#34;</span>, <span style="color:#ff79c6">&#34;status&#34;</span>:<span style="color:#bd93f9">301</span>, <span style="color:#ff79c6">&#34;referer&#34;</span>:<span style="color:#f1fa8c">&#34;/&#34;</span>, <span style="color:#ff79c6">&#34;agent&#34;</span>:<span style="color:#f1fa8c">&#34;MSIE&#34;</span>, <span style="color:#ff79c6">&#34;userid&#34;</span>:<span style="color:#bd93f9">3</span>}&#39; | norikra-client event send www
 $ echo &#39;{<span style="color:#ff79c6">&#34;path&#34;</span>:<span style="color:#f1fa8c">&#34;/&#34;</span>, <span style="color:#ff79c6">&#34;status&#34;</span>:<span style="color:#bd93f9">200</span>, <span style="color:#ff79c6">&#34;referer&#34;</span>:<span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#ff79c6">&#34;agent&#34;</span>:<span style="color:#f1fa8c">&#34;MSIE&#34;</span>, <span style="color:#ff79c6">&#34;userid&#34;</span>:<span style="color:#bd93f9">3</span>}&#39; | norikra-client event send www
 $ echo &#39;{<span style="color:#ff79c6">&#34;path&#34;</span>:<span style="color:#f1fa8c">&#34;/&#34;</span>, <span style="color:#ff79c6">&#34;status&#34;</span>:<span style="color:#bd93f9">200</span>, <span style="color:#ff79c6">&#34;referer&#34;</span>:<span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#ff79c6">&#34;agent&#34;</span>:<span style="color:#f1fa8c">&#34;MSIE&#34;</span>, <span style="color:#ff79c6">&#34;userid&#34;</span>:<span style="color:#bd93f9">3</span>}&#39; | norikra-client event send www
-</code></pre></div><p>クエリの値をfetchする。送るのが遅くてgroup byされなかったがこんな感じ。
+</code></pre></div><p>クエリの値をfetchする。送るのが遅くてgroup byされなかったが結果はこんな感じ。
 eventがこなかったはじめのWindowは0が出力されるが、それ以降のWindowでは出力されない。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ norikra-client event fetch www.toppageviews
 {<span style="color:#ff79c6">&#34;time&#34;</span>:<span style="color:#f1fa8c">&#34;2017/06/07 20:58:13&#34;</span>,<span style="color:#ff79c6">&#34;cnt&#34;</span>:<span style="color:#bd93f9">0</span>}
@@ -516,8 +516,7 @@ eventがこなかったはじめのWindowは0が出力されるが、それ以�
 
 <h2 id="クエリeplhttpnorikragithubioqueryhtml"><a href="http://norikra.github.io/query.html">クエリ(EPL)</a></h2>
 <h3 id="windowなし">Windowなし</h3>
-<p>上の例では<code>time_batch</code>でWindowを定義したが、定義しないクエリを追加してみる。
-以下のようなクエリを登録し、再びeventを流してfetchすると流した分が全てとれる。
+<p>上の例では time_batch でWindowを定義したが、次のようなWindowなしのクエリを登録してeventを流すと流した分が全てとれる。
 ただし、このようなクエリはfetchされないと大量のoutput eventが溜まる可能性がある。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">SELECT</span> path, status <span style="color:#ff79c6">AS</span> cnt <span style="color:#ff79c6">FROM</span> www <span style="color:#ff79c6">WHERE</span> path<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;/&#34;</span> <span style="color:#ff79c6">AND</span> status<span style="color:#ff79c6">=</span><span style="color:#bd93f9">200</span>
 </code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ echo &#39;{<span style="color:#ff79c6">&#34;path&#34;</span>:<span style="color:#f1fa8c">&#34;/&#34;</span>, <span style="color:#ff79c6">&#34;status&#34;</span>:<span style="color:#bd93f9">200</span>, <span style="color:#ff79c6">&#34;referer&#34;</span>:<span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#ff79c6">&#34;agent&#34;</span>:<span style="color:#f1fa8c">&#34;MSIE&#34;</span>, <span style="color:#ff79c6">&#34;userid&#34;</span>:<span style="color:#bd93f9">3</span>}&#39; | norikra-client event send www
@@ -526,8 +525,7 @@ $ norikra-client event fetch www.toppageviews-nowin
 {<span style="color:#ff79c6">&#34;time&#34;</span>:<span style="color:#f1fa8c">&#34;2017/06/07 23:06:12&#34;</span>,<span style="color:#ff79c6">&#34;cnt&#34;</span>:<span style="color:#bd93f9">200</span>,<span style="color:#ff79c6">&#34;path&#34;</span>:<span style="color:#f1fa8c">&#34;/&#34;</span>}
 {<span style="color:#ff79c6">&#34;time&#34;</span>:<span style="color:#f1fa8c">&#34;2017/06/07 23:09:10&#34;</span>,<span style="color:#ff79c6">&#34;cnt&#34;</span>:<span style="color:#bd93f9">200</span>,<span style="color:#ff79c6">&#34;path&#34;</span>:<span style="color:#f1fa8c">&#34;/&#34;</span>}
 </code></pre></div><h3 id="wintime_batchhttpwwwespertechcomesperrelease-520esper-referencehtmlepl-viewshtmlview-win-time-batch"><a href="http://www.espertech.com/esper/release-5.2.0/esper-reference/html/epl-views.html#view-win-time-batch">win:time_batch</a></h3>
-<p><code>10 sec</code>のように秒以外にも<code>msec</code>、<code>min</code>、<code>hour</code>、どう使うか想像できないが<code>year</code>まで指定でき、
-<code>10 minutes 30 seconds</code>みたいに組み合わせることも<a href="http://www.espertech.com/esper/release-5.2.0/esper-reference/html/epl_clauses.html#epl-syntax-time-periods">できる</a>。</p>
+<p>10 sec のように指定する。単位は sec, msec、min、hour、どう使うか想像できないがyearまで対応しており 10 minutes 30 seconds といったように組み合わせることも<a href="http://www.espertech.com/esper/release-5.2.0/esper-reference/html/epl_clauses.html#epl-syntax-time-periods">できる</a>。</p>
 <p>また、第二引数にミリ秒を渡すと出力するタイミングを指定できる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">count</span>(<span style="color:#ff79c6">*</span>) <span style="color:#ff79c6">AS</span> cnt <span style="color:#ff79c6">FROM</span> www.win:time_batch(<span style="color:#bd93f9">1</span><span style="color:#ff79c6">min</span>, <span style="color:#bd93f9">0</span>L) <span style="color:#ff79c6">WHERE</span> path<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;/&#34;</span> <span style="color:#ff79c6">AND</span> status<span style="color:#ff79c6">=</span><span style="color:#bd93f9">200</span>
 </code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ echo &#39;{<span style="color:#ff79c6">&#34;path&#34;</span>:<span style="color:#f1fa8c">&#34;/&#34;</span>, <span style="color:#ff79c6">&#34;status&#34;</span>:<span style="color:#bd93f9">200</span>, <span style="color:#ff79c6">&#34;referer&#34;</span>:<span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#ff79c6">&#34;agent&#34;</span>:<span style="color:#f1fa8c">&#34;MSIE&#34;</span>, <span style="color:#ff79c6">&#34;userid&#34;</span>:<span style="color:#bd93f9">3</span>}&#39; | norikra-client event send www
@@ -575,7 +573,7 @@ $ norikra-client event fetch www.length-len
 <p><a href="https://github.com/norikra/fluent-plugin-norikra">fluent-plugin-norikra</a>でNorikraサーバーにeventを送り、
 eventを受け取ってファイルに出力する。</p>
 <p>c4.large(2コア,メモリ3.75GiB)でDockerでNorikraを立ち上げ、以下の設定でtd-agentを実行した。
-<code>auto_field</code>は来たeventのフィールドを自動でtargetに登録するかの設定で、
+<strong>auto_field</strong> は来たeventのフィールドを自動でtargetに登録するかの設定で、
 true(デフォルト)にするとどんなフィールドが来ているかNorikra上で確認することができる。
 falseにしてもクエリで使う分は自動で登録される。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;source&gt;
