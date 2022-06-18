@@ -223,12 +223,16 @@
     }
 
     .single p>code, .single li>code {
-        color: #261400;
         padding: 0 0.2rem;
         display: inline-block;
         overflow: auto;
         max-width: 100%;
         vertical-align: bottom;
+    }
+
+    .single strong {
+        color: #d2691e;
+        font-weight: normal;
     }
 
     .single .highlight {
@@ -420,11 +424,6 @@
 
       <div class="sns">
         <div class="sns-item">
-          <a class="nl" href="https://twitter.com/sambaiz">
-            <img src="/image/twitter.png" width="30px" height="30px" alt="twitter">
-          </a>
-        </div>
-        <div class="sns-item">
           <a class="nl" href="https://github.com/sambaiz">
             <img src="/image/github.png" width="30px" height="30px" alt="github">
           </a>
@@ -487,19 +486,19 @@
       <h2 id="what-is-hdfs">What is HDFS</h2>
 <p>HDFS stands for Hadoop Distributed File System, one of the implementations of file systems for Hadoop, and other implementations include local files and S3. It distributes the disk I/O, which is a big problem when the data size is enormous and makes a block size, a unit for reading and writing, big to reduce the seek cost and improve the throughput.</p>
 <p>You can see disk I/O can be a bottleneck from <a href="https://gist.github.com/jboner/2841832">the data</a> that while communication within the data center takes about 0.5ms for a round trip, seeking takes 10ms, and reading 1MB takes 20ms.</p>
-<p>HDFS is not good at handling many files because 150 bytes of metadata per file is allocated in the memory of <code>NameNode</code>. Besides, files can only be appended data.</p>
+<p>HDFS is not good at handling many files because 150 bytes of metadata per file is allocated in the memory of NameNode. Besides, files can only be appended data.</p>
 <h3 id="namenode-and-datanode">NameNode and DataNode</h3>
-<p>The cluster has <code>DataNodes</code>, which have distributed blocks, and per namespace, a <code>NameNode</code>, which manages which <code>DataNode</code> has blocks of a file. <code>NameNode</code> has <code>fsimage</code>, which is a snapshot of file&rsquo;s metadata, and <code>edit log</code>, which haven&rsquo;t yet contained in <code>fsimage</code>. <code>edit log</code> is periodically merged to <code>fsimage</code> by <code>Secondary NameNode</code>.</p>
-<p>If <code>NameNode</code> is down, any data can&rsquo;t be read and written, so it needs to start a new <code>NameNode</code>.
-At that time, the state is recovered with applying <code>edit log</code> to <code>fsimage</code>, so these files should be backuped to prevent from losing.</p>
-<p>It can take over 30 minutes to start a <code>NameNode</code> if the cluster is big, so <code>Standby NameNode</code> can be placed instead of <code>Secondary NameNode</code> to improve the availability. <code>Standby NameNode</code> share <code>edit log</code> on a shared storage with <code>NameNode</code>, and the latest state is on memory, so it can be switched within a few tens of seconds after it is determined that the <code>NameNode</code> is dead.</p>
+<p>The cluster has <strong>DataNodes</strong>, which have distributed blocks, and per namespace, a <strong>NameNode</strong>, which manages which DataNode has blocks of a file. NameNode has <strong>fsimage</strong>, which is a snapshot of file&rsquo;s metadata, and <strong>edit log</strong>, which haven&rsquo;t yet contained in fsimage. Edit log is periodically merged to fsimage by <strong>Secondary NameNode</strong>.</p>
+<p>If NameNode is down, any data can&rsquo;t be read and written, so it needs to start a new NameNode.
+At that time, the state is recovered with applying edit log to fsimage, so these files should be backuped to prevent from losing.</p>
+<p>It can take over 30 minutes to start a NameNode if the cluster is big, so <strong>Standby NameNode</strong> can be placed instead of Secondary NameNode to improve the availability. Standby NameNode share edit log on a shared storage with NameNode, and the latest state is on memory, so it can be switched within a few tens of seconds after it is determined that the NameNode is dead.</p>
 <h2 id="write-and-read">Write and read</h2>
 <h3 id="write">Write</h3>
-<p>File system ommunicates with <code>NameNode</code> to check the file exists and have permissions, and if there is no problem, returns <code>FSDataOutputStream</code> to the client. First, written data is put into a queue, and then <code>DataStreamer</code> selects which <code>DataNodes</code> are written with communicating with <code>NameNode</code>. The number of replica settings <code>DataNodes</code> are selected, and a pipeline is created between the <code>DataNodes</code> to write data in order. If succeeded, an ack packet is returned from each <code>DetaNode</code>, so put it into an ack queue and wait for ack packets to be returned from all <code>DataNodes</code>. If some <code>DataNodes</code> fails, erase the written data, remove it from the pipeline, and create a new pipeline.</p>
+<p>File system ommunicates with NameNode to check the file exists and have permissions, and if there is no problem, returns FSDataOutputStream to the client. First, written data is put into a queue, and then <strong>DataStreamer</strong> selects which DataNodes are written with communicating with NameNode. The number of replica settings DataNodes are selected, and a pipeline is created between the DataNodes to write data in order. If succeeded, an ack packet is returned from each DetaNode, so put it into an ack queue and wait for ack packets to be returned from all DataNodes. If some DataNodes fails, erase the written data, remove it from the pipeline, and create a new pipeline.</p>
 <h3 id="read">Read</h3>
-<p>File system asks <code>NameNode</code> where blocks of the file is.
-<code>NameNode</code> sorts<code> DataNode</code> having blocks in order of closeness on the network topology and returns the address of neareset one.
-After that, file system returns <code>FSDataInputStream</code> containing the address to the client, and it reads data.</p>
+<p>File system asks NameNode where blocks of the file is.
+NameNode sorts DataNode having blocks in order of closeness on the network topology and returns the address of neareset one.
+After that, file system returns FSDataInputStream containing the address to the client, and it reads data.</p>
 <h2 id="start-on-singlenode-clusterhttphadoopapacheorgdocscurrenthadoop-project-disthadoop-commonsingleclusterhtml"><a href="http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/SingleCluster.html">Start on SingleNode Cluster</a></h2>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ yum --enablerepo=epel -y install pdsh
 $ echo $JAVA_HOME

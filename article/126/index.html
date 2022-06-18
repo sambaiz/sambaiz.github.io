@@ -223,12 +223,16 @@
     }
 
     .single p>code, .single li>code {
-        color: #261400;
         padding: 0 0.2rem;
         display: inline-block;
         overflow: auto;
         max-width: 100%;
         vertical-align: bottom;
+    }
+
+    .single strong {
+        color: #d2691e;
+        font-weight: normal;
     }
 
     .single .highlight {
@@ -420,11 +424,6 @@
 
       <div class="sns">
         <div class="sns-item">
-          <a class="nl" href="https://twitter.com/sambaiz">
-            <img src="/image/twitter.png" width="30px" height="30px" alt="twitter">
-          </a>
-        </div>
-        <div class="sns-item">
           <a class="nl" href="https://github.com/sambaiz">
             <img src="/image/github.png" width="30px" height="30px" alt="github">
           </a>
@@ -491,26 +490,26 @@ Hadoopのファイルシステム実装の一つで、他の実装にはLocal fi
 スループットを高めている。</p>
 <p>ディスクI/Oのオーバーヘッドがどれくらい大きいかというと、データセンター内での通信が往復0.5msほどで行われるのに対して、
 シークは10ms、1MBの読み込みは20msも<a href="https://gist.github.com/jboner/2841832">かかる</a>。</p>
-<p>1ファイルあたり150バイトのメタデータが<code>NameNode</code>のメモリ上に乗るので大量のファイルを扱うのは得意ではない。また、ファイルは追記しかできない。</p>
+<p>1ファイルあたり150バイトのメタデータがNameNodeのメモリ上に乗るので大量のファイルを扱うのは得意ではない。また、ファイルは追記しかできない。</p>
 <h3 id="namenodeとdatanode">NameNodeとDataNode</h3>
-<p>クラスタ内にはブロックを分散して持つ<code>DataNode</code>と、どの<code>DataNode</code>にそのファイルのブロックがあるかを管理する名前空間ごとの<code>NameNode</code>が存在する。
-<code>NameNode</code>はファイルのメタデータのスナップショットである<code>fsimage</code>と、<code>fsimage</code>にまだ含まれていない変更ログである<code>edit log</code>を持っている。
-<code>edit log</code>は定期的に<code>Secondary NameNode</code>によって<code>fsimage</code>にマージされる。</p>
-<p><code>NameNode</code>が機能停止すると読み書きできなくなってしまうので新しい<code>NameNode</code>を立てる必要がある。
-その際<code>fsimage</code>に<code>edit log</code>を適用して状態を復元するため、これらのファイルは別のファイルシステムにバックアップなどして失われないようにする。</p>
-<p>巨大なクラスタだと<code>NameNode</code>を立ち上げるのに30分以上かかることもあるため、
-<code>Secondary NameNode</code>の代わりに<code>Standby NameNode</code>を立てて可用性を高めることもできる。
-<code>Standby NameNode</code>は<code>NameNode</code>と共有ストレージで<code>edit log</code>を共有し、最新の状態がメモリ上に乗っているので<code>NameNode</code>が死んだと判断されてから数十秒ほどで切り替えることができる。</p>
+<p>クラスタ内にはブロックを分散して持つ<strong>DataNode</strong>と、どのDataNodeにそのファイルのブロックがあるかを管理する名前空間ごとの<strong>NameNode</strong>が存在する。
+NameNodeはファイルのメタデータのスナップショットである<strong>fsimage</strong>と、fsimageにまだ含まれていない変更ログである<strong>edit log</strong>を持っている。
+edit logは定期的に<strong>Secondary NameNode</strong>によってfsimageにマージされる。</p>
+<p>NameNodeが機能停止すると読み書きできなくなってしまうので新しいNameNodeを立てる必要がある。
+その際fsimageにedit logを適用して状態を復元するため、これらのファイルは別のファイルシステムにバックアップなどして失われないようにする。</p>
+<p>巨大なクラスタだとNameNodeを立ち上げるのに30分以上かかることもあるため、
+Secondary NameNodeの代わりに<strong>Standby NameNode</strong>を立てて可用性を高めることもできる。
+Standby NameNodeはNameNodeと共有ストレージでedit logを共有し、最新の状態がメモリ上に乗っているのでNameNodeが死んだと判断されてから数十秒ほどで切り替えることができる。</p>
 <h2 id="書き込みと読み込み">書き込みと読み込み</h2>
 <h3 id="書き込み">書き込み</h3>
-<p>ファイルシステムが<code>NameNode</code>とやりとりして、ファイルが存在しているか、パーミッションがあるかを確認し、問題なければ<code>FSDataOutputStream</code>をクライアントに返す。書き込むデータはまずキューに入れられ、どの<code>DataNode</code>に書き込むかは<code>DataStreamer</code>というのが<code>NameNode</code>とやりとりして決める。
-<code>DataNode</code>はレプリカの設定数分選ばれ、順に書き込まれるよう<code>DataNode</code>間でパイプラインが作られる。
-正常に書き込まれた<code>DetaNode</code>からはackパケットが返ってくるのでこれはackキューに入れて全て正しく書き込まれたことが確認できたら消す。
-失敗した<code>DataNode</code>があったら、そこに中途半端に書き込まれた分を消して、パイプラインから除き新しいパイプラインを作る。</p>
+<p>ファイルシステムがNameNodeとやりとりして、ファイルが存在しているか、パーミッションがあるかを確認し、問題なければFSDataOutputStreamをクライアントに返す。書き込むデータはまずキューに入れられ、どのDataNodeに書き込むかは<strong>DataStreamer</strong>というのがNameNodeとやりとりして決める。
+DataNodeはレプリカの設定数分選ばれ、順に書き込まれるようDataNode間でパイプラインが作られる。
+正常に書き込まれたDetaNodeからはackパケットが返ってくるのでこれはackキューに入れて全て正しく書き込まれたことが確認できたら消す。
+失敗したDataNodeがあったら、そこに中途半端に書き込まれた分を消して、パイプラインから除き新しいパイプラインを作る。</p>
 <h3 id="読み込み">読み込み</h3>
-<p>ファイルシステムが<code>NameNode</code>にファイルのブロックがどこにあるかを問い合わせる。
-<code>NameNode</code>はブロックがある<code>DataNode</code>をクライアントからネットワークトポロジ上で近い順にソートしてアドレスを返す。
-ファイルシステムはそのアドレスが含まれた<code>FSDataInputStream</code>をクライアントに返してクライアントが順にreadしていく。</p>
+<p>ファイルシステムがNameNodeにファイルのブロックがどこにあるかを問い合わせる。
+NameNodeはブロックがあるDataNodeをクライアントからネットワークトポロジ上で近い順にソートしてアドレスを返す。
+ファイルシステムはそのアドレスが含まれたFSDataInputStreamをクライアントに返してクライアントが順にreadしていく。</p>
 <h2 id="singlenode-clusterで動かすhttphadoopapacheorgdocscurrenthadoop-project-disthadoop-commonsingleclusterhtml"><a href="http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/SingleCluster.html">SingleNode Clusterで動かす</a></h2>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ yum --enablerepo=epel -y install pdsh
 $ echo $JAVA_HOME
