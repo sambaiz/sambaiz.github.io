@@ -487,7 +487,7 @@
 どこまで処理したかを記録し、次回はその続きから実行できるようにする機能。
 1.0以前は対応していなかったParquetやORCも今は対応している。</p>
 <p><a href="https://www.sambaiz.net/article/203/">AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net</a></p>
-<p>Job bookamarkをEnableにして、DynamicFrameのメソッドを呼ぶ際に<code>transcation_ctx</code>を渡し、<code>job.commit()</code>するとBookmarkされる。</p>
+<p>Job bookamarkをEnableにして、DynamicFrameのメソッドを呼ぶ際に <strong>transcation_ctx</strong> を渡し、<strong>job.commit()</strong> するとBookmarkされる。</p>
 <p><img src="https://www.sambaiz.net/images/333.png" alt="Bookmarkの設定"></p>
 <p>例えば、S3のjsonをソースとするテーブルをカウントして出力する次のjobは、Bookmarkを有効にすると既にカウントしたものが読まれなくなるため、
 トータルの件数ではなく前回との増分が出力される。
@@ -512,15 +512,15 @@ df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span
 df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>mode(<span style="color:#f1fa8c">&#34;append&#34;</span>)<span style="color:#ff79c6">.</span>csv(
     <span style="color:#f1fa8c">&#34;s3://*****/test-table-summary&#34;</span>, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
 job<span style="color:#ff79c6">.</span>commit()
-</code></pre></div><p>前回との差分がなくDynamicFrameの中身が空の場合、DataFrameのスキーマも空となってSQLでフィールドを参照すると<code>cannnot resolve *** given input columns</code>になる問題があって、これを回避するために <code>if df.count() == 0</code> でチェックしたりする必要がある。</p>
+</code></pre></div><p>前回との差分がなくDynamicFrameの中身が空の場合、DataFrameのスキーマも空となってSQLでフィールドを参照すると cannnot resolve *** given input columns になる問題があって、これを回避するために if df.count() == 0 でチェックしたりする必要がある。</p>
 <p>日付によるパーティションを切ってクエリで日付を指定しても、
 Bookmarkの判定では絞られないので次のようなログが大量に出て全てのパーティションが探索される。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">INFO [Thread-5] hadoop.PartitionFilesListerUsingBookmark (FileSystemBookmark.scala:apply(356)): After initial job bookmarks filter, processing 0.00% of 592 files in partition DynamicFramePartition(com.amazonaws.services.glue.DynamicRecord@218398ba,s3://hogefuga/log/2021/09/02/11/,1630504916000).
 </code></pre></div><p>これによりタイムライン上ではExecutorが起動してからTaskの開始までに時間がかかっているように見える。</p>
 <p><a href="https://www.sambaiz.net/article/382/">SparkのWeb UIでJobのStageとExecutorによるTask分散、SQLのplanを確認する - sambaiz-net</a></p>
 <p><img src="https://www.sambaiz.net/images/333-2.png" alt="Web UIのタイムライン"></p>
-<p><code>from_catalog()</code>に次のパラメータを渡すと<a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-etl-partitions.html">対象のパーティションを絞ることができる</a>。<code>additional_options</code>は<code>getPartition()</code>する際に絞られるのでパーティションの数が膨大な場合に効率が良いが、テーブルに<a href="https://docs.aws.amazon.com/glue/latest/dg/partition-indexes.html">パーティションインデックス</a>が貼られている必要があって、パーティションのキーをdateにしていたりすると貼ることができない。
-<code>pushDownPredicate</code>の方は<code>getPartition()</code>後に絞られる。これらは併用することもできる。</p>
+<p>from_catalog() に次のパラメータを渡すと<a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-etl-partitions.html">対象のパーティションを絞ることができる</a>。<strong>additional_options</strong> は getPartition() する際に絞られるのでパーティションの数が膨大な場合に効率が良いが、テーブルに<a href="https://docs.aws.amazon.com/glue/latest/dg/partition-indexes.html">パーティションインデックス</a>が貼られている必要があって、パーティションのキーをdateにしていたりすると貼ることができない。
+<strong>pushDownPredicate</strong> の方は getPartition() 後に絞られる。これらは併用することもできる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">pushDownPredicate<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;day&gt;=10 and customer_id like &#39;10%&#39;&#34;</span>,
 additional_options<span style="color:#ff79c6">=</span>{<span style="color:#f1fa8c">&#34;catalogPartitionPredicate&#34;</span>:<span style="color:#f1fa8c">&#34;year=&#39;2021&#39; and month=&#39;06&#39;&#34;</span>}
 </code></pre></div>

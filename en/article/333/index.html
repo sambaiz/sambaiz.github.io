@@ -486,7 +486,7 @@
       <p><a href="https://docs.aws.amazon.com/glue/latest/dg/monitor-continuations.html">Job Bookmark</a> of AWS Glue is a feature that saves what records are processed, and prevent it from being executed next time.
 Parquet and ORC, which were not supported before 1.0, are now supported.</p>
 <p><a href="https://www.sambaiz.net/article/203/">AWS GlueでCSVを加工しParquetに変換してパーティションを切りAthenaで参照する - sambaiz-net</a></p>
-<p>Bookmark is available if Job Bookmark is enabled, call DynamicFrame methods with a <code>transaction_ctx</code>, and call <code>job.commit()</code>.</p>
+<p>Bookmark is available if Job Bookmark is enabled, call DynamicFrame methods with a <strong>transaction_ctx</strong>, and call <strong>job.commit()</strong>.</p>
 <p><img src="https://www.sambaiz.net/images/333.png" alt="Bookmark settings"></p>
 <p>For example, following job that counts a table and outputs it doesn&rsquo;t count records previously counted if Bookmark is available, so it outputs not total but difference count from the previous time.
 The lag before it can be referenced due to S3 eventual consistency is also taken into account.
@@ -510,15 +510,15 @@ df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span
 df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>mode(<span style="color:#f1fa8c">&#34;append&#34;</span>)<span style="color:#ff79c6">.</span>csv(
     <span style="color:#f1fa8c">&#34;s3://*****/test-table-summary&#34;</span>, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
 job<span style="color:#ff79c6">.</span>commit()
-</code></pre></div><p>If there is no differences from the previous time so that the contents of DynamicFrame are empty, the schema of DataFrame is also empty. Therefore if the field is referenced in SQL, <code>cannnot resolve *** given input columns</code> error is occured. To resolve this problem, a check like <code>if df.count() == 0</code> is needed.</p>
+</code></pre></div><p>If there is no differences from the previous time so that the contents of DynamicFrame are empty, the schema of DataFrame is also empty. Therefore if the field is referenced in SQL, &ldquo;cannnot resolve *** given input columns&rdquo; error is occured. To resolve this problem, a check like &ldquo;if df.count() == 0&rdquo; is needed.</p>
 <p>Even if the data is partitioned by date and specified the date in the query, since it cannot be narrowed down in Bookmark, the following logs are output a lot and all partitions are searched.</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">INFO [Thread-5] hadoop.PartitionFilesListerUsingBookmark (FileSystemBookmark.scala:apply(356)): After initial job bookmarks filter, processing 0.00% of 592 files in partition DynamicFramePartition(com.amazonaws.services.glue.DynamicRecord@218398ba,s3://hogefuga/log/2021/09/02/11/,1630504916000).
 </code></pre></div><p>As a result, it takes time from adding Executors to starting the Task on the timeline.</p>
 <p><a href="https://www.sambaiz.net/en/article/382/">Spark Web UI: Monitor Job Stages, Tasks distribution and SQL plan - sambaiz-net</a></p>
 <p><img src="https://www.sambaiz.net/images/333-2.png" alt="Web UI Timeline"></p>
-<p>Passing the following parameter to <code>from_catalog()</code> will allow you to <a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-etl-partitions.html">narrow down the target partition</a>.
-<code>additional_options</code> is narrowed down when <code>getPartition()</code>, so it is efficient when the number of partitions is huge but the <a href="https://docs.aws.amazon.com/glue/latest/dg/partition-indexes.html">partition index</a> is needed on the table, and it cannot be indexed if the partition key type is date.
-<code>pushDownPredicate</code> is narrowed down after <code>getPartition()</code>. These can also be used together.</p>
+<p>Passing the following parameter to from_catalog() will allow you to <a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-programming-etl-partitions.html">narrow down the target partition</a>.
+<strong>additional_options</strong> is narrowed down when getPartition(), so it is efficient when the number of partitions is huge but the <a href="https://docs.aws.amazon.com/glue/latest/dg/partition-indexes.html">partition index</a> is needed on the table, and it cannot be indexed if the partition key type is date.
+<strong>pushDownPredicate</strong> is narrowed down after getPartition(). These can also be used together.</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">pushDownPredicate<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;day&gt;=10 and customer_id like &#39;10%&#39;&#34;</span>,
 additional_options<span style="color:#ff79c6">=</span>{<span style="color:#f1fa8c">&#34;catalogPartitionPredicate&#34;</span>:<span style="color:#f1fa8c">&#34;year=&#39;2021&#39; and month=&#39;06&#39;&#34;</span>}
 </code></pre></div>
