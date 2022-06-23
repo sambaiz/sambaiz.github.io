@@ -483,7 +483,7 @@
         <time>2022-06-22</time>
         <a class="tag" href='/en/tags/aws/'>aws</a><a class="tag" href='/en/tags/spark/'>spark</a><a class="tag" href='/en/tags/hadoop/'>hadoop</a>
       </div>
-      <p><a href="https://aws.amazon.com/jp/emr/">Amazon EMR</a> is the service that launches a cluster running Spark, Hive, and Presto apps on EC2 or EKS. While Glue, the managed Spark service, can easily run Spark ETL jobs with serverless, EMR has the advantage of excellent cost performance, and also fine-tuning is available but, now that <a href="https://aws.amazon.com/jp/emr/serverless/">EMR Serverless</a> has been released, the difference has narrowed a little. Glue also has handy features such as Connector, which makes various data sources referrable, and Bookmark, which makes processing being executed from the previous continuation. However, if heavy processing is executed repeatedly, it can be expensive, besides, it causes to reach quotas such as DPU, so it would be better to use it properly.</p>
+      <p><a href="https://aws.amazon.com/jp/emr/">Amazon EMR</a> is the service that launches a cluster running Spark, Hive, and Presto apps on EC2 or EKS. While Glue, the managed Spark service, can easily run Spark ETL jobs with serverless, EMR has the advantage of excellent cost performance, and also fine-tuning is available, but now that <a href="https://aws.amazon.com/jp/emr/serverless/">EMR Serverless</a> has been released, the difference has narrowed a little. Glue also has handy features such as Connector, which makes various data sources referrable, and Bookmark, which makes processing being executed from the previous continuation. However, if heavy processing is executed repeatedly, it can be expensive, besides, it causes to reach quotas such as DPU, so it would be better to use it properly.</p>
 <p><a href="https://www.sambaiz.net/en/article/393/">Generate data with TPC-DS Connector for Glue - sambaiz-net</a></p>
 <p><a href="https://www.sambaiz.net/en/article/333/">Enable Job Bookmark of AWS Glue to process from the records following ones executed previously - sambaiz-net</a></p>
 <p>I use the following code this time.</p>
@@ -508,6 +508,16 @@ output_path <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#3
     df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>mode(<span style="color:#f1fa8c">&#39;overwrite&#39;</span>)<span style="color:#ff79c6">.</span>parquet(output_path, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
 
 $ aws s3 cp test<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff79c6">//&lt;</span>bucket<span style="color:#ff79c6">&gt;/</span>
+</code></pre></div><p>IF tables in Glue Data Catalog is referred,
+To refer to the Glue Data Catalog table, apply <a href="https://docs.aws.amazon.com/ja_jp/emr/latest/ReleaseGuide/emr-spark-glue.html">the following settings</a>.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">with</span> SparkSession<span style="color:#ff79c6">.</span>builder \
+    <span style="color:#ff79c6">.</span>appName(<span style="color:#f1fa8c">&#34;testapp&#34;</span>) \
+    <span style="color:#ff79c6">.</span>config(<span style="color:#f1fa8c">&#34;hive.metastore.client.factory.class&#34;</span>, <span style="color:#f1fa8c">&#34;com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory&#34;</span>) \
+    <span style="color:#ff79c6">.</span>enableHiveSupport() \
+    <span style="color:#ff79c6">.</span>getOrCreate() <span style="color:#ff79c6">as</span> spark:
+    df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT * FROM xxxx.yyyyy&#34;</span>)
+</code></pre></div><p>Besides, if there is a partition whose type is Date, &ldquo;Unsupported expression &lsquo;2022 - 05 - 04&rsquo;&rdquo; error <a href="https://github.com/awslabs/aws-glue-data-catalog-client-for-apache-hive-metastore/issues/45">occurs</a>, so it needs to disable partition pruning.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">.</span>config(<span style="color:#f1fa8c">&#34;spark.sql.hive.metastorePartitionPruning&#34;</span>, <span style="color:#f1fa8c">&#34;false&#34;</span>) \
 </code></pre></div><p><a href="https://awscli.amazonaws.com/v2/documentation/api/latest/reference/emr/create-cluster.html">aws emr create-cluster</a> launches a cluster. If &ndash;step and &ndash;auto-terminate are passed, the cluster will be terminated as soon as the process is completed, so it can be disposable.</p>
 <p>Other flags are as follows:</p>
 <ul>
