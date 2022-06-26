@@ -465,9 +465,8 @@
         <time>2020-12-04</time>
         <a class="tag" href='/tags/kubernetes/'>kubernetes</a><a class="tag" href='/tags/istio/'>istio</a><a class="tag" href='/tags/auth/'>auth</a>
       </div>
-      <p>mTLS (Mutual TLS)認証は、<a href="https://tools.ietf.org/html/rfc8705">RFC8705</a>に記載されている、TLSハンドシェイクの際にサーバーからだけではなくクライアントからも証明書を送ることで相互に認証を行う手法。クライアントは事前に自身の秘密鍵で生成したCSRをサーバーに送り、サーバーがルート認証局となって発行した証明書を取得しておく。
-KubernetesではIstioのSidecarを通すことで透過的にmTLS認証を行うことが<a href="https://istio.io/latest/docs/concepts/security/#mutual-tls-authentication">できる</a>。
-実際に試してみる。なお、証明書はEnvoy SDS(secret discovery service) APIのリクエストによってCSRが定期的にistiodに送られて<a href="https://istio.io/latest/docs/concepts/security/#pki">発行、更新される</a>らしい。</p>
+      <p>mTLS (Mutual TLS)認証は<a href="https://tools.ietf.org/html/rfc8705">RFC8705</a>に記載されている、TLSハンドシェイクの際にサーバーからだけではなくクライアントからも証明書を送ることで相互に認証を行う手法。クライアントは事前に自身の秘密鍵で生成したCSRをサーバーに送り、サーバーがルート認証局となって発行した証明書を取得しておく。</p>
+<p>KubernetesではIstioのSidecarを通すことで透過的にmTLS認証を行うことが<a href="https://istio.io/latest/docs/concepts/security/#mutual-tls-authentication">できる</a>。証明書はEnvoy SDS(secret discovery service) APIのリクエストによってCSRが定期的にistiodに送られて<a href="https://istio.io/latest/docs/concepts/security/#pki">発行、更新される</a>らしい。</p>
 <p>Istio OperatorでIstioを<a href="https://istio.io/latest/docs/setup/install/operator/">インストール</a>する。
 以前はHelmで入れていたが今はこれがベストプラクティスのようだ。</p>
 <p><a href="https://www.sambaiz.net/article/185/">IstioをHelmでインストールしてRoutingとTelemetryを行いJaeger/Kialiで確認する - sambaiz-net</a></p>
@@ -539,7 +538,7 @@ EOF
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl label namespace default istio-injection=disabled --overwrite
 $ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never --  -s -o /dev/null -w &#39;%{http_code}\n&#39; my-nginx.sambaiz.svc.cluster.local
 200
-</code></pre></div><p><a href="https://istio.io/latest/docs/reference/config/security/peer_authentication/">PeerAuthentication</a>でmTLSをSTRICTにするとリクエストを受ける際にmTLSが強制される。</p>
+</code></pre></div><p><a href="https://istio.io/latest/docs/reference/config/security/peer_authentication/">PeerAuthentication</a>でmTLSを<strong>STRICT</strong>にするとリクエストを受ける際にmTLSが強制される。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ kubectl apply -f - &lt;&lt;EOF
 <span style="color:#ff79c6">apiVersion</span>: security.istio.io/v1beta1
 <span style="color:#ff79c6">kind</span>: PeerAuthentication
@@ -551,8 +550,8 @@ $ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never 
     <span style="color:#ff79c6">matchLabels</span>:
       <span style="color:#ff79c6">run</span>: my-nginx
   <span style="color:#ff79c6">mtls</span>:
-    <span style="color:#ff79c6">mode</span>: STRICT
-EOF
+<span style="display:block;width:100%;background-color:#3d3f4a">    <span style="color:#ff79c6">mode</span>: STRICT
+</span>EOF
 </code></pre></div><p>Sidecarなしでは弾かれるようになった。Sidecarを入れるとトラフィックが自動で<a href="https://istio.io/latest/docs/tasks/security/authentication/authn-policy/#globally-enabling-istio-mutual-tls-in-strict-mode">mTLSにアップグレード</a>されるので通る。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl label namespace default istio-injection=disabled --overwrite
 $ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never my-nginx.sambaiz.svc.cluster.local
@@ -564,10 +563,9 @@ $ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never 
 200
 </code></pre></div><p>指定したhostにリクエストを送る際に適用される<a href="https://istio.io/latest/docs/reference/config/networking/destination-rule/">DestinationRule</a>の
 <a href="https://istio.io/latest/docs/reference/config/networking/destination-rule/#ClientTLSSettings-TLSmode">TLSMode</a>を
-<code>ISTIO_MUTUAL</code>にするとIstio生成の証明書が、<code>MUTUAL</code>にすると自分で生成した証明書が送られ、<code>DISABLE</code> だとTLS通信を行わなくなる。
-hostにservice名のみを指定した場合そのRuleのnamespaceのものとして解釈されるが、ミスを防ぐために
-<code>my-svc.my-namespace.svc.cluster.local</code>のような<a href="https://kubernetes.io/ja/docs/concepts/services-networking/dns-pod-service/#services">FQDN</a>で指定することが推奨されている。</p>
-<p><code>DISABLE</code>にしてリクエストを送るとSidecarがあっても弾かれる。</p>
+<strong>ISTIO_MUTUAL</strong>にするとIstio生成の証明書が、<strong>MUTUAL</strong>にすると自分で生成した証明書が送られ、<strong>DISABLE</strong>だとTLS通信を行わなくなる。
+hostにservice名のみを指定した場合そのRuleのnamespaceのものとして解釈されるが、ミスを防ぐために my-svc.my-namespace.svc.cluster.local のような<a href="https://kubernetes.io/ja/docs/concepts/services-networking/dns-pod-service/#services">FQDN</a>で指定することが推奨されている。</p>
+<p>DISABLEにしてリクエストを送るとSidecarがあっても弾かれる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ kubectl apply -f - &lt;&lt;EOF
 <span style="color:#ff79c6">apiVersion</span>: networking.istio.io/v1alpha3
 <span style="color:#ff79c6">kind</span>: DestinationRule
@@ -577,8 +575,8 @@ hostにservice名のみを指定した場合そのRuleのnamespaceのものと�
   <span style="color:#ff79c6">host</span>: <span style="color:#f1fa8c">&#34;*.sambaiz.svc.cluster.local&#34;</span>
   <span style="color:#ff79c6">trafficPolicy</span>:
     <span style="color:#ff79c6">tls</span>:
-      <span style="color:#ff79c6">mode</span>: DISABLE
-EOF
+<span style="display:block;width:100%;background-color:#3d3f4a">      <span style="color:#ff79c6">mode</span>: DISABLE
+</span>EOF
 
 $ kubectl label namespace default istio-injection=enabled --overwrite
 $ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never sh
@@ -586,7 +584,7 @@ $ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never 
 <span style="color:#ff79c6">upstream connect error or disconnect/reset before headers. reset reason</span>: connection termination
 
 $ kubectl delete destinationrule sambaiz
-</code></pre></div><p>mTLS認証を行うと証明書のSAN(Subject Alternative Name)に書かれている<a href="https://spiffe.io/">SPIFFE</a> IDが <code>&quot;By=spiffe://cluster.local/ns/foo/sa/httpbin;Hash=&lt;redacted&gt;;Subject=\&quot;\&quot;;URI=spiffe://cluster.local/ns/foo/sa/sleep&quot;</code> のような形式の <code>X-Forwarded-Client-Cert</code> headerで<a href="https://istio.io/latest/docs/tasks/security/authentication/authn-policy/#auto-mutual-tls">渡る</a>。これにより<a href="https://istio.io/latest/docs/reference/config/security/authorization-policy/">AuthorizationPolicy</a>でprincipalsを用いたアクセス制御ができる。</p>
+</code></pre></div><p>mTLS認証を行うと証明書の <strong>SAN(Subject Alternative Name)</strong> に書かれている<a href="https://spiffe.io/">SPIFFE</a> IDが <strong>By=spiffe://cluster.local/ns/foo/sa/httpbin;Hash=<!-- raw HTML omitted -->;Subject=&quot;&quot;;URI=spiffe://cluster.local/ns/foo/sa/sleep</strong> のような形式で <a href="https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/headers#x-forwarded-client-cert">X-Forwarded-Client-Cert</a> headerに乗って<a href="https://istio.io/latest/docs/tasks/security/authentication/authn-policy/#auto-mutual-tls">渡る</a>ので、これを基に<a href="https://istio.io/latest/docs/reference/config/security/authorization-policy/">AuthorizationPolicy</a>によるアクセス制御ができる。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ kubectl apply -f - &lt;&lt;EOF
 <span style="color:#ff79c6">apiVersion</span>: security.istio.io/v1beta1
 <span style="color:#ff79c6">kind</span>: AuthorizationPolicy
@@ -601,12 +599,12 @@ $ kubectl delete destinationrule sambaiz
  <span style="color:#ff79c6">rules</span>:
  - <span style="color:#ff79c6">from</span>:
    - <span style="color:#ff79c6">source</span>:
-       <span style="color:#ff79c6">principals</span>: [<span style="color:#f1fa8c">&#34;cluster.local/ns/default/sa/test-service-account&#34;</span>]
-   <span style="color:#ff79c6">to</span>:
+<span style="display:block;width:100%;background-color:#3d3f4a">       <span style="color:#ff79c6">principals</span>: [<span style="color:#f1fa8c">&#34;cluster.local/ns/default/sa/test-service-account&#34;</span>]
+</span>   <span style="color:#ff79c6">to</span>:
    - <span style="color:#ff79c6">operation</span>:
        <span style="color:#ff79c6">methods</span>: [<span style="color:#f1fa8c">&#34;GET&#34;</span>]
 EOF
-</code></pre></div><p>principalsのServiceAccountを持たないクライアントからのリクエストは弾かれるようになった。</p>
+</code></pre></div><p>AuthorizationPolicyを作成するとprincipalsのServiceAccountを持たないクライアントからのリクエストは弾かれるようになった。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ kubectl run -it --rm=true test-client --image=curlimages/curl --restart=Never sh
 / $ curl my-nginx.sambaiz.svc.cluster.local
 <span style="color:#ff79c6">RBAC</span>: access denied/
