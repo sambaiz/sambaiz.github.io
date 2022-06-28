@@ -483,7 +483,7 @@
         <time>2022-06-22</time>
         <a class="tag" href='/en/tags/aws/'>aws</a><a class="tag" href='/en/tags/spark/'>spark</a><a class="tag" href='/en/tags/hadoop/'>hadoop</a>
       </div>
-      <p><a href="https://aws.amazon.com/jp/emr/">Amazon EMR</a> is the service that launches a cluster installed Spark, Hive, and Presto on EC2 or EKS. While Glue, the managed Spark service, can easily run Spark ETL jobs with serverless, EMR has the advantage of excellent cost performance, and also fine-tuning is available, but now that <a href="https://aws.amazon.com/jp/emr/serverless/">EMR Serverless</a> has been released, the difference has narrowed a little. Glue also has handy features such as <a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>, which doesn&rsquo;t need to be specified the schema, and Bookmark, which makes processing being executed from the previous continuation. However, if heavy processing is executed repeatedly, it can be expensive, besides, it causes to reach quotas such as DPU, so it would be better to use it properly.</p>
+      <p><a href="https://aws.amazon.com/jp/emr/">Amazon EMR</a> is the service that launches a cluster installed Spark, Hive, and Presto on EC2 or EKS. While Glue, the managed Spark service, can easily run Spark ETL jobs with serverless, EMR has the advantage of excellent cost performance by spot instances etc., and also fine-tuning is available, but now that <a href="https://aws.amazon.com/jp/emr/serverless/">EMR Serverless</a> has been released, the difference has narrowed a little. Glue also has handy features such as <a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>, which doesn&rsquo;t need to be specified the schema, and Bookmark, which makes processing being executed from the previous continuation. However, if heavy processing is executed repeatedly, it can be expensive, besides, it causes to reach quotas such as DPU, so it would be better to use it properly.</p>
 <p><a href="https://www.sambaiz.net/en/article/393/">Generate data with TPC-DS Connector for Glue - sambaiz-net</a></p>
 <p><a href="https://www.sambaiz.net/en/article/333/">Enable Job Bookmark of AWS Glue to process from the records following ones executed previously - sambaiz-net</a></p>
 <p>I use the following code this time.</p>
@@ -567,13 +567,41 @@ In EMR, if it is set to &ldquo;client&rdquo;, the Driver Program is <a href="htt
     <span style="color:#f1fa8c">&#34;ClusterId&#34;</span>: <span style="color:#f1fa8c">&#34;j-DND71AFKD661&#34;</span>,
     <span style="color:#f1fa8c">&#34;ClusterArn&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:elasticmapreduce:ap-northeast-1:******:cluster/j-DND71AFKD661&#34;</span>
 <span style="color:#ff79c6">}</span>
-</code></pre></div><p>Step starts to run when the instance is launched.</p>
+</code></pre></div><p>With <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-instance-fleet.html">instance fleets</a> settings instead of &ndash;instance-type and &ndash;instance-count, a cluster, which consists of low-cost spot instances and multiple types of instances, can be launched. Spot instances can suddenly shut down depending on the demand, but even if shuffle blocks are lost due to it, there is a feature to <a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-spark-configure.html#spark-decommissioning">recover</a> with recalculation, so there is no problem.</p>
+
+
+
+
+<div class="img_container"><a href="/en/article/409/images/spotinstance.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/409/images/spotinstance_hu9890bd47d3138610da9203487c09d61b_325219_600x370_fit_lanczos_2.png" width="600" height="291" alt="Pricing history of spot instances">
+</a></div>
+
+
+<ul>
+<li>InstanceTypeConfigs
+<ul>
+<li>BidPrice,BidPriceAsPercentageOfOnDemandPrice: The bid price for each spot instance. If neither is given, the on-demand price is the upper limit.</li>
+<li><a href="https://docs.aws.amazon.com/emr/latest/APIReference/API_InstanceFleetConfig.html">WeightedCapacity</a>: The amount that one instance fills the capacity. The default is 1.</li>
+</ul>
+</li>
+<li>LaunchSpecifications
+<ul>
+<li>TimeoutDurationMinutes, TimeoutAction: Behavior when spot instances cannot be used</li>
+</ul>
+</li>
+</ul>
+<p>&ndash;managed-scaling-policy&rsquo;s UnitType is InstanceFleetUnits.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">--instance-fleets <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>MASTER,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>CORE,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,TargetSpotCapacity<span style="color:#ff79c6">=</span>3,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span>,<span style="color:#f1fa8c">&#39;{InstanceType=m6g.2xlarge,WeightedCapacity=2}&#39;</span><span style="color:#ff79c6">]</span>,LaunchSpecifications<span style="color:#ff79c6">={</span><span style="color:#8be9fd;font-style:italic">SpotSpecification</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{TimeoutDurationMinutes=5,TimeoutAction=SWITCH_TO_ON_DEMAND}&#39;</span><span style="color:#ff79c6">}</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>--managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=InstanceFleetUnits}&#39;</span><span style="color:#f1fa8c">\
+</span></code></pre></div><p>The step starts to run when the instances are launched.</p>
 
 
 
 
 <div class="img_container"><a href="/en/article/409/images/instances.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/409/images/instances_hu7b007391fe461d5eac21adcb472759f7_200277_600x370_fit_lanczos_2.png" width="600" height="184" alt="Instances">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/409/images/instances_hu2f099206671c72a392846590b15c03f1_321446_600x370_fit_lanczos_2.png" width="600" height="292" alt="Instances">
 </a></div>
 
 
@@ -614,8 +642,14 @@ In EMR, if it is set to &ldquo;client&rdquo;, the Driver Program is <a href="htt
 </a></div>
 
 
-<h2 id="references">References</h2>
+<p>Step <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-manage-view-web-log-files.html">logs</a> are stored in the S3 location you specified, <!-- raw HTML omitted -->/<!-- raw HTML omitted -->/steps/<!-- raw HTML omitted -->/(stdout|stderr).gz, <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-debugging.html#emr-plan-debugging-logs-archive">every 5 minutes</a>, so if you define a function like the following, you can see the logs without accessing the management console.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ brew install watch
+$ <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;function emrlog () { watch -n 300 \&#34;aws emr describe-cluster --cluster-id \${1} | jq &#39;.Cluster | .LogUri + .Id&#39; | sed -e &#39;s/s3n:/s3:/g&#39; | xargs -I{} aws s3 cp \&#34;{}/steps/\$(aws emr list-steps --cluster-id \${1} | jq -r &#39;.Steps[] | select(.Name == \&#34;\${2:-spark-submit}\&#34;) | .Id&#39;)/\${3:-stdout}.gz\&#34; - | gunzip -c | tail -n 20\&#34;; }&#34;</span> &gt;&gt; ~/.bash_profile
+$ <span style="color:#8be9fd;font-style:italic">source</span> ~/.bash_profile
+$ emrlog j-DND71AFKD661
+</code></pre></div><h2 id="references">References</h2>
 <p><a href="https://pages.awscloud.com/rs/112-TZM-766/images/AWS_ETL_services_tips_202107.pdf">AWS で実践！Analytics Modernization ～ETL 編～ AWS ETL サービス適材適所選択のコツ</a></p>
+<p><a href="https://developers.cyberagent.co.jp/blog/archives/19150/">Instance Fleetsを使って集計クラスタのランニングコストを1/4にした | CyberAgent Developers Blog</a></p>
 
     </div>
     <div class="share">

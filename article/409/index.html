@@ -484,7 +484,7 @@
         <a class="tag" href='/tags/aws/'>aws</a><a class="tag" href='/tags/spark/'>spark</a><a class="tag" href='/tags/hadoop/'>hadoop</a>
       </div>
       <p><a href="https://aws.amazon.com/jp/emr/">Amazon EMR</a>はEC2やEKS上にSparkやHive, Prestoのクラスタを構築するサービス。
-SparkのマネージドサービスであるGlueと比べると、Glueはサーバーレスで手軽にSparkによるETL処理をを行えるのに対して、EMRはコストパフォーマンスに優れ詳細なチューニングを行うことができるという特長があるが、<a href="https://aws.amazon.com/jp/emr/serverless/">EMR Serverless</a>がリリースされたのでその差は少し縮まっているように感じる。Glueにはスキーマを指定する必要がない<a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>や前の続きから実行できるBookmarkといった便利な機能もあるが、重い処理を立て続けに実行するとコストが嵩んだりDPUなどのクォータに引っかかることもあるので適宜使い分けていきたい。</p>
+SparkのマネージドサービスであるGlueと比べると、Glueはサーバーレスで手軽にSparkによるETL処理をを行えるのに対して、EMRはスポットインスタンスなどを利用したコストパフォーマンスの良さと詳細なチューニングを行うことができるという特長があるが、<a href="https://aws.amazon.com/jp/emr/serverless/">EMR Serverless</a>がリリースされたのでその差は少し縮まっているように感じる。Glueにはスキーマを指定する必要がない<a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>や前の続きから実行できるBookmarkといった便利な機能もあるが、重い処理を立て続けに実行するとコストが嵩んだりDPUなどのクォータに引っかかることもあるので適宜使い分けていきたい。</p>
 <p><a href="https://www.sambaiz.net/article/333/">AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net</a></p>
 <p>今回は次のアプリケーションを実行する。</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py">$ cat test<span style="color:#ff79c6">.</span>py
@@ -566,13 +566,42 @@ $ aws s3 cp test<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff
     <span style="color:#f1fa8c">&#34;ClusterId&#34;</span>: <span style="color:#f1fa8c">&#34;j-DND71AFKD661&#34;</span>,
     <span style="color:#f1fa8c">&#34;ClusterArn&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:elasticmapreduce:ap-northeast-1:******:cluster/j-DND71AFKD661&#34;</span>
 <span style="color:#ff79c6">}</span>
-</code></pre></div><p>インスタンスが立ち上がるとstepの実行が始まる。</p>
+</code></pre></div><p>また、&ndash;instance-type や　&ndash;instance-count の代わりに<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-instance-fleet.html">instance fleets</a>の設定を行うことでコストが低いスポットインスタンスや複数のインスタンスタイプを混ぜたクラスタを構築することができる。
+スポットインスタンスはオンデマンドの需要によって突然シャットダウンすることがあるが、もしそれによってシャッフルブロックが失われても再計算して<a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-spark-configure.html#spark-decommissioning">回復する</a>仕組みがあるので特に問題は起きない。</p>
+
+
+
+
+<div class="img_container"><a href="/article/409/images/spotinstance.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/spotinstance_hu9890bd47d3138610da9203487c09d61b_325219_600x370_fit_lanczos_2.png" width="600" height="291" alt="スポットインスタンスのPricing history">
+</a></div>
+
+
+<ul>
+<li>InstanceTypeConfigs
+<ul>
+<li>BidPrice,BidPriceAsPercentageOfOnDemandPrice: スポットインスタンスへの入札額。いずれも渡さないとオンデマンドの価格が上限となる。</li>
+<li><a href="https://docs.aws.amazon.com/emr/latest/APIReference/API_InstanceFleetConfig.html">WeightedCapacity</a>: 1インスタンスがキャパシティを埋める量。デフォルトは1。</li>
+</ul>
+</li>
+<li>LaunchSpecifications
+<ul>
+<li>TimeoutDurationMinutes, TimeoutAction: スポットインスタンスが使えなかった場合の挙動</li>
+</ul>
+</li>
+</ul>
+<p>&ndash;managed-scaling-policy の UnitType は InstanceFleetUnits となる。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">--instance-fleets <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>MASTER,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>CORE,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,TargetSpotCapacity<span style="color:#ff79c6">=</span>3,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span>,<span style="color:#f1fa8c">&#39;{InstanceType=m6g.2xlarge,WeightedCapacity=2}&#39;</span><span style="color:#ff79c6">]</span>,LaunchSpecifications<span style="color:#ff79c6">={</span><span style="color:#8be9fd;font-style:italic">SpotSpecification</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{TimeoutDurationMinutes=5,TimeoutAction=SWITCH_TO_ON_DEMAND}&#39;</span><span style="color:#ff79c6">}</span> <span style="color:#f1fa8c">\
+</span><span style="color:#f1fa8c"></span>--managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=InstanceFleetUnits}&#39;</span><span style="color:#f1fa8c">\
+</span></code></pre></div><p>インスタンスが立ち上がるとstepの実行が始まる。</p>
 
 
 
 
 <div class="img_container"><a href="/article/409/images/instances.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/instances_hu7b007391fe461d5eac21adcb472759f7_200277_600x370_fit_lanczos_2.png" width="600" height="184" alt="インスタンス">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/instances_hu2f099206671c72a392846590b15c03f1_321446_600x370_fit_lanczos_2.png" width="600" height="292" alt="インスタンス">
 </a></div>
 
 
@@ -613,8 +642,14 @@ $ aws s3 cp test<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff
 </a></div>
 
 
-<h2 id="参考">参考</h2>
+<p>stepの<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-manage-view-web-log-files.html">ログ</a>は<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-debugging.html#emr-plan-debugging-logs-archive">5分ごと</a>にS3の <!-- raw HTML omitted -->/<!-- raw HTML omitted -->/steps/<!-- raw HTML omitted -->/(stdout|stderr).gz に保存されるので次のような関数を定義しておくとコンソールに見に行かなくて済む。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ brew install watch
+$ <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;function emrlog () { watch -n 300 \&#34;aws emr describe-cluster --cluster-id \${1} | jq &#39;.Cluster | .LogUri + .Id&#39; | sed -e &#39;s/s3n:/s3:/g&#39; | xargs -I{} aws s3 cp \&#34;{}/steps/\$(aws emr list-steps --cluster-id \${1} | jq -r &#39;.Steps[] | select(.Name == \&#34;\${2:-spark-submit}\&#34;) | .Id&#39;)/\${3:-stdout}.gz\&#34; - | gunzip -c | tail -n 20\&#34;; }&#34;</span> &gt;&gt; ~/.bash_profile
+$ <span style="color:#8be9fd;font-style:italic">source</span> ~/.bash_profile
+$ emrlog j-DND71AFKD661
+</code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://pages.awscloud.com/rs/112-TZM-766/images/AWS_ETL_services_tips_202107.pdf">AWS で実践！Analytics Modernization ～ETL 編～ AWS ETL サービス適材適所選択のコツ</a></p>
+<p><a href="https://developers.cyberagent.co.jp/blog/archives/19150/">Instance Fleetsを使って集計クラスタのランニングコストを1/4にした | CyberAgent Developers Blog</a></p>
 
     </div>
     <div class="share">
