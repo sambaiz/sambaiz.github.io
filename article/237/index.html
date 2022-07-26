@@ -466,165 +466,165 @@
         <a class="tag" href='/tags/infra/'>infra</a><a class="tag" href='/tags/linux/'>linux</a>
       </div>
       <p>LinuxのNamespaceはuidやpid、networkなどを分離できる機能で、Dockerなどのコンテナ技術で使われている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback"># Amazon Linux 2 (ami-0ff21806645c5e492)
-$ uname -r
-4.14.138-114.102.amzn2.x86_64
-</code></pre></div><h2 id="user-namespaceでrootになる">User NamespaceでRootになる</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span># Amazon Linux 2 (ami-0ff21806645c5e492)
+</span></span><span style="display:flex;"><span>$ uname -r
+</span></span><span style="display:flex;"><span>4.14.138-114.102.amzn2.x86_64
+</span></span></code></pre></div><h2 id="user-namespaceでrootになる">User NamespaceでRootになる</h2>
 <p>rootでないと正常終了しないコードを書いた。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ cat /tmp/root_only.sh
-<span style="color:#6272a4">#!/bin/sh</span>
-
-<span style="color:#ff79c6">if</span> <span style="color:#ff79c6">[</span> <span style="color:#f1fa8c">&#34;</span><span style="color:#ff79c6">$(</span>id -u<span style="color:#ff79c6">)</span><span style="color:#f1fa8c">&#34;</span> !<span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;0&#34;</span> <span style="color:#ff79c6">]</span>; <span style="color:#ff79c6">then</span>
-  <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;you are not root...&#34;</span>
-  <span style="color:#8be9fd;font-style:italic">exit</span> <span style="color:#bd93f9">1</span>
-<span style="color:#ff79c6">fi</span>
-<span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;you are root!&#34;</span>
-</code></pre></div><p>実際ec2-userでは<code>exit 1</code>になる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ id -u
-1000
-
-$ sh /tmp/root_only.sh; echo $?
-you are not root...
-1
-</code></pre></div><p>User Namespaceを作る。rootでないとそれ以外のNamespaceは作れない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ unshare --net
-unshare: unshare failed: Operation not permitted
-
-$ unshare --user
-$ id
-uid=65534(nfsnobody) gid=65534(nfsnobody) groups=65534(nfsnobody)
-
-$ echo $$
-3537
-</code></pre></div><p>他のshellを開き、Namespaceの外側からuid_mapを書き込む。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ cat /tmp/root_only.sh
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#!/bin/sh</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">if</span> <span style="color:#ff79c6">[</span> <span style="color:#f1fa8c">&#34;</span><span style="color:#ff79c6">$(</span>id -u<span style="color:#ff79c6">)</span><span style="color:#f1fa8c">&#34;</span> !<span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;0&#34;</span> <span style="color:#ff79c6">]</span>; <span style="color:#ff79c6">then</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;you are not root...&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd;font-style:italic">exit</span> <span style="color:#bd93f9">1</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">fi</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;you are root!&#34;</span>
+</span></span></code></pre></div><p>実際ec2-userでは<code>exit 1</code>になる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ id -u
+</span></span><span style="display:flex;"><span>1000
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ sh /tmp/root_only.sh; echo $?
+</span></span><span style="display:flex;"><span>you are not root...
+</span></span><span style="display:flex;"><span>1
+</span></span></code></pre></div><p>User Namespaceを作る。rootでないとそれ以外のNamespaceは作れない。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ unshare --net
+</span></span><span style="display:flex;"><span>unshare: unshare failed: Operation not permitted
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ unshare --user
+</span></span><span style="display:flex;"><span>$ id
+</span></span><span style="display:flex;"><span>uid=65534(nfsnobody) gid=65534(nfsnobody) groups=65534(nfsnobody)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ echo $$
+</span></span><span style="display:flex;"><span>3537
+</span></span></code></pre></div><p>他のshellを開き、Namespaceの外側からuid_mapを書き込む。
 外側の1000から始まるuidを、このNamespaceの0から始まるuidに範囲1でマッピングする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback"># Namespace外
-$ echo &#39;0 1000 1&#39; &gt; /proc/3537/uid_map
-</code></pre></div><p>要するに、uid=1000だったec2-userは、このNamespaceではuid=0(root)になる。上のコードも正常終了した。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ id -u
-0
-
-$ sh /tmp/root_only.sh 
-you are root!
-0
-</code></pre></div><p>権限昇格してしまったように見えるかもしれないが、もちろんそんなことはなくて元々のユーザーのパーミッションでできなかったことはできない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ touch /root_power
-touch: cannot touch &#39;/root_power&#39;: Permission denied
-</code></pre></div><p>Namespace内で作ったファイルをNamespace外で見ると、元々のユーザーで作ったことになっている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ touch /home/ec2-user/fake_root_power
-$ ls -l /home/ec2-user/
-total 0
--rw-rw-r-- 1 root nfsnobody 0 Sep  5 11:48 fake_root_power
-
-# Namespace外
-$ ls -l /home/ec2-user/
-total 0
--rw-rw-r-- 1 ec2-user ec2-user 0 Sep  5 11:48 fake_root_power
-</code></pre></div><h2 id="network-namespaceを作りvethでnamespace外と通信できるようにする">Network Namespaceを作りvethでNamespace外と通信できるようにする</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span># Namespace外
+</span></span><span style="display:flex;"><span>$ echo &#39;0 1000 1&#39; &gt; /proc/3537/uid_map
+</span></span></code></pre></div><p>要するに、uid=1000だったec2-userは、このNamespaceではuid=0(root)になる。上のコードも正常終了した。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ id -u
+</span></span><span style="display:flex;"><span>0
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ sh /tmp/root_only.sh 
+</span></span><span style="display:flex;"><span>you are root!
+</span></span><span style="display:flex;"><span>0
+</span></span></code></pre></div><p>権限昇格してしまったように見えるかもしれないが、もちろんそんなことはなくて元々のユーザーのパーミッションでできなかったことはできない。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ touch /root_power
+</span></span><span style="display:flex;"><span>touch: cannot touch &#39;/root_power&#39;: Permission denied
+</span></span></code></pre></div><p>Namespace内で作ったファイルをNamespace外で見ると、元々のユーザーで作ったことになっている。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ touch /home/ec2-user/fake_root_power
+</span></span><span style="display:flex;"><span>$ ls -l /home/ec2-user/
+</span></span><span style="display:flex;"><span>total 0
+</span></span><span style="display:flex;"><span>-rw-rw-r-- 1 root nfsnobody 0 Sep  5 11:48 fake_root_power
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span># Namespace外
+</span></span><span style="display:flex;"><span>$ ls -l /home/ec2-user/
+</span></span><span style="display:flex;"><span>total 0
+</span></span><span style="display:flex;"><span>-rw-rw-r-- 1 ec2-user ec2-user 0 Sep  5 11:48 fake_root_power
+</span></span></code></pre></div><h2 id="network-namespaceを作りvethでnamespace外と通信できるようにする">Network Namespaceを作りvethでNamespace外と通信できるようにする</h2>
 <p>ではrootだからといって特に何もできないのかというとそんなことはなく、User以外のNamespaceが作れる。</p>
 <p>Namespace外のネットワークはこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ip addr 
-1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-    inet6 ::1/128 scope host 
-       valid_lft forever preferred_lft forever
-2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 9001 qdisc pfifo_fast state UP group default qlen 1000
-    link/ether 06:fa:1d:4e:ec:92 brd ff:ff:ff:ff:ff:ff
-    inet 172.31.14.149/20 brd 172.31.15.255 scope global dynamic eth0
-       valid_lft 3449sec preferred_lft 3449sec
-    inet6 fe80::4fa:1dff:fe4e:ec92/64 scope link 
-       valid_lft forever preferred_lft forever
-
-$ ip route show table main
-default via 172.31.0.1 dev eth0 
-169.254.169.254 dev eth0 
-172.31.0.0/20 dev eth0 proto kernel scope link src 172.31.14.149
-</code></pre></div><p>Namespaceを作るとloopbackしかアドレスが表示されなくなり、ルートテーブルが空になる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ unshare --net
-$ ip addr
-1: lo: &lt;LOOPBACK&gt; mtu 65536 qdisc noop state DOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-
-$ ip r
-(empty)
-
-$ curl 8.8.8.8
-curl: (7) Couldn&#39;t connect to server
-
-$ echo $$
-1011
-</code></pre></div><p>2つのインタフェース間で通信できるvethのインタフェースを作成し、一つはNamespaceの中に移動する。sudoが必要。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback"># Namespace外
-$ sudo ip link add name veth0-host type veth peer name veth0-ct
-$ ip link
-...
-3: veth0-ct@veth0-host: &lt;BROADCAST,MULTICAST,M-DOWN&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
-    link/ether b2:09:b8:a4:65:3d brd ff:ff:ff:ff:ff:ff
-4: veth0-host@veth0-ct: &lt;BROADCAST,MULTICAST,M-DOWN&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
-    link/ether 4e:89:1e:aa:84:ec brd ff:ff:ff:ff:ff:ff
-
-$ sudo ip addr add 192.168.10.1/24 dev veth0-host
-$ sudo ip link set up veth0-host
-
-$ sudo ip link set veth0-ct netns 1011
-</code></pre></div><p>インタフェースを立ち上げるとルートテーブルが更新され、Namespace内外が通信できるようになる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ip addr add 192.168.10.2/24 dev veth0-ct
-$ ping 192.168.10.1
-connect: Network is unreachable
-
-$ ip link set up veth0-ct
-$ ip r
-192.168.10.0/24 dev veth0-ct proto kernel scope link src 192.168.10.2
-
-$ ip addr
-1: lo: &lt;LOOPBACK&gt; mtu 65536 qdisc noop state DOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-3: veth0-ct§if4: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP group default qlen 1000
-    link/ether b2:09:b8:a4:65:3d brd ff:ff:ff:ff:ff:ff link-netnsid 0
-    inet 192.168.10.2/24 scope global veth0-ct
-       valid_lft forever preferred_lft forever
-    inet6 fe80::b009:b8ff:fea4:653d/64 scope link 
-       valid_lft forever preferred_lft forever
-
-$ ping 192.168.10.1
-PING 192.168.10.1 (192.168.10.1) 56(84) bytes of data.
-64 bytes from 192.168.10.1: icmp_seq=1 ttl=255 time=0.027 ms
-64 bytes from 192.168.10.1: icmp_seq=2 ttl=255 time=0.031 ms
-</code></pre></div><h2 id="natしてインターネットと通信できるようにする">NATしてインターネットと通信できるようにする</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ ip addr 
+</span></span><span style="display:flex;"><span>1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+</span></span><span style="display:flex;"><span>    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+</span></span><span style="display:flex;"><span>    inet 127.0.0.1/8 scope host lo
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>    inet6 ::1/128 scope host 
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 9001 qdisc pfifo_fast state UP group default qlen 1000
+</span></span><span style="display:flex;"><span>    link/ether 06:fa:1d:4e:ec:92 brd ff:ff:ff:ff:ff:ff
+</span></span><span style="display:flex;"><span>    inet 172.31.14.149/20 brd 172.31.15.255 scope global dynamic eth0
+</span></span><span style="display:flex;"><span>       valid_lft 3449sec preferred_lft 3449sec
+</span></span><span style="display:flex;"><span>    inet6 fe80::4fa:1dff:fe4e:ec92/64 scope link 
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ip route show table main
+</span></span><span style="display:flex;"><span>default via 172.31.0.1 dev eth0 
+</span></span><span style="display:flex;"><span>169.254.169.254 dev eth0 
+</span></span><span style="display:flex;"><span>172.31.0.0/20 dev eth0 proto kernel scope link src 172.31.14.149
+</span></span></code></pre></div><p>Namespaceを作るとloopbackしかアドレスが表示されなくなり、ルートテーブルが空になる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ unshare --net
+</span></span><span style="display:flex;"><span>$ ip addr
+</span></span><span style="display:flex;"><span>1: lo: &lt;LOOPBACK&gt; mtu 65536 qdisc noop state DOWN group default qlen 1000
+</span></span><span style="display:flex;"><span>    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ip r
+</span></span><span style="display:flex;"><span>(empty)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ curl 8.8.8.8
+</span></span><span style="display:flex;"><span>curl: (7) Couldn&#39;t connect to server
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ echo $$
+</span></span><span style="display:flex;"><span>1011
+</span></span></code></pre></div><p>2つのインタフェース間で通信できるvethのインタフェースを作成し、一つはNamespaceの中に移動する。sudoが必要。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span># Namespace外
+</span></span><span style="display:flex;"><span>$ sudo ip link add name veth0-host type veth peer name veth0-ct
+</span></span><span style="display:flex;"><span>$ ip link
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>3: veth0-ct@veth0-host: &lt;BROADCAST,MULTICAST,M-DOWN&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+</span></span><span style="display:flex;"><span>    link/ether b2:09:b8:a4:65:3d brd ff:ff:ff:ff:ff:ff
+</span></span><span style="display:flex;"><span>4: veth0-host@veth0-ct: &lt;BROADCAST,MULTICAST,M-DOWN&gt; mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+</span></span><span style="display:flex;"><span>    link/ether 4e:89:1e:aa:84:ec brd ff:ff:ff:ff:ff:ff
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ sudo ip addr add 192.168.10.1/24 dev veth0-host
+</span></span><span style="display:flex;"><span>$ sudo ip link set up veth0-host
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ sudo ip link set veth0-ct netns 1011
+</span></span></code></pre></div><p>インタフェースを立ち上げるとルートテーブルが更新され、Namespace内外が通信できるようになる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ ip addr add 192.168.10.2/24 dev veth0-ct
+</span></span><span style="display:flex;"><span>$ ping 192.168.10.1
+</span></span><span style="display:flex;"><span>connect: Network is unreachable
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ip link set up veth0-ct
+</span></span><span style="display:flex;"><span>$ ip r
+</span></span><span style="display:flex;"><span>192.168.10.0/24 dev veth0-ct proto kernel scope link src 192.168.10.2
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ip addr
+</span></span><span style="display:flex;"><span>1: lo: &lt;LOOPBACK&gt; mtu 65536 qdisc noop state DOWN group default qlen 1000
+</span></span><span style="display:flex;"><span>    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+</span></span><span style="display:flex;"><span>3: veth0-ct§if4: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc noqueue state UP group default qlen 1000
+</span></span><span style="display:flex;"><span>    link/ether b2:09:b8:a4:65:3d brd ff:ff:ff:ff:ff:ff link-netnsid 0
+</span></span><span style="display:flex;"><span>    inet 192.168.10.2/24 scope global veth0-ct
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>    inet6 fe80::b009:b8ff:fea4:653d/64 scope link 
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ping 192.168.10.1
+</span></span><span style="display:flex;"><span>PING 192.168.10.1 (192.168.10.1) 56(84) bytes of data.
+</span></span><span style="display:flex;"><span>64 bytes from 192.168.10.1: icmp_seq=1 ttl=255 time=0.027 ms
+</span></span><span style="display:flex;"><span>64 bytes from 192.168.10.1: icmp_seq=2 ttl=255 time=0.031 ms
+</span></span></code></pre></div><h2 id="natしてインターネットと通信できるようにする">NATしてインターネットと通信できるようにする</h2>
 <p>まだインターネットにはルーティングされていないので通信できない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ping 8.8.8.8
-connect: Network is unreachable
-</code></pre></div><p>Namespace外でIPマスカレードする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback"># Namespace外
-$ sudo bash -c &#39;echo 1 &gt; /proc/sys/net/ipv4/ip_forward
-$ sudo iptables --table nat --flush
-$ sudo iptables --table nat --append POSTROUTING --source 192.168.10.0/24 --jump MASQUERADE
-$ sudo iptables --table nat --list
-Chain PREROUTING (policy ACCEPT)
-target     prot opt source               destination         
-
-Chain INPUT (policy ACCEPT)
-target     prot opt source               destination         
-
-Chain OUTPUT (policy ACCEPT)
-target     prot opt source               destination         
-
-Chain POSTROUTING (policy ACCEPT)
-target     prot opt source               destination         
-MASQUERADE  all  --  ip-192-168-10-0.ap-northeast-1.compute.internal/24  anywhere
-</code></pre></div><p>デフォルトゲートウェイをNamespace外のvethにするとインターネットと通信できるようになる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ip route add default via 192.168.10.1
-$ ip r
-default via 192.168.10.1 dev veth0-ct 
-192.168.10.0/24 dev veth0-ct proto kernel scope link src 192.168.10.2
-
-$ ping 8.8.8.8
-PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
-64 bytes from 8.8.8.8: icmp_seq=1 ttl=41 time=2.70 ms
-64 bytes from 8.8.8.8: icmp_seq=2 ttl=41 time=2.78 ms
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ ping 8.8.8.8
+</span></span><span style="display:flex;"><span>connect: Network is unreachable
+</span></span></code></pre></div><p>Namespace外でIPマスカレードする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span># Namespace外
+</span></span><span style="display:flex;"><span>$ sudo bash -c &#39;echo 1 &gt; /proc/sys/net/ipv4/ip_forward
+</span></span><span style="display:flex;"><span>$ sudo iptables --table nat --flush
+</span></span><span style="display:flex;"><span>$ sudo iptables --table nat --append POSTROUTING --source 192.168.10.0/24 --jump MASQUERADE
+</span></span><span style="display:flex;"><span>$ sudo iptables --table nat --list
+</span></span><span style="display:flex;"><span>Chain PREROUTING (policy ACCEPT)
+</span></span><span style="display:flex;"><span>target     prot opt source               destination         
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Chain INPUT (policy ACCEPT)
+</span></span><span style="display:flex;"><span>target     prot opt source               destination         
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Chain OUTPUT (policy ACCEPT)
+</span></span><span style="display:flex;"><span>target     prot opt source               destination         
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Chain POSTROUTING (policy ACCEPT)
+</span></span><span style="display:flex;"><span>target     prot opt source               destination         
+</span></span><span style="display:flex;"><span>MASQUERADE  all  --  ip-192-168-10-0.ap-northeast-1.compute.internal/24  anywhere
+</span></span></code></pre></div><p>デフォルトゲートウェイをNamespace外のvethにするとインターネットと通信できるようになる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ ip route add default via 192.168.10.1
+</span></span><span style="display:flex;"><span>$ ip r
+</span></span><span style="display:flex;"><span>default via 192.168.10.1 dev veth0-ct 
+</span></span><span style="display:flex;"><span>192.168.10.0/24 dev veth0-ct proto kernel scope link src 192.168.10.2
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ping 8.8.8.8
+</span></span><span style="display:flex;"><span>PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+</span></span><span style="display:flex;"><span>64 bytes from 8.8.8.8: icmp_seq=1 ttl=41 time=2.70 ms
+</span></span><span style="display:flex;"><span>64 bytes from 8.8.8.8: icmp_seq=2 ttl=41 time=2.78 ms
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://gihyo.jp/admin/serial/01/linux_containers/0006">第6回　Linuxカーネルのコンテナ機能［5］ ─ネットワーク：LXCで学ぶコンテナ入門 －軽量仮想化環境を実現する技術｜gihyo.jp … 技術評論社</a></p>
 <p><a href="http://gihyo.jp/admin/serial/01/linux_containers/0016">第16回　Linuxカーネルのコンテナ機能 [6] ─ユーザ名前空間：LXCで学ぶコンテナ入門 －軽量仮想化環境を実現する技術｜gihyo.jp … 技術評論社</a></p>
 <p><a href="https://blog.kamijin-fanta.info/2018/12/netns/">LinuxのNetns/veth/Bridge/NATで仮想ネットワーク構築 - kamijin-fanta</a></p>

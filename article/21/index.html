@@ -471,83 +471,83 @@
 ただ、壁紙のようなサイズを生成するような場合にそれを行うと、GPUのメモリを食いつぶしてしまう。
 これを避けるために、画像を小さなタイルに分割し、それぞれ独立に勾配を計算する。
 また、毎回画像をランダムにシフトしていくことで、タイルに見えることを避け、画像全体の品質を向上させる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">tffunc</span>(<span style="color:#ff79c6">*</span>argtypes):
-    <span style="color:#f1fa8c">&#39;&#39;&#39;Helper that transforms TF-graph generating function into a regular one.
-</span><span style="color:#f1fa8c">    See &#34;resize&#34; function below.
-</span><span style="color:#f1fa8c">    &#39;&#39;&#39;</span>
-    placeholders <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">list</span>(<span style="color:#8be9fd;font-style:italic">map</span>(tf<span style="color:#ff79c6">.</span>placeholder, argtypes))
-    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">wrap</span>(f):
-        out <span style="color:#ff79c6">=</span> f(<span style="color:#ff79c6">*</span>placeholders)
-        <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">wrapper</span>(<span style="color:#ff79c6">*</span>args, <span style="color:#ff79c6">**</span>kw):
-            <span style="color:#ff79c6">return</span> out<span style="color:#ff79c6">.</span>eval(<span style="color:#8be9fd;font-style:italic">dict</span>(<span style="color:#8be9fd;font-style:italic">zip</span>(placeholders, args)), session<span style="color:#ff79c6">=</span>kw<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;session&#39;</span>))
-        <span style="color:#ff79c6">return</span> wrapper
-    <span style="color:#ff79c6">return</span> wrap
-
-<span style="color:#6272a4"># Helper function that uses TF to resize an image</span>
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">resize</span>(img, size):
-    img <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>expand_dims(img, <span style="color:#bd93f9">0</span>)
-    <span style="color:#ff79c6">return</span> tf<span style="color:#ff79c6">.</span>image<span style="color:#ff79c6">.</span>resize_bilinear(img, size)[<span style="color:#bd93f9">0</span>,:,:,:]
-resize <span style="color:#ff79c6">=</span> tffunc(np<span style="color:#ff79c6">.</span>float32, np<span style="color:#ff79c6">.</span>int32)(resize)
-
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">calc_grad_tiled</span>(img, t_grad, tile_size<span style="color:#ff79c6">=</span><span style="color:#bd93f9">512</span>):
-    <span style="color:#f1fa8c">&#39;&#39;&#39;Compute the value of tensor t_grad over the image in a tiled way.
-</span><span style="color:#f1fa8c">    Random shifts are applied to the image to blur tile boundaries over
-</span><span style="color:#f1fa8c">    multiple iterations.&#39;&#39;&#39;</span>
-    sz <span style="color:#ff79c6">=</span> tile_size
-    h, w <span style="color:#ff79c6">=</span> img<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>]
-    sx, sy <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>random<span style="color:#ff79c6">.</span>randint(sz, size<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>)
-    img_shift <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>roll(np<span style="color:#ff79c6">.</span>roll(img, sx, <span style="color:#bd93f9">1</span>), sy, <span style="color:#bd93f9">0</span>)
-    grad <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>zeros_like(img)
-    <span style="color:#ff79c6">for</span> y <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(<span style="color:#bd93f9">0</span>, <span style="color:#8be9fd;font-style:italic">max</span>(h<span style="color:#ff79c6">-</span>sz<span style="color:#ff79c6">//</span><span style="color:#bd93f9">2</span>, sz),sz):
-        <span style="color:#ff79c6">for</span> x <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(<span style="color:#bd93f9">0</span>, <span style="color:#8be9fd;font-style:italic">max</span>(w<span style="color:#ff79c6">-</span>sz<span style="color:#ff79c6">//</span><span style="color:#bd93f9">2</span>, sz),sz):
-            sub <span style="color:#ff79c6">=</span> img_shift[y:y<span style="color:#ff79c6">+</span>sz,x:x<span style="color:#ff79c6">+</span>sz]
-            g <span style="color:#ff79c6">=</span> sess<span style="color:#ff79c6">.</span>run(t_grad, {t_input:sub})
-            grad[y:y<span style="color:#ff79c6">+</span>sz,x:x<span style="color:#ff79c6">+</span>sz] <span style="color:#ff79c6">=</span> g
-    <span style="color:#ff79c6">return</span> np<span style="color:#ff79c6">.</span>roll(np<span style="color:#ff79c6">.</span>roll(grad, <span style="color:#ff79c6">-</span>sx, <span style="color:#bd93f9">1</span>), <span style="color:#ff79c6">-</span>sy, <span style="color:#bd93f9">0</span>)
-</code></pre></div><p><code>tf.image.resize_bilinear</code>は<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/image.html#resize_bilinear">双線形補間によってリサイズする。</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">tffunc</span>(<span style="color:#ff79c6">*</span>argtypes):
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;&#39;&#39;Helper that transforms TF-graph generating function into a regular one.
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    See &#34;resize&#34; function below.
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#39;&#39;&#39;</span>
+</span></span><span style="display:flex;"><span>    placeholders <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">list</span>(<span style="color:#8be9fd;font-style:italic">map</span>(tf<span style="color:#ff79c6">.</span>placeholder, argtypes))
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">wrap</span>(f):
+</span></span><span style="display:flex;"><span>        out <span style="color:#ff79c6">=</span> f(<span style="color:#ff79c6">*</span>placeholders)
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">wrapper</span>(<span style="color:#ff79c6">*</span>args, <span style="color:#ff79c6">**</span>kw):
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">return</span> out<span style="color:#ff79c6">.</span>eval(<span style="color:#8be9fd;font-style:italic">dict</span>(<span style="color:#8be9fd;font-style:italic">zip</span>(placeholders, args)), session<span style="color:#ff79c6">=</span>kw<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;session&#39;</span>))
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> wrapper
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> wrap
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># Helper function that uses TF to resize an image</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">resize</span>(img, size):
+</span></span><span style="display:flex;"><span>    img <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>expand_dims(img, <span style="color:#bd93f9">0</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> tf<span style="color:#ff79c6">.</span>image<span style="color:#ff79c6">.</span>resize_bilinear(img, size)[<span style="color:#bd93f9">0</span>,:,:,:]
+</span></span><span style="display:flex;"><span>resize <span style="color:#ff79c6">=</span> tffunc(np<span style="color:#ff79c6">.</span>float32, np<span style="color:#ff79c6">.</span>int32)(resize)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">calc_grad_tiled</span>(img, t_grad, tile_size<span style="color:#ff79c6">=</span><span style="color:#bd93f9">512</span>):
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;&#39;&#39;Compute the value of tensor t_grad over the image in a tiled way.
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    Random shifts are applied to the image to blur tile boundaries over
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    multiple iterations.&#39;&#39;&#39;</span>
+</span></span><span style="display:flex;"><span>    sz <span style="color:#ff79c6">=</span> tile_size
+</span></span><span style="display:flex;"><span>    h, w <span style="color:#ff79c6">=</span> img<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>]
+</span></span><span style="display:flex;"><span>    sx, sy <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>random<span style="color:#ff79c6">.</span>randint(sz, size<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>)
+</span></span><span style="display:flex;"><span>    img_shift <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>roll(np<span style="color:#ff79c6">.</span>roll(img, sx, <span style="color:#bd93f9">1</span>), sy, <span style="color:#bd93f9">0</span>)
+</span></span><span style="display:flex;"><span>    grad <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>zeros_like(img)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> y <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(<span style="color:#bd93f9">0</span>, <span style="color:#8be9fd;font-style:italic">max</span>(h<span style="color:#ff79c6">-</span>sz<span style="color:#ff79c6">//</span><span style="color:#bd93f9">2</span>, sz),sz):
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">for</span> x <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(<span style="color:#bd93f9">0</span>, <span style="color:#8be9fd;font-style:italic">max</span>(w<span style="color:#ff79c6">-</span>sz<span style="color:#ff79c6">//</span><span style="color:#bd93f9">2</span>, sz),sz):
+</span></span><span style="display:flex;"><span>            sub <span style="color:#ff79c6">=</span> img_shift[y:y<span style="color:#ff79c6">+</span>sz,x:x<span style="color:#ff79c6">+</span>sz]
+</span></span><span style="display:flex;"><span>            g <span style="color:#ff79c6">=</span> sess<span style="color:#ff79c6">.</span>run(t_grad, {t_input:sub})
+</span></span><span style="display:flex;"><span>            grad[y:y<span style="color:#ff79c6">+</span>sz,x:x<span style="color:#ff79c6">+</span>sz] <span style="color:#ff79c6">=</span> g
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> np<span style="color:#ff79c6">.</span>roll(np<span style="color:#ff79c6">.</span>roll(grad, <span style="color:#ff79c6">-</span>sx, <span style="color:#bd93f9">1</span>), <span style="color:#ff79c6">-</span>sy, <span style="color:#bd93f9">0</span>)
+</span></span></code></pre></div><p><code>tf.image.resize_bilinear</code>は<a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/image.html#resize_bilinear">双線形補間によってリサイズする。</a></p>
 <p><code>numpy.roll</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.roll.html">配列を第三引数axisによってローリングする</a>。
 axisを指定しない場合、フラットなものとして扱われる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">hoge <span style="color:#ff79c6">=</span> [[<span style="color:#bd93f9">0</span>, <span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>],
-        [<span style="color:#bd93f9">3</span>, <span style="color:#bd93f9">4</span>, <span style="color:#bd93f9">5</span>],
-        [<span style="color:#bd93f9">6</span>, <span style="color:#bd93f9">7</span>, <span style="color:#bd93f9">8</span>]]
-
-<span style="color:#ff79c6">print</span>(np<span style="color:#ff79c6">.</span>roll(hoge, <span style="color:#bd93f9">1</span>))
-<span style="color:#6272a4"># [[8 0 1]</span>
-<span style="color:#6272a4">#  [2 3 4]</span>
-<span style="color:#6272a4">#  [5 6 7]]</span>
-
-<span style="color:#ff79c6">print</span>(np<span style="color:#ff79c6">.</span>roll(hoge, <span style="color:#bd93f9">1</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0</span>))
-<span style="color:#6272a4"># [[6 7 8]</span>
-<span style="color:#6272a4">#  [0 1 2]</span>
-<span style="color:#6272a4">#  [3 4 5]]</span>
-
-<span style="color:#ff79c6">print</span>(np<span style="color:#ff79c6">.</span>roll(hoge, <span style="color:#bd93f9">1</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>))
-<span style="color:#6272a4"># [[2 0 1]</span>
-<span style="color:#6272a4">#  [5 3 4]</span>
-<span style="color:#6272a4">#  [8 6 7]]</span>
-</code></pre></div><p>つまり、<code>calc_grad_tiled</code>では、ランダムにローリングして、タイルに分割して勾配を求め、ローリングした分を戻して返している。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>hoge <span style="color:#ff79c6">=</span> [[<span style="color:#bd93f9">0</span>, <span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>],
+</span></span><span style="display:flex;"><span>        [<span style="color:#bd93f9">3</span>, <span style="color:#bd93f9">4</span>, <span style="color:#bd93f9">5</span>],
+</span></span><span style="display:flex;"><span>        [<span style="color:#bd93f9">6</span>, <span style="color:#bd93f9">7</span>, <span style="color:#bd93f9">8</span>]]
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">print</span>(np<span style="color:#ff79c6">.</span>roll(hoge, <span style="color:#bd93f9">1</span>))
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[8 0 1]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [2 3 4]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [5 6 7]]</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">print</span>(np<span style="color:#ff79c6">.</span>roll(hoge, <span style="color:#bd93f9">1</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">0</span>))
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[6 7 8]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [0 1 2]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [3 4 5]]</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">print</span>(np<span style="color:#ff79c6">.</span>roll(hoge, <span style="color:#bd93f9">1</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>))
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[2 0 1]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [5 3 4]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [8 6 7]]</span>
+</span></span></code></pre></div><p>つまり、<code>calc_grad_tiled</code>では、ランダムにローリングして、タイルに分割して勾配を求め、ローリングした分を戻して返している。
 これと、画像サイズを<code>octave_scale</code>倍にしていく以外は前回やったのと基本的に同じだ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">render_multiscale</span>(t_obj, img0<span style="color:#ff79c6">=</span>img_noise, iter_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.0</span>, octave_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">3</span>, octave_scale<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.4</span>):
-    t_score <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_mean(t_obj) <span style="color:#6272a4"># defining the optimization objective</span>
-    t_grad <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>gradients(t_score, t_input)[<span style="color:#bd93f9">0</span>] <span style="color:#6272a4"># behold the power of automatic differentiation!</span>
-
-    img <span style="color:#ff79c6">=</span> img0<span style="color:#ff79c6">.</span>copy()
-    <span style="color:#ff79c6">for</span> octave <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(octave_n):
-        <span style="color:#ff79c6">if</span> octave<span style="color:#ff79c6">&gt;</span><span style="color:#bd93f9">0</span>:
-            hw <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>float32(img<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>])<span style="color:#ff79c6">*</span>octave_scale
-            img <span style="color:#ff79c6">=</span> resize(img, np<span style="color:#ff79c6">.</span>int32(hw))
-        <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(iter_n):
-            g <span style="color:#ff79c6">=</span> calc_grad_tiled(img, t_grad)
-            <span style="color:#6272a4"># normalizing the gradient, so the same step size should work</span>
-            g <span style="color:#ff79c6">/=</span> g<span style="color:#ff79c6">.</span>std()<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1e-8</span>         <span style="color:#6272a4"># for different layers and networks</span>
-            img <span style="color:#ff79c6">+=</span> g<span style="color:#ff79c6">*</span>step
-            <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#39;.&#39;</span>, end <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39; &#39;</span>)
-        clear_output()
-        showarray(visstd(img))
-
-render_multiscale(T(layer)[:,:,:,channel])
-</code></pre></div><h2 id="laplacian-pyramid-gradient-normalization">Laplacian Pyramid Gradient Normalization</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">render_multiscale</span>(t_obj, img0<span style="color:#ff79c6">=</span>img_noise, iter_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.0</span>, octave_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">3</span>, octave_scale<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.4</span>):
+</span></span><span style="display:flex;"><span>    t_score <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_mean(t_obj) <span style="color:#6272a4"># defining the optimization objective</span>
+</span></span><span style="display:flex;"><span>    t_grad <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>gradients(t_score, t_input)[<span style="color:#bd93f9">0</span>] <span style="color:#6272a4"># behold the power of automatic differentiation!</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    img <span style="color:#ff79c6">=</span> img0<span style="color:#ff79c6">.</span>copy()
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> octave <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(octave_n):
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">if</span> octave<span style="color:#ff79c6">&gt;</span><span style="color:#bd93f9">0</span>:
+</span></span><span style="display:flex;"><span>            hw <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>float32(img<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>])<span style="color:#ff79c6">*</span>octave_scale
+</span></span><span style="display:flex;"><span>            img <span style="color:#ff79c6">=</span> resize(img, np<span style="color:#ff79c6">.</span>int32(hw))
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(iter_n):
+</span></span><span style="display:flex;"><span>            g <span style="color:#ff79c6">=</span> calc_grad_tiled(img, t_grad)
+</span></span><span style="display:flex;"><span>            <span style="color:#6272a4"># normalizing the gradient, so the same step size should work</span>
+</span></span><span style="display:flex;"><span>            g <span style="color:#ff79c6">/=</span> g<span style="color:#ff79c6">.</span>std()<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1e-8</span>         <span style="color:#6272a4"># for different layers and networks</span>
+</span></span><span style="display:flex;"><span>            img <span style="color:#ff79c6">+=</span> g<span style="color:#ff79c6">*</span>step
+</span></span><span style="display:flex;"><span>            <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#39;.&#39;</span>, end <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39; &#39;</span>)
+</span></span><span style="display:flex;"><span>        clear_output()
+</span></span><span style="display:flex;"><span>        showarray(visstd(img))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>render_multiscale(T(layer)[:,:,:,channel])
+</span></span></code></pre></div><h2 id="laplacian-pyramid-gradient-normalization">Laplacian Pyramid Gradient Normalization</h2>
 <p>結果の画像は、高い周波数(ピクセルの変化の度合が高い)が多く含まれている。
 これを改善するための一つの方法として、毎回画像をぼかし、高周波数を抑え、画像を滑らかにするものがある。
 ただ、この方法は良い画像にするためにより多くの繰り返しが必要になってしまう。
@@ -555,136 +555,136 @@ render_multiscale(T(layer)[:,:,:,channel])
 <p>ラプラシアンピラミッドというのは、ガウシアンピラミッドにおける、ある解像度の画像と、
 その一つレベルの高い(解像度1/2 * 1/2 = 1/4)画像をアップサンプルしたものの差分だ。</p>
 <p><a href="http://labs.eecs.tottori-u.ac.jp/sd/Member/oyamada/OpenCV/html/py_tutorials/py_imgproc/py_pyramids/py_pyramids.html">画像ピラミッド — OpenCV-Python Tutorials 1 documentation</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">k <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>float32([<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">4</span>,<span style="color:#bd93f9">6</span>,<span style="color:#bd93f9">4</span>,<span style="color:#bd93f9">1</span>])
-k <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>outer(k, k)
-<span style="color:#6272a4"># [[  1.   4.   6.   4.   1.]</span>
-<span style="color:#6272a4">#  [  4.  16.  24.  16.   4.]</span>
-<span style="color:#6272a4">#  [  6.  24.  36.  24.   6.]</span>
-<span style="color:#6272a4">#  [  4.  16.  24.  16.   4.]</span>
-<span style="color:#6272a4">#  [  1.   4.   6.   4.   1.]]</span>
-
-k5x5 <span style="color:#ff79c6">=</span> k[:,:,None,None]<span style="color:#ff79c6">/</span>k<span style="color:#ff79c6">.</span>sum()<span style="color:#ff79c6">*</span>np<span style="color:#ff79c6">.</span>eye(<span style="color:#bd93f9">3</span>, dtype<span style="color:#ff79c6">=</span>np<span style="color:#ff79c6">.</span>float32)
-
-<span style="color:#ff79c6">print</span>(<span style="color:#8be9fd;font-style:italic">len</span>(k5x5))
-<span style="color:#6272a4"># 5</span>
-
-<span style="color:#ff79c6">print</span>(k5x5[<span style="color:#bd93f9">0</span>])
-<span style="color:#6272a4"># [[[ 0.00390625  0.          0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.00390625  0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.          0.00390625]]</span>
-
-<span style="color:#6272a4"># [[ 0.015625    0.          0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.015625    0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.          0.015625  ]]</span>
-
-<span style="color:#6272a4"># [[ 0.0234375   0.          0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.0234375   0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.          0.0234375 ]]</span>
-
-<span style="color:#6272a4"># [[ 0.015625    0.          0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.015625    0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.          0.015625  ]]</span>
-
-<span style="color:#6272a4"># [[ 0.00390625  0.          0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.00390625  0.        ]</span>
-<span style="color:#6272a4">#  [ 0.          0.          0.00390625]]]</span>
-</code></pre></div><p><code>numpy.outer</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.outer.html">外積を求める</a>もので、
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>k <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>float32([<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">4</span>,<span style="color:#bd93f9">6</span>,<span style="color:#bd93f9">4</span>,<span style="color:#bd93f9">1</span>])
+</span></span><span style="display:flex;"><span>k <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>outer(k, k)
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[  1.   4.   6.   4.   1.]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [  4.  16.  24.  16.   4.]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [  6.  24.  36.  24.   6.]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [  4.  16.  24.  16.   4.]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [  1.   4.   6.   4.   1.]]</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>k5x5 <span style="color:#ff79c6">=</span> k[:,:,<span style="color:#ff79c6">None</span>,<span style="color:#ff79c6">None</span>]<span style="color:#ff79c6">/</span>k<span style="color:#ff79c6">.</span>sum()<span style="color:#ff79c6">*</span>np<span style="color:#ff79c6">.</span>eye(<span style="color:#bd93f9">3</span>, dtype<span style="color:#ff79c6">=</span>np<span style="color:#ff79c6">.</span>float32)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#8be9fd;font-style:italic">len</span>(k5x5))
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># 5</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">print</span>(k5x5[<span style="color:#bd93f9">0</span>])
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[[ 0.00390625  0.          0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.00390625  0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.          0.00390625]]</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[ 0.015625    0.          0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.015625    0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.          0.015625  ]]</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[ 0.0234375   0.          0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.0234375   0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.          0.0234375 ]]</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[ 0.015625    0.          0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.015625    0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.          0.015625  ]]</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># [[ 0.00390625  0.          0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.00390625  0.        ]</span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">#  [ 0.          0.          0.00390625]]]</span>
+</span></span></code></pre></div><p><code>numpy.outer</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.outer.html">外積を求める</a>もので、
 <code>numpy.eye</code>は<a href="http://docs.scipy.org/doc/numpy/reference/generated/numpy.eye.html">対角線が1で、それ以外は0の2次元行列を返す</a>。
 <code>k</code>を指定すると、対角線の位置を変更できるが、指定していない場合はNxNの単位行列が返ることになる。
 このフィルターで畳み込むことで、ラプラシアンピラミッドの1レベル高い画像に変換できる。
 <code>tf.nn.conv2d_transpose</code>は
 <a href="https://www.tensorflow.org/versions/r0.10/api_docs/python/nn.html#conv2d_transpose">畳み込みの逆処理</a>のようなもので、
 これでアップサンプルした画像と元画像の差分を取って、ラプラシアンピラミッドを生成している。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">lap_split</span>(img):
-    <span style="color:#f1fa8c">&#39;&#39;&#39;Split the image into lo and hi frequency components&#39;&#39;&#39;</span>
-    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#39;split&#39;</span>):
-        lo <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>conv2d(img, k5x5, [<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">1</span>], <span style="color:#f1fa8c">&#39;SAME&#39;</span>)
-        lo2 <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>conv2d_transpose(lo, k5x5<span style="color:#ff79c6">*</span><span style="color:#bd93f9">4</span>, tf<span style="color:#ff79c6">.</span>shape(img), [<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">1</span>])
-        hi <span style="color:#ff79c6">=</span> img<span style="color:#ff79c6">-</span>lo2
-    <span style="color:#ff79c6">return</span> lo, hi
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">lap_split_n</span>(img, n):
-    <span style="color:#f1fa8c">&#39;&#39;&#39;Build Laplacian pyramid with n splits&#39;&#39;&#39;</span>
-    levels <span style="color:#ff79c6">=</span> []
-    <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(n):
-        img, hi <span style="color:#ff79c6">=</span> lap_split(img)
-        levels<span style="color:#ff79c6">.</span>append(hi)
-    levels<span style="color:#ff79c6">.</span>append(img)
-    <span style="color:#ff79c6">return</span> levels[::<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>]
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">lap_merge</span>(levels):
-    <span style="color:#f1fa8c">&#39;&#39;&#39;Merge Laplacian pyramid&#39;&#39;&#39;</span>
-    img <span style="color:#ff79c6">=</span> levels[<span style="color:#bd93f9">0</span>]
-    <span style="color:#ff79c6">for</span> hi <span style="color:#ff79c6">in</span> levels[<span style="color:#bd93f9">1</span>:]:
-        <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#39;merge&#39;</span>):
-            img <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>conv2d_transpose(img, k5x5<span style="color:#ff79c6">*</span><span style="color:#bd93f9">4</span>, tf<span style="color:#ff79c6">.</span>shape(hi), [<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">1</span>]) <span style="color:#ff79c6">+</span> hi
-    <span style="color:#ff79c6">return</span> img
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">normalize_std</span>(img, eps<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1e-10</span>):
-    <span style="color:#f1fa8c">&#39;&#39;&#39;Normalize image by making its standard deviation = 1.0&#39;&#39;&#39;</span>
-    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#39;normalize&#39;</span>):
-        std <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>sqrt(tf<span style="color:#ff79c6">.</span>reduce_mean(tf<span style="color:#ff79c6">.</span>square(img)))
-        <span style="color:#ff79c6">return</span> img<span style="color:#ff79c6">/</span>tf<span style="color:#ff79c6">.</span>maximum(std, eps)
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">lap_normalize</span>(img, scale_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">4</span>):
-    <span style="color:#f1fa8c">&#39;&#39;&#39;Perform the Laplacian pyramid normalization.&#39;&#39;&#39;</span>
-    img <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>expand_dims(img,<span style="color:#bd93f9">0</span>)
-    tlevels <span style="color:#ff79c6">=</span> lap_split_n(img, scale_n)
-    tlevels <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">list</span>(<span style="color:#8be9fd;font-style:italic">map</span>(normalize_std, tlevels))
-    out <span style="color:#ff79c6">=</span> lap_merge(tlevels)
-    <span style="color:#ff79c6">return</span> out[<span style="color:#bd93f9">0</span>,:,:,:]
-</code></pre></div><p><code>lap_normalize</code>で画像からラプラシアンピラミッドを生成し、それぞれで正規化してからマージして元の画像に戻す処理をしている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">render_lapnorm</span>(t_obj, img0<span style="color:#ff79c6">=</span>img_noise, visfunc<span style="color:#ff79c6">=</span>visstd,
-                   iter_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.0</span>, octave_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">3</span>, octave_scale<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.4</span>, lap_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">4</span>):
-    t_score <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_mean(t_obj) <span style="color:#6272a4"># defining the optimization objective</span>
-    t_grad <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>gradients(t_score, t_input)[<span style="color:#bd93f9">0</span>] <span style="color:#6272a4"># behold the power of automatic differentiation!</span>
-    <span style="color:#6272a4"># build the laplacian normalization graph</span>
-    lap_norm_func <span style="color:#ff79c6">=</span> tffunc(np<span style="color:#ff79c6">.</span>float32)(partial(lap_normalize, scale_n<span style="color:#ff79c6">=</span>lap_n))
-
-    img <span style="color:#ff79c6">=</span> img0<span style="color:#ff79c6">.</span>copy()
-    <span style="color:#ff79c6">for</span> octave <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(octave_n):
-        <span style="color:#ff79c6">if</span> octave<span style="color:#ff79c6">&gt;</span><span style="color:#bd93f9">0</span>:
-            hw <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>float32(img<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>])<span style="color:#ff79c6">*</span>octave_scale
-            img <span style="color:#ff79c6">=</span> resize(img, np<span style="color:#ff79c6">.</span>int32(hw))
-        <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(iter_n):
-            g <span style="color:#ff79c6">=</span> calc_grad_tiled(img, t_grad)
-            g <span style="color:#ff79c6">=</span> lap_norm_func(g)
-            img <span style="color:#ff79c6">+=</span> g<span style="color:#ff79c6">*</span>step
-            <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#39;.&#39;</span>, end <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39; &#39;</span>)
-        clear_output()
-        showarray(visfunc(img))
-
-render_lapnorm(T(layer)[:,:,:,channel])
-</code></pre></div><h2 id="deepdream">DeepDream</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">lap_split</span>(img):
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;&#39;&#39;Split the image into lo and hi frequency components&#39;&#39;&#39;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#39;split&#39;</span>):
+</span></span><span style="display:flex;"><span>        lo <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>conv2d(img, k5x5, [<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">1</span>], <span style="color:#f1fa8c">&#39;SAME&#39;</span>)
+</span></span><span style="display:flex;"><span>        lo2 <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>conv2d_transpose(lo, k5x5<span style="color:#ff79c6">*</span><span style="color:#bd93f9">4</span>, tf<span style="color:#ff79c6">.</span>shape(img), [<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">1</span>])
+</span></span><span style="display:flex;"><span>        hi <span style="color:#ff79c6">=</span> img<span style="color:#ff79c6">-</span>lo2
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> lo, hi
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">lap_split_n</span>(img, n):
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;&#39;&#39;Build Laplacian pyramid with n splits&#39;&#39;&#39;</span>
+</span></span><span style="display:flex;"><span>    levels <span style="color:#ff79c6">=</span> []
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(n):
+</span></span><span style="display:flex;"><span>        img, hi <span style="color:#ff79c6">=</span> lap_split(img)
+</span></span><span style="display:flex;"><span>        levels<span style="color:#ff79c6">.</span>append(hi)
+</span></span><span style="display:flex;"><span>    levels<span style="color:#ff79c6">.</span>append(img)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> levels[::<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>]
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">lap_merge</span>(levels):
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;&#39;&#39;Merge Laplacian pyramid&#39;&#39;&#39;</span>
+</span></span><span style="display:flex;"><span>    img <span style="color:#ff79c6">=</span> levels[<span style="color:#bd93f9">0</span>]
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> hi <span style="color:#ff79c6">in</span> levels[<span style="color:#bd93f9">1</span>:]:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#39;merge&#39;</span>):
+</span></span><span style="display:flex;"><span>            img <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>conv2d_transpose(img, k5x5<span style="color:#ff79c6">*</span><span style="color:#bd93f9">4</span>, tf<span style="color:#ff79c6">.</span>shape(hi), [<span style="color:#bd93f9">1</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">2</span>,<span style="color:#bd93f9">1</span>]) <span style="color:#ff79c6">+</span> hi
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> img
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">normalize_std</span>(img, eps<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1e-10</span>):
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;&#39;&#39;Normalize image by making its standard deviation = 1.0&#39;&#39;&#39;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#39;normalize&#39;</span>):
+</span></span><span style="display:flex;"><span>        std <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>sqrt(tf<span style="color:#ff79c6">.</span>reduce_mean(tf<span style="color:#ff79c6">.</span>square(img)))
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> img<span style="color:#ff79c6">/</span>tf<span style="color:#ff79c6">.</span>maximum(std, eps)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">lap_normalize</span>(img, scale_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">4</span>):
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;&#39;&#39;Perform the Laplacian pyramid normalization.&#39;&#39;&#39;</span>
+</span></span><span style="display:flex;"><span>    img <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>expand_dims(img,<span style="color:#bd93f9">0</span>)
+</span></span><span style="display:flex;"><span>    tlevels <span style="color:#ff79c6">=</span> lap_split_n(img, scale_n)
+</span></span><span style="display:flex;"><span>    tlevels <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">list</span>(<span style="color:#8be9fd;font-style:italic">map</span>(normalize_std, tlevels))
+</span></span><span style="display:flex;"><span>    out <span style="color:#ff79c6">=</span> lap_merge(tlevels)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> out[<span style="color:#bd93f9">0</span>,:,:,:]
+</span></span></code></pre></div><p><code>lap_normalize</code>で画像からラプラシアンピラミッドを生成し、それぞれで正規化してからマージして元の画像に戻す処理をしている。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">render_lapnorm</span>(t_obj, img0<span style="color:#ff79c6">=</span>img_noise, visfunc<span style="color:#ff79c6">=</span>visstd,
+</span></span><span style="display:flex;"><span>                   iter_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.0</span>, octave_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">3</span>, octave_scale<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.4</span>, lap_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">4</span>):
+</span></span><span style="display:flex;"><span>    t_score <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_mean(t_obj) <span style="color:#6272a4"># defining the optimization objective</span>
+</span></span><span style="display:flex;"><span>    t_grad <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>gradients(t_score, t_input)[<span style="color:#bd93f9">0</span>] <span style="color:#6272a4"># behold the power of automatic differentiation!</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4"># build the laplacian normalization graph</span>
+</span></span><span style="display:flex;"><span>    lap_norm_func <span style="color:#ff79c6">=</span> tffunc(np<span style="color:#ff79c6">.</span>float32)(partial(lap_normalize, scale_n<span style="color:#ff79c6">=</span>lap_n))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    img <span style="color:#ff79c6">=</span> img0<span style="color:#ff79c6">.</span>copy()
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> octave <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(octave_n):
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">if</span> octave<span style="color:#ff79c6">&gt;</span><span style="color:#bd93f9">0</span>:
+</span></span><span style="display:flex;"><span>            hw <span style="color:#ff79c6">=</span> np<span style="color:#ff79c6">.</span>float32(img<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>])<span style="color:#ff79c6">*</span>octave_scale
+</span></span><span style="display:flex;"><span>            img <span style="color:#ff79c6">=</span> resize(img, np<span style="color:#ff79c6">.</span>int32(hw))
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(iter_n):
+</span></span><span style="display:flex;"><span>            g <span style="color:#ff79c6">=</span> calc_grad_tiled(img, t_grad)
+</span></span><span style="display:flex;"><span>            g <span style="color:#ff79c6">=</span> lap_norm_func(g)
+</span></span><span style="display:flex;"><span>            img <span style="color:#ff79c6">+=</span> g<span style="color:#ff79c6">*</span>step
+</span></span><span style="display:flex;"><span>            <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#39;.&#39;</span>, end <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39; &#39;</span>)
+</span></span><span style="display:flex;"><span>        clear_output()
+</span></span><span style="display:flex;"><span>        showarray(visfunc(img))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>render_lapnorm(T(layer)[:,:,:,channel])
+</span></span></code></pre></div><h2 id="deepdream">DeepDream</h2>
 <p>で、これがDeepDreamのアルゴリズム。
 ラプラシアンピラミッドを生成して、リサイズの際に次のレベルのを足していっている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">render_deepdream</span>(t_obj, img0<span style="color:#ff79c6">=</span>img_noise,
-                     iter_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.5</span>, octave_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">4</span>, octave_scale<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.4</span>):
-    t_score <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_mean(t_obj) <span style="color:#6272a4"># defining the optimization objective</span>
-    t_grad <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>gradients(t_score, t_input)[<span style="color:#bd93f9">0</span>] <span style="color:#6272a4"># behold the power of automatic differentiation!</span>
-
-    <span style="color:#6272a4"># split the image into a number of octaves</span>
-    img <span style="color:#ff79c6">=</span> img0
-    octaves <span style="color:#ff79c6">=</span> []
-    <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(octave_n<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>):
-        hw <span style="color:#ff79c6">=</span> img<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>]
-        lo <span style="color:#ff79c6">=</span> resize(img, np<span style="color:#ff79c6">.</span>int32(np<span style="color:#ff79c6">.</span>float32(hw)<span style="color:#ff79c6">/</span>octave_scale))
-        hi <span style="color:#ff79c6">=</span> img<span style="color:#ff79c6">-</span>resize(lo, hw)
-        img <span style="color:#ff79c6">=</span> lo
-        octaves<span style="color:#ff79c6">.</span>append(hi)
-
-    <span style="color:#6272a4"># generate details octave by octave</span>
-    <span style="color:#ff79c6">for</span> octave <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(octave_n):
-        <span style="color:#ff79c6">if</span> octave<span style="color:#ff79c6">&gt;</span><span style="color:#bd93f9">0</span>:
-            hi <span style="color:#ff79c6">=</span> octaves[<span style="color:#ff79c6">-</span>octave]
-            img <span style="color:#ff79c6">=</span> resize(img, hi<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>])<span style="color:#ff79c6">+</span>hi
-        <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(iter_n):
-            g <span style="color:#ff79c6">=</span> calc_grad_tiled(img, t_grad)
-            img <span style="color:#ff79c6">+=</span> g<span style="color:#ff79c6">*</span>(step <span style="color:#ff79c6">/</span> (np<span style="color:#ff79c6">.</span>abs(g)<span style="color:#ff79c6">.</span>mean()<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1e-7</span>))
-            <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#39;.&#39;</span>,end <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39; &#39;</span>)
-        clear_output()
-        showarray(img<span style="color:#ff79c6">/</span><span style="color:#bd93f9">255.0</span>)
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">render_deepdream</span>(t_obj, img0<span style="color:#ff79c6">=</span>img_noise,
+</span></span><span style="display:flex;"><span>                     iter_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.5</span>, octave_n<span style="color:#ff79c6">=</span><span style="color:#bd93f9">4</span>, octave_scale<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1.4</span>):
+</span></span><span style="display:flex;"><span>    t_score <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>reduce_mean(t_obj) <span style="color:#6272a4"># defining the optimization objective</span>
+</span></span><span style="display:flex;"><span>    t_grad <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>gradients(t_score, t_input)[<span style="color:#bd93f9">0</span>] <span style="color:#6272a4"># behold the power of automatic differentiation!</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4"># split the image into a number of octaves</span>
+</span></span><span style="display:flex;"><span>    img <span style="color:#ff79c6">=</span> img0
+</span></span><span style="display:flex;"><span>    octaves <span style="color:#ff79c6">=</span> []
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(octave_n<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>):
+</span></span><span style="display:flex;"><span>        hw <span style="color:#ff79c6">=</span> img<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>]
+</span></span><span style="display:flex;"><span>        lo <span style="color:#ff79c6">=</span> resize(img, np<span style="color:#ff79c6">.</span>int32(np<span style="color:#ff79c6">.</span>float32(hw)<span style="color:#ff79c6">/</span>octave_scale))
+</span></span><span style="display:flex;"><span>        hi <span style="color:#ff79c6">=</span> img<span style="color:#ff79c6">-</span>resize(lo, hw)
+</span></span><span style="display:flex;"><span>        img <span style="color:#ff79c6">=</span> lo
+</span></span><span style="display:flex;"><span>        octaves<span style="color:#ff79c6">.</span>append(hi)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4"># generate details octave by octave</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> octave <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(octave_n):
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">if</span> octave<span style="color:#ff79c6">&gt;</span><span style="color:#bd93f9">0</span>:
+</span></span><span style="display:flex;"><span>            hi <span style="color:#ff79c6">=</span> octaves[<span style="color:#ff79c6">-</span>octave]
+</span></span><span style="display:flex;"><span>            img <span style="color:#ff79c6">=</span> resize(img, hi<span style="color:#ff79c6">.</span>shape[:<span style="color:#bd93f9">2</span>])<span style="color:#ff79c6">+</span>hi
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(iter_n):
+</span></span><span style="display:flex;"><span>            g <span style="color:#ff79c6">=</span> calc_grad_tiled(img, t_grad)
+</span></span><span style="display:flex;"><span>            img <span style="color:#ff79c6">+=</span> g<span style="color:#ff79c6">*</span>(step <span style="color:#ff79c6">/</span> (np<span style="color:#ff79c6">.</span>abs(g)<span style="color:#ff79c6">.</span>mean()<span style="color:#ff79c6">+</span><span style="color:#bd93f9">1e-7</span>))
+</span></span><span style="display:flex;"><span>            <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#39;.&#39;</span>,end <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39; &#39;</span>)
+</span></span><span style="display:flex;"><span>        clear_output()
+</span></span><span style="display:flex;"><span>        showarray(img<span style="color:#ff79c6">/</span><span style="color:#bd93f9">255.0</span>)
+</span></span></code></pre></div>
     </div>
     <div class="share">
       <div class="cell">

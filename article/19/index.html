@@ -469,95 +469,95 @@
 <h2 id="influxdbhttpsgithubcominfluxdatainfluxdb"><a href="https://github.com/influxdata/influxdb">InfluxDB</a></h2>
 <p>Golangで書かれた時系列データベース。今回使うのは<code>v0.13</code>。前のバージョンと結構違うので注意。</p>
 <p>デフォルトでは無効になっている認証を<a href="https://docs.influxdata.com/influxdb/v0.13/administration/authentication_and_authorization/#set-up-authentication">有効にする</a>ために設定ファイルを編集して設置する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ brew install influxdb # OSX
-$ influxd config &gt; influxdb.conf
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-toml" data-lang="toml">[http]
-  ...
-  auth-enabled = <span style="color:#ff79c6">true</span>
-  ...
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#ff79c6">FROM</span><span style="color:#f1fa8c"> influxdb:0.13</span>
-
-<span style="color:#ff79c6">VOLUME</span><span style="color:#f1fa8c"> /var/lib/influxdb</span>
-<span style="color:#ff79c6">ADD</span> influxdb.conf /
-<span style="color:#ff79c6">ENV</span> INFLUXDB_CONFIG_PATH /influxdb.conf
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker run -p 8083:8083 -p 8086:8086 myinfluxdb
-</code></pre></div><p><code>influxd</code>コマンドや
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ brew install influxdb # OSX
+</span></span><span style="display:flex;"><span>$ influxd config &gt; influxdb.conf
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-toml" data-lang="toml"><span style="display:flex;"><span>[http]
+</span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>  auth-enabled = <span style="color:#ff79c6">true</span>
+</span></span><span style="display:flex;"><span>  ...
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-docker" data-lang="docker"><span style="display:flex;"><span><span style="color:#ff79c6">FROM</span><span style="color:#f1fa8c"> influxdb:0.13</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">VOLUME</span><span style="color:#f1fa8c"> /var/lib/influxdb</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">ADD</span> influxdb.conf /
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">ENV</span> INFLUXDB_CONFIG_PATH /influxdb.conf
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ docker run -p 8083:8083 -p 8086:8086 myinfluxdb
+</span></span></code></pre></div><p><code>influxd</code>コマンドや
 <code>:8083</code>のWebインタフェースの他に
 <code>:8086</code>に<a href="https://docs.influxdata.com/influxdb/v0.13/concepts/api/">HTTP API</a>が用意されている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ curl -i -XPOST http://localhost:<span style="color:#bd93f9">8086</span>/query --data-urlencode <span style="color:#f1fa8c">&#34;q=CREATE USER root WITH PASSWORD &#39;root&#39; WITH ALL PRIVILEGES&#34;</span>
-
-$ curl -i -XPOST http://localhost:<span style="color:#bd93f9">8086</span>/query -u root:root --data-urlencode <span style="color:#f1fa8c">&#34;q=CREATE DATABASE mydb&#34;</span>
-{<span style="color:#ff79c6">&#34;results&#34;</span>:[{}]}
-
-# Line Protocol(https://docs.influxdata.com/influxdb/v<span style="color:#bd93f9">0.13</span>/write_protocols/line/)
-$ curl -i -XPOST &#39;http://localhost:<span style="color:#bd93f9">8086</span>/write?db=mydb&#39; -u root:root --data-binary &#39;cpu_load_short,host=server<span style="color:#bd93f9">01</span>,region=us-west value=<span style="color:#bd93f9">0.64</span> <span style="color:#bd93f9">1434055562000000000</span>&#39;
-(<span style="color:#bd93f9">204</span> No Content)
-
-$ curl -GET &#39;http://localhost:<span style="color:#bd93f9">8086</span>/query?db=mydb&#39; -u root:root --data-urlencode &#39;q=SELECT * FROM <span style="color:#f1fa8c">&#34;cpu_load_short&#34;</span>&#39; | jq
-{
-  <span style="color:#ff79c6">&#34;results&#34;</span>: [
-    {
-      <span style="color:#ff79c6">&#34;series&#34;</span>: [
-        {
-          <span style="color:#ff79c6">&#34;name&#34;</span>: <span style="color:#f1fa8c">&#34;cpu_load_short&#34;</span>,
-          <span style="color:#ff79c6">&#34;columns&#34;</span>: [
-            <span style="color:#f1fa8c">&#34;time&#34;</span>,
-            <span style="color:#f1fa8c">&#34;host&#34;</span>,
-            <span style="color:#f1fa8c">&#34;region&#34;</span>,
-            <span style="color:#f1fa8c">&#34;value&#34;</span>
-          ],
-          <span style="color:#ff79c6">&#34;values&#34;</span>: [
-            [
-              <span style="color:#f1fa8c">&#34;2015-06-11T20:46:02Z&#34;</span>,
-              <span style="color:#f1fa8c">&#34;server01&#34;</span>,
-              <span style="color:#f1fa8c">&#34;us-west&#34;</span>,
-              <span style="color:#bd93f9">0.64</span>
-            ]
-          ]
-        }
-      ]
-    }
-  ]
-}
-</code></pre></div><h2 id="fluent-plugin-influxdbhttpsgithubcomfanglifluent-plugin-influxdb"><a href="https://github.com/fangli/fluent-plugin-influxdb">fluent-plugin-influxdb</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>$ curl -i -XPOST http:<span style="color:#6272a4">//localhost:8086/query --data-urlencode &#34;q=CREATE USER root WITH PASSWORD &#39;root&#39; WITH ALL PRIVILEGES&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>
+</span></span><span style="display:flex;"><span>$ curl -i -XPOST http:<span style="color:#6272a4">//localhost:8086/query -u root:root --data-urlencode &#34;q=CREATE DATABASE mydb&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>{<span style="color:#ff79c6">&#34;results&#34;</span>:[{}]}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span># Line Protocol(https:<span style="color:#6272a4">//docs.influxdata.com/influxdb/v0.13/write_protocols/line/)
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>$ curl -i -XPOST &#39;http:<span style="color:#6272a4">//localhost:8086/write?db=mydb&#39; -u root:root --data-binary &#39;cpu_load_short,host=server01,region=us-west value=0.64 1434055562000000000&#39;
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>(<span style="color:#bd93f9">204</span> No Content)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ curl -GET &#39;http:<span style="color:#6272a4">//localhost:8086/query?db=mydb&#39; -u root:root --data-urlencode &#39;q=SELECT * FROM &#34;cpu_load_short&#34;&#39; | jq
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>{
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;results&#34;</span>: [
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;series&#34;</span>: [
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">&#34;name&#34;</span>: <span style="color:#f1fa8c">&#34;cpu_load_short&#34;</span>,
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">&#34;columns&#34;</span>: [
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#34;time&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#34;host&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#34;region&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#34;value&#34;</span>
+</span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">&#34;values&#34;</span>: [
+</span></span><span style="display:flex;"><span>            [
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;2015-06-11T20:46:02Z&#34;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;server01&#34;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;us-west&#34;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#bd93f9">0.64</span>
+</span></span><span style="display:flex;"><span>            ]
+</span></span><span style="display:flex;"><span>          ]
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>      ]
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>  ]
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="fluent-plugin-influxdbhttpsgithubcomfanglifluent-plugin-influxdb"><a href="https://github.com/fangli/fluent-plugin-influxdb">fluent-plugin-influxdb</a></h2>
 <p>設定はこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;source&gt;
-  type tail
-  path      /usr/src/app/test.log
-  pos_file  /etc/td-agent/test.log.pos
-  tag       something.log
-  format    json
-&lt;/source&gt;
-
-&lt;match *.log&gt;
-  @type     influxdb
-  host      influxdb
-  port      8086
-  dbname    mydb
-  user      root
-  password  root
-&lt;/match&gt;
-</code></pre></div><p>5秒ごとにランダムな値valueのログを出力し続ける。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> twisted.internet <span style="color:#ff79c6">import</span> task, reactor
-<span style="color:#ff79c6">import</span> logging
-<span style="color:#ff79c6">import</span> json
-<span style="color:#ff79c6">import</span> random
-
-INTERVAL <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">5</span> <span style="color:#6272a4"># sec</span>
-logging<span style="color:#ff79c6">.</span>basicConfig(filename<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;test.log&#39;</span>, format<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;</span><span style="color:#f1fa8c">%(message)s</span><span style="color:#f1fa8c">&#39;</span>, level<span style="color:#ff79c6">=</span>logging<span style="color:#ff79c6">.</span>INFO)
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">somethingHappend</span>():
-  data <span style="color:#ff79c6">=</span> {
-    <span style="color:#f1fa8c">&#34;value&#34;</span>: random<span style="color:#ff79c6">.</span>randint(<span style="color:#bd93f9">0</span>, <span style="color:#bd93f9">100</span>),
-    <span style="color:#f1fa8c">&#34;event&#34;</span>: <span style="color:#f1fa8c">&#34;something&#34;</span>
-  }
-  logging<span style="color:#ff79c6">.</span>info(json<span style="color:#ff79c6">.</span>dumps(data))  
-
-<span style="color:#ff79c6">if</span> __name__ <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#39;__main__&#39;</span>:
-    instance <span style="color:#ff79c6">=</span> task<span style="color:#ff79c6">.</span>LoopingCall(somethingHappend)
-    instance<span style="color:#ff79c6">.</span>start(INTERVAL)
-    reactor<span style="color:#ff79c6">.</span>run()
-</code></pre></div><h2 id="grafanahttpgrafanaorg"><a href="http://grafana.org/">Grafana</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>&lt;source&gt;
+</span></span><span style="display:flex;"><span>  type tail
+</span></span><span style="display:flex;"><span>  path      /usr/src/app/test.log
+</span></span><span style="display:flex;"><span>  pos_file  /etc/td-agent/test.log.pos
+</span></span><span style="display:flex;"><span>  tag       something.log
+</span></span><span style="display:flex;"><span>  format    json
+</span></span><span style="display:flex;"><span>&lt;/source&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>&lt;match *.log&gt;
+</span></span><span style="display:flex;"><span>  @type     influxdb
+</span></span><span style="display:flex;"><span>  host      influxdb
+</span></span><span style="display:flex;"><span>  port      8086
+</span></span><span style="display:flex;"><span>  dbname    mydb
+</span></span><span style="display:flex;"><span>  user      root
+</span></span><span style="display:flex;"><span>  password  root
+</span></span><span style="display:flex;"><span>&lt;/match&gt;
+</span></span></code></pre></div><p>5秒ごとにランダムな値valueのログを出力し続ける。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">from</span> twisted.internet <span style="color:#ff79c6">import</span> task, reactor
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> logging
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> json
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> random
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>INTERVAL <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">5</span> <span style="color:#6272a4"># sec</span>
+</span></span><span style="display:flex;"><span>logging<span style="color:#ff79c6">.</span>basicConfig(filename<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;test.log&#39;</span>, <span style="color:#8be9fd;font-style:italic">format</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;</span><span style="color:#f1fa8c">%(message)s</span><span style="color:#f1fa8c">&#39;</span>, level<span style="color:#ff79c6">=</span>logging<span style="color:#ff79c6">.</span>INFO)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">somethingHappend</span>():
+</span></span><span style="display:flex;"><span>  data <span style="color:#ff79c6">=</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;value&#34;</span>: random<span style="color:#ff79c6">.</span>randint(<span style="color:#bd93f9">0</span>, <span style="color:#bd93f9">100</span>),
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;event&#34;</span>: <span style="color:#f1fa8c">&#34;something&#34;</span>
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>  logging<span style="color:#ff79c6">.</span>info(json<span style="color:#ff79c6">.</span>dumps(data))  
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">if</span> __name__ <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#39;__main__&#39;</span>:
+</span></span><span style="display:flex;"><span>    instance <span style="color:#ff79c6">=</span> task<span style="color:#ff79c6">.</span>LoopingCall(somethingHappend)
+</span></span><span style="display:flex;"><span>    instance<span style="color:#ff79c6">.</span>start(INTERVAL)
+</span></span><span style="display:flex;"><span>    reactor<span style="color:#ff79c6">.</span>run()
+</span></span></code></pre></div><h2 id="grafanahttpgrafanaorg"><a href="http://grafana.org/">Grafana</a></h2>
 <p>可視化ツール。データソースとしてInfluxDB、Garaphite、Elasticsearchなどが使える。</p>
 <p><a href="http://play.grafana.org/">Demo</a></p>
 <p>Kibana(+Elasticsearch)だと
@@ -565,15 +565,15 @@ logging<span style="color:#ff79c6">.</span>basicConfig(filename<span style="colo
 こちらは最初からできて手軽。</p>
 <hr>
 <p>これらのDockerイメージを作って、minikubeで立ち上げてみた。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl get pods
-NAME                        READY     STATUS    RESTARTS   AGE
-grafana-1386260931-lq8wh    1/1       Running   0          2m
-influxdb-2543054961-yj1bd   1/1       Running   0          2m
-testapp-532457622-269qo     1/1       Running   0          2m
-
-$ curl -i -XPOST http://192.168.99.100:30005/query?db=mydb -u root:root --data-urlencode &#39;q=SELECT * FROM &#34;something.log&#34; LIMIT 1&#39;
-{&#34;results&#34;:[{&#34;series&#34;:[{&#34;name&#34;:&#34;something.log&#34;,&#34;columns&#34;:[&#34;time&#34;,&#34;event&#34;,&#34;value&#34;],&#34;values&#34;:[[&#34;2016-08-31T08:38:37Z&#34;,&#34;something&#34;,23]]}]}]}
-</code></pre></div><p>http://192.168.99.100:30003</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ kubectl get pods
+</span></span><span style="display:flex;"><span>NAME                        READY     STATUS    RESTARTS   AGE
+</span></span><span style="display:flex;"><span>grafana-1386260931-lq8wh    1/1       Running   0          2m
+</span></span><span style="display:flex;"><span>influxdb-2543054961-yj1bd   1/1       Running   0          2m
+</span></span><span style="display:flex;"><span>testapp-532457622-269qo     1/1       Running   0          2m
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ curl -i -XPOST http://192.168.99.100:30005/query?db=mydb -u root:root --data-urlencode &#39;q=SELECT * FROM &#34;something.log&#34; LIMIT 1&#39;
+</span></span><span style="display:flex;"><span>{&#34;results&#34;:[{&#34;series&#34;:[{&#34;name&#34;:&#34;something.log&#34;,&#34;columns&#34;:[&#34;time&#34;,&#34;event&#34;,&#34;value&#34;],&#34;values&#34;:[[&#34;2016-08-31T08:38:37Z&#34;,&#34;something&#34;,23]]}]}]}
+</span></span></code></pre></div><p>http://192.168.99.100:30003</p>
 <p>admin/adminでログインしてDataSourceに<code>http://192.168.99.100:30005</code>のInfluxDBを設定すると、
 Dashboardにグラフやテーブルなどを置いて表示させることができるようになる。</p>
 
@@ -581,7 +581,7 @@ Dashboardにグラフやテーブルなどを置いて表示させることが�
 
 
 <div class="img_container"><a href="/article/19/images/grafana.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/article/19/images/grafana_hu6e16c2a13021cf71b9a48dd1b8ed1002_81916_600x370_fit_lanczos_2.png" width="600" height="305" alt="grafanaのDashboard">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/19/images/grafana_hu6e16c2a13021cf71b9a48dd1b8ed1002_81916_600x370_fit_lanczos_3.png" width="600" height="305" alt="grafanaのDashboard">
 </a></div>
 
 
@@ -593,12 +593,12 @@ fluentdはv0.14からナノ秒でタイムスタンプを持つようになっ�
 <p>fluent-plugin-influxdbのtime_precisionはデフォルトでs(秒)になっているが、
 これをns(ナノ秒)にしただけでは、(現時点では)秒のままのタイムスタンプが送られるのでうまくいかない。
 そのため、以下のようにナノ秒を取れる場合はそれを使い、そうでない場合は無視するように修正した。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">nstime = time * (10 ** 9) + (defined?(Fluent::EventTime) ? time.nsec : 0)
-</code></pre></div><p><a href="https://github.com/fangli/fluent-plugin-influxdb/pull/62">プルリク</a>は出した。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>nstime = time * (10 ** 9) + (defined?(Fluent::EventTime) ? time.nsec : 0)
+</span></span></code></pre></div><p><a href="https://github.com/fangli/fluent-plugin-influxdb/pull/62">プルリク</a>は出した。
 自分のプラグインはこんな感じで使うことができる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">td-agent-gem install specific_install &amp;&amp; \
-td-agent-gem specific_install https://github.com/sambaiz/fluent-plugin-influxdb.git
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>td-agent-gem install specific_install &amp;&amp; \
+</span></span><span style="display:flex;"><span>td-agent-gem specific_install https://github.com/sambaiz/fluent-plugin-influxdb.git
+</span></span></code></pre></div>
     </div>
     <div class="share">
       <div class="cell">

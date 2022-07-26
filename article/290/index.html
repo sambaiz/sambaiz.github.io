@@ -479,47 +479,47 @@
 <code>model_fn()</code> も後述するElastic Inferenceを使う場合<code>model.pt</code>というファイルをロードするデフォルト実装が使われる。
 ただしその場合モデルが<code>torch.jit.save()</code>で<a href="https://pytorch.org/docs/stable/jit.html">TorchScript</a>として保存してある<a href="https://sagemaker.readthedocs.io/en/stable/frameworks/pytorch/using_pytorch.html#save-the-model">必要がある</a>。</p>
 <p>今回は <code>predict_fn()</code> のみ実装した。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">$ cat inference<span style="color:#ff79c6">.</span>py
-<span style="color:#ff79c6">import</span> torch
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">predict_fn</span>(input_data, model):
-    device <span style="color:#ff79c6">=</span> torch<span style="color:#ff79c6">.</span>device(<span style="color:#f1fa8c">&#39;cuda&#39;</span> <span style="color:#ff79c6">if</span> torch<span style="color:#ff79c6">.</span>cuda<span style="color:#ff79c6">.</span>is_available() <span style="color:#ff79c6">else</span> <span style="color:#f1fa8c">&#39;cpu&#39;</span>)
-    model <span style="color:#ff79c6">=</span> model<span style="color:#ff79c6">.</span>to(device)
-    input_data <span style="color:#ff79c6">=</span> input_data<span style="color:#ff79c6">.</span>to(device)
-    model<span style="color:#ff79c6">.</span>eval()
-    <span style="color:#ff79c6">with</span> torch<span style="color:#ff79c6">.</span>jit<span style="color:#ff79c6">.</span>optimized_execution(True, {<span style="color:#f1fa8c">&#34;target_device&#34;</span>: <span style="color:#f1fa8c">&#34;eia:0&#34;</span>}):
-        output <span style="color:#ff79c6">=</span> model(input_data)
-        <span style="color:#ff79c6">return</span> output<span style="color:#ff79c6">.</span>max(<span style="color:#bd93f9">1</span>)[<span style="color:#bd93f9">1</span>]
-</code></pre></div><h2 id="デプロイ">デプロイ</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>$ cat inference<span style="color:#ff79c6">.</span>py
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> torch
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">predict_fn</span>(input_data, model):
+</span></span><span style="display:flex;"><span>    device <span style="color:#ff79c6">=</span> torch<span style="color:#ff79c6">.</span>device(<span style="color:#f1fa8c">&#39;cuda&#39;</span> <span style="color:#ff79c6">if</span> torch<span style="color:#ff79c6">.</span>cuda<span style="color:#ff79c6">.</span>is_available() <span style="color:#ff79c6">else</span> <span style="color:#f1fa8c">&#39;cpu&#39;</span>)
+</span></span><span style="display:flex;"><span>    model <span style="color:#ff79c6">=</span> model<span style="color:#ff79c6">.</span>to(device)
+</span></span><span style="display:flex;"><span>    input_data <span style="color:#ff79c6">=</span> input_data<span style="color:#ff79c6">.</span>to(device)
+</span></span><span style="display:flex;"><span>    model<span style="color:#ff79c6">.</span>eval()
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">with</span> torch<span style="color:#ff79c6">.</span>jit<span style="color:#ff79c6">.</span>optimized_execution(<span style="color:#ff79c6">True</span>, {<span style="color:#f1fa8c">&#34;target_device&#34;</span>: <span style="color:#f1fa8c">&#34;eia:0&#34;</span>}):
+</span></span><span style="display:flex;"><span>        output <span style="color:#ff79c6">=</span> model(input_data)
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> output<span style="color:#ff79c6">.</span>max(<span style="color:#bd93f9">1</span>)[<span style="color:#bd93f9">1</span>]
+</span></span></code></pre></div><h2 id="デプロイ">デプロイ</h2>
 <p>Training jobがモデルを保存したS3のパスを取ってきて<a href="https://sagemaker.readthedocs.io/en/stable/frameworks/pytorch/sagemaker.pytorch.html#pytorch-model">PyTorchModel</a>を作る。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> sagemaker.pytorch.model <span style="color:#ff79c6">import</span> PyTorchModel
-
-training_job_name <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;pytorch-training-2020-07-25-08-41-45-674&#39;</span>
-training_job <span style="color:#ff79c6">=</span> sess<span style="color:#ff79c6">.</span>client(<span style="color:#f1fa8c">&#39;sagemaker&#39;</span>)<span style="color:#ff79c6">.</span>describe_training_job(TrainingJobName<span style="color:#ff79c6">=</span>training_job_name)
-model <span style="color:#ff79c6">=</span> PyTorchModel(model_data<span style="color:#ff79c6">=</span>training_job[<span style="color:#f1fa8c">&#39;ModelArtifacts&#39;</span>][<span style="color:#f1fa8c">&#39;S3ModelArtifacts&#39;</span>], 
-                     role<span style="color:#ff79c6">=</span>sagemaker<span style="color:#ff79c6">.</span>get_execution_role(),
-                     framework_version<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;1.3.1&#39;</span>,
-                     py_version<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;py3&#39;</span>,
-                     source_dir<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;/root/sagemaker-pytorch-mnist&#39;</span>,
-                     entry_point<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;inference.py&#39;</span>)
-</code></pre></div><p><code>deploy()</code>するとModelsとEndpoint configurations、Endpointsが作成される。結構時間がかかる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">from</span> sagemaker.pytorch.model <span style="color:#ff79c6">import</span> PyTorchModel
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>training_job_name <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;pytorch-training-2020-07-25-08-41-45-674&#39;</span>
+</span></span><span style="display:flex;"><span>training_job <span style="color:#ff79c6">=</span> sess<span style="color:#ff79c6">.</span>client(<span style="color:#f1fa8c">&#39;sagemaker&#39;</span>)<span style="color:#ff79c6">.</span>describe_training_job(TrainingJobName<span style="color:#ff79c6">=</span>training_job_name)
+</span></span><span style="display:flex;"><span>model <span style="color:#ff79c6">=</span> PyTorchModel(model_data<span style="color:#ff79c6">=</span>training_job[<span style="color:#f1fa8c">&#39;ModelArtifacts&#39;</span>][<span style="color:#f1fa8c">&#39;S3ModelArtifacts&#39;</span>], 
+</span></span><span style="display:flex;"><span>                     role<span style="color:#ff79c6">=</span>sagemaker<span style="color:#ff79c6">.</span>get_execution_role(),
+</span></span><span style="display:flex;"><span>                     framework_version<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;1.3.1&#39;</span>,
+</span></span><span style="display:flex;"><span>                     py_version<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;py3&#39;</span>,
+</span></span><span style="display:flex;"><span>                     source_dir<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;/root/sagemaker-pytorch-mnist&#39;</span>,
+</span></span><span style="display:flex;"><span>                     entry_point<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;inference.py&#39;</span>)
+</span></span></code></pre></div><p><code>deploy()</code>するとModelsとEndpoint configurations、Endpointsが作成される。結構時間がかかる。</p>
 <p><img src="https://www.sambaiz.net/images/290.png" alt="Endpoints"></p>
 <p><code>accelerator_type</code>に指定している<a href="https://docs.aws.amazon.com/ja_jp/sagemaker/latest/dg/ei.html">Elastic Inference</a>というのは、適した量のGPUリソースを各CPUインスタンスにアタッチしてくれるもので、GPUインスタンスのリソースを十分使えていない場合コストを下げることができる。ただEI用のイメージのPyTorchのバージョンが古くバージョンを下げる必要があった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">model<span style="color:#ff79c6">.</span>deploy(instance_type<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;ml.c4.xlarge&#39;</span>, initial_instance_count<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>, endpoint_name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;pytorch-mnist-test&#39;</span>, accelerator_type<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;ml.eia2.medium&#39;</span>)
-</code></pre></div><p>呼び出してみる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> torchvision <span style="color:#ff79c6">import</span> datasets, transforms
-
-dataset <span style="color:#ff79c6">=</span> datasets<span style="color:#ff79c6">.</span>MNIST(<span style="color:#f1fa8c">&#39;mnist&#39;</span>, train<span style="color:#ff79c6">=</span>False, transform<span style="color:#ff79c6">=</span>transforms<span style="color:#ff79c6">.</span>ToTensor(), download<span style="color:#ff79c6">=</span>False)
-result <span style="color:#ff79c6">=</span> predictor<span style="color:#ff79c6">.</span>predict(dataset[<span style="color:#bd93f9">0</span>][<span style="color:#bd93f9">0</span>]<span style="color:#ff79c6">.</span>view(<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">28</span>))
-<span style="color:#ff79c6">print</span>(result) <span style="color:#6272a4"># [7]</span>
-<span style="color:#ff79c6">print</span>(dataset[<span style="color:#bd93f9">0</span>][<span style="color:#bd93f9">1</span>]) <span style="color:#6272a4"># 7</span>
-</code></pre></div><p>shapeの不一致などでエラーを起こすとタイムアウトし、ログにも <code>EI Error Description: Internal error</code> と表示されるだけでトラブルシューティングが難しかった。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>model<span style="color:#ff79c6">.</span>deploy(instance_type<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;ml.c4.xlarge&#39;</span>, initial_instance_count<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>, endpoint_name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;pytorch-mnist-test&#39;</span>, accelerator_type<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;ml.eia2.medium&#39;</span>)
+</span></span></code></pre></div><p>呼び出してみる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">from</span> torchvision <span style="color:#ff79c6">import</span> datasets, transforms
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>dataset <span style="color:#ff79c6">=</span> datasets<span style="color:#ff79c6">.</span>MNIST(<span style="color:#f1fa8c">&#39;mnist&#39;</span>, train<span style="color:#ff79c6">=</span><span style="color:#ff79c6">False</span>, transform<span style="color:#ff79c6">=</span>transforms<span style="color:#ff79c6">.</span>ToTensor(), download<span style="color:#ff79c6">=</span><span style="color:#ff79c6">False</span>)
+</span></span><span style="display:flex;"><span>result <span style="color:#ff79c6">=</span> predictor<span style="color:#ff79c6">.</span>predict(dataset[<span style="color:#bd93f9">0</span>][<span style="color:#bd93f9">0</span>]<span style="color:#ff79c6">.</span>view(<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">28</span>))
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">print</span>(result) <span style="color:#6272a4"># [7]</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">print</span>(dataset[<span style="color:#bd93f9">0</span>][<span style="color:#bd93f9">1</span>]) <span style="color:#6272a4"># 7</span>
+</span></span></code></pre></div><p>shapeの不一致などでエラーを起こすとタイムアウトし、ログにも <code>EI Error Description: Internal error</code> と表示されるだけでトラブルシューティングが難しかった。
 例外をcatchしてログを出したり入力のバリデーションを行うと良いと思う。</p>
 <h2 id="後片付け">後片付け</h2>
 <p>デプロイしたリソースを削除する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">predictor<span style="color:#ff79c6">.</span>delete_endpoint()
-predictor<span style="color:#ff79c6">.</span>delete_model()
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>predictor<span style="color:#ff79c6">.</span>delete_endpoint()
+</span></span><span style="display:flex;"><span>predictor<span style="color:#ff79c6">.</span>delete_model()
+</span></span></code></pre></div>
     </div>
     <div class="share">
       <div class="cell">

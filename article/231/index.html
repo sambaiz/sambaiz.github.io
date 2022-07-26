@@ -479,165 +479,165 @@ PermissionsはPull requestsではなくIssueのRead &amp; Writeが必要で、
 さらにそうすると表示されるようになるSubscribe to eventsのIssue commentにチェックを入れる。</p>
 <p>作成すると秘密鍵がダウンロードできるのでSecretsmanagerに上げておき、LambdaのRoleにもこれを取得できるRoleを付ける。</p>
 <p><a href="https://www.sambaiz.net/article/204/">AWS Systems Manager (SSM)のParameter Storeに認証情報を置き参照する - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ aws secretsmanager create-secret --name GitHubCdkAppSecretKey --secret-string $(cat private-key.pem)
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">Policies</span>:
-  - <span style="color:#ff79c6">PolicyName</span>: read-cdk-github-app-secret-key
-    <span style="color:#ff79c6">PolicyDocument</span>:
-    <span style="color:#ff79c6">Version</span>: <span style="color:#f1fa8c">&#34;2012-10-17&#34;</span>
-    <span style="color:#ff79c6">Statement</span>:
-      - <span style="color:#ff79c6">Effect</span>: Allow
-        <span style="color:#ff79c6">Action</span>: secretsmanager:GetSecretValue
-        <span style="color:#ff79c6">Resource</span>: &lt;secret-key arn&gt;
-</code></pre></div><h2 id="webhooksのリクエスト内容httpsdevelopergithubcomwebhooksexample-delivery"><a href="https://developer.github.com/webhooks/#example-delivery">Webhooksのリクエスト内容</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ aws secretsmanager create-secret --name GitHubCdkAppSecretKey --secret-string $(cat private-key.pem)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">Policies</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">PolicyName</span>: read-cdk-github-app-secret-key
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">PolicyDocument</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Version</span>: <span style="color:#f1fa8c">&#34;2012-10-17&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Statement</span>:
+</span></span><span style="display:flex;"><span>      - <span style="color:#ff79c6">Effect</span>: Allow
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Action</span>: secretsmanager:GetSecretValue
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Resource</span>: &lt;secret-key arn&gt;
+</span></span></code></pre></div><h2 id="webhooksのリクエスト内容httpsdevelopergithubcomwebhooksexample-delivery"><a href="https://developer.github.com/webhooks/#example-delivery">Webhooksのリクエスト内容</a></h2>
 <p>設定でチェックを入れたeventが起きると次のようなリクエストが送られてくる。
 Headerの <code>X-GitHub-Event</code> によってbodyの中身が決まり、
 <code>X-Hub-Signature</code> と、bodyと設定したWebhook secretから生成したHMACのMAC値を比較することで
 リクエストを<a href="https://developer.github.com/webhooks/securing/#validating-payloads-from-github">検証する</a>ことができる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">POST /payload HTTP/<span style="color:#bd93f9">1.1</span>
-Host: localhost:<span style="color:#bd93f9">4567</span>
-X-GitHub-Delivery: <span style="color:#bd93f9">72</span>d<span style="color:#bd93f9">3162</span>e-cc<span style="color:#bd93f9">78</span><span style="color:#bd93f9">-11e3</span><span style="color:#bd93f9">-81</span>ab<span style="color:#bd93f9">-4</span>c<span style="color:#bd93f9">9367</span>dc<span style="color:#bd93f9">0958</span>
-X-Hub-Signature: sha<span style="color:#bd93f9">1</span>=<span style="color:#bd93f9">7</span>d<span style="color:#bd93f9">38</span>cdd<span style="color:#bd93f9">689735</span>b<span style="color:#bd93f9">008</span>b<span style="color:#bd93f9">3</span>c<span style="color:#bd93f9">702</span>edd<span style="color:#bd93f9">92</span>eea<span style="color:#bd93f9">23791</span>c<span style="color:#bd93f9">5</span>f<span style="color:#bd93f9">6</span>
-User-Agent: GitHub-Hookshot/<span style="color:#bd93f9">044</span>aadd
-Content-Type: application/json
-Content-Length: <span style="color:#bd93f9">6615</span>
-X-GitHub-Event: issues
-{
-  <span style="color:#ff79c6">&#34;action&#34;</span>: <span style="color:#f1fa8c">&#34;opened&#34;</span>,
-  <span style="color:#ff79c6">&#34;issue&#34;</span>: {
-    <span style="color:#ff79c6">&#34;url&#34;</span>: <span style="color:#f1fa8c">&#34;https://api.github.com/repos/octocat/Hello-World/issues/1347&#34;</span>,
-    <span style="color:#ff79c6">&#34;number&#34;</span>: <span style="color:#bd93f9">1347</span>,
-    ...
-  },
-  <span style="color:#ff79c6">&#34;repository&#34;</span> : {
-    <span style="color:#ff79c6">&#34;id&#34;</span>: <span style="color:#bd93f9">1296269</span>,
-    <span style="color:#ff79c6">&#34;full_name&#34;</span>: <span style="color:#f1fa8c">&#34;octocat/Hello-World&#34;</span>,
-    <span style="color:#ff79c6">&#34;owner&#34;</span>: {
-      <span style="color:#ff79c6">&#34;login&#34;</span>: <span style="color:#f1fa8c">&#34;octocat&#34;</span>,
-      <span style="color:#ff79c6">&#34;id&#34;</span>: <span style="color:#bd93f9">1</span>,
-      ...
-    },
-    ...
-  },
-  <span style="color:#ff79c6">&#34;sender&#34;</span>: {
-    <span style="color:#ff79c6">&#34;login&#34;</span>: <span style="color:#f1fa8c">&#34;octocat&#34;</span>,
-    <span style="color:#ff79c6">&#34;id&#34;</span>: <span style="color:#bd93f9">1</span>,
-    ...
-  }
-}
-</code></pre></div><h2 id="実装">実装</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>POST /payload HTTP/<span style="color:#bd93f9">1.1</span>
+</span></span><span style="display:flex;"><span>Host: localhost:<span style="color:#bd93f9">4567</span>
+</span></span><span style="display:flex;"><span>X-GitHub-Delivery: <span style="color:#bd93f9">72</span>d<span style="color:#bd93f9">3162</span>e-cc<span style="color:#bd93f9">78</span><span style="color:#bd93f9">-11e3</span><span style="color:#bd93f9">-81</span>ab<span style="color:#bd93f9">-4</span>c<span style="color:#bd93f9">9367</span>dc<span style="color:#bd93f9">0958</span>
+</span></span><span style="display:flex;"><span>X-Hub-Signature: sha<span style="color:#bd93f9">1</span>=<span style="color:#bd93f9">7</span>d<span style="color:#bd93f9">38</span>cdd<span style="color:#bd93f9">689735</span>b<span style="color:#bd93f9">008</span>b<span style="color:#bd93f9">3</span>c<span style="color:#bd93f9">702</span>edd<span style="color:#bd93f9">92</span>eea<span style="color:#bd93f9">23791</span>c<span style="color:#bd93f9">5</span>f<span style="color:#bd93f9">6</span>
+</span></span><span style="display:flex;"><span>User-Agent: GitHub-Hookshot/<span style="color:#bd93f9">044</span>aadd
+</span></span><span style="display:flex;"><span>Content-Type: application/json
+</span></span><span style="display:flex;"><span>Content-Length: <span style="color:#bd93f9">6615</span>
+</span></span><span style="display:flex;"><span>X-GitHub-Event: issues
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;action&#34;</span>: <span style="color:#f1fa8c">&#34;opened&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;issue&#34;</span>: {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;url&#34;</span>: <span style="color:#f1fa8c">&#34;https://api.github.com/repos/octocat/Hello-World/issues/1347&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;number&#34;</span>: <span style="color:#bd93f9">1347</span>,
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;repository&#34;</span> : {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;id&#34;</span>: <span style="color:#bd93f9">1296269</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;full_name&#34;</span>: <span style="color:#f1fa8c">&#34;octocat/Hello-World&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;owner&#34;</span>: {
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;login&#34;</span>: <span style="color:#f1fa8c">&#34;octocat&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;id&#34;</span>: <span style="color:#bd93f9">1</span>,
+</span></span><span style="display:flex;"><span>      ...
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;sender&#34;</span>: {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;login&#34;</span>: <span style="color:#f1fa8c">&#34;octocat&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;id&#34;</span>: <span style="color:#bd93f9">1</span>,
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="実装">実装</h2>
 <p>Signatureを検証し、対応するEventのstructにパースして処理を行う流れ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">import</span> (
-	<span style="color:#f1fa8c">&#34;context&#34;</span>
-	<span style="color:#f1fa8c">&#34;errors&#34;</span>
-	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
-	<span style="color:#f1fa8c">&#34;net/http&#34;</span>
-	<span style="color:#f1fa8c">&#34;os&#34;</span>
-	<span style="color:#f1fa8c">&#34;time&#34;</span>
-
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-lambda-go/events&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-lambda-go/lambda&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/awserr&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/session&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/service/secretsmanager&#34;</span>
-	jwt <span style="color:#f1fa8c">&#34;github.com/dgrijalva/jwt-go&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/google/go-github/v26/github&#34;</span>
-	<span style="color:#f1fa8c">&#34;go.uber.org/zap&#34;</span>
-	<span style="color:#f1fa8c">&#34;golang.org/x/oauth2&#34;</span>
-)
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">handler</span>(event events.APIGatewayProxyRequest) (Response, <span style="color:#8be9fd">error</span>) {
-	ctx <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">Background</span>()
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> github.<span style="color:#50fa7b">ValidateSignature</span>(event.Headers[<span style="color:#f1fa8c">&#34;X-Hub-Signature&#34;</span>], []<span style="color:#8be9fd;font-style:italic">byte</span>(event.Body), []<span style="color:#8be9fd;font-style:italic">byte</span>(webhookSecret)); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		logger.<span style="color:#50fa7b">Info</span>(<span style="color:#f1fa8c">&#34;Signature is invalid&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
-		<span style="color:#ff79c6">return</span> Response{
-			StatusCode: http.StatusBadRequest,
-		}, <span style="color:#ff79c6">nil</span>
-	}
-	hook, err <span style="color:#ff79c6">:=</span> github.<span style="color:#50fa7b">ParseWebHook</span>(event.Headers[<span style="color:#f1fa8c">&#34;X-GitHub-Event&#34;</span>], []<span style="color:#8be9fd;font-style:italic">byte</span>(event.Body))
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;Failed to parse hook&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
-		<span style="color:#ff79c6">return</span> Response{
-			StatusCode: http.StatusBadRequest,
-		}, <span style="color:#ff79c6">nil</span>
-	}
-	<span style="color:#ff79c6">switch</span> hook <span style="color:#ff79c6">:=</span> hook.(<span style="color:#8be9fd;font-style:italic">type</span>) {
-	<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">*</span>github.IssueCommentEvent:
-		err = <span style="color:#50fa7b">processIssueCommentEvent</span>(ctx, hook)
-	}
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;Failed to process an event&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
-		<span style="color:#ff79c6">return</span> Response{
-			StatusCode: http.StatusInternalServerError,
-		}, err
-	}
-	<span style="color:#ff79c6">return</span> Response{
-		StatusCode: http.StatusOK,
-	}, <span style="color:#ff79c6">nil</span>
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">processIssueCommentEvent</span>(
-	ctx context.Context,
-	hook <span style="color:#ff79c6">*</span>github.IssueCommentEvent) <span style="color:#8be9fd">error</span> {
-	<span style="color:#ff79c6">if</span> hook.<span style="color:#50fa7b">GetComment</span>().<span style="color:#50fa7b">GetBody</span>() <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;ping&#34;</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
-	}
-	client, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">newGitHubClient</span>(ctx, hook.<span style="color:#50fa7b">GetInstallation</span>().<span style="color:#50fa7b">GetID</span>())
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> err
-	}
-	_, _, err = client.Issues.<span style="color:#50fa7b">CreateComment</span>(
-		ctx,
-		hook.<span style="color:#50fa7b">GetRepo</span>().<span style="color:#50fa7b">GetOwner</span>().<span style="color:#50fa7b">GetLogin</span>(),
-		hook.<span style="color:#50fa7b">GetRepo</span>().<span style="color:#50fa7b">GetName</span>(),
-		hook.<span style="color:#50fa7b">GetIssue</span>().<span style="color:#50fa7b">GetNumber</span>(),
-		<span style="color:#ff79c6">&amp;</span>github.IssueComment{
-			Body: <span style="color:#ff79c6">&amp;</span>[]<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;pong&#34;</span>}[<span style="color:#bd93f9">0</span>],
-		},
-	)
-	<span style="color:#ff79c6">return</span> err
-}
-</code></pre></div><p>なお無条件に返すようにするとbotの投稿でさらにeventが発火して無限ループしてしまう。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;context&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;errors&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;net/http&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;os&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;time&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-lambda-go/events&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-lambda-go/lambda&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/awserr&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/session&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/service/secretsmanager&#34;</span>
+</span></span><span style="display:flex;"><span>	jwt <span style="color:#f1fa8c">&#34;github.com/dgrijalva/jwt-go&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/google/go-github/v26/github&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;go.uber.org/zap&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;golang.org/x/oauth2&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">handler</span>(event events.APIGatewayProxyRequest) (Response, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>	ctx <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">Background</span>()
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> github.<span style="color:#50fa7b">ValidateSignature</span>(event.Headers[<span style="color:#f1fa8c">&#34;X-Hub-Signature&#34;</span>], []<span style="color:#8be9fd;font-style:italic">byte</span>(event.Body), []<span style="color:#8be9fd;font-style:italic">byte</span>(webhookSecret)); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		logger.<span style="color:#50fa7b">Info</span>(<span style="color:#f1fa8c">&#34;Signature is invalid&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> Response{
+</span></span><span style="display:flex;"><span>			StatusCode: http.StatusBadRequest,
+</span></span><span style="display:flex;"><span>		}, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	hook, err <span style="color:#ff79c6">:=</span> github.<span style="color:#50fa7b">ParseWebHook</span>(event.Headers[<span style="color:#f1fa8c">&#34;X-GitHub-Event&#34;</span>], []<span style="color:#8be9fd;font-style:italic">byte</span>(event.Body))
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;Failed to parse hook&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> Response{
+</span></span><span style="display:flex;"><span>			StatusCode: http.StatusBadRequest,
+</span></span><span style="display:flex;"><span>		}, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">switch</span> hook <span style="color:#ff79c6">:=</span> hook.(<span style="color:#8be9fd;font-style:italic">type</span>) {
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">case</span> <span style="color:#ff79c6">*</span>github.IssueCommentEvent:
+</span></span><span style="display:flex;"><span>		err = <span style="color:#50fa7b">processIssueCommentEvent</span>(ctx, hook)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;Failed to process an event&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> Response{
+</span></span><span style="display:flex;"><span>			StatusCode: http.StatusInternalServerError,
+</span></span><span style="display:flex;"><span>		}, err
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> Response{
+</span></span><span style="display:flex;"><span>		StatusCode: http.StatusOK,
+</span></span><span style="display:flex;"><span>	}, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">processIssueCommentEvent</span>(
+</span></span><span style="display:flex;"><span>	ctx context.Context,
+</span></span><span style="display:flex;"><span>	hook <span style="color:#ff79c6">*</span>github.IssueCommentEvent) <span style="color:#8be9fd">error</span> {
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> hook.<span style="color:#50fa7b">GetComment</span>().<span style="color:#50fa7b">GetBody</span>() <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;ping&#34;</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	client, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">newGitHubClient</span>(ctx, hook.<span style="color:#50fa7b">GetInstallation</span>().<span style="color:#50fa7b">GetID</span>())
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> err
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	_, _, err = client.Issues.<span style="color:#50fa7b">CreateComment</span>(
+</span></span><span style="display:flex;"><span>		ctx,
+</span></span><span style="display:flex;"><span>		hook.<span style="color:#50fa7b">GetRepo</span>().<span style="color:#50fa7b">GetOwner</span>().<span style="color:#50fa7b">GetLogin</span>(),
+</span></span><span style="display:flex;"><span>		hook.<span style="color:#50fa7b">GetRepo</span>().<span style="color:#50fa7b">GetName</span>(),
+</span></span><span style="display:flex;"><span>		hook.<span style="color:#50fa7b">GetIssue</span>().<span style="color:#50fa7b">GetNumber</span>(),
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">&amp;</span>github.IssueComment{
+</span></span><span style="display:flex;"><span>			Body: <span style="color:#ff79c6">&amp;</span>[]<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;pong&#34;</span>}[<span style="color:#bd93f9">0</span>],
+</span></span><span style="display:flex;"><span>		},
+</span></span><span style="display:flex;"><span>	)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> err
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>なお無条件に返すようにするとbotの投稿でさらにeventが発火して無限ループしてしまう。</p>
 <p><img src="https://www.sambaiz.net/images/231-2.png" alt="無限ループ"></p>
 <h3 id="クライアントの生成httpsdevelopergithubcomappsbuilding-github-appsauthenticating-with-github-apps"><a href="https://developer.github.com/apps/building-github-apps/authenticating-with-github-apps/">クライアントの生成</a></h3>
 <p>リポジトリに対してAPIを呼ぶには、まずダウンロードした秘密鍵でJWTを作り、これでInstallationTokenを取得してHeaderに乗せる必要がある。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">newGitHubClient</span>(ctx context.Context, installationID <span style="color:#8be9fd">int64</span>) (<span style="color:#ff79c6">*</span>github.Client, <span style="color:#8be9fd">error</span>) {
-	now <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>()
-	payload <span style="color:#ff79c6">:=</span> jwt.<span style="color:#50fa7b">NewWithClaims</span>(jwt.SigningMethodRS256, jwt.MapClaims{
-		<span style="color:#f1fa8c">&#34;iat&#34;</span>: now.<span style="color:#50fa7b">Unix</span>(),
-		<span style="color:#f1fa8c">&#34;exp&#34;</span>: now.<span style="color:#50fa7b">Add</span>(<span style="color:#bd93f9">10</span> <span style="color:#ff79c6">*</span> time.Minute).<span style="color:#50fa7b">Unix</span>(),
-		<span style="color:#f1fa8c">&#34;iss&#34;</span>: appID,
-	})
-	pem, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">getSecret</span>(privateKeyArn)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
-	}
-	privateKey, err <span style="color:#ff79c6">:=</span> jwt.<span style="color:#50fa7b">ParseRSAPrivateKeyFromPEM</span>([]<span style="color:#8be9fd;font-style:italic">byte</span>(pem))
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
-	}
-	token, err <span style="color:#ff79c6">:=</span> payload.<span style="color:#50fa7b">SignedString</span>(privateKey)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
-	}
-	ts <span style="color:#ff79c6">:=</span> oauth2.<span style="color:#50fa7b">StaticTokenSource</span>(
-		<span style="color:#ff79c6">&amp;</span>oauth2.Token{AccessToken: token},
-	)
-	tc <span style="color:#ff79c6">:=</span> oauth2.<span style="color:#50fa7b">NewClient</span>(ctx, ts)
-	client <span style="color:#ff79c6">:=</span> github.<span style="color:#50fa7b">NewClient</span>(tc)
-
-	installationToken, _, err <span style="color:#ff79c6">:=</span> client.Apps.<span style="color:#50fa7b">CreateInstallationToken</span>(ctx, installationID)
-	<span style="color:#ff79c6">if</span> _, _, err <span style="color:#ff79c6">:=</span> client.Apps.<span style="color:#50fa7b">Get</span>(ctx, <span style="color:#f1fa8c">&#34;&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;Failed to create installation token: %s&#34;</span>, err.<span style="color:#50fa7b">Error</span>())
-	}
-	ts = oauth2.<span style="color:#50fa7b">StaticTokenSource</span>(
-		<span style="color:#ff79c6">&amp;</span>oauth2.Token{AccessToken: installationToken.<span style="color:#50fa7b">GetToken</span>()},
-	)
-	tc = oauth2.<span style="color:#50fa7b">NewClient</span>(ctx, ts)
-	client = github.<span style="color:#50fa7b">NewClient</span>(tc)
-	<span style="color:#ff79c6">return</span> client, <span style="color:#ff79c6">nil</span>
-}
-</code></pre></div><h2 id="動作確認">動作確認</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">newGitHubClient</span>(ctx context.Context, installationID <span style="color:#8be9fd">int64</span>) (<span style="color:#ff79c6">*</span>github.Client, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>	now <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>()
+</span></span><span style="display:flex;"><span>	payload <span style="color:#ff79c6">:=</span> jwt.<span style="color:#50fa7b">NewWithClaims</span>(jwt.SigningMethodRS256, jwt.MapClaims{
+</span></span><span style="display:flex;"><span>		<span style="color:#f1fa8c">&#34;iat&#34;</span>: now.<span style="color:#50fa7b">Unix</span>(),
+</span></span><span style="display:flex;"><span>		<span style="color:#f1fa8c">&#34;exp&#34;</span>: now.<span style="color:#50fa7b">Add</span>(<span style="color:#bd93f9">10</span> <span style="color:#ff79c6">*</span> time.Minute).<span style="color:#50fa7b">Unix</span>(),
+</span></span><span style="display:flex;"><span>		<span style="color:#f1fa8c">&#34;iss&#34;</span>: appID,
+</span></span><span style="display:flex;"><span>	})
+</span></span><span style="display:flex;"><span>	pem, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">getSecret</span>(privateKeyArn)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	privateKey, err <span style="color:#ff79c6">:=</span> jwt.<span style="color:#50fa7b">ParseRSAPrivateKeyFromPEM</span>([]<span style="color:#8be9fd;font-style:italic">byte</span>(pem))
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	token, err <span style="color:#ff79c6">:=</span> payload.<span style="color:#50fa7b">SignedString</span>(privateKey)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	ts <span style="color:#ff79c6">:=</span> oauth2.<span style="color:#50fa7b">StaticTokenSource</span>(
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">&amp;</span>oauth2.Token{AccessToken: token},
+</span></span><span style="display:flex;"><span>	)
+</span></span><span style="display:flex;"><span>	tc <span style="color:#ff79c6">:=</span> oauth2.<span style="color:#50fa7b">NewClient</span>(ctx, ts)
+</span></span><span style="display:flex;"><span>	client <span style="color:#ff79c6">:=</span> github.<span style="color:#50fa7b">NewClient</span>(tc)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	installationToken, _, err <span style="color:#ff79c6">:=</span> client.Apps.<span style="color:#50fa7b">CreateInstallationToken</span>(ctx, installationID)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> _, _, err <span style="color:#ff79c6">:=</span> client.Apps.<span style="color:#50fa7b">Get</span>(ctx, <span style="color:#f1fa8c">&#34;&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;Failed to create installation token: %s&#34;</span>, err.<span style="color:#50fa7b">Error</span>())
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	ts = oauth2.<span style="color:#50fa7b">StaticTokenSource</span>(
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">&amp;</span>oauth2.Token{AccessToken: installationToken.<span style="color:#50fa7b">GetToken</span>()},
+</span></span><span style="display:flex;"><span>	)
+</span></span><span style="display:flex;"><span>	tc = oauth2.<span style="color:#50fa7b">NewClient</span>(ctx, ts)
+</span></span><span style="display:flex;"><span>	client = github.<span style="color:#50fa7b">NewClient</span>(tc)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> client, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="動作確認">動作確認</h2>
 <p>実際動かしてみるとなかなかうまくいかない。
 <code>GitHub Apps &gt; Advanced</code> から送られたイベントとそれに対するレスポンスが確認でき、再送することもできて便利。</p>
 <p><img src="https://www.sambaiz.net/images/231-3.png" alt="送られたイベント"></p>

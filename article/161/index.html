@@ -472,82 +472,82 @@ K8sならworkerの増減も簡単だし、HelmのChartもあるので立てる�
 <p>@task(10)のように括弧の中に数字を書いて実行される割合を偏らせることもできる。
 異なるTaskSetに対応するユーザーを複数作ることもできて、こちらもweightで重みを付けられる。
 ユーザー数はあとでWeb上から入力する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python">$ mkdir tasks
-$ cat tasks<span style="color:#ff79c6">/</span>tasks<span style="color:#ff79c6">.</span>py
-<span style="color:#ff79c6">from</span> locust <span style="color:#ff79c6">import</span> HttpLocust, TaskSet, task
-
-<span style="color:#ff79c6">class</span> <span style="color:#50fa7b">ElbTasks</span>(TaskSet):
-  @task
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">task1</span>(self):
-    <span style="color:#ff79c6">with</span> self<span style="color:#ff79c6">.</span>client<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#34;/&#34;</span>, catch_response<span style="color:#ff79c6">=</span>True) <span style="color:#ff79c6">as</span> response:
-      <span style="color:#ff79c6">if</span> response<span style="color:#ff79c6">.</span>content <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;Success&#34;</span>:
-        response<span style="color:#ff79c6">.</span>failure(<span style="color:#f1fa8c">&#34;Got wrong response&#34;</span>)
-
-<span style="color:#ff79c6">class</span> <span style="color:#50fa7b">ElbWarmer</span>(HttpLocust):
-  task_set <span style="color:#ff79c6">=</span> ElbTasks
-  min_wait <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1000</span>
-  max_wait <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">3000</span>
-</code></pre></div><p>stableに<a href="https://github.com/kubernetes/charts/tree/master/stable/locust">Chart</a>はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、package して、helm repo index でこれを参照するindex.yamlを生成した。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>$ mkdir tasks
+</span></span><span style="display:flex;"><span>$ cat tasks<span style="color:#ff79c6">/</span>tasks<span style="color:#ff79c6">.</span>py
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> locust <span style="color:#ff79c6">import</span> HttpLocust, TaskSet, task
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">ElbTasks</span>(TaskSet):
+</span></span><span style="display:flex;"><span>  @task
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">task1</span>(self):
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">with</span> self<span style="color:#ff79c6">.</span>client<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#34;/&#34;</span>, catch_response<span style="color:#ff79c6">=</span><span style="color:#ff79c6">True</span>) <span style="color:#ff79c6">as</span> response:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">if</span> response<span style="color:#ff79c6">.</span>content <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#34;Success&#34;</span>:
+</span></span><span style="display:flex;"><span>        response<span style="color:#ff79c6">.</span>failure(<span style="color:#f1fa8c">&#34;Got wrong response&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">ElbWarmer</span>(HttpLocust):
+</span></span><span style="display:flex;"><span>  task_set <span style="color:#ff79c6">=</span> ElbTasks
+</span></span><span style="display:flex;"><span>  min_wait <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1000</span>
+</span></span><span style="display:flex;"><span>  max_wait <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">3000</span>
+</span></span></code></pre></div><p>stableに<a href="https://github.com/kubernetes/charts/tree/master/stable/locust">Chart</a>はあるが、今のところtasksの中を書き換えなくてはいけないようなので、forkしてきてtasksの中を書き換え、package して、helm repo index でこれを参照するindex.yamlを生成した。</p>
 <blockquote>
 <p>追記(2020-03-11): 今はConfigmapを自分で作成し &ndash;set worker.config.configmapName=*** することでforkしなくてもよく<a href="https://github.com/helm/charts/commit/0ab53c795720882f3f9630c12f8ecf96ba881638">なった</a>
 kubectl create configmap locust-worker-configs &ndash;from-file tasks/tasks.py</p>
 </blockquote>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ helm package .
-$ helm repo index .
-$ ls
-index.yaml		locust-0.1.2.tgz		...
-$ cat index.yaml
-<span style="color:#ff79c6">apiVersion</span>: v1
-<span style="color:#ff79c6">entries</span>:
-  <span style="color:#ff79c6">locust</span>:
-    ...
-    <span style="color:#ff79c6">urls</span>:
-    - locust-0.1.2.tgz
-    <span style="color:#ff79c6">version</span>: <span style="color:#bd93f9">0.1.2</span>
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm repo add my-locust &#39;https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust&#39;
-$ helm repo list
-NAME     	URL                                                                     
-stable   	https://kubernetes-charts.storage.googleapis.com
-local    	http://127.0.0.1:8879/charts    
-my-locust	https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust
-</code></pre></div><p>GKEのようなRBACが有効な環境でHelmを使う場合、TillerにServiceAccountを設定しておく。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span>$ helm package .
+</span></span><span style="display:flex;"><span>$ helm repo index .
+</span></span><span style="display:flex;"><span>$ ls
+</span></span><span style="display:flex;"><span>index.yaml		locust-0.1.2.tgz		...
+</span></span><span style="display:flex;"><span>$ cat index.yaml
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: v1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">entries</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">locust</span>:
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">urls</span>:
+</span></span><span style="display:flex;"><span>    - locust-0.1.2.tgz
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">version</span>: <span style="color:#bd93f9">0.1.2</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ helm repo add my-locust &#39;https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust&#39;
+</span></span><span style="display:flex;"><span>$ helm repo list
+</span></span><span style="display:flex;"><span>NAME     	URL                                                                     
+</span></span><span style="display:flex;"><span>stable   	https://kubernetes-charts.storage.googleapis.com
+</span></span><span style="display:flex;"><span>local    	http://127.0.0.1:8879/charts    
+</span></span><span style="display:flex;"><span>my-locust	https://raw.githubusercontent.com/sambaiz/charts/my-locust/stable/locust
+</span></span></code></pre></div><p>GKEのようなRBACが有効な環境でHelmを使う場合、TillerにServiceAccountを設定しておく。</p>
 <p><a href="https://www.sambaiz.net/article/160/">RBACが有効なGKEでHelmを使う - sambaiz-net</a></p>
 <p>addしたrepoからinstallする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm install -n my-locust --set master.config.target-host=**** my-locust/locust 
-</code></pre></div><p>masterとworker(デフォルトで2つ)が立った。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl get pods
-NAME                                READY     STATUS    RESTARTS   AGE
-my-locust-master-7f7d57f5dc-k966s   1/1       Running   0          1m
-my-locust-worker-66cc964748-7ff5w   1/1       Running   0          1m
-my-locust-worker-66cc964748-wx5hf   1/1       Running   0          1m
-...
-</code></pre></div><p>port-forwardしてweb-uiにアクセスしてみる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl port-forward $POD_NAME 8089
-$ open localhost:8089
-</code></pre></div><p><img src="https://www.sambaiz.net/images/161.png" alt="User数と生成速度の設定"></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ helm install -n my-locust --set master.config.target-host=**** my-locust/locust 
+</span></span></code></pre></div><p>masterとworker(デフォルトで2つ)が立った。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ kubectl get pods
+</span></span><span style="display:flex;"><span>NAME                                READY     STATUS    RESTARTS   AGE
+</span></span><span style="display:flex;"><span>my-locust-master-7f7d57f5dc-k966s   1/1       Running   0          1m
+</span></span><span style="display:flex;"><span>my-locust-worker-66cc964748-7ff5w   1/1       Running   0          1m
+</span></span><span style="display:flex;"><span>my-locust-worker-66cc964748-wx5hf   1/1       Running   0          1m
+</span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><p>port-forwardしてweb-uiにアクセスしてみる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ kubectl port-forward $POD_NAME 8089
+</span></span><span style="display:flex;"><span>$ open localhost:8089
+</span></span></code></pre></div><p><img src="https://www.sambaiz.net/images/161.png" alt="User数と生成速度の設定"></p>
 <p>実行開始するとRPSなどがリアルタイムで表示される。
 1000Users、50spawned/sで始めてみたところ、200Userにも到達せずにリクエスト自体が止まってしまった。</p>
 <p><img src="https://www.sambaiz.net/images/161-2.png" alt="実行結果"></p>
 <p>少なく再設定してもUsersはそのままでよく分からない。
 一旦立ち上げ直して100,10で実行してみたら100Userまで行くことは確認できた。</p>
 <p>再び止まるまで上げてみたところ、途中でOOMになっていることが分かった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ kubectl describe pod my-locust-worker-****
-<span style="color:#ff79c6">Containers</span>:
-  <span style="color:#ff79c6">locust</span>:
-    ...
-    <span style="color:#ff79c6">Last State</span>:     Terminated
-      <span style="color:#ff79c6">Reason</span>:       OOMKilled
-      <span style="color:#ff79c6">Exit Code</span>:    <span style="color:#bd93f9">137</span>
-...
-</code></pre></div><p>メモリ(割り当て128mi)だけではなく、CPU(割り当て100<a href="https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu">millicores</a>)もそれなりに使われていて、単純にreplica数を増やせばよさそう。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ watch kubectl top node
-NAME                                CPU(cores)   MEMORY(bytes)
-my-locust-master-7f7d57f5dc-h9mvt   1m           19Mi
-my-locust-worker-66cc964748-9dp8n   72m          112Mi
-my-locust-worker-66cc964748-h94v9   61m          114Mi
-</code></pre></div><p>ということでworkerを2から5に増やしてみたところUser数を増やしても止まらなくなった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl scale deployment my-locust-worker --replicas=5
-</code></pre></div><p><a href="https://www.sambaiz.net/article/299/">EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span>$ kubectl describe pod my-locust-worker-****
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">Containers</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">locust</span>:
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Last State</span>:     Terminated
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Reason</span>:       OOMKilled
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Exit Code</span>:    <span style="color:#bd93f9">137</span>
+</span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><p>メモリ(割り当て128mi)だけではなく、CPU(割り当て100<a href="https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#meaning-of-cpu">millicores</a>)もそれなりに使われていて、単純にreplica数を増やせばよさそう。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ watch kubectl top node
+</span></span><span style="display:flex;"><span>NAME                                CPU(cores)   MEMORY(bytes)
+</span></span><span style="display:flex;"><span>my-locust-master-7f7d57f5dc-h9mvt   1m           19Mi
+</span></span><span style="display:flex;"><span>my-locust-worker-66cc964748-9dp8n   72m          112Mi
+</span></span><span style="display:flex;"><span>my-locust-worker-66cc964748-h94v9   61m          114Mi
+</span></span></code></pre></div><p>ということでworkerを2から5に増やしてみたところUser数を増やしても止まらなくなった。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ kubectl scale deployment my-locust-worker --replicas=5
+</span></span></code></pre></div><p><a href="https://www.sambaiz.net/article/299/">EKS上のLocustから負荷をかける際のリソースの割り当てやインスタンスタイプの調整 - sambaiz-net</a></p>
 
     </div>
     <div class="share">

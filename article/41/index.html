@@ -490,36 +490,36 @@
 通信するためのソケットを生成する<code>socket()</code>などのシステムコールで割り当てられる。</p>
 <h2 id="ファイルディスクリプタの上限">ファイルディスクリプタの上限</h2>
 <p>一つのプロセスがリソースを食いつぶさないように使えるファイルディスクリプタの上限が決まっていて、現在のプロセスの値は<code>ulimit -n</code>で確認できる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ulimit -n
-1024
-</code></pre></div><p>各プロセスの上限と、使っているファイルディスクリプタは次のようにして確認できる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat /proc/&lt;プロセスID&gt;/limits
-...
-Max open files            1024                 4096                 files     
-...
-
-$ ls -l /proc/&lt;プロセスID&gt;/fd
-</code></pre></div><p>webサーバーのような同時に大量の通信をするプロセスではこの上限に達してしまい、<code>Too many open files</code>になってしまうことがあるので増やす必要がある。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ ulimit -n
+</span></span><span style="display:flex;"><span>1024
+</span></span></code></pre></div><p>各プロセスの上限と、使っているファイルディスクリプタは次のようにして確認できる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ cat /proc/&lt;プロセスID&gt;/limits
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>Max open files            1024                 4096                 files     
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ls -l /proc/&lt;プロセスID&gt;/fd
+</span></span></code></pre></div><p>webサーバーのような同時に大量の通信をするプロセスではこの上限に達してしまい、<code>Too many open files</code>になってしまうことがあるので増やす必要がある。
 上限を変更する方法として次の方法がある。</p>
 <h3 id="etcsecuritylimitsconfで変更する"><code>/etc/security/limits.conf</code>で変更する</h3>
 <p>ログインの際などに行われるPAM認証時に適用されるので、サーバーの起動時に立ち上がったデーモンには適用されない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat /etc/pam.d/sshd
-...
-session    required     pam_limits.so
-...
-</code></pre></div><p>全てのユーザー(<code>*</code>)のプロセスが使えるファイルディスクリプタの、ユーザーが設定できるsoftとrootが設定できるhard limitを共に64000にする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ echo &#34;* hard nofile 64000&#34; &gt;&gt; /etc/security/limits.conf
-$ echo &#34;* soft nofile 64000&#34; &gt;&gt; /etc/security/limits.conf
-$ ulimit -n
-64000
-</code></pre></div><h3 id="ulimit--nで変更する"><code>ulimit -n</code>で変更する</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ cat /etc/pam.d/sshd
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>session    required     pam_limits.so
+</span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><p>全てのユーザー(<code>*</code>)のプロセスが使えるファイルディスクリプタの、ユーザーが設定できるsoftとrootが設定できるhard limitを共に64000にする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ echo &#34;* hard nofile 64000&#34; &gt;&gt; /etc/security/limits.conf
+</span></span><span style="display:flex;"><span>$ echo &#34;* soft nofile 64000&#34; &gt;&gt; /etc/security/limits.conf
+</span></span><span style="display:flex;"><span>$ ulimit -n
+</span></span><span style="display:flex;"><span>64000
+</span></span></code></pre></div><h3 id="ulimit--nで変更する"><code>ulimit -n</code>で変更する</h3>
 <p>シェルと、そこから起動したプロセスでのみ有効。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ulimit -n 64000
-</code></pre></div><h3 id="dockerの場合-run時の--ulimithttpsdocsdockercomenginereferencecommandlinerunset-ulimits-in-container---ulimitで変更する">(dockerの場合) run時の<a href="https://docs.docker.com/engine/reference/commandline/run/#/set-ulimits-in-container---ulimit">&ndash;ulimit</a>で変更する</h3>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker run -itd --ulimit nofile=11111 ubuntu
-$ docker exec -it &lt;id&gt; /bin/bash -c &#34;ulimit -n&#34;
-11111
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ ulimit -n 64000
+</span></span></code></pre></div><h3 id="dockerの場合-run時の--ulimithttpsdocsdockercomenginereferencecommandlinerunset-ulimits-in-container---ulimitで変更する">(dockerの場合) run時の<a href="https://docs.docker.com/engine/reference/commandline/run/#/set-ulimits-in-container---ulimit">&ndash;ulimit</a>で変更する</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ docker run -itd --ulimit nofile=11111 ubuntu
+</span></span><span style="display:flex;"><span>$ docker exec -it &lt;id&gt; /bin/bash -c &#34;ulimit -n&#34;
+</span></span><span style="display:flex;"><span>11111
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://open-groove.net/linux/memo-etcsecuritylimits-conf/">/etc/security/limits.confに関するメモ | OpenGroove</a></p>
 <p><a href="https://staffblog.yumemi.jp/%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%83%87%E3%82%A3%E3%82%B9%E3%82%AF%E3%83%AA%E3%83%97%E3%82%BF%E6%95%B0%E3%81%AE%E4%B8%8A%E9%99%90%E5%A4%89%E6%9B%B4%E3%81%A8limits-conf%E3%81%AE%E7%BD%A0-2/">ファイルディスクリプタ数の上限変更とlimits.confの罠</a></p>
 <p><a href="http://www.koikikukan.com/archives/2013/03/14-005555.php">Linuxのファイルディスクリプタ数を変更・確認する方法: 小粋空間</a></p>

@@ -469,124 +469,124 @@
 全体のコードは<a href="https://github.com/sambaiz/cdk-kda-pyflink-sample">GitHub</a>にある。</p>
 <p><a href="https://www.sambaiz.net/article/302/">Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成 - sambaiz-net</a></p>
 <p>今回動かすのは次の、KDSから流れてきたデータにクエリを実行し、その結果をS3に書き込む簡単なコード。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">from</span> pyflink.table <span style="color:#ff79c6">import</span> EnvironmentSettings, StreamTableEnvironment
-<span style="color:#ff79c6">from</span> pyflink.table.window <span style="color:#ff79c6">import</span> Tumble
-<span style="color:#ff79c6">import</span> os
-<span style="color:#ff79c6">import</span> json
-
-APPLICATION_PROPERTIES_FILE_PATH <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;/etc/flink/application_properties.json&#34;</span>  <span style="color:#6272a4"># on kda</span>
-
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">get_application_properties</span>():
-    <span style="color:#ff79c6">if</span> os<span style="color:#ff79c6">.</span>path<span style="color:#ff79c6">.</span>isfile(APPLICATION_PROPERTIES_FILE_PATH):
-        <span style="color:#ff79c6">with</span> <span style="color:#8be9fd;font-style:italic">open</span>(APPLICATION_PROPERTIES_FILE_PATH, <span style="color:#f1fa8c">&#34;r&#34;</span>) <span style="color:#ff79c6">as</span> <span style="color:#8be9fd;font-style:italic">file</span>:
-            contents <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">file</span><span style="color:#ff79c6">.</span>read()
-            properties <span style="color:#ff79c6">=</span> json<span style="color:#ff79c6">.</span>loads(contents)
-            <span style="color:#ff79c6">return</span> properties
-    <span style="color:#ff79c6">else</span>:
-        <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#39;A file at &#34;{}&#34; was not found&#39;</span><span style="color:#ff79c6">.</span>format(
-            APPLICATION_PROPERTIES_FILE_PATH))
-
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">property_map</span>(props, property_group_id):
-    <span style="color:#ff79c6">for</span> prop <span style="color:#ff79c6">in</span> props:
-        <span style="color:#ff79c6">if</span> prop[<span style="color:#f1fa8c">&#34;PropertyGroupId&#34;</span>] <span style="color:#ff79c6">==</span> property_group_id:
-            <span style="color:#ff79c6">return</span> prop[<span style="color:#f1fa8c">&#34;PropertyMap&#34;</span>]
-
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">main</span>():
-    table_env <span style="color:#ff79c6">=</span> StreamTableEnvironment<span style="color:#ff79c6">.</span>create(
-        environment_settings<span style="color:#ff79c6">=</span>EnvironmentSettings<span style="color:#ff79c6">.</span>new_instance(
-        )<span style="color:#ff79c6">.</span>in_streaming_mode()<span style="color:#ff79c6">.</span>use_blink_planner()<span style="color:#ff79c6">.</span>build()
-    )
-
-    props <span style="color:#ff79c6">=</span> get_application_properties()
-    input_property_map <span style="color:#ff79c6">=</span> property_map(props, <span style="color:#f1fa8c">&#34;consumer.config.0&#34;</span>)
-    output_property_map <span style="color:#ff79c6">=</span> property_map(props, <span style="color:#f1fa8c">&#34;sink.config.0&#34;</span>)
-
-    input_table_name <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;input_table&#34;</span>
-    output_table_name <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;output_table&#34;</span>
-
-    table_env<span style="color:#ff79c6">.</span>execute_sql(
-        <span style="color:#f1fa8c">&#34;&#34;&#34;CREATE TABLE {0} (
-</span><span style="color:#f1fa8c">                foo BIGINT
-</span><span style="color:#f1fa8c">            ) WITH (
-</span><span style="color:#f1fa8c">                &#39;connector&#39; = &#39;kinesis&#39;,
-</span><span style="color:#f1fa8c">                &#39;stream&#39; = &#39;{1}&#39;,
-</span><span style="color:#f1fa8c">                &#39;aws.region&#39; = &#39;{2}&#39;,
-</span><span style="color:#f1fa8c">                &#39;scan.stream.initpos&#39; = &#39;{3}&#39;,
-</span><span style="color:#f1fa8c">                &#39;format&#39; = &#39;json&#39;,
-</span><span style="color:#f1fa8c">                &#39;json.timestamp-format.standard&#39; = &#39;ISO-8601&#39;
-</span><span style="color:#f1fa8c">            )&#34;&#34;&#34;</span><span style="color:#ff79c6">.</span>format(
-            input_table_name,
-            input_property_map[<span style="color:#f1fa8c">&#34;input.stream.name&#34;</span>],
-            input_property_map[<span style="color:#f1fa8c">&#34;aws.region&#34;</span>],
-            input_property_map[<span style="color:#f1fa8c">&#34;flink.stream.initpos&#34;</span>])
-    )
-
-    table_env<span style="color:#ff79c6">.</span>execute_sql(
-        <span style="color:#f1fa8c">&#34;&#34;&#34;CREATE TABLE {0} (
-</span><span style="color:#f1fa8c">                bar BIGINT
-</span><span style="color:#f1fa8c">            ) WITH (
-</span><span style="color:#f1fa8c">                &#39;connector&#39; = &#39;filesystem&#39;,
-</span><span style="color:#f1fa8c">                &#39;path&#39; = &#39;s3a://{1}/&#39;,
-</span><span style="color:#f1fa8c">                &#39;format&#39; = &#39;csv&#39;,
-</span><span style="color:#f1fa8c">                &#39;sink.partition-commit.policy.kind&#39; = &#39;success-file&#39;,
-</span><span style="color:#f1fa8c">                &#39;sink.partition-commit.delay&#39; = &#39;1 min&#39;
-</span><span style="color:#f1fa8c">            )&#34;&#34;&#34;</span><span style="color:#ff79c6">.</span>format(
-            output_table_name,
-            output_property_map[<span style="color:#f1fa8c">&#34;output.bucket.name&#34;</span>])
-    )
-
-    table_env<span style="color:#ff79c6">.</span>execute_sql(
-        <span style="color:#f1fa8c">&#34;&#34;&#34;INSERT INTO {0}
-</span><span style="color:#f1fa8c">            SELECT foo as bar
-</span><span style="color:#f1fa8c">            FROM {1}
-</span><span style="color:#f1fa8c">        &#34;&#34;&#34;</span><span style="color:#ff79c6">.</span>format(output_table_name, input_table_name)
-    )
-
-
-<span style="color:#ff79c6">if</span> __name__ <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;__main__&#34;</span>:
-    main()
-</code></pre></div><p>次のようにpythonファイルとconnectorのJARをpropertyGroupで<a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/java/gs-python-createapp.html">指定する</a>。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-js" data-lang="js">{
-    propertyGroupId<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;kinesis.analytics.flink.run.options&#34;</span>,
-    propertyMap<span style="color:#ff79c6">:</span> {
-        <span style="color:#f1fa8c">&#34;python&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;kda-app.py&#34;</span>,
-        <span style="color:#f1fa8c">&#34;jarfile&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;amazon-kinesis-sql-connector-flink-2.0.3.jar&#34;</span>,
-    }
-}, 
-{
-    propertyGroupId<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;consumer.config.0&#34;</span>,
-    propertyMap<span style="color:#ff79c6">:</span> {
-        <span style="color:#f1fa8c">&#34;input.stream.name&#34;</span><span style="color:#ff79c6">:</span> srcStream.streamName,
-        <span style="color:#f1fa8c">&#34;aws.region&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">this</span>.region,
-        <span style="color:#f1fa8c">&#34;flink.stream.initpos&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;LATEST&#34;</span>,
-    }
-},
-{
-    propertyGroupId<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;sink.config.0&#34;</span>,
-    propertyMap<span style="color:#ff79c6">:</span> {
-        <span style="color:#f1fa8c">&#34;output.bucket.name&#34;</span><span style="color:#ff79c6">:</span> destBucket.bucketName,
-    }
-}
-</code></pre></div><p>JARはmavenから持ってきてパッケージに含める。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">from</span> pyflink.table <span style="color:#ff79c6">import</span> EnvironmentSettings, StreamTableEnvironment
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> pyflink.table.window <span style="color:#ff79c6">import</span> Tumble
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> os
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> json
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>APPLICATION_PROPERTIES_FILE_PATH <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;/etc/flink/application_properties.json&#34;</span>  <span style="color:#6272a4"># on kda</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">get_application_properties</span>():
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> os<span style="color:#ff79c6">.</span>path<span style="color:#ff79c6">.</span>isfile(APPLICATION_PROPERTIES_FILE_PATH):
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">with</span> <span style="color:#8be9fd;font-style:italic">open</span>(APPLICATION_PROPERTIES_FILE_PATH, <span style="color:#f1fa8c">&#34;r&#34;</span>) <span style="color:#ff79c6">as</span> file:
+</span></span><span style="display:flex;"><span>            contents <span style="color:#ff79c6">=</span> file<span style="color:#ff79c6">.</span>read()
+</span></span><span style="display:flex;"><span>            properties <span style="color:#ff79c6">=</span> json<span style="color:#ff79c6">.</span>loads(contents)
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">return</span> properties
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">else</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#39;A file at &#34;</span><span style="color:#f1fa8c">{}</span><span style="color:#f1fa8c">&#34; was not found&#39;</span><span style="color:#ff79c6">.</span>format(
+</span></span><span style="display:flex;"><span>            APPLICATION_PROPERTIES_FILE_PATH))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">property_map</span>(props, property_group_id):
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> prop <span style="color:#ff79c6">in</span> props:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">if</span> prop[<span style="color:#f1fa8c">&#34;PropertyGroupId&#34;</span>] <span style="color:#ff79c6">==</span> property_group_id:
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">return</span> prop[<span style="color:#f1fa8c">&#34;PropertyMap&#34;</span>]
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">main</span>():
+</span></span><span style="display:flex;"><span>    table_env <span style="color:#ff79c6">=</span> StreamTableEnvironment<span style="color:#ff79c6">.</span>create(
+</span></span><span style="display:flex;"><span>        environment_settings<span style="color:#ff79c6">=</span>EnvironmentSettings<span style="color:#ff79c6">.</span>new_instance(
+</span></span><span style="display:flex;"><span>        )<span style="color:#ff79c6">.</span>in_streaming_mode()<span style="color:#ff79c6">.</span>use_blink_planner()<span style="color:#ff79c6">.</span>build()
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    props <span style="color:#ff79c6">=</span> get_application_properties()
+</span></span><span style="display:flex;"><span>    input_property_map <span style="color:#ff79c6">=</span> property_map(props, <span style="color:#f1fa8c">&#34;consumer.config.0&#34;</span>)
+</span></span><span style="display:flex;"><span>    output_property_map <span style="color:#ff79c6">=</span> property_map(props, <span style="color:#f1fa8c">&#34;sink.config.0&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    input_table_name <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;input_table&#34;</span>
+</span></span><span style="display:flex;"><span>    output_table_name <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;output_table&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    table_env<span style="color:#ff79c6">.</span>execute_sql(
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;&#34;&#34;CREATE TABLE </span><span style="color:#f1fa8c">{0}</span><span style="color:#f1fa8c"> (
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                foo BIGINT
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">            ) WITH (
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;connector&#39; = &#39;kinesis&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;stream&#39; = &#39;</span><span style="color:#f1fa8c">{1}</span><span style="color:#f1fa8c">&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;aws.region&#39; = &#39;</span><span style="color:#f1fa8c">{2}</span><span style="color:#f1fa8c">&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;scan.stream.initpos&#39; = &#39;</span><span style="color:#f1fa8c">{3}</span><span style="color:#f1fa8c">&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;format&#39; = &#39;json&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;json.timestamp-format.standard&#39; = &#39;ISO-8601&#39;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">            )&#34;&#34;&#34;</span><span style="color:#ff79c6">.</span>format(
+</span></span><span style="display:flex;"><span>            input_table_name,
+</span></span><span style="display:flex;"><span>            input_property_map[<span style="color:#f1fa8c">&#34;input.stream.name&#34;</span>],
+</span></span><span style="display:flex;"><span>            input_property_map[<span style="color:#f1fa8c">&#34;aws.region&#34;</span>],
+</span></span><span style="display:flex;"><span>            input_property_map[<span style="color:#f1fa8c">&#34;flink.stream.initpos&#34;</span>])
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    table_env<span style="color:#ff79c6">.</span>execute_sql(
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;&#34;&#34;CREATE TABLE </span><span style="color:#f1fa8c">{0}</span><span style="color:#f1fa8c"> (
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                bar BIGINT
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">            ) WITH (
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;connector&#39; = &#39;filesystem&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;path&#39; = &#39;s3a://</span><span style="color:#f1fa8c">{1}</span><span style="color:#f1fa8c">/&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;format&#39; = &#39;csv&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;sink.partition-commit.policy.kind&#39; = &#39;success-file&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">                &#39;sink.partition-commit.delay&#39; = &#39;1 min&#39;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">            )&#34;&#34;&#34;</span><span style="color:#ff79c6">.</span>format(
+</span></span><span style="display:flex;"><span>            output_table_name,
+</span></span><span style="display:flex;"><span>            output_property_map[<span style="color:#f1fa8c">&#34;output.bucket.name&#34;</span>])
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    table_env<span style="color:#ff79c6">.</span>execute_sql(
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;&#34;&#34;INSERT INTO </span><span style="color:#f1fa8c">{0}</span><span style="color:#f1fa8c">
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">            SELECT foo as bar
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">            FROM </span><span style="color:#f1fa8c">{1}</span><span style="color:#f1fa8c">
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;&#34;&#34;</span><span style="color:#ff79c6">.</span>format(output_table_name, input_table_name)
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">if</span> __name__ <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;__main__&#34;</span>:
+</span></span><span style="display:flex;"><span>    main()
+</span></span></code></pre></div><p>次のようにpythonファイルとconnectorのJARをpropertyGroupで<a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/java/gs-python-createapp.html">指定する</a>。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-js" data-lang="js"><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    propertyGroupId<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;kinesis.analytics.flink.run.options&#34;</span>,
+</span></span><span style="display:flex;"><span>    propertyMap<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;python&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;kda-app.py&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;jarfile&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;amazon-kinesis-sql-connector-flink-2.0.3.jar&#34;</span>,
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}, 
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    propertyGroupId<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;consumer.config.0&#34;</span>,
+</span></span><span style="display:flex;"><span>    propertyMap<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;input.stream.name&#34;</span><span style="color:#ff79c6">:</span> srcStream.streamName,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;aws.region&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">this</span>.region,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;flink.stream.initpos&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;LATEST&#34;</span>,
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>},
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    propertyGroupId<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;sink.config.0&#34;</span>,
+</span></span><span style="display:flex;"><span>    propertyMap<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;output.bucket.name&#34;</span><span style="color:#ff79c6">:</span> destBucket.bucketName,
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>JARはmavenから持ってきてパッケージに含める。
 <code>amazon-kinesis-connector-flink</code>というのもあるが、<code>2.0.3</code>時点では依存が足りずそのままでは<a href="https://github.com/aws-samples/amazon-kinesis-data-analytics-java-examples/issues/4">動かない</a>。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ mvn dependency:get -Dartifact=software.amazon.kinesis:amazon-kinesis-sql-connector-flink:2.0.3 -Ddest=./kda-app
-</code></pre></div><p>デプロイ完了後実行する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ mvn dependency:get -Dartifact=software.amazon.kinesis:amazon-kinesis-sql-connector-flink:2.0.3 -Ddest=./kda-app
+</span></span></code></pre></div><p>デプロイ完了後実行する。</p>
 <p><img src="https://www.sambaiz.net/images/334.png" alt="アプリケーショングラフ"></p>
 <p>アプリケーショングラフに何も表示されない場合はログを確認する。そのままだと見づらいので次のように整形すると良い。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ export LOG_GROUP_NAME=**** LOG_STREAM_NAME=*****
-$ aws logs get-log-events --log-group-name ${LOG_GROUP_NAME} --log-stream-name ${LOG_STREAM_NAME} | jq -r &#39;.events[] | (.timestamp | ./1000 | todate) + &#34;\t&#34; + (.message | fromjson | .messageType + &#34;\t&#34; + .message)&#39;
-...
-2021-04-24T12:57:52Z	INFO	Triggering checkpoint 28 (type=CHECKPOINT) @ 1619269072699 for job 8c9c84e4c6183d644fdd765c0ba3b31c.
-2021-04-24T12:57:53Z	INFO	Completed checkpoint 28 for job 8c9c84e4c6183d644fdd765c0ba3b31c (3748 bytes in 395 ms).
-2021-04-24T12:57:53Z	INFO	Subtask 0 received completion notification for checkpoint with id=28.
-2021-04-24T12:58:52Z	INFO	Triggering checkpoint 29 (type=CHECKPOINT) @ 1619269132699 for job 8c9c84e4c6183d644fdd765c0ba3b31c.
-2021-04-24T12:58:52Z	INFO	Subtask 0 checkpointing for checkpoint with id=29 (max part counter=0).
-2021-04-24T12:58:53Z	INFO	Completed checkpoint 29 for job 8c9c84e4c6183d644fdd765c0ba3b31c (3748 bytes in 375 ms).
-2021-04-24T12:58:53Z	INFO	Subtask 0 received completion notification for checkpoint with id=29.
-</code></pre></div><p><a href="https://awslabs.github.io/amazon-kinesis-data-generator/web/producer.html">Kinesis Data Generator</a>でKDSにデータを流し込んで、S3に保存されていたら成功だ。もし何も保存されていない場合はFlinkのダッシュボードに何か出ていないか確認する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ export LOG_GROUP_NAME=**** LOG_STREAM_NAME=*****
+</span></span><span style="display:flex;"><span>$ aws logs get-log-events --log-group-name ${LOG_GROUP_NAME} --log-stream-name ${LOG_STREAM_NAME} | jq -r &#39;.events[] | (.timestamp | ./1000 | todate) + &#34;\t&#34; + (.message | fromjson | .messageType + &#34;\t&#34; + .message)&#39;
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>2021-04-24T12:57:52Z	INFO	Triggering checkpoint 28 (type=CHECKPOINT) @ 1619269072699 for job 8c9c84e4c6183d644fdd765c0ba3b31c.
+</span></span><span style="display:flex;"><span>2021-04-24T12:57:53Z	INFO	Completed checkpoint 28 for job 8c9c84e4c6183d644fdd765c0ba3b31c (3748 bytes in 395 ms).
+</span></span><span style="display:flex;"><span>2021-04-24T12:57:53Z	INFO	Subtask 0 received completion notification for checkpoint with id=28.
+</span></span><span style="display:flex;"><span>2021-04-24T12:58:52Z	INFO	Triggering checkpoint 29 (type=CHECKPOINT) @ 1619269132699 for job 8c9c84e4c6183d644fdd765c0ba3b31c.
+</span></span><span style="display:flex;"><span>2021-04-24T12:58:52Z	INFO	Subtask 0 checkpointing for checkpoint with id=29 (max part counter=0).
+</span></span><span style="display:flex;"><span>2021-04-24T12:58:53Z	INFO	Completed checkpoint 29 for job 8c9c84e4c6183d644fdd765c0ba3b31c (3748 bytes in 375 ms).
+</span></span><span style="display:flex;"><span>2021-04-24T12:58:53Z	INFO	Subtask 0 received completion notification for checkpoint with id=29.
+</span></span></code></pre></div><p><a href="https://awslabs.github.io/amazon-kinesis-data-generator/web/producer.html">Kinesis Data Generator</a>でKDSにデータを流し込んで、S3に保存されていたら成功だ。もし何も保存されていない場合はFlinkのダッシュボードに何か出ていないか確認する。</p>
 <p><img src="https://www.sambaiz.net/images/334-2.png" alt="Apache Flink Dashboard"></p>
 
     </div>

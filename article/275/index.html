@@ -470,84 +470,84 @@ JSON文字列をCodable(Encodable &amp; Decodable) protocolを実装したClass�
 <p>全ての変数がCodableで、特に何もする必要がない場合はCodableを付ければうまくいく。
 String、Int、Doubleといったstandard libraryの型や、DateやDataなどFoundationの型は<a href="https://developer.apple.com/documentation/foundation/archives_and_serialization/encoding_and_decoding_custom_types">Codable</a>になっている。</p>
 <p>CodingKeyでフィールド名のマッピングができる。デコード時にOptionalでないフィールドが足りなかったり型が異なると例外が飛び、エンコード時にはnilを無視する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-swift" data-lang="swift"><span style="color:#8be9fd;font-style:italic">struct</span> <span style="color:#50fa7b">Foo</span>: Codable {
-    <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">nums</span>: [<span style="color:#8be9fd;font-style:italic">Int</span>]
-    <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">str</span>: <span style="color:#8be9fd;font-style:italic">String</span>
-    
-    <span style="color:#8be9fd;font-style:italic">enum</span> <span style="color:#50fa7b">CodingKeys</span>: <span style="color:#8be9fd;font-style:italic">String</span>, CodingKey {
-        <span style="color:#ff79c6">case</span> nums = <span style="color:#f1fa8c">&#34;numbers&#34;</span>
-        <span style="color:#ff79c6">case</span> str
-    }
-}
-
-
-<span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">data</span> = <span style="color:#f1fa8c">&#34;&#34;&#34;
-</span><span style="color:#f1fa8c">{
-</span><span style="color:#f1fa8c">    &#34;</span>numbers<span style="color:#f1fa8c">&#34;: [100, 120],
-</span><span style="color:#f1fa8c">    &#34;</span>str<span style="color:#f1fa8c">&#34;: &#34;</span>Aaa<span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">}
-</span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>.data(using: .utf8)<span style="color:#ff79c6">!</span>
-<span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">json</span> = <span style="color:#ff79c6">try</span>! JSONDecoder().decode(Foo.<span style="color:#ff79c6">self</span>, from: data)
-print(json.str) <span style="color:#6272a4">// =&gt; Aaa</span>
-<span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">enc</span> = <span style="color:#ff79c6">try</span>! JSONEncoder().encode(json)
-print(<span style="color:#8be9fd;font-style:italic">String</span>(data: enc, encoding: .utf8)<span style="color:#ff79c6">!</span>) <span style="color:#6272a4">// =&gt; {&#34;numbers&#34;:[100,120],&#34;str&#34;:&#34;Aaa&#34;}</span>
-
-<span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">data</span> = <span style="color:#f1fa8c">&#34;&#34;&#34;
-</span><span style="color:#f1fa8c">{
-</span><span style="color:#f1fa8c">    &#34;</span>numbers<span style="color:#f1fa8c">&#34;: [100, 120],
-</span><span style="color:#f1fa8c">}
-</span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>.data(using: .utf8)<span style="color:#ff79c6">!</span>
-<span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">json</span> = <span style="color:#ff79c6">try</span>! JSONDecoder().decode(Foo.<span style="color:#ff79c6">self</span>, from: data) <span style="color:#6272a4">// Swift.DecodingError.keyNotFound</span>
-</code></pre></div><p>Codableの関数を自分で実装すれば柔軟に処理できる。次の例ではJSONのbar.strをFoo.strに対応させている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-swift" data-lang="swift"><span style="color:#8be9fd;font-style:italic">struct</span> <span style="color:#50fa7b">Foo</span> {
-    <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">nums</span>: [<span style="color:#8be9fd;font-style:italic">Int</span>]
-    <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">str</span>: <span style="color:#8be9fd;font-style:italic">String</span>
-
-    <span style="color:#8be9fd;font-style:italic">enum</span> <span style="color:#50fa7b">CodingKeys</span>: <span style="color:#8be9fd;font-style:italic">String</span>, CodingKey {
-        <span style="color:#ff79c6">case</span> nums = <span style="color:#f1fa8c">&#34;numbers&#34;</span>
-        <span style="color:#ff79c6">case</span> bar
-        <span style="color:#ff79c6">case</span> str
-    }
-    
-    <span style="color:#8be9fd;font-style:italic">enum</span> <span style="color:#50fa7b">BarKeys</span>: <span style="color:#8be9fd;font-style:italic">String</span>, CodingKey {
-        <span style="color:#ff79c6">case</span> str
-    }
-}
-
-<span style="color:#8be9fd;font-style:italic">extension</span> <span style="color:#50fa7b">Foo</span>: Codable {
-    <span style="color:#8be9fd;font-style:italic">init</span>(from decoder: Decoder) <span style="color:#ff79c6">throws</span> {
-        <span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">values</span> = <span style="color:#ff79c6">try</span> decoder.container(keyedBy: CodingKeys.<span style="color:#ff79c6">self</span>)
-        nums = <span style="color:#ff79c6">try</span> values.decode([<span style="color:#8be9fd;font-style:italic">Int</span>].<span style="color:#ff79c6">self</span>, forKey: .nums)
-        
-        <span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">barValues</span> = <span style="color:#ff79c6">try</span> values.nestedContainer(keyedBy: BarKeys.<span style="color:#ff79c6">self</span>, forKey: .bar)
-        <span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">barstr</span> = <span style="color:#ff79c6">try</span> barValues.decode(<span style="color:#8be9fd;font-style:italic">String</span>.<span style="color:#ff79c6">self</span>, forKey: .str)
-        str = barstr
-    }
-    
-    <span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">encode</span>(to encoder: Encoder) <span style="color:#ff79c6">throws</span> {
-        <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">container</span> = encoder.container(keyedBy: CodingKeys.<span style="color:#ff79c6">self</span>)
-        <span style="color:#ff79c6">try</span> container.encode(nums, forKey: .nums)
-        
-        <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">bar</span> = container.nestedContainer(keyedBy: BarKeys.<span style="color:#ff79c6">self</span>, forKey: .bar)
-        <span style="color:#ff79c6">try</span> bar.encode(str, forKey: .str)
-    }
-}
-
-
-
-<span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">data</span> = <span style="color:#f1fa8c">&#34;&#34;&#34;
-</span><span style="color:#f1fa8c">{
-</span><span style="color:#f1fa8c">    &#34;</span>numbers<span style="color:#f1fa8c">&#34;: [100, 120],
-</span><span style="color:#f1fa8c">    &#34;</span>bar<span style="color:#f1fa8c">&#34;: {
-</span><span style="color:#f1fa8c">        &#34;</span>str<span style="color:#f1fa8c">&#34;: &#34;</span>aiueo<span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">    }
-</span><span style="color:#f1fa8c">}
-</span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>.data(using: .utf8)<span style="color:#ff79c6">!</span>
-<span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">json</span> = <span style="color:#ff79c6">try</span>! JSONDecoder().decode(Foo.<span style="color:#ff79c6">self</span>, from: data)
-print(json.str) <span style="color:#6272a4">// =&gt; aiueo</span>
-<span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">enc</span> = <span style="color:#ff79c6">try</span>! JSONEncoder().encode(json)
-print(<span style="color:#8be9fd;font-style:italic">String</span>(data: enc, encoding: .utf8)<span style="color:#ff79c6">!</span>) <span style="color:#6272a4">// =&gt; {&#34;numbers&#34;:[100,120],&#34;bar&#34;:{&#34;str&#34;:&#34;aiueo&#34;}}</span>
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-swift" data-lang="swift"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">struct</span> <span style="color:#50fa7b">Foo</span>: Codable {
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">nums</span>: [<span style="color:#8be9fd;font-style:italic">Int</span>]
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">str</span>: <span style="color:#8be9fd;font-style:italic">String</span>
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">enum</span> <span style="color:#50fa7b">CodingKeys</span>: <span style="color:#8be9fd;font-style:italic">String</span>, CodingKey {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">case</span> nums = <span style="color:#f1fa8c">&#34;numbers&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">case</span> str
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">data</span> = <span style="color:#f1fa8c">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">{
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;</span>numbers<span style="color:#f1fa8c">&#34;: [100, 120],
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;</span>str<span style="color:#f1fa8c">&#34;: &#34;</span>Aaa<span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">}
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>.data(using: .utf8)<span style="color:#ff79c6">!</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">json</span> = <span style="color:#ff79c6">try</span>! JSONDecoder().decode(Foo.<span style="color:#ff79c6">self</span>, from: data)
+</span></span><span style="display:flex;"><span>print(json.str) <span style="color:#6272a4">// =&gt; Aaa</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">enc</span> = <span style="color:#ff79c6">try</span>! JSONEncoder().encode(json)
+</span></span><span style="display:flex;"><span>print(<span style="color:#8be9fd;font-style:italic">String</span>(data: enc, encoding: .utf8)<span style="color:#ff79c6">!</span>) <span style="color:#6272a4">// =&gt; {&#34;numbers&#34;:[100,120],&#34;str&#34;:&#34;Aaa&#34;}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">data</span> = <span style="color:#f1fa8c">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">{
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;</span>numbers<span style="color:#f1fa8c">&#34;: [100, 120],
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">}
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>.data(using: .utf8)<span style="color:#ff79c6">!</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">json</span> = <span style="color:#ff79c6">try</span>! JSONDecoder().decode(Foo.<span style="color:#ff79c6">self</span>, from: data) <span style="color:#6272a4">// Swift.DecodingError.keyNotFound</span>
+</span></span></code></pre></div><p>Codableの関数を自分で実装すれば柔軟に処理できる。次の例ではJSONのbar.strをFoo.strに対応させている。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-swift" data-lang="swift"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">struct</span> <span style="color:#50fa7b">Foo</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">nums</span>: [<span style="color:#8be9fd;font-style:italic">Int</span>]
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">str</span>: <span style="color:#8be9fd;font-style:italic">String</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">enum</span> <span style="color:#50fa7b">CodingKeys</span>: <span style="color:#8be9fd;font-style:italic">String</span>, CodingKey {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">case</span> nums = <span style="color:#f1fa8c">&#34;numbers&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">case</span> bar
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">case</span> str
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">enum</span> <span style="color:#50fa7b">BarKeys</span>: <span style="color:#8be9fd;font-style:italic">String</span>, CodingKey {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">case</span> str
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">extension</span> <span style="color:#50fa7b">Foo</span>: Codable {
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">init</span>(from decoder: Decoder) <span style="color:#ff79c6">throws</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">values</span> = <span style="color:#ff79c6">try</span> decoder.container(keyedBy: CodingKeys.<span style="color:#ff79c6">self</span>)
+</span></span><span style="display:flex;"><span>        nums = <span style="color:#ff79c6">try</span> values.decode([<span style="color:#8be9fd;font-style:italic">Int</span>].<span style="color:#ff79c6">self</span>, forKey: .nums)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">barValues</span> = <span style="color:#ff79c6">try</span> values.nestedContainer(keyedBy: BarKeys.<span style="color:#ff79c6">self</span>, forKey: .bar)
+</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">barstr</span> = <span style="color:#ff79c6">try</span> barValues.decode(<span style="color:#8be9fd;font-style:italic">String</span>.<span style="color:#ff79c6">self</span>, forKey: .str)
+</span></span><span style="display:flex;"><span>        str = barstr
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">encode</span>(to encoder: Encoder) <span style="color:#ff79c6">throws</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">container</span> = encoder.container(keyedBy: CodingKeys.<span style="color:#ff79c6">self</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">try</span> container.encode(nums, forKey: .nums)
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">bar</span> = container.nestedContainer(keyedBy: BarKeys.<span style="color:#ff79c6">self</span>, forKey: .bar)
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">try</span> bar.encode(str, forKey: .str)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">var</span> <span style="color:#8be9fd;font-style:italic">data</span> = <span style="color:#f1fa8c">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">{
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;</span>numbers<span style="color:#f1fa8c">&#34;: [100, 120],
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;</span>bar<span style="color:#f1fa8c">&#34;: {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;</span>str<span style="color:#f1fa8c">&#34;: &#34;</span>aiueo<span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    }
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">}
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>.data(using: .utf8)<span style="color:#ff79c6">!</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">json</span> = <span style="color:#ff79c6">try</span>! JSONDecoder().decode(Foo.<span style="color:#ff79c6">self</span>, from: data)
+</span></span><span style="display:flex;"><span>print(json.str) <span style="color:#6272a4">// =&gt; aiueo</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">let</span> <span style="color:#8be9fd;font-style:italic">enc</span> = <span style="color:#ff79c6">try</span>! JSONEncoder().encode(json)
+</span></span><span style="display:flex;"><span>print(<span style="color:#8be9fd;font-style:italic">String</span>(data: enc, encoding: .utf8)<span style="color:#ff79c6">!</span>) <span style="color:#6272a4">// =&gt; {&#34;numbers&#34;:[100,120],&#34;bar&#34;:{&#34;str&#34;:&#34;aiueo&#34;}}</span>
+</span></span></code></pre></div>
     </div>
     <div class="share">
       <div class="cell">

@@ -470,90 +470,90 @@
 <p><a href="https://github.com/sambaiz/lottery-log">sambaiz/lottery-log</a></p>
 <p>これは以下のようなlottery.logを出力し続け、数秒後に一定確率で同じuidのreceived.logを出力するもの。
 広告的に言えば、lotteryがimpで、receivedがclickといった感じかな。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">// lottery.log
-{<span style="color:#ff79c6">&#34;ts&#34;</span>:<span style="color:#bd93f9">1497453504.6818597</span>,<span style="color:#ff79c6">&#34;uid&#34;</span>:<span style="color:#f1fa8c">&#34;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&#34;</span>,<span style="color:#ff79c6">&#34;prize&#34;</span>:<span style="color:#bd93f9">855</span>,<span style="color:#ff79c6">&#34;isWin&#34;</span>:<span style="color:#ff79c6">true</span>}
-// received.log
-{<span style="color:#ff79c6">&#34;ts&#34;</span>:<span style="color:#bd93f9">1497453515.932101</span>,<span style="color:#ff79c6">&#34;uid&#34;</span>:<span style="color:#f1fa8c">&#34;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&#34;</span>}
-</code></pre></div><p>クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-json" data-lang="json"><span style="display:flex;"><span><span style="color:#6272a4">// lottery.log
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>{<span style="color:#ff79c6">&#34;ts&#34;</span>:<span style="color:#bd93f9">1497453504.6818597</span>,<span style="color:#ff79c6">&#34;uid&#34;</span>:<span style="color:#f1fa8c">&#34;b18c0d98-19b2-4e37-8fc4-6b00a4b728c3&#34;</span>,<span style="color:#ff79c6">&#34;prize&#34;</span>:<span style="color:#bd93f9">855</span>,<span style="color:#ff79c6">&#34;isWin&#34;</span>:<span style="color:#ff79c6">true</span>}
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">// received.log
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>{<span style="color:#ff79c6">&#34;ts&#34;</span>:<span style="color:#bd93f9">1497453515.932101</span>,<span style="color:#ff79c6">&#34;uid&#34;</span>:<span style="color:#f1fa8c">&#34;bc4f578f-4a5f-47f1-a4e0-1ef0b43c316e&#34;</span>}
+</span></span></code></pre></div><p>クエリはこんな感じ。一つはlotteryログとreceivedログをuidでJOINするもので、
 received_rateの計算にはサブクエリも使っている。
 received_rateの計算で分母に小さな値を足しているのはNaNやInfinityにならないようにするため。
 receivedログは最大30秒遅れて出力されるため、40秒前までのreceivedログをwin:timeで見ている。
 これをtime_batchにしてしまうと期待通りの結果にならないので注意。</p>
 <p>もう一つはJavaの関数でboolを0/1にして平均をとることでisWinがtrueである割合を出している。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker exec norikra norikra-client query add lottery_agg &#39;
-SELECT COUNT(*) as received_count, (COUNT(*) / (SELECT COUNT(*) + 0.00001 FROM lottery.win:time_batch(1 sec, 0).std:unique(uid))) as received_rate, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time(40 sec).std:unique(uid) as a, received.win:time_batch(1 sec, 0).std:unique(uid) as b WHERE a.uid = b.uid&#39;
-
-$ docker exec norikra norikra-client query add lottery_win_rate &#39;SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)&#39;
-</code></pre></div><p>で、このクエリの結果をElasticsearchに送って可視化してみたのがこれ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;source&gt;
-  @type tail
-  path /var/log/lottery.log
-  pos_file /etc/td-agent/log.pos
-  tag event.lottery
-  format json
-&lt;/source&gt;
-
-&lt;source&gt;
-  @type tail
-  path /var/log/received.log
-  pos_file /etc/td-agent/log.pos
-  tag event.received
-  format json
-&lt;/source&gt;
-
-&lt;match event.*&gt;
-  @type   norikra
-  norikra localhost:26571
-  
-  remove_tag_prefix event # event.*の部分が
-  target_map_tag    yes   # targetになる
-
-  &lt;default&gt;
-    auto_field false 
-  &lt;/default&gt;
-&lt;/match&gt;
-
-&lt;source&gt;
-  @type   norikra
-  norikra localhost:26571
-  &lt;fetch&gt;
-    method   event
-    target   lottery_agg
-    tag      string data.lottery_agg
-    interval 1m
-  &lt;/fetch&gt;
-  &lt;fetch&gt;
-    method   event
-    target   lottery_win_rate
-    tag      string data.lottery_win_rate
-    interval 1m
-  &lt;/fetch&gt;
-&lt;/source&gt;
-
-&lt;match data.lottery_agg&gt;
-  @type elasticsearch
-  host 172.31.5.20
-  port 9200
-  logstash_prefix lottery
-  type_name lottery_agg
-  logstash_format true
-&lt;/match&gt;
-
-&lt;match data.lottery_win_rate&gt;
-  @type elasticsearch
-  host 172.31.5.20
-  port 9200
-  logstash_prefix lottery
-  type_name lottery_win_rate
-  logstash_format true
-&lt;/match&gt;
-</code></pre></div><p>received_rateを計算するときのウィンドウが1secと小さく、タイミングによってはreceivedの数がlotteryの数を上回ることがあるため1以下で絞っている。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ docker exec norikra norikra-client query add lottery_agg &#39;
+</span></span><span style="display:flex;"><span>SELECT COUNT(*) as received_count, (COUNT(*) / (SELECT COUNT(*) + 0.00001 FROM lottery.win:time_batch(1 sec, 0).std:unique(uid))) as received_rate, AVG(prize) as prize_avg, SUM(prize) as prize_sum FROM lottery.win:time(40 sec).std:unique(uid) as a, received.win:time_batch(1 sec, 0).std:unique(uid) as b WHERE a.uid = b.uid&#39;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ docker exec norikra norikra-client query add lottery_win_rate &#39;SELECT avg(Boolean.compare(isWin, false)) as win_rate FROM lottery.win:time_batch(1 sec)&#39;
+</span></span></code></pre></div><p>で、このクエリの結果をElasticsearchに送って可視化してみたのがこれ。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>&lt;source&gt;
+</span></span><span style="display:flex;"><span>  @type tail
+</span></span><span style="display:flex;"><span>  path /var/log/lottery.log
+</span></span><span style="display:flex;"><span>  pos_file /etc/td-agent/log.pos
+</span></span><span style="display:flex;"><span>  tag event.lottery
+</span></span><span style="display:flex;"><span>  format json
+</span></span><span style="display:flex;"><span>&lt;/source&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>&lt;source&gt;
+</span></span><span style="display:flex;"><span>  @type tail
+</span></span><span style="display:flex;"><span>  path /var/log/received.log
+</span></span><span style="display:flex;"><span>  pos_file /etc/td-agent/log.pos
+</span></span><span style="display:flex;"><span>  tag event.received
+</span></span><span style="display:flex;"><span>  format json
+</span></span><span style="display:flex;"><span>&lt;/source&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>&lt;match event.*&gt;
+</span></span><span style="display:flex;"><span>  @type   norikra
+</span></span><span style="display:flex;"><span>  norikra localhost:26571
+</span></span><span style="display:flex;"><span>  
+</span></span><span style="display:flex;"><span>  remove_tag_prefix event # event.*の部分が
+</span></span><span style="display:flex;"><span>  target_map_tag    yes   # targetになる
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  &lt;default&gt;
+</span></span><span style="display:flex;"><span>    auto_field false 
+</span></span><span style="display:flex;"><span>  &lt;/default&gt;
+</span></span><span style="display:flex;"><span>&lt;/match&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>&lt;source&gt;
+</span></span><span style="display:flex;"><span>  @type   norikra
+</span></span><span style="display:flex;"><span>  norikra localhost:26571
+</span></span><span style="display:flex;"><span>  &lt;fetch&gt;
+</span></span><span style="display:flex;"><span>    method   event
+</span></span><span style="display:flex;"><span>    target   lottery_agg
+</span></span><span style="display:flex;"><span>    tag      string data.lottery_agg
+</span></span><span style="display:flex;"><span>    interval 1m
+</span></span><span style="display:flex;"><span>  &lt;/fetch&gt;
+</span></span><span style="display:flex;"><span>  &lt;fetch&gt;
+</span></span><span style="display:flex;"><span>    method   event
+</span></span><span style="display:flex;"><span>    target   lottery_win_rate
+</span></span><span style="display:flex;"><span>    tag      string data.lottery_win_rate
+</span></span><span style="display:flex;"><span>    interval 1m
+</span></span><span style="display:flex;"><span>  &lt;/fetch&gt;
+</span></span><span style="display:flex;"><span>&lt;/source&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>&lt;match data.lottery_agg&gt;
+</span></span><span style="display:flex;"><span>  @type elasticsearch
+</span></span><span style="display:flex;"><span>  host 172.31.5.20
+</span></span><span style="display:flex;"><span>  port 9200
+</span></span><span style="display:flex;"><span>  logstash_prefix lottery
+</span></span><span style="display:flex;"><span>  type_name lottery_agg
+</span></span><span style="display:flex;"><span>  logstash_format true
+</span></span><span style="display:flex;"><span>&lt;/match&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>&lt;match data.lottery_win_rate&gt;
+</span></span><span style="display:flex;"><span>  @type elasticsearch
+</span></span><span style="display:flex;"><span>  host 172.31.5.20
+</span></span><span style="display:flex;"><span>  port 9200
+</span></span><span style="display:flex;"><span>  logstash_prefix lottery
+</span></span><span style="display:flex;"><span>  type_name lottery_win_rate
+</span></span><span style="display:flex;"><span>  logstash_format true
+</span></span><span style="display:flex;"><span>&lt;/match&gt;
+</span></span></code></pre></div><p>received_rateを計算するときのウィンドウが1secと小さく、タイミングによってはreceivedの数がlotteryの数を上回ることがあるため1以下で絞っている。</p>
 
 
 
 
 <div class="img_container"><a href="/article/111/images/visualize.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/article/111/images/visualize_hud8a0f261254a16ca68a6a8bf330c54bf_78643_600x370_fit_lanczos_2.png" width="400" height="209" alt="可視化したもの">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/111/images/visualize_hud8a0f261254a16ca68a6a8bf330c54bf_78643_600x370_fit_lanczos_3.png" width="400" height="209" alt="可視化したもの">
 </a></div>
 
 

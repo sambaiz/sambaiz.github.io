@@ -466,80 +466,80 @@
         <a class="tag" href='/tags/gcp/'>gcp</a><a class="tag" href='/tags/kubernetes/'>kubernetes</a><a class="tag" href='/tags/infra/'>infra</a>
       </div>
       <p><a href="https://www.sambaiz.net/article/122/">k8sのパッケージマネージャーHelmを使う - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm version
-Client: &amp;version.Version{SemVer:&#34;v2.8.2&#34;, GitCommit:&#34;a80231648a1473929271764b920a8e346f6de844&#34;, GitTreeState:&#34;clean&#34;}
-Server: &amp;version.Version{SemVer:&#34;v2.8.2&#34;, GitCommit:&#34;a80231648a1473929271764b920a8e346f6de844&#34;, GitTreeState:&#34;clean&#34;}
-</code></pre></div><p>GKEで helm init して helm install したところ以下のエラーが返ってきた。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">Error: release my-locust failed: namespaces &#34;default&#34; is forbidden: User &#34;system:serviceaccount:kube-system:default&#34; cannot get namespaces in the namespace &#34;default&#34;: Unknown user &#34;system:serviceaccount:kube-system:default&#34;
-</code></pre></div><p>GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が<a href="https://cloud.google.com/kubernetes-engine/docs/role-based-access-control">有効になっている</a>ため、<a href="https://github.com/kubernetes/helm/blob/master/docs/rbac.md">Tillerインスタンスに権限を与える</a>必要がある。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ helm version
+</span></span><span style="display:flex;"><span>Client: &amp;version.Version{SemVer:&#34;v2.8.2&#34;, GitCommit:&#34;a80231648a1473929271764b920a8e346f6de844&#34;, GitTreeState:&#34;clean&#34;}
+</span></span><span style="display:flex;"><span>Server: &amp;version.Version{SemVer:&#34;v2.8.2&#34;, GitCommit:&#34;a80231648a1473929271764b920a8e346f6de844&#34;, GitTreeState:&#34;clean&#34;}
+</span></span></code></pre></div><p>GKEで helm init して helm install したところ以下のエラーが返ってきた。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>Error: release my-locust failed: namespaces &#34;default&#34; is forbidden: User &#34;system:serviceaccount:kube-system:default&#34; cannot get namespaces in the namespace &#34;default&#34;: Unknown user &#34;system:serviceaccount:kube-system:default&#34;
+</span></span></code></pre></div><p>GKEではデフォルトでK8sのRBAC(Role-Based Access Control)が<a href="https://cloud.google.com/kubernetes-engine/docs/role-based-access-control">有効になっている</a>ため、<a href="https://github.com/kubernetes/helm/blob/master/docs/rbac.md">Tillerインスタンスに権限を与える</a>必要がある。</p>
 <p>ということでTiller用にnamespaceを切って、その中では好きにできる<a href="https://kubernetes.io/docs/admin/authorization/rbac/#role-and-clusterrole">Role</a>と、Tillerが使う<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/">ServiceAccount</a>を作成し、RoleBindingで紐づける。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">kind</span>: Role
-<span style="color:#ff79c6">apiVersion</span>: rbac.authorization.k8s.io/v1beta1
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: tiller-manager
-  <span style="color:#ff79c6">namespace</span>: tiller-world
-<span style="color:#ff79c6">rules</span>:
-- <span style="color:#ff79c6">apiGroups</span>: [<span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#f1fa8c">&#34;extensions&#34;</span>, <span style="color:#f1fa8c">&#34;apps&#34;</span>]
-  <span style="color:#ff79c6">resources</span>: [<span style="color:#f1fa8c">&#34;*&#34;</span>]
-  <span style="color:#ff79c6">verbs</span>: [<span style="color:#f1fa8c">&#34;*&#34;</span>]
----
-<span style="color:#ff79c6">apiVersion</span>: v1
-<span style="color:#ff79c6">kind</span>: ServiceAccount
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: tiller
-  <span style="color:#ff79c6">namespace</span>: tiller-world
----
-<span style="color:#ff79c6">kind</span>: RoleBinding
-<span style="color:#ff79c6">apiVersion</span>: rbac.authorization.k8s.io/v1beta1
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: tiller-binding
-  <span style="color:#ff79c6">namespace</span>: tiller-world
-<span style="color:#ff79c6">subjects</span>:
-- <span style="color:#ff79c6">kind</span>: ServiceAccount
-  <span style="color:#ff79c6">name</span>: tiller
-  <span style="color:#ff79c6">namespace</span>: tiller-world
-<span style="color:#ff79c6">roleRef</span>:
-  <span style="color:#ff79c6">kind</span>: Role
-  <span style="color:#ff79c6">name</span>: tiller-manager
-  <span style="color:#ff79c6">apiGroup</span>: rbac.authorization.k8s.io
-</code></pre></div><p>Roleを追加するため、自分自身にsuper-user相当のcluster-admin roleをbindする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=&lt;email&gt;
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl create namespace tiller-world
-$ kubectl create -f tiller-rbac.yaml
-</code></pre></div><p>helm init時に作ったServiceAccountを渡す。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm init --tiller-namespace tiller-world --service-account tiller
-$ kubectl get deployment -n tiller-world
-NAME            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
-tiller-deploy   1         1         1            1           1m
-</code></pre></div><p>Prometheusをinstallしてみる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ helm install --name my-prometheus stable/prometheus --tiller-namespace tiller-world --namespace tiller-world
-$ kubectl get pods -n tiller-world
-NAME                                                           READY     STATUS    RESTARTS   AGE
-my-prometheus-prometheus-alertmanager-85f75879db-9r9z2         2/2       Running   0          1m
-my-prometheus-prometheus-kube-state-metrics-65dfc57897-95ts7   1/1       Running   0          1m
-my-prometheus-prometheus-server-7c98fb8ffb-s7jpq               2/2       Running   0          1m
-tiller-deploy-57dbcb6bbc-6srlt                                 1/1       Running   0          2m
-</code></pre></div><hr>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: Role
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: rbac.authorization.k8s.io/v1beta1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: tiller-manager
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span>: tiller-world
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">rules</span>:
+</span></span><span style="display:flex;"><span>- <span style="color:#ff79c6">apiGroups</span>: [<span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#f1fa8c">&#34;extensions&#34;</span>, <span style="color:#f1fa8c">&#34;apps&#34;</span>]
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">resources</span>: [<span style="color:#f1fa8c">&#34;*&#34;</span>]
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">verbs</span>: [<span style="color:#f1fa8c">&#34;*&#34;</span>]
+</span></span><span style="display:flex;"><span>---
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: v1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: ServiceAccount
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: tiller
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span>: tiller-world
+</span></span><span style="display:flex;"><span>---
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: RoleBinding
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: rbac.authorization.k8s.io/v1beta1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: tiller-binding
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span>: tiller-world
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">subjects</span>:
+</span></span><span style="display:flex;"><span>- <span style="color:#ff79c6">kind</span>: ServiceAccount
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: tiller
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span>: tiller-world
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">roleRef</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">kind</span>: Role
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: tiller-manager
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">apiGroup</span>: rbac.authorization.k8s.io
+</span></span></code></pre></div><p>Roleを追加するため、自分自身にsuper-user相当のcluster-admin roleをbindする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=&lt;email&gt;
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ kubectl create namespace tiller-world
+</span></span><span style="display:flex;"><span>$ kubectl create -f tiller-rbac.yaml
+</span></span></code></pre></div><p>helm init時に作ったServiceAccountを渡す。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ helm init --tiller-namespace tiller-world --service-account tiller
+</span></span><span style="display:flex;"><span>$ kubectl get deployment -n tiller-world
+</span></span><span style="display:flex;"><span>NAME            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+</span></span><span style="display:flex;"><span>tiller-deploy   1         1         1            1           1m
+</span></span></code></pre></div><p>Prometheusをinstallしてみる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ helm install --name my-prometheus stable/prometheus --tiller-namespace tiller-world --namespace tiller-world
+</span></span><span style="display:flex;"><span>$ kubectl get pods -n tiller-world
+</span></span><span style="display:flex;"><span>NAME                                                           READY     STATUS    RESTARTS   AGE
+</span></span><span style="display:flex;"><span>my-prometheus-prometheus-alertmanager-85f75879db-9r9z2         2/2       Running   0          1m
+</span></span><span style="display:flex;"><span>my-prometheus-prometheus-kube-state-metrics-65dfc57897-95ts7   1/1       Running   0          1m
+</span></span><span style="display:flex;"><span>my-prometheus-prometheus-server-7c98fb8ffb-s7jpq               2/2       Running   0          1m
+</span></span><span style="display:flex;"><span>tiller-deploy-57dbcb6bbc-6srlt                                 1/1       Running   0          2m
+</span></span></code></pre></div><hr>
 <p>ただ、実際のところHelmが特定のnamespaceしか触れないのは不便だし、roleをあとから増やすのも面倒なので最初からcluster-adminのRoleを付けておいてもよいかもしれない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">apiVersion</span>: v1
-<span style="color:#ff79c6">kind</span>: ServiceAccount
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: tiller
-  <span style="color:#ff79c6">namespace</span>: kube-system
----
-<span style="color:#ff79c6">apiVersion</span>: rbac.authorization.k8s.io/v1beta1
-<span style="color:#ff79c6">kind</span>: ClusterRoleBinding
-<span style="color:#ff79c6">metadata</span>:
-  <span style="color:#ff79c6">name</span>: tiller
-<span style="color:#ff79c6">roleRef</span>:
-  <span style="color:#ff79c6">apiGroup</span>: rbac.authorization.k8s.io
-  <span style="color:#ff79c6">kind</span>: ClusterRole
-  <span style="color:#ff79c6">name</span>: cluster-admin
-<span style="color:#ff79c6">subjects</span>:
-  - <span style="color:#ff79c6">kind</span>: ServiceAccount
-    <span style="color:#ff79c6">name</span>: tiller
-    <span style="color:#ff79c6">namespace</span>: kube-system
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: v1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: ServiceAccount
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: tiller
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span>: kube-system
+</span></span><span style="display:flex;"><span>---
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: rbac.authorization.k8s.io/v1beta1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: ClusterRoleBinding
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: tiller
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">roleRef</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">apiGroup</span>: rbac.authorization.k8s.io
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">kind</span>: ClusterRole
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: cluster-admin
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">subjects</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">kind</span>: ServiceAccount
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">name</span>: tiller
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">namespace</span>: kube-system
+</span></span></code></pre></div>
     </div>
     <div class="share">
       <div class="cell">

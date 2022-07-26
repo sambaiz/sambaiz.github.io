@@ -470,49 +470,49 @@ Boostingというのはアンサンブル学習の種類の一つで、ランダ
 順番に前回までの結果を受けながら学習し、結果をまとめる際にそれぞれの重みを掛けるもの。
 XGBoostではランダムフォレストと同様に決定木を弱学習器とする。</p>
 <p><a href="https://www.sambaiz.net/article/166/">KaggleのTitanicのチュートリアルをランダムフォレストで解く - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ pip install xgboost
-</code></pre></div><p>XGBoostは欠損値をそのまま扱うこともできるが、今回は以前と同じようにデータの前処理を行った。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ pip install xgboost
+</span></span></code></pre></div><p>XGBoostは欠損値をそのまま扱うこともできるが、今回は以前と同じようにデータの前処理を行った。
 <a href="https://github.com/dmlc/xgboost/blob/master/doc/parameter.md#learning-task-parameters">パラメータ</a>の
 objective(目的関数)には二値分類なので binary:logistic を指定し、確率が返るのでroundして出力している。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">import</span> pandas <span style="color:#ff79c6">as</span> pd
-<span style="color:#ff79c6">import</span> xgboost <span style="color:#ff79c6">as</span> xgb
-<span style="color:#ff79c6">from</span> sklearn.model_selection <span style="color:#ff79c6">import</span> train_test_split
-<span style="color:#ff79c6">from</span> sklearn.metrics <span style="color:#ff79c6">import</span> accuracy_score
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">preprocess</span>(df):
-    df[<span style="color:#f1fa8c">&#39;Fare&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Fare&#39;</span>]<span style="color:#ff79c6">.</span>fillna(df[<span style="color:#f1fa8c">&#39;Fare&#39;</span>]<span style="color:#ff79c6">.</span>mean())
-    df[<span style="color:#f1fa8c">&#39;Age&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Age&#39;</span>]<span style="color:#ff79c6">.</span>fillna(df[<span style="color:#f1fa8c">&#39;Age&#39;</span>]<span style="color:#ff79c6">.</span>mean())
-    df[<span style="color:#f1fa8c">&#39;Embarked&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Embarked&#39;</span>]<span style="color:#ff79c6">.</span>fillna(<span style="color:#f1fa8c">&#39;Unknown&#39;</span>)
-    df[<span style="color:#f1fa8c">&#39;Sex&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Sex&#39;</span>]<span style="color:#ff79c6">.</span>apply(<span style="color:#ff79c6">lambda</span> x: <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">if</span> x <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#39;male&#39;</span> <span style="color:#ff79c6">else</span> <span style="color:#bd93f9">0</span>)
-    df[<span style="color:#f1fa8c">&#39;Embarked&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Embarked&#39;</span>]<span style="color:#ff79c6">.</span>map( {<span style="color:#f1fa8c">&#39;S&#39;</span>: <span style="color:#bd93f9">0</span>, <span style="color:#f1fa8c">&#39;C&#39;</span>: <span style="color:#bd93f9">1</span>, <span style="color:#f1fa8c">&#39;Q&#39;</span>: <span style="color:#bd93f9">2</span>, <span style="color:#f1fa8c">&#39;Unknown&#39;</span>: <span style="color:#bd93f9">3</span>} )<span style="color:#ff79c6">.</span>astype(<span style="color:#8be9fd;font-style:italic">int</span>)
-    df <span style="color:#ff79c6">=</span> df<span style="color:#ff79c6">.</span>drop([<span style="color:#f1fa8c">&#39;Cabin&#39;</span>,<span style="color:#f1fa8c">&#39;Name&#39;</span>,<span style="color:#f1fa8c">&#39;PassengerId&#39;</span>,<span style="color:#f1fa8c">&#39;Ticket&#39;</span>],axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)
-    <span style="color:#ff79c6">return</span> df
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train</span>(df):
-    train_x <span style="color:#ff79c6">=</span> df<span style="color:#ff79c6">.</span>drop(<span style="color:#f1fa8c">&#39;Survived&#39;</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)
-    train_y <span style="color:#ff79c6">=</span> df<span style="color:#ff79c6">.</span>Survived
-    (train_x, test_x ,train_y, test_y) <span style="color:#ff79c6">=</span> train_test_split(train_x, train_y, test_size <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0.6</span>, random_state <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">42</span>)
-    dtrain <span style="color:#ff79c6">=</span> xgb<span style="color:#ff79c6">.</span>DMatrix(train_x, label<span style="color:#ff79c6">=</span>train_y)
-    param <span style="color:#ff79c6">=</span> {<span style="color:#f1fa8c">&#39;max_depth&#39;</span>:<span style="color:#bd93f9">3</span>, <span style="color:#f1fa8c">&#39;learning_rate&#39;</span>: <span style="color:#bd93f9">0.6</span>, <span style="color:#f1fa8c">&#39;objective&#39;</span>:<span style="color:#f1fa8c">&#39;binary:logistic&#39;</span> }
-    num_round <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">2</span>
-    bst <span style="color:#ff79c6">=</span> xgb<span style="color:#ff79c6">.</span>train(param, dtrain, num_round)
-    preds <span style="color:#ff79c6">=</span> bst<span style="color:#ff79c6">.</span>predict(xgb<span style="color:#ff79c6">.</span>DMatrix(test_x))
-    <span style="color:#ff79c6">print</span>(accuracy_score(preds<span style="color:#ff79c6">.</span>round(), test_y))
-
-    <span style="color:#ff79c6">return</span> bst
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">predict</span>(bst, df):
-    <span style="color:#ff79c6">return</span> bst<span style="color:#ff79c6">.</span>predict(xgb<span style="color:#ff79c6">.</span>DMatrix(df))
-
-df <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(<span style="color:#f1fa8c">&#39;./train.csv&#39;</span>)
-df_test_origin <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(<span style="color:#f1fa8c">&#39;./test.csv&#39;</span>)
-df <span style="color:#ff79c6">=</span> preprocess(df)
-df_test <span style="color:#ff79c6">=</span> preprocess(df_test_origin)
-bst <span style="color:#ff79c6">=</span> train(df)
-answer <span style="color:#ff79c6">=</span> predict(bst, df_test)<span style="color:#ff79c6">.</span>round()<span style="color:#ff79c6">.</span>astype(<span style="color:#8be9fd;font-style:italic">int</span>)
-submit_data <span style="color:#ff79c6">=</span>  pd<span style="color:#ff79c6">.</span>Series(answer, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;Survived&#39;</span>, index<span style="color:#ff79c6">=</span>df_test_origin[<span style="color:#f1fa8c">&#39;PassengerId&#39;</span>])
-submit_data<span style="color:#ff79c6">.</span>to_csv(<span style="color:#f1fa8c">&#39;submit2.csv&#39;</span>, header<span style="color:#ff79c6">=</span>True)
-</code></pre></div><p>精度は0.78ほど。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> pandas <span style="color:#ff79c6">as</span> pd
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> xgboost <span style="color:#ff79c6">as</span> xgb
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> sklearn.model_selection <span style="color:#ff79c6">import</span> train_test_split
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> sklearn.metrics <span style="color:#ff79c6">import</span> accuracy_score
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">preprocess</span>(df):
+</span></span><span style="display:flex;"><span>    df[<span style="color:#f1fa8c">&#39;Fare&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Fare&#39;</span>]<span style="color:#ff79c6">.</span>fillna(df[<span style="color:#f1fa8c">&#39;Fare&#39;</span>]<span style="color:#ff79c6">.</span>mean())
+</span></span><span style="display:flex;"><span>    df[<span style="color:#f1fa8c">&#39;Age&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Age&#39;</span>]<span style="color:#ff79c6">.</span>fillna(df[<span style="color:#f1fa8c">&#39;Age&#39;</span>]<span style="color:#ff79c6">.</span>mean())
+</span></span><span style="display:flex;"><span>    df[<span style="color:#f1fa8c">&#39;Embarked&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Embarked&#39;</span>]<span style="color:#ff79c6">.</span>fillna(<span style="color:#f1fa8c">&#39;Unknown&#39;</span>)
+</span></span><span style="display:flex;"><span>    df[<span style="color:#f1fa8c">&#39;Sex&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Sex&#39;</span>]<span style="color:#ff79c6">.</span>apply(<span style="color:#ff79c6">lambda</span> x: <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">if</span> x <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#39;male&#39;</span> <span style="color:#ff79c6">else</span> <span style="color:#bd93f9">0</span>)
+</span></span><span style="display:flex;"><span>    df[<span style="color:#f1fa8c">&#39;Embarked&#39;</span>] <span style="color:#ff79c6">=</span> df[<span style="color:#f1fa8c">&#39;Embarked&#39;</span>]<span style="color:#ff79c6">.</span>map( {<span style="color:#f1fa8c">&#39;S&#39;</span>: <span style="color:#bd93f9">0</span>, <span style="color:#f1fa8c">&#39;C&#39;</span>: <span style="color:#bd93f9">1</span>, <span style="color:#f1fa8c">&#39;Q&#39;</span>: <span style="color:#bd93f9">2</span>, <span style="color:#f1fa8c">&#39;Unknown&#39;</span>: <span style="color:#bd93f9">3</span>} )<span style="color:#ff79c6">.</span>astype(<span style="color:#8be9fd;font-style:italic">int</span>)
+</span></span><span style="display:flex;"><span>    df <span style="color:#ff79c6">=</span> df<span style="color:#ff79c6">.</span>drop([<span style="color:#f1fa8c">&#39;Cabin&#39;</span>,<span style="color:#f1fa8c">&#39;Name&#39;</span>,<span style="color:#f1fa8c">&#39;PassengerId&#39;</span>,<span style="color:#f1fa8c">&#39;Ticket&#39;</span>],axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> df
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train</span>(df):
+</span></span><span style="display:flex;"><span>    train_x <span style="color:#ff79c6">=</span> df<span style="color:#ff79c6">.</span>drop(<span style="color:#f1fa8c">&#39;Survived&#39;</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)
+</span></span><span style="display:flex;"><span>    train_y <span style="color:#ff79c6">=</span> df<span style="color:#ff79c6">.</span>Survived
+</span></span><span style="display:flex;"><span>    (train_x, test_x ,train_y, test_y) <span style="color:#ff79c6">=</span> train_test_split(train_x, train_y, test_size <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0.6</span>, random_state <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">42</span>)
+</span></span><span style="display:flex;"><span>    dtrain <span style="color:#ff79c6">=</span> xgb<span style="color:#ff79c6">.</span>DMatrix(train_x, label<span style="color:#ff79c6">=</span>train_y)
+</span></span><span style="display:flex;"><span>    param <span style="color:#ff79c6">=</span> {<span style="color:#f1fa8c">&#39;max_depth&#39;</span>:<span style="color:#bd93f9">3</span>, <span style="color:#f1fa8c">&#39;learning_rate&#39;</span>: <span style="color:#bd93f9">0.6</span>, <span style="color:#f1fa8c">&#39;objective&#39;</span>:<span style="color:#f1fa8c">&#39;binary:logistic&#39;</span> }
+</span></span><span style="display:flex;"><span>    num_round <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">2</span>
+</span></span><span style="display:flex;"><span>    bst <span style="color:#ff79c6">=</span> xgb<span style="color:#ff79c6">.</span>train(param, dtrain, num_round)
+</span></span><span style="display:flex;"><span>    preds <span style="color:#ff79c6">=</span> bst<span style="color:#ff79c6">.</span>predict(xgb<span style="color:#ff79c6">.</span>DMatrix(test_x))
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">print</span>(accuracy_score(preds<span style="color:#ff79c6">.</span>round(), test_y))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> bst
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">predict</span>(bst, df):
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> bst<span style="color:#ff79c6">.</span>predict(xgb<span style="color:#ff79c6">.</span>DMatrix(df))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>df <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(<span style="color:#f1fa8c">&#39;./train.csv&#39;</span>)
+</span></span><span style="display:flex;"><span>df_test_origin <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(<span style="color:#f1fa8c">&#39;./test.csv&#39;</span>)
+</span></span><span style="display:flex;"><span>df <span style="color:#ff79c6">=</span> preprocess(df)
+</span></span><span style="display:flex;"><span>df_test <span style="color:#ff79c6">=</span> preprocess(df_test_origin)
+</span></span><span style="display:flex;"><span>bst <span style="color:#ff79c6">=</span> train(df)
+</span></span><span style="display:flex;"><span>answer <span style="color:#ff79c6">=</span> predict(bst, df_test)<span style="color:#ff79c6">.</span>round()<span style="color:#ff79c6">.</span>astype(<span style="color:#8be9fd;font-style:italic">int</span>)
+</span></span><span style="display:flex;"><span>submit_data <span style="color:#ff79c6">=</span>  pd<span style="color:#ff79c6">.</span>Series(answer, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;Survived&#39;</span>, index<span style="color:#ff79c6">=</span>df_test_origin[<span style="color:#f1fa8c">&#39;PassengerId&#39;</span>])
+</span></span><span style="display:flex;"><span>submit_data<span style="color:#ff79c6">.</span>to_csv(<span style="color:#f1fa8c">&#39;submit2.csv&#39;</span>, header<span style="color:#ff79c6">=</span><span style="color:#ff79c6">True</span>)
+</span></span></code></pre></div><p>精度は0.78ほど。</p>
 <p><img src="https://www.sambaiz.net/images/169.png" alt="スコアと順位"></p>
 <h2 id="参考">参考</h2>
 <p><a href="https://www.slideshare.net/Retrieva_jp/ss-80724064">ブースティング入門</a></p>

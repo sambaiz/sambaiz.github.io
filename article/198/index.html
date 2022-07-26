@@ -478,86 +478,86 @@
 <p>以下のCNNで学習率を高めに設定しBNありなしの結果を比較する。学習データはmnist。MonitoredSessionでcostをsummaryとして出力しTensorBoardで見られるようにしている。</p>
 <p><a href="https://www.sambaiz.net/article/147/">TensorBoardでsummaryやグラフを見る - sambaiz-net</a></p>
 <p><a href="https://www.sambaiz.net/article/175/">TensorFlowのMonitoredSessionとSessionRunHookとsummaryのエラー - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">import</span> pandas <span style="color:#ff79c6">as</span> pd
-<span style="color:#ff79c6">import</span> numpy <span style="color:#ff79c6">as</span> np
-<span style="color:#ff79c6">import</span> tensorflow <span style="color:#ff79c6">as</span> tf
-<span style="color:#ff79c6">from</span> sklearn.model_selection <span style="color:#ff79c6">import</span> train_test_split
-<span style="color:#ff79c6">from</span> sklearn.utils <span style="color:#ff79c6">import</span> shuffle
-<span style="color:#ff79c6">from</span> sklearn.metrics <span style="color:#ff79c6">import</span> accuracy_score
-
-train <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(<span style="color:#f1fa8c">&#39;./train.csv&#39;</span>)
-(x_train, x_valid ,y_train, y_valid) <span style="color:#ff79c6">=</span> train_test_split(
-    train<span style="color:#ff79c6">.</span>drop(<span style="color:#f1fa8c">&#39;label&#39;</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)<span style="color:#ff79c6">.</span>values<span style="color:#ff79c6">.</span>reshape((<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">1</span>)), 
-    np<span style="color:#ff79c6">.</span>identity(<span style="color:#bd93f9">10</span>)[train[<span style="color:#f1fa8c">&#39;label&#39;</span>]], 
-    test_size <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0.1</span>, random_state <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">100</span>)
-
-<span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#34;data shape: {}, label shape {}&#34;</span><span style="color:#ff79c6">.</span>format(x_train<span style="color:#ff79c6">.</span>shape, y_train<span style="color:#ff79c6">.</span>shape))
-
-tf<span style="color:#ff79c6">.</span>reset_default_graph()
-
-<span style="color:#ff79c6">class</span> <span style="color:#50fa7b">ConvBnRelu</span>:
-    <span style="color:#ff79c6">def</span> __init__(self, filters, kernel_size):
-        self<span style="color:#ff79c6">.</span>filters <span style="color:#ff79c6">=</span> filters
-        self<span style="color:#ff79c6">.</span>kernel_size<span style="color:#ff79c6">=</span> kernel_size
-        
-    <span style="color:#ff79c6">def</span> __call__(self, x, use_bn, is_training):
-        h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Conv2D(filters<span style="color:#ff79c6">=</span>self<span style="color:#ff79c6">.</span>filters, kernel_size<span style="color:#ff79c6">=</span>self<span style="color:#ff79c6">.</span>kernel_size)(x)
-        h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>cond(
-            use_bn,
-            true_fn<span style="color:#ff79c6">=</span><span style="color:#ff79c6">lambda</span>: tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>batch_normalization(h, training<span style="color:#ff79c6">=</span>is_training),
-            false_fn<span style="color:#ff79c6">=</span><span style="color:#ff79c6">lambda</span>: h
-        )
-        <span style="color:#ff79c6">return</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu(h)
-
-is_training <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>bool, shape<span style="color:#ff79c6">=</span>())
-use_bn <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>bool, shape<span style="color:#ff79c6">=</span>())
-x <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(shape<span style="color:#ff79c6">=</span>[None, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">1</span>], dtype<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>float32)
-t <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, [None, <span style="color:#bd93f9">10</span>])
-
-<span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#34;Conv1&#34;</span>):
-    h <span style="color:#ff79c6">=</span> ConvBnRelu(filters<span style="color:#ff79c6">=</span><span style="color:#bd93f9">32</span>, kernel_size<span style="color:#ff79c6">=</span> [<span style="color:#bd93f9">3</span>, <span style="color:#bd93f9">3</span>])(x, use_bn, is_training)
-    h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>MaxPooling2D(pool_size<span style="color:#ff79c6">=</span>[<span style="color:#bd93f9">2</span>, <span style="color:#bd93f9">2</span>], strides<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>)(h)
-
-<span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#34;Conv2&#34;</span>):
-    h <span style="color:#ff79c6">=</span> ConvBnRelu(filters<span style="color:#ff79c6">=</span> <span style="color:#bd93f9">64</span>, kernel_size<span style="color:#ff79c6">=</span> [<span style="color:#bd93f9">3</span>, <span style="color:#bd93f9">3</span>])(h, use_bn, is_training)
-    h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>MaxPooling2D(pool_size<span style="color:#ff79c6">=</span>[<span style="color:#bd93f9">2</span>, <span style="color:#bd93f9">2</span>], strides<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>)(h)
-
-h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Flatten()(h)
-y <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(units<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>softmax)(h)
-
-global_step<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>get_or_create_global_step()
-cost <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">-</span> tf<span style="color:#ff79c6">.</span>reduce_mean(tf<span style="color:#ff79c6">.</span>reduce_sum(t <span style="color:#ff79c6">*</span> tf<span style="color:#ff79c6">.</span>log(tf<span style="color:#ff79c6">.</span>clip_by_value(y, <span style="color:#bd93f9">1e-10</span>, y)), axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>))
-summary_cost <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>summary<span style="color:#ff79c6">.</span>scalar(<span style="color:#f1fa8c">&#39;cost&#39;</span>, cost)
-optimizer <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>AdamOptimizer(<span style="color:#bd93f9">0.01</span>)<span style="color:#ff79c6">.</span>minimize(cost, global_step<span style="color:#ff79c6">=</span>global_step)
-
-EPOCH_NUM <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">5</span>
-BATCH_SIZE <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">100</span>
-
-hooks <span style="color:#ff79c6">=</span> [
-    tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>StopAtStepHook(last_step<span style="color:#ff79c6">=</span>EPOCH_NUM<span style="color:#ff79c6">*</span>(<span style="color:#8be9fd;font-style:italic">len</span>(x_train) <span style="color:#ff79c6">//</span> BATCH_SIZE))
-]
-
-init <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>global_variables_initializer()
-
-<span style="color:#ff79c6">for</span> bn <span style="color:#ff79c6">in</span> [False, True]:
-    epoch <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>
-    <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#34;--- use binary norm: {} ---&#34;</span><span style="color:#ff79c6">.</span>format(bn))
-    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>MonitoredTrainingSession(
-        hooks<span style="color:#ff79c6">=</span>hooks, 
-        summary_dir<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;/home/jovyan/summary&#34;</span>,
-        save_summaries_steps<span style="color:#ff79c6">=</span><span style="color:#bd93f9">100</span>) <span style="color:#ff79c6">as</span> sess:    
-        sess<span style="color:#ff79c6">.</span>run(init, feed_dict<span style="color:#ff79c6">=</span>{x: x_valid, t: y_valid, is_training: False, use_bn: bn})
-        <span style="color:#ff79c6">while</span> <span style="color:#ff79c6">not</span> sess<span style="color:#ff79c6">.</span>should_stop():
-            epoch <span style="color:#ff79c6">+=</span> <span style="color:#bd93f9">1</span>
-            y_pred, cost_valid, _ <span style="color:#ff79c6">=</span> sess<span style="color:#ff79c6">.</span>run([y, cost, summary_cost], feed_dict<span style="color:#ff79c6">=</span>{x: x_valid, t: y_valid, is_training: False, use_bn: bn})
-            <span style="color:#ff79c6">print</span>(<span style="color:#f1fa8c">&#34;epoch: {:2d}, cost: {:.4f}, accuracy: {:.4f}&#34;</span><span style="color:#ff79c6">.</span>format(
-                epoch, cost_valid, accuracy_score(y_pred<span style="color:#ff79c6">.</span>argmax(axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>), y_valid<span style="color:#ff79c6">.</span>argmax(axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>))))
-            x_train, y_train <span style="color:#ff79c6">=</span> shuffle(x_train, y_train, random_state<span style="color:#ff79c6">=</span><span style="color:#bd93f9">100</span>)
-            <span style="color:#ff79c6">for</span> batch <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(<span style="color:#8be9fd;font-style:italic">len</span>(x_train) <span style="color:#ff79c6">//</span> BATCH_SIZE):
-                start <span style="color:#ff79c6">=</span> batch <span style="color:#ff79c6">*</span> BATCH_SIZE
-                end <span style="color:#ff79c6">=</span> start <span style="color:#ff79c6">+</span> BATCH_SIZE
-                sess<span style="color:#ff79c6">.</span>run(optimizer, feed_dict<span style="color:#ff79c6">=</span>{x: x_train[start:end], t: y_train[start:end], is_training: True, use_bn: bn})
-</code></pre></div><p>BNを行わなかったときの結果。コストを下げられていない。ちなみに学習率を0.01から0.001にしたら下げられるようになった。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> pandas <span style="color:#ff79c6">as</span> pd
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> numpy <span style="color:#ff79c6">as</span> np
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> tensorflow <span style="color:#ff79c6">as</span> tf
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> sklearn.model_selection <span style="color:#ff79c6">import</span> train_test_split
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> sklearn.utils <span style="color:#ff79c6">import</span> shuffle
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> sklearn.metrics <span style="color:#ff79c6">import</span> accuracy_score
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>train <span style="color:#ff79c6">=</span> pd<span style="color:#ff79c6">.</span>read_csv(<span style="color:#f1fa8c">&#39;./train.csv&#39;</span>)
+</span></span><span style="display:flex;"><span>(x_train, x_valid ,y_train, y_valid) <span style="color:#ff79c6">=</span> train_test_split(
+</span></span><span style="display:flex;"><span>    train<span style="color:#ff79c6">.</span>drop(<span style="color:#f1fa8c">&#39;label&#39;</span>, axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>)<span style="color:#ff79c6">.</span>values<span style="color:#ff79c6">.</span>reshape((<span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">1</span>)), 
+</span></span><span style="display:flex;"><span>    np<span style="color:#ff79c6">.</span>identity(<span style="color:#bd93f9">10</span>)[train[<span style="color:#f1fa8c">&#39;label&#39;</span>]], 
+</span></span><span style="display:flex;"><span>    test_size <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0.1</span>, random_state <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">100</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#34;data shape: </span><span style="color:#f1fa8c">{}</span><span style="color:#f1fa8c">, label shape </span><span style="color:#f1fa8c">{}</span><span style="color:#f1fa8c">&#34;</span><span style="color:#ff79c6">.</span>format(x_train<span style="color:#ff79c6">.</span>shape, y_train<span style="color:#ff79c6">.</span>shape))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>tf<span style="color:#ff79c6">.</span>reset_default_graph()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">ConvBnRelu</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">def</span> __init__(self, filters, kernel_size):
+</span></span><span style="display:flex;"><span>        self<span style="color:#ff79c6">.</span>filters <span style="color:#ff79c6">=</span> filters
+</span></span><span style="display:flex;"><span>        self<span style="color:#ff79c6">.</span>kernel_size<span style="color:#ff79c6">=</span> kernel_size
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">def</span> __call__(self, x, use_bn, is_training):
+</span></span><span style="display:flex;"><span>        h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Conv2D(filters<span style="color:#ff79c6">=</span>self<span style="color:#ff79c6">.</span>filters, kernel_size<span style="color:#ff79c6">=</span>self<span style="color:#ff79c6">.</span>kernel_size)(x)
+</span></span><span style="display:flex;"><span>        h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>cond(
+</span></span><span style="display:flex;"><span>            use_bn,
+</span></span><span style="display:flex;"><span>            true_fn<span style="color:#ff79c6">=</span><span style="color:#ff79c6">lambda</span>: tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>batch_normalization(h, training<span style="color:#ff79c6">=</span>is_training),
+</span></span><span style="display:flex;"><span>            false_fn<span style="color:#ff79c6">=</span><span style="color:#ff79c6">lambda</span>: h
+</span></span><span style="display:flex;"><span>        )
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>relu(h)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>is_training <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>bool, shape<span style="color:#ff79c6">=</span>())
+</span></span><span style="display:flex;"><span>use_bn <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>bool, shape<span style="color:#ff79c6">=</span>())
+</span></span><span style="display:flex;"><span>x <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(shape<span style="color:#ff79c6">=</span>[<span style="color:#ff79c6">None</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">28</span>, <span style="color:#bd93f9">1</span>], dtype<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>float32)
+</span></span><span style="display:flex;"><span>t <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, [<span style="color:#ff79c6">None</span>, <span style="color:#bd93f9">10</span>])
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#34;Conv1&#34;</span>):
+</span></span><span style="display:flex;"><span>    h <span style="color:#ff79c6">=</span> ConvBnRelu(filters<span style="color:#ff79c6">=</span><span style="color:#bd93f9">32</span>, kernel_size<span style="color:#ff79c6">=</span> [<span style="color:#bd93f9">3</span>, <span style="color:#bd93f9">3</span>])(x, use_bn, is_training)
+</span></span><span style="display:flex;"><span>    h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>MaxPooling2D(pool_size<span style="color:#ff79c6">=</span>[<span style="color:#bd93f9">2</span>, <span style="color:#bd93f9">2</span>], strides<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>)(h)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>name_scope(<span style="color:#f1fa8c">&#34;Conv2&#34;</span>):
+</span></span><span style="display:flex;"><span>    h <span style="color:#ff79c6">=</span> ConvBnRelu(filters<span style="color:#ff79c6">=</span> <span style="color:#bd93f9">64</span>, kernel_size<span style="color:#ff79c6">=</span> [<span style="color:#bd93f9">3</span>, <span style="color:#bd93f9">3</span>])(h, use_bn, is_training)
+</span></span><span style="display:flex;"><span>    h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>MaxPooling2D(pool_size<span style="color:#ff79c6">=</span>[<span style="color:#bd93f9">2</span>, <span style="color:#bd93f9">2</span>], strides<span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span>)(h)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>h <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Flatten()(h)
+</span></span><span style="display:flex;"><span>y <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>layers<span style="color:#ff79c6">.</span>Dense(units<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, activation<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>nn<span style="color:#ff79c6">.</span>softmax)(h)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>global_step<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>get_or_create_global_step()
+</span></span><span style="display:flex;"><span>cost <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">-</span> tf<span style="color:#ff79c6">.</span>reduce_mean(tf<span style="color:#ff79c6">.</span>reduce_sum(t <span style="color:#ff79c6">*</span> tf<span style="color:#ff79c6">.</span>log(tf<span style="color:#ff79c6">.</span>clip_by_value(y, <span style="color:#bd93f9">1e-10</span>, y)), axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>))
+</span></span><span style="display:flex;"><span>summary_cost <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>summary<span style="color:#ff79c6">.</span>scalar(<span style="color:#f1fa8c">&#39;cost&#39;</span>, cost)
+</span></span><span style="display:flex;"><span>optimizer <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>AdamOptimizer(<span style="color:#bd93f9">0.01</span>)<span style="color:#ff79c6">.</span>minimize(cost, global_step<span style="color:#ff79c6">=</span>global_step)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>EPOCH_NUM <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">5</span>
+</span></span><span style="display:flex;"><span>BATCH_SIZE <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">100</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>hooks <span style="color:#ff79c6">=</span> [
+</span></span><span style="display:flex;"><span>    tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>StopAtStepHook(last_step<span style="color:#ff79c6">=</span>EPOCH_NUM<span style="color:#ff79c6">*</span>(<span style="color:#8be9fd;font-style:italic">len</span>(x_train) <span style="color:#ff79c6">//</span> BATCH_SIZE))
+</span></span><span style="display:flex;"><span>]
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>init <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>global_variables_initializer()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">for</span> bn <span style="color:#ff79c6">in</span> [<span style="color:#ff79c6">False</span>, <span style="color:#ff79c6">True</span>]:
+</span></span><span style="display:flex;"><span>    epoch <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">-</span><span style="color:#bd93f9">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#34;--- use binary norm: </span><span style="color:#f1fa8c">{}</span><span style="color:#f1fa8c"> ---&#34;</span><span style="color:#ff79c6">.</span>format(bn))
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>MonitoredTrainingSession(
+</span></span><span style="display:flex;"><span>        hooks<span style="color:#ff79c6">=</span>hooks, 
+</span></span><span style="display:flex;"><span>        summary_dir<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;/home/jovyan/summary&#34;</span>,
+</span></span><span style="display:flex;"><span>        save_summaries_steps<span style="color:#ff79c6">=</span><span style="color:#bd93f9">100</span>) <span style="color:#ff79c6">as</span> sess:    
+</span></span><span style="display:flex;"><span>        sess<span style="color:#ff79c6">.</span>run(init, feed_dict<span style="color:#ff79c6">=</span>{x: x_valid, t: y_valid, is_training: <span style="color:#ff79c6">False</span>, use_bn: bn})
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">while</span> <span style="color:#ff79c6">not</span> sess<span style="color:#ff79c6">.</span>should_stop():
+</span></span><span style="display:flex;"><span>            epoch <span style="color:#ff79c6">+=</span> <span style="color:#bd93f9">1</span>
+</span></span><span style="display:flex;"><span>            y_pred, cost_valid, _ <span style="color:#ff79c6">=</span> sess<span style="color:#ff79c6">.</span>run([y, cost, summary_cost], feed_dict<span style="color:#ff79c6">=</span>{x: x_valid, t: y_valid, is_training: <span style="color:#ff79c6">False</span>, use_bn: bn})
+</span></span><span style="display:flex;"><span>            <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#34;epoch: </span><span style="color:#f1fa8c">{:2d}</span><span style="color:#f1fa8c">, cost: </span><span style="color:#f1fa8c">{:.4f}</span><span style="color:#f1fa8c">, accuracy: </span><span style="color:#f1fa8c">{:.4f}</span><span style="color:#f1fa8c">&#34;</span><span style="color:#ff79c6">.</span>format(
+</span></span><span style="display:flex;"><span>                epoch, cost_valid, accuracy_score(y_pred<span style="color:#ff79c6">.</span>argmax(axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>), y_valid<span style="color:#ff79c6">.</span>argmax(axis<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>))))
+</span></span><span style="display:flex;"><span>            x_train, y_train <span style="color:#ff79c6">=</span> shuffle(x_train, y_train, random_state<span style="color:#ff79c6">=</span><span style="color:#bd93f9">100</span>)
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">for</span> batch <span style="color:#ff79c6">in</span> <span style="color:#8be9fd;font-style:italic">range</span>(<span style="color:#8be9fd;font-style:italic">len</span>(x_train) <span style="color:#ff79c6">//</span> BATCH_SIZE):
+</span></span><span style="display:flex;"><span>                start <span style="color:#ff79c6">=</span> batch <span style="color:#ff79c6">*</span> BATCH_SIZE
+</span></span><span style="display:flex;"><span>                end <span style="color:#ff79c6">=</span> start <span style="color:#ff79c6">+</span> BATCH_SIZE
+</span></span><span style="display:flex;"><span>                sess<span style="color:#ff79c6">.</span>run(optimizer, feed_dict<span style="color:#ff79c6">=</span>{x: x_train[start:end], t: y_train[start:end], is_training: <span style="color:#ff79c6">True</span>, use_bn: bn})
+</span></span></code></pre></div><p>BNを行わなかったときの結果。コストを下げられていない。ちなみに学習率を0.01から0.001にしたら下げられるようになった。</p>
 <p><img src="https://www.sambaiz.net/images/198-2.png" alt="BNしない場合のコスト"></p>
 <p>一方、BNを行ったときの結果がこれ。学習率はそのままで順調にコストを下げることができている。</p>
 <p><img src="https://www.sambaiz.net/images/198-3.png" alt="BNした場合のコスト"></p>

@@ -468,13 +468,13 @@
       <blockquote>
 <p>追記(2016-06-25): 現在は普通に入れても0.12系の2.3.5-1が入るようになっている。</p>
 </blockquote>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh
-$ td-agent --version
-td-agent 0.14.16
-</code></pre></div><p>0.12系じゃない！？</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ yum list installed | grep td-agent
-td-agent.x86_64                       2.3.5-0.el2017               @treasuredata
-</code></pre></div><p>どうやら2.3.5では0.14系になってしまっているよう。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ curl -L https://toolbelt.treasuredata.com/sh/install-redhat-td-agent2.sh | sh
+</span></span><span style="display:flex;"><span>$ td-agent --version
+</span></span><span style="display:flex;"><span>td-agent 0.14.16
+</span></span></code></pre></div><p>0.12系じゃない！？</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ yum list installed | grep td-agent
+</span></span><span style="display:flex;"><span>td-agent.x86_64                       2.3.5-0.el2017               @treasuredata
+</span></span></code></pre></div><p>どうやら2.3.5では0.14系になってしまっているよう。
 そのあとにリリースされた2.3.5-1では直ってるみたいだが、現時点ではrpmリポジトリに上がっていない。</p>
 <p>しょうがないのでソースからビルドすることにした。
 いずれにせよ各環境で同じバージョンのビルドに合わせるべきだとは思う。
@@ -483,34 +483,34 @@ Beanstalk環境の場合、AMIに固めていたとしても非Beanstalk AMIで�
 <p>前UbuntuでやったようにDockerでビルドする。今回はAmazon Linux向け。</p>
 <p><a href="https://www.sambaiz.net/article/32/">td-agentをビルドしてfluentdのバージョンを上げる - sambaiz-net</a></p>
 <p><a href="https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/">https://hub.docker.com/r/sambaiz/docker-td-agent-build-amazon-linux/</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-docker" data-lang="docker"><span style="color:#ff79c6">FROM</span><span style="color:#f1fa8c"> amazonlinux:2017.03</span>
-
-<span style="color:#ff79c6">WORKDIR</span><span style="color:#f1fa8c"> /tmp</span>
-
-<span style="color:#ff79c6">RUN</span> yum -y update <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    yum groupinstall -y <span style="color:#f1fa8c">&#34;Development Tools&#34;</span> <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    yum install -y ruby23 ruby23-devel <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    gem install bundler io-console <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    git clone https://github.com/treasure-data/omnibus-td-agent
-
-<span style="color:#ff79c6">WORKDIR</span><span style="color:#f1fa8c"> /tmp/omnibus-td-agent</span>
-
-<span style="color:#ff79c6">RUN</span> bundle install --binstubs <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    bin/gem_downloader core_gems.rb <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    bin/gem_downloader plugin_gems.rb <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    bin/gem_downloader ui_gems.rb <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    mkdir -p /opt/td-agent /var/cache/omnibus <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    bin/omnibus build td-agent2 <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    mv ./pkg/*.rpm /
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker build -t amazon-linux-td-agent .
-$ docker run --name altd -itd amazon-linux-td-agent sh
-$ docker cp altd:/td-agent-2.3.5-1.el2017.x86_64.rpm .
-</code></pre></div><p>あとはこれをインストールする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ yum install -y redhat-lsb-core
-$ rpm -ivh td-agent-2.3.5-1.el2017.x86_64.rpm 
-$ td-agent --version
-td-agent 0.12.36
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-docker" data-lang="docker"><span style="display:flex;"><span><span style="color:#ff79c6">FROM</span><span style="color:#f1fa8c"> amazonlinux:2017.03</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">WORKDIR</span><span style="color:#f1fa8c"> /tmp</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">RUN</span> yum -y update <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    yum groupinstall -y <span style="color:#f1fa8c">&#34;Development Tools&#34;</span> <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    yum install -y ruby23 ruby23-devel <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    gem install bundler io-console <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    git clone https://github.com/treasure-data/omnibus-td-agent
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">WORKDIR</span><span style="color:#f1fa8c"> /tmp/omnibus-td-agent</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">RUN</span> bundle install --binstubs <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    bin/gem_downloader core_gems.rb <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    bin/gem_downloader plugin_gems.rb <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    bin/gem_downloader ui_gems.rb <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    mkdir -p /opt/td-agent /var/cache/omnibus <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    bin/omnibus build td-agent2 <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    mv ./pkg/*.rpm /
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ docker build -t amazon-linux-td-agent .
+</span></span><span style="display:flex;"><span>$ docker run --name altd -itd amazon-linux-td-agent sh
+</span></span><span style="display:flex;"><span>$ docker cp altd:/td-agent-2.3.5-1.el2017.x86_64.rpm .
+</span></span></code></pre></div><p>あとはこれをインストールする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ yum install -y redhat-lsb-core
+</span></span><span style="display:flex;"><span>$ rpm -ivh td-agent-2.3.5-1.el2017.x86_64.rpm 
+</span></span><span style="display:flex;"><span>$ td-agent --version
+</span></span><span style="display:flex;"><span>td-agent 0.12.36
+</span></span></code></pre></div>
     </div>
     <div class="share">
       <div class="cell">

@@ -471,104 +471,104 @@
 <p><a href="https://www.sambaiz.net/article/121/">TerraformでVPCを管理するmoduleを作る - sambaiz-net</a></p>
 <p>functionsと同列にinfrastructureディレクトリを作成してtfファイルを置く。
 その下に環境ごとのディレクトリを作成することもできて、その場合は &ndash;env で指定した環境のものが使われる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">- functions
-- infrastructure
-  main.tf
-  variables.tf
-  - modules
-    - cloudwatch_schedule
-      main.tf
-      variables.tf
-project.json 
-</code></pre></div><p>functionをデプロイするとそのARNが変数で取れるようになる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ apex list --tfvars
-apex_function_hello=&#34;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&#34;
-</code></pre></div><p>今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>- functions
+</span></span><span style="display:flex;"><span>- infrastructure
+</span></span><span style="display:flex;"><span>  main.tf
+</span></span><span style="display:flex;"><span>  variables.tf
+</span></span><span style="display:flex;"><span>  - modules
+</span></span><span style="display:flex;"><span>    - cloudwatch_schedule
+</span></span><span style="display:flex;"><span>      main.tf
+</span></span><span style="display:flex;"><span>      variables.tf
+</span></span><span style="display:flex;"><span>project.json 
+</span></span></code></pre></div><p>functionをデプロイするとそのARNが変数で取れるようになる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ apex list --tfvars
+</span></span><span style="display:flex;"><span>apex_function_hello=&#34;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&#34;
+</span></span></code></pre></div><p>今回設定するトリガーはCloudwatch Eventのスケジューリング。作成するリソースは以下の通り。</p>
 <ul>
 <li><a href="https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_rule.html">aws_cloudwatch_event_rule</a>でイベントルール(今回はschedule)を作成</li>
 <li><a href="https://www.terraform.io/docs/providers/aws/r/cloudwatch_event_target.html">aws_cloudwatch_event_target</a>でルールにターゲット(今回はLambda)を設定</li>
 <li><a href="https://www.terraform.io/docs/providers/aws/r/lambda_permission.html">aws_lambda_permission</a>でルールに対象Lambdaをinvokeする権限を付ける</li>
 </ul>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-tf" data-lang="tf">$ cat infrastructure<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">module</span>s<span style="color:#ff79c6">/</span>cloudwatch_schefule<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">var</span>iables.tf
-<span style="color:#ff79c6">variable</span> <span style="color:#f1fa8c">&#34;lambda_function_name&#34;</span> {}
-<span style="color:#ff79c6">variable</span> <span style="color:#f1fa8c">&#34;lambda_function_arn&#34;</span> {}
-<span style="color:#ff79c6">variable</span> <span style="color:#f1fa8c">&#34;schedule_expression&#34;</span> {
-    <span style="color:#50fa7b">description</span> = <span style="color:#f1fa8c">&#34;cloudwatch schedule expression e.g. </span>\<span style="color:#f1fa8c">&#34;</span>cron(<span style="color:#bd93f9">0</span><span style="color:#ff79c6">/</span><span style="color:#bd93f9">5</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">?</span> <span style="color:#ff79c6">*</span>)\<span style="color:#f1fa8c">&#34;&#34;</span>
-}
-
-$ cat infrastructure<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">module</span>s<span style="color:#ff79c6">/</span>cloudwatch_schefule<span style="color:#ff79c6">/</span>main.tf
-<span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;aws_cloudwatch_event_rule&#34;</span> <span style="color:#f1fa8c">&#34;lambda&#34;</span> {
-  <span style="color:#50fa7b">name</span>        = <span style="color:#f1fa8c">&#34;lambda_rule_</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.lambda_function_name<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-  <span style="color:#50fa7b">description</span> = <span style="color:#f1fa8c">&#34;invoke lambda </span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.lambda_function_name<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-  <span style="color:#50fa7b">schedule_expression</span> = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.schedule_expression<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-}
-<span style="color:#ff79c6"> 
-</span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;aws_cloudwatch_event_target&#34;</span> <span style="color:#f1fa8c">&#34;lambda&#34;</span> {
-  <span style="color:#50fa7b">target_id</span> = <span style="color:#f1fa8c">&#34;lambda_target_</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.lambda_function_name<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-  <span style="color:#50fa7b">rule</span>      = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span>aws_cloudwatch_event_rule.lambda.name<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-  <span style="color:#50fa7b">arn</span>       = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.lambda_function_arn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-}
-<span style="color:#ff79c6"> 
-</span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;aws_lambda_permission&#34;</span> <span style="color:#f1fa8c">&#34;lambda&#34;</span> {
-  <span style="color:#50fa7b">statement_id</span>  = <span style="color:#f1fa8c">&#34;AllowExecutionFromCloudWatch&#34;</span>
-  <span style="color:#50fa7b">action</span>        = <span style="color:#f1fa8c">&#34;lambda:InvokeFunction&#34;</span>
-  <span style="color:#50fa7b">function_name</span> = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span>aws_cloudwatch_event_target.lambda.arn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-  <span style="color:#50fa7b">principal</span>     = <span style="color:#f1fa8c">&#34;events.amazonaws.com&#34;</span>
-  <span style="color:#50fa7b">source_arn</span>    = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span>aws_cloudwatch_event_rule.lambda.arn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-}
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-tf" data-lang="tf">$ cat infrastructure<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">var</span>iables.tf 
-<span style="color:#ff79c6">variable</span> <span style="color:#f1fa8c">&#34;apex_function_names&#34;</span> {
-    <span style="color:#50fa7b">type</span>=<span style="color:#8be9fd;font-style:italic">&#34;map</span><span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">}
-</span><span style="color:#f1fa8c">variable &#34;</span>apex_function_hello<span style="color:#f1fa8c">&#34; {}
-</span><span style="color:#f1fa8c">
-</span><span style="color:#f1fa8c">$ cat infrastructure/main.tf
-</span><span style="color:#f1fa8c">terraform {
-</span><span style="color:#f1fa8c">  backend &#34;</span>s3<span style="color:#f1fa8c">&#34; {
-</span><span style="color:#f1fa8c">    bucket = &#34;</span>sambaiz<span style="color:#ff79c6">-</span>terraform<span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">    key    = &#34;</span>usetf.tfstate<span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">    region = &#34;</span>ap<span style="color:#ff79c6">-</span>northeast<span style="color:#bd93f9">-1</span><span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">  }
-</span><span style="color:#f1fa8c">}
-</span><span style="color:#f1fa8c">
-</span><span style="color:#f1fa8c">module &#34;</span>hello_trigger<span style="color:#f1fa8c">&#34; {
-</span><span style="color:#f1fa8c">  source = &#34;</span>.<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">module</span>s<span style="color:#ff79c6">/</span>cloudwatch_schedule<span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">  lambda_function_name = &#34;</span>${<span style="color:#8be9fd;font-style:italic">var</span>.apex_function_names[<span style="color:#f1fa8c">&#34;hello&#34;</span>]}<span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">  lambda_function_arn = &#34;</span>${<span style="color:#8be9fd;font-style:italic">var</span>.apex_function_hello}<span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">  schedule_expression = &#34;</span>cron(<span style="color:#bd93f9">0</span><span style="color:#ff79c6">/</span><span style="color:#bd93f9">5</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">?</span> <span style="color:#ff79c6">*</span>)<span style="color:#f1fa8c">&#34;
-</span><span style="color:#f1fa8c">}
-</span></code></pre></div><p>initしてbackendを初期化してmoduleを準備する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ apex infra init
-$ ls infrastructure/.terraform/modules/*****
-main.tf		variables.tf
-</code></pre></div><p>planするとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ apex infra plan
-+ module.hello_trigger.aws_cloudwatch_event_rule.lambda
-    arn:                 &#34;&lt;computed&gt;&#34;
-    description:         &#34;invoke lambda usetf_hello&#34;
-    is_enabled:          &#34;true&#34;
-    name:                &#34;lambda_rule_usetf_hello&#34;
-    schedule_expression: &#34;cron(0/5 * * * ? *)&#34;
-
-+ module.hello_trigger.aws_cloudwatch_event_target.lambda
-    arn:       &#34;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&#34;
-    rule:      &#34;lambda_rule_usetf_hello&#34;
-    target_id: &#34;lambda_target_usetf_hello&#34;
-
-+ module.hello_trigger.aws_lambda_permission.lambda
-    action:        &#34;lambda:InvokeFunction&#34;
-    function_name: &#34;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&#34;
-    principal:     &#34;events.amazonaws.com&#34;
-    source_arn:    &#34;${aws_cloudwatch_event_rule.lambda.arn}&#34;
-    statement_id:  &#34;AllowExecutionFromCloudWatch&#34;
-</code></pre></div><p>applyするとトリガーが登録される。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ apex infra apply
-$ apex logs hello
-...
-/aws/lambda/usetf_hello 2017-11-12T13:20:14.561Z	37e75818-c7ac-11e7-a333-111863808b13	processing event:
-...
-/aws/lambda/usetf_hello 2017-11-12T13:25:15.182Z	eb178941-c7ac-11e7-bde0-998ea9659640 processing event:
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-tf" data-lang="tf"><span style="display:flex;"><span>$ cat infrastructure<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">module</span>s<span style="color:#ff79c6">/</span>cloudwatch_schefule<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">var</span>iables.tf
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">variable</span> <span style="color:#f1fa8c">&#34;lambda_function_name&#34;</span> {}
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">variable</span> <span style="color:#f1fa8c">&#34;lambda_function_arn&#34;</span> {}
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">variable</span> <span style="color:#f1fa8c">&#34;schedule_expression&#34;</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#50fa7b">description</span> = <span style="color:#f1fa8c">&#34;cloudwatch schedule expression e.g. </span>\<span style="color:#f1fa8c">&#34;</span>cron(<span style="color:#bd93f9">0</span><span style="color:#ff79c6">/</span><span style="color:#bd93f9">5</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">?</span> <span style="color:#ff79c6">*</span>)\<span style="color:#f1fa8c">&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ cat infrastructure<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">module</span>s<span style="color:#ff79c6">/</span>cloudwatch_schefule<span style="color:#ff79c6">/</span>main.tf
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;aws_cloudwatch_event_rule&#34;</span> <span style="color:#f1fa8c">&#34;lambda&#34;</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">name</span>        = <span style="color:#f1fa8c">&#34;lambda_rule_</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.lambda_function_name<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">description</span> = <span style="color:#f1fa8c">&#34;invoke lambda </span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.lambda_function_name<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">schedule_expression</span> = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.schedule_expression<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6"> 
+</span></span></span><span style="display:flex;"><span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;aws_cloudwatch_event_target&#34;</span> <span style="color:#f1fa8c">&#34;lambda&#34;</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">target_id</span> = <span style="color:#f1fa8c">&#34;lambda_target_</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.lambda_function_name<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">rule</span>      = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span>aws_cloudwatch_event_rule.lambda.name<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">arn</span>       = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span><span style="color:#8be9fd;font-style:italic">var</span>.lambda_function_arn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6"> 
+</span></span></span><span style="display:flex;"><span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;aws_lambda_permission&#34;</span> <span style="color:#f1fa8c">&#34;lambda&#34;</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">statement_id</span>  = <span style="color:#f1fa8c">&#34;AllowExecutionFromCloudWatch&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">action</span>        = <span style="color:#f1fa8c">&#34;lambda:InvokeFunction&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">function_name</span> = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span>aws_cloudwatch_event_target.lambda.arn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">principal</span>     = <span style="color:#f1fa8c">&#34;events.amazonaws.com&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">source_arn</span>    = <span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">${</span>aws_cloudwatch_event_rule.lambda.arn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-tf" data-lang="tf"><span style="display:flex;"><span>$ cat infrastructure<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">var</span>iables.tf 
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">variable</span> <span style="color:#f1fa8c">&#34;apex_function_names&#34;</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#50fa7b">type</span>=<span style="color:#8be9fd;font-style:italic">&#34;map</span><span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">}
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">variable &#34;</span>apex_function_hello<span style="color:#f1fa8c">&#34; {}
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">$ cat infrastructure/main.tf
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">terraform {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  backend &#34;</span>s3<span style="color:#f1fa8c">&#34; {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    bucket = &#34;</span>sambaiz<span style="color:#ff79c6">-</span>terraform<span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    key    = &#34;</span>usetf.tfstate<span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    region = &#34;</span>ap<span style="color:#ff79c6">-</span>northeast<span style="color:#bd93f9">-1</span><span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  }
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">}
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">module &#34;</span>hello_trigger<span style="color:#f1fa8c">&#34; {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  source = &#34;</span>.<span style="color:#ff79c6">/</span><span style="color:#8be9fd;font-style:italic">module</span>s<span style="color:#ff79c6">/</span>cloudwatch_schedule<span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  lambda_function_name = &#34;</span>${<span style="color:#8be9fd;font-style:italic">var</span>.apex_function_names[<span style="color:#f1fa8c">&#34;hello&#34;</span>]}<span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  lambda_function_arn = &#34;</span>${<span style="color:#8be9fd;font-style:italic">var</span>.apex_function_hello}<span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  schedule_expression = &#34;</span>cron(<span style="color:#bd93f9">0</span><span style="color:#ff79c6">/</span><span style="color:#bd93f9">5</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">?</span> <span style="color:#ff79c6">*</span>)<span style="color:#f1fa8c">&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">}
+</span></span></span></code></pre></div><p>initしてbackendを初期化してmoduleを準備する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ apex infra init
+</span></span><span style="display:flex;"><span>$ ls infrastructure/.terraform/modules/*****
+</span></span><span style="display:flex;"><span>main.tf		variables.tf
+</span></span></code></pre></div><p>planするとこんな感じ。ApexによってfunctionのARNが渡っていることが分かる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ apex infra plan
+</span></span><span style="display:flex;"><span>+ module.hello_trigger.aws_cloudwatch_event_rule.lambda
+</span></span><span style="display:flex;"><span>    arn:                 &#34;&lt;computed&gt;&#34;
+</span></span><span style="display:flex;"><span>    description:         &#34;invoke lambda usetf_hello&#34;
+</span></span><span style="display:flex;"><span>    is_enabled:          &#34;true&#34;
+</span></span><span style="display:flex;"><span>    name:                &#34;lambda_rule_usetf_hello&#34;
+</span></span><span style="display:flex;"><span>    schedule_expression: &#34;cron(0/5 * * * ? *)&#34;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>+ module.hello_trigger.aws_cloudwatch_event_target.lambda
+</span></span><span style="display:flex;"><span>    arn:       &#34;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&#34;
+</span></span><span style="display:flex;"><span>    rule:      &#34;lambda_rule_usetf_hello&#34;
+</span></span><span style="display:flex;"><span>    target_id: &#34;lambda_target_usetf_hello&#34;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>+ module.hello_trigger.aws_lambda_permission.lambda
+</span></span><span style="display:flex;"><span>    action:        &#34;lambda:InvokeFunction&#34;
+</span></span><span style="display:flex;"><span>    function_name: &#34;arn:aws:lambda:ap-northeast-1:*****:function:usetf_hello&#34;
+</span></span><span style="display:flex;"><span>    principal:     &#34;events.amazonaws.com&#34;
+</span></span><span style="display:flex;"><span>    source_arn:    &#34;${aws_cloudwatch_event_rule.lambda.arn}&#34;
+</span></span><span style="display:flex;"><span>    statement_id:  &#34;AllowExecutionFromCloudWatch&#34;
+</span></span></code></pre></div><p>applyするとトリガーが登録される。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ apex infra apply
+</span></span><span style="display:flex;"><span>$ apex logs hello
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>/aws/lambda/usetf_hello 2017-11-12T13:20:14.561Z	37e75818-c7ac-11e7-a333-111863808b13	processing event:
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>/aws/lambda/usetf_hello 2017-11-12T13:25:15.182Z	eb178941-c7ac-11e7-bde0-998ea9659640 processing event:
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://dev.classmethod.jp/cloud/aws/ami-and-snapshot-delete-with-apex-and-terraform/">ApexとTerraformでCloudWatch EventsによりInvokeされるLambda関数をデプロイする ｜ Developers.IO</a></p>
 
     </div>

@@ -467,218 +467,218 @@
       </div>
       <p>Fluentdはv1.0から標準で<a href="https://docs.fluentd.org/deployment/multi-process-workers">マルチプロセス対応</a>され、
 指定した数のWorkerで処理が行われるようになった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;system&gt;
-  workers 4
-&lt;/system&gt;
-</code></pre></div><p>どのように実行しているのか<code>v1.12.3</code>の実装を見ていく。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>&lt;system&gt;
+</span></span><span style="display:flex;"><span>  workers 4
+</span></span><span style="display:flex;"><span>&lt;/system&gt;
+</span></span></code></pre></div><p>どのように実行しているのか<code>v1.12.3</code>の実装を見ていく。</p>
 <h2 id="supervisorhttpsgithubcomfluentfluentdblobv1123libfluentsupervisorrb"><a href="https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/supervisor.rb">Supervisor</a></h2>
 <p><a href="https://docs.fluentd.org/deployment/multi-process-workers">Multi Process Workers</a>のドキュメントにもあるように、
 Workerと通信する<a href="https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/supervisor.rb">Supervisor</a>というのが存在する。
 具体的に何をしているかというとWorkerプロセスを作成するWorkerModuleを渡してサーバーを立てたり、SIGNALを送ったりしている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/master/lib/fluent/supervisor.rb#L365-L377</span>
-<span style="color:#ff79c6">module</span> WorkerModule
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">spawn</span>(process_manager)
-    main_cmd <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:main_cmd</span><span style="color:#ff79c6">]</span>
-    env <span style="color:#ff79c6">=</span> {
-      <span style="color:#f1fa8c">&#39;SERVERENGINE_WORKER_ID&#39;</span> <span style="color:#ff79c6">=&gt;</span> <span style="color:#8be9fd;font-style:italic">@worker_id</span><span style="color:#ff79c6">.</span>to_i<span style="color:#ff79c6">.</span>to_s,
-    }
-    <span style="color:#8be9fd;font-style:italic">@pm</span> <span style="color:#ff79c6">=</span> process_manager<span style="color:#ff79c6">.</span>spawn(env, <span style="color:#ff79c6">*</span>main_cmd)
-  <span style="color:#ff79c6">end</span>
-
-  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">after_start</span>
-    (config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_pid</span><span style="color:#ff79c6">]</span> <span style="color:#ff79c6">||=</span> {})<span style="color:#ff79c6">[</span><span style="color:#8be9fd;font-style:italic">@worker_id</span><span style="color:#ff79c6">]</span> <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">@pm</span><span style="color:#ff79c6">.</span>pid
-  <span style="color:#ff79c6">end</span>
-<span style="color:#ff79c6">end</span>
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/supervisor.rb#L808-L811</span>
-se <span style="color:#ff79c6">=</span> ServerEngine<span style="color:#ff79c6">.</span>create(ServerModule, WorkerModule){
-  Fluent<span style="color:#ff79c6">::</span>Supervisor<span style="color:#ff79c6">.</span>load_config(<span style="color:#8be9fd;font-style:italic">@config_path</span>, params)
-}
-se<span style="color:#ff79c6">.</span>run
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/master/lib/fluent/supervisor.rb#L305-L317</span>
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">kill_worker</span>
-  <span style="color:#ff79c6">if</span> config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_pid</span><span style="color:#ff79c6">]</span>
-    pids <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_pid</span><span style="color:#ff79c6">].</span>clone
-    config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_pid</span><span style="color:#ff79c6">].</span>clear
-    pids<span style="color:#ff79c6">.</span>each_value <span style="color:#ff79c6">do</span> <span style="color:#ff79c6">|</span>pid<span style="color:#ff79c6">|</span>
-      <span style="color:#ff79c6">if</span> Fluent<span style="color:#ff79c6">.</span>windows?
-        Process<span style="color:#ff79c6">.</span>kill <span style="color:#f1fa8c">:KILL</span>, pid
-      <span style="color:#ff79c6">else</span>
-        Process<span style="color:#ff79c6">.</span>kill <span style="color:#f1fa8c">:TERM</span>, pid
-      <span style="color:#ff79c6">end</span>
-    <span style="color:#ff79c6">end</span>
-  <span style="color:#ff79c6">end</span>
-<span style="color:#ff79c6">end</span>
-</code></pre></div><h2 id="treasure-dataserverenginehttpsgithubcomtreasure-dataserverengine"><a href="https://github.com/treasure-data/serverengine">treasure-data/serverengine</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/master/lib/fluent/supervisor.rb#L365-L377</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">module</span> WorkerModule
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">spawn</span>(process_manager)
+</span></span><span style="display:flex;"><span>    main_cmd <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:main_cmd</span><span style="color:#ff79c6">]</span>
+</span></span><span style="display:flex;"><span>    env <span style="color:#ff79c6">=</span> {
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#39;SERVERENGINE_WORKER_ID&#39;</span> <span style="color:#ff79c6">=&gt;</span> <span style="color:#8be9fd;font-style:italic">@worker_id</span><span style="color:#ff79c6">.</span>to_i<span style="color:#ff79c6">.</span>to_s,
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">@pm</span> <span style="color:#ff79c6">=</span> process_manager<span style="color:#ff79c6">.</span>spawn(env, <span style="color:#ff79c6">*</span>main_cmd)
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">after_start</span>
+</span></span><span style="display:flex;"><span>    (config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_pid</span><span style="color:#ff79c6">]</span> <span style="color:#ff79c6">||=</span> {})<span style="color:#ff79c6">[</span><span style="color:#8be9fd;font-style:italic">@worker_id</span><span style="color:#ff79c6">]</span> <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">@pm</span><span style="color:#ff79c6">.</span>pid
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">end</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/supervisor.rb#L808-L811</span>
+</span></span><span style="display:flex;"><span>se <span style="color:#ff79c6">=</span> ServerEngine<span style="color:#ff79c6">.</span>create(ServerModule, WorkerModule){
+</span></span><span style="display:flex;"><span>  Fluent<span style="color:#ff79c6">::</span>Supervisor<span style="color:#ff79c6">.</span>load_config(<span style="color:#8be9fd;font-style:italic">@config_path</span>, params)
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>se<span style="color:#ff79c6">.</span>run
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/master/lib/fluent/supervisor.rb#L305-L317</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">kill_worker</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">if</span> config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_pid</span><span style="color:#ff79c6">]</span>
+</span></span><span style="display:flex;"><span>    pids <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_pid</span><span style="color:#ff79c6">].</span>clone
+</span></span><span style="display:flex;"><span>    config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_pid</span><span style="color:#ff79c6">].</span>clear
+</span></span><span style="display:flex;"><span>    pids<span style="color:#ff79c6">.</span>each_value <span style="color:#ff79c6">do</span> <span style="color:#ff79c6">|</span>pid<span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">if</span> Fluent<span style="color:#ff79c6">.</span>windows?
+</span></span><span style="display:flex;"><span>        Process<span style="color:#ff79c6">.</span>kill <span style="color:#f1fa8c">:KILL</span>, pid
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">else</span>
+</span></span><span style="display:flex;"><span>        Process<span style="color:#ff79c6">.</span>kill <span style="color:#f1fa8c">:TERM</span>, pid
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">end</span>
+</span></span></code></pre></div><h2 id="treasure-dataserverenginehttpsgithubcomtreasure-dataserverengine"><a href="https://github.com/treasure-data/serverengine">treasure-data/serverengine</a></h2>
 <p>ロバストなマルチプロセスのサーバーを実装するためのフレームワーク。</p>
 <p><code>worker_type</code>を<a href="https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/supervisor.rb#L422">spawn</a>にしているので、
 <a href="https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/multi_spawn_server.rb">MultiSpawnServer</a>が使われる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/supervisor.rb#L90-L113</span>
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">self</span><span style="color:#ff79c6">.</span><span style="color:#50fa7b">create_server_proc</span>(server_module, worker_module, config)
-  wt <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_type</span><span style="color:#ff79c6">]</span> <span style="color:#ff79c6">||</span> <span style="color:#f1fa8c">&#39;embedded&#39;</span>
-  <span style="color:#ff79c6">case</span> wt
-  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">&#39;embedded&#39;</span>
-    server_class <span style="color:#ff79c6">=</span> EmbeddedServer
-  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">&#39;process&#39;</span>
-    server_class <span style="color:#ff79c6">=</span> MultiProcessServer
-  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">&#39;thread&#39;</span>
-    server_class <span style="color:#ff79c6">=</span> MultiThreadServer
-  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">&#39;spawn&#39;</span>
-    server_class <span style="color:#ff79c6">=</span> MultiSpawnServer
-  <span style="color:#ff79c6">else</span>
-    <span style="color:#ff79c6">raise</span> ArgumentError, <span style="color:#f1fa8c">&#34;unexpected :worker_type option </span><span style="color:#f1fa8c">#{</span>wt<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-  <span style="color:#ff79c6">end</span>
-  <span style="color:#ff79c6">...</span>
-<span style="color:#ff79c6">end</span>
-</code></pre></div><p>MultiSpawnServerは<a href="https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/multi_worker_server.rb">MultiWorkerServer</a>を継承していて、常に設定した数になるようWorkerを起動し、その際に<code>WorkerModule.spawn</code>が呼ばれる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/multi_worker_server.rb#L56-L62</span>
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">run</span>
-  <span style="color:#ff79c6">while</span> <span style="color:#ff79c6">true</span>
-    num_alive <span style="color:#ff79c6">=</span> keepalive_workers
-    <span style="color:#ff79c6">break</span> <span style="color:#ff79c6">if</span> num_alive <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span>
-    wait_tick
-  <span style="color:#ff79c6">end</span>
-<span style="color:#ff79c6">end</span>
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/multi_worker_server.rb#L116-L121</span>
-<span style="color:#ff79c6">elsif</span> wid <span style="color:#ff79c6">&lt;</span> <span style="color:#8be9fd;font-style:italic">@num_workers</span>
-  <span style="color:#6272a4"># scale up or reboot</span>
-  <span style="color:#ff79c6">unless</span> <span style="color:#8be9fd;font-style:italic">@stop</span>
-    <span style="color:#8be9fd;font-style:italic">@monitors</span><span style="color:#ff79c6">[</span>wid<span style="color:#ff79c6">]</span> <span style="color:#ff79c6">=</span> delayed_start_worker(wid)
-    num_alive <span style="color:#ff79c6">+=</span> <span style="color:#bd93f9">1</span>
-  <span style="color:#ff79c6">end</span>
-</code></pre></div><h2 id="in_forward-pluginhttpsgithubcomfluentfluentdblobv1123libfluentpluginin_forwardrb"><a href="https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/plugin/in_forward.rb">in_forward plugin</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/supervisor.rb#L90-L113</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">self</span><span style="color:#ff79c6">.</span><span style="color:#50fa7b">create_server_proc</span>(server_module, worker_module, config)
+</span></span><span style="display:flex;"><span>  wt <span style="color:#ff79c6">=</span> config<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">:worker_type</span><span style="color:#ff79c6">]</span> <span style="color:#ff79c6">||</span> <span style="color:#f1fa8c">&#39;embedded&#39;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">case</span> wt
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">&#39;embedded&#39;</span>
+</span></span><span style="display:flex;"><span>    server_class <span style="color:#ff79c6">=</span> EmbeddedServer
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">&#39;process&#39;</span>
+</span></span><span style="display:flex;"><span>    server_class <span style="color:#ff79c6">=</span> MultiProcessServer
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">&#39;thread&#39;</span>
+</span></span><span style="display:flex;"><span>    server_class <span style="color:#ff79c6">=</span> MultiThreadServer
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">&#39;spawn&#39;</span>
+</span></span><span style="display:flex;"><span>    server_class <span style="color:#ff79c6">=</span> MultiSpawnServer
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">else</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">raise</span> ArgumentError, <span style="color:#f1fa8c">&#34;unexpected :worker_type option </span><span style="color:#f1fa8c">#{</span>wt<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">...</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">end</span>
+</span></span></code></pre></div><p>MultiSpawnServerは<a href="https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/multi_worker_server.rb">MultiWorkerServer</a>を継承していて、常に設定した数になるようWorkerを起動し、その際に<code>WorkerModule.spawn</code>が呼ばれる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/multi_worker_server.rb#L56-L62</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">run</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">while</span> <span style="color:#ff79c6">true</span>
+</span></span><span style="display:flex;"><span>    num_alive <span style="color:#ff79c6">=</span> keepalive_workers
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">break</span> <span style="color:#ff79c6">if</span> num_alive <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span>
+</span></span><span style="display:flex;"><span>    wait_tick
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">end</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/multi_worker_server.rb#L116-L121</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">elsif</span> wid <span style="color:#ff79c6">&lt;</span> <span style="color:#8be9fd;font-style:italic">@num_workers</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#6272a4"># scale up or reboot</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">unless</span> <span style="color:#8be9fd;font-style:italic">@stop</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">@monitors</span><span style="color:#ff79c6">[</span>wid<span style="color:#ff79c6">]</span> <span style="color:#ff79c6">=</span> delayed_start_worker(wid)
+</span></span><span style="display:flex;"><span>    num_alive <span style="color:#ff79c6">+=</span> <span style="color:#bd93f9">1</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span></code></pre></div><h2 id="in_forward-pluginhttpsgithubcomfluentfluentdblobv1123libfluentpluginin_forwardrb"><a href="https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/plugin/in_forward.rb">in_forward plugin</a></h2>
 <p>どうもWorkerに処理を割り振っている様子がないので、プラグインの方も見てみる。</p>
 <p><code>in_forward</code> pluginはWorker数が1より大きいとき、環境変数<code>SERVERENGINE_SOCKETMANAGER_PATH</code>を渡して<code>SocketManager::Client</code>というのを作成し、listenしている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/plugin/in_forward.rb#L169-L181</span>
-shared_socket <span style="color:#ff79c6">=</span> system_config<span style="color:#ff79c6">.</span>workers <span style="color:#ff79c6">&gt;</span> <span style="color:#bd93f9">1</span>
-
-log<span style="color:#ff79c6">.</span>info <span style="color:#f1fa8c">&#34;listening port&#34;</span>, <span style="color:#f1fa8c">port</span>: <span style="color:#8be9fd;font-style:italic">@port</span>, <span style="color:#f1fa8c">bind</span>: <span style="color:#8be9fd;font-style:italic">@bind</span>
-server_create_connection(
-  <span style="color:#f1fa8c">:in_forward_server</span>, <span style="color:#8be9fd;font-style:italic">@port</span>,
-  <span style="color:#f1fa8c">bind</span>: <span style="color:#8be9fd;font-style:italic">@bind</span>,
-  <span style="color:#f1fa8c">shared</span>: shared_socket,
-  <span style="color:#f1fa8c">resolve_name</span>: <span style="color:#8be9fd;font-style:italic">@resolve_hostname</span>,
-  <span style="color:#f1fa8c">linger_timeout</span>: <span style="color:#8be9fd;font-style:italic">@linger_timeout</span>,
-  <span style="color:#f1fa8c">send_keepalive_packet</span>: <span style="color:#8be9fd;font-style:italic">@send_keepalive_packet</span>,
-  <span style="color:#f1fa8c">backlog</span>: <span style="color:#8be9fd;font-style:italic">@backlog</span>,
-  <span style="color:#ff79c6">&amp;</span><span style="color:#8be9fd;font-style:italic">method</span>(<span style="color:#f1fa8c">:handle_connection</span>)
-)
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/plugin_helper/server.rb#L343-L353</span>
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">server_socket_manager_client</span>
-  socket_manager_path <span style="color:#ff79c6">=</span> ENV<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">&#39;SERVERENGINE_SOCKETMANAGER_PATH&#39;</span><span style="color:#ff79c6">]</span>
-  <span style="color:#ff79c6">if</span> Fluent<span style="color:#ff79c6">.</span>windows?
-    socket_manager_path <span style="color:#ff79c6">=</span> socket_manager_path<span style="color:#ff79c6">.</span>to_i
-  <span style="color:#ff79c6">end</span>
-  ServerEngine<span style="color:#ff79c6">::</span>SocketManager<span style="color:#ff79c6">::</span>Client<span style="color:#ff79c6">.</span>new(socket_manager_path)
-<span style="color:#ff79c6">end</span>
-
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">server_create_tcp_socket</span>(shared, bind, port)
-  sock <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">if</span> shared
-            server_socket_manager_client<span style="color:#ff79c6">.</span>listen_tcp(bind, port)
-</code></pre></div><h2 id="socketmanagerhttpsgithubcomtreasure-dataserverenginetreev223socketmanager"><a href="https://github.com/treasure-data/serverengine/tree/v2.2.3#socketmanager">SocketManager</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/plugin/in_forward.rb#L169-L181</span>
+</span></span><span style="display:flex;"><span>shared_socket <span style="color:#ff79c6">=</span> system_config<span style="color:#ff79c6">.</span>workers <span style="color:#ff79c6">&gt;</span> <span style="color:#bd93f9">1</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>log<span style="color:#ff79c6">.</span>info <span style="color:#f1fa8c">&#34;listening port&#34;</span>, <span style="color:#f1fa8c">port</span>: <span style="color:#8be9fd;font-style:italic">@port</span>, <span style="color:#f1fa8c">bind</span>: <span style="color:#8be9fd;font-style:italic">@bind</span>
+</span></span><span style="display:flex;"><span>server_create_connection(
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">:in_forward_server</span>, <span style="color:#8be9fd;font-style:italic">@port</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">bind</span>: <span style="color:#8be9fd;font-style:italic">@bind</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">shared</span>: shared_socket,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">resolve_name</span>: <span style="color:#8be9fd;font-style:italic">@resolve_hostname</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">linger_timeout</span>: <span style="color:#8be9fd;font-style:italic">@linger_timeout</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">send_keepalive_packet</span>: <span style="color:#8be9fd;font-style:italic">@send_keepalive_packet</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">backlog</span>: <span style="color:#8be9fd;font-style:italic">@backlog</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&amp;</span><span style="color:#8be9fd;font-style:italic">method</span>(<span style="color:#f1fa8c">:handle_connection</span>)
+</span></span><span style="display:flex;"><span>)
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/plugin_helper/server.rb#L343-L353</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">server_socket_manager_client</span>
+</span></span><span style="display:flex;"><span>  socket_manager_path <span style="color:#ff79c6">=</span> ENV<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">&#39;SERVERENGINE_SOCKETMANAGER_PATH&#39;</span><span style="color:#ff79c6">]</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">if</span> Fluent<span style="color:#ff79c6">.</span>windows?
+</span></span><span style="display:flex;"><span>    socket_manager_path <span style="color:#ff79c6">=</span> socket_manager_path<span style="color:#ff79c6">.</span>to_i
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>  ServerEngine<span style="color:#ff79c6">::</span>SocketManager<span style="color:#ff79c6">::</span>Client<span style="color:#ff79c6">.</span>new(socket_manager_path)
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">server_create_tcp_socket</span>(shared, bind, port)
+</span></span><span style="display:flex;"><span>  sock <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">if</span> shared
+</span></span><span style="display:flex;"><span>            server_socket_manager_client<span style="color:#ff79c6">.</span>listen_tcp(bind, port)
+</span></span></code></pre></div><h2 id="socketmanagerhttpsgithubcomtreasure-dataserverenginetreev223socketmanager"><a href="https://github.com/treasure-data/serverengine/tree/v2.2.3#socketmanager">SocketManager</a></h2>
 <p>SocketManagerは複数のClientから同じポートを動的にlistenできるようにするものらしい。
 ClientがあるならServerもあってSupervisorで作られている。
 Clientを作るときに渡していた環境変数はここで代入されてspawn時に共有される。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/supervisor.rb#L71-L73</span>
-socket_manager_path <span style="color:#ff79c6">=</span> ServerEngine<span style="color:#ff79c6">::</span>SocketManager<span style="color:#ff79c6">::</span>Server<span style="color:#ff79c6">.</span>generate_path
-ServerEngine<span style="color:#ff79c6">::</span>SocketManager<span style="color:#ff79c6">::</span>Server<span style="color:#ff79c6">.</span>open(socket_manager_path)
-ENV<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">&#39;SERVERENGINE_SOCKETMANAGER_PATH&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#ff79c6">=</span> socket_manager_path<span style="color:#ff79c6">.</span>to_s
-</code></pre></div><p>UNIXの場合、ClientはServerとUNIXドメインソケットで通信して、
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/fluent/fluentd/blob/v1.12.3/lib/fluent/supervisor.rb#L71-L73</span>
+</span></span><span style="display:flex;"><span>socket_manager_path <span style="color:#ff79c6">=</span> ServerEngine<span style="color:#ff79c6">::</span>SocketManager<span style="color:#ff79c6">::</span>Server<span style="color:#ff79c6">.</span>generate_path
+</span></span><span style="display:flex;"><span>ServerEngine<span style="color:#ff79c6">::</span>SocketManager<span style="color:#ff79c6">::</span>Server<span style="color:#ff79c6">.</span>open(socket_manager_path)
+</span></span><span style="display:flex;"><span>ENV<span style="color:#ff79c6">[</span><span style="color:#f1fa8c">&#39;SERVERENGINE_SOCKETMANAGER_PATH&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#ff79c6">=</span> socket_manager_path<span style="color:#ff79c6">.</span>to_s
+</span></span></code></pre></div><p>UNIXの場合、ClientはServerとUNIXドメインソケットで通信して、
 外部からのリクエストを受けるソケットのファイルディスクリプタを<a href="https://docs.ruby-lang.org/ja/latest/method/UNIXSocket/i/recv_io.html">取得する</a>。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/socket_manager.rb#L43-L60</span>
-listen_method <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">case</span> proto
-                <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:tcp</span> <span style="color:#ff79c6">then</span> <span style="color:#f1fa8c">:listen_tcp</span>
-                <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:udp</span> <span style="color:#ff79c6">then</span> <span style="color:#f1fa8c">:listen_udp</span>
-                <span style="color:#ff79c6">else</span>
-                  <span style="color:#ff79c6">raise</span> ArgumentError, <span style="color:#f1fa8c">&#34;unknown protocol: </span><span style="color:#f1fa8c">#{</span>proto<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-                <span style="color:#ff79c6">end</span>
-peer <span style="color:#ff79c6">=</span> connect_peer(<span style="color:#8be9fd;font-style:italic">@path</span>)
-<span style="color:#ff79c6">begin</span>
-  SocketManager<span style="color:#ff79c6">.</span>send_peer(peer, <span style="color:#ff79c6">[</span>Process<span style="color:#ff79c6">.</span>pid, listen_method, bind, port<span style="color:#ff79c6">]</span>)
-  res <span style="color:#ff79c6">=</span> SocketManager<span style="color:#ff79c6">.</span>recv_peer(peer)
-  <span style="color:#ff79c6">if</span> res<span style="color:#ff79c6">.</span>is_a?(Exception)
-    <span style="color:#ff79c6">raise</span> res
-  <span style="color:#ff79c6">else</span>
-    <span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">send</span>(<span style="color:#f1fa8c">:recv</span>, family, proto, peer, res)
-  <span style="color:#ff79c6">end</span>
-<span style="color:#ff79c6">ensure</span>
-  peer<span style="color:#ff79c6">.</span>close
-<span style="color:#ff79c6">end</span>
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/8bdd8ef83fa9fc932614a3c5a07c7c41591ead7d/lib/serverengine/socket_manager_unix.rb#L30-L38</span>
- <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">recv</span>(family, proto, peer, sent)
-  server_class <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">case</span> proto
-                  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:tcp</span> <span style="color:#ff79c6">then</span> TCPServer
-                  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:udp</span> <span style="color:#ff79c6">then</span> UDPSocket
-                  <span style="color:#ff79c6">else</span>
-                    <span style="color:#ff79c6">raise</span> ArgumentError, <span style="color:#f1fa8c">&#34;invalid protocol: </span><span style="color:#f1fa8c">#{</span>proto<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-                  <span style="color:#ff79c6">end</span>
-  peer<span style="color:#ff79c6">.</span>recv_io(server_class)
-<span style="color:#ff79c6">end</span>
-</code></pre></div><p>Serverはすでにソケットが作られていればそれを、作られていなければ新たに作って返す。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-ruby" data-lang="ruby"><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/socket_manager.rb#L113-L128</span>
-<span style="color:#ff79c6">def</span> <span style="color:#50fa7b">listen</span>(proto, bind, port)
-  sockets, new_method <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">case</span> proto
-                        <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:tcp</span> <span style="color:#ff79c6">then</span> <span style="color:#ff79c6">[</span><span style="color:#8be9fd;font-style:italic">@tcp_sockets</span>, <span style="color:#f1fa8c">:listen_tcp_new</span><span style="color:#ff79c6">]</span>
-                        <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:udp</span> <span style="color:#ff79c6">then</span> <span style="color:#ff79c6">[</span><span style="color:#8be9fd;font-style:italic">@udp_sockets</span>, <span style="color:#f1fa8c">:listen_udp_new</span><span style="color:#ff79c6">]</span>
-                        <span style="color:#ff79c6">else</span>
-                          <span style="color:#ff79c6">raise</span> ArgumentError, <span style="color:#f1fa8c">&#34;invalid protocol: </span><span style="color:#f1fa8c">#{</span>proto<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
-                        <span style="color:#ff79c6">end</span>
-  key, bind_ip <span style="color:#ff79c6">=</span> resolve_bind_key(bind, port)
-
-  <span style="color:#8be9fd;font-style:italic">@mutex</span><span style="color:#ff79c6">.</span>synchronize <span style="color:#ff79c6">do</span>
-    <span style="color:#ff79c6">unless</span> sockets<span style="color:#ff79c6">.</span>has_key?(key)
-      sockets<span style="color:#ff79c6">[</span>key<span style="color:#ff79c6">]</span> <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">send</span>(new_method, bind_ip, port)
-    <span style="color:#ff79c6">end</span>
-    <span style="color:#ff79c6">return</span> sockets<span style="color:#ff79c6">[</span>key<span style="color:#ff79c6">]</span>
-  <span style="color:#ff79c6">end</span>
-<span style="color:#ff79c6">end</span>
-</code></pre></div><h2 id="挙動確認">挙動確認</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/socket_manager.rb#L43-L60</span>
+</span></span><span style="display:flex;"><span>listen_method <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">case</span> proto
+</span></span><span style="display:flex;"><span>                <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:tcp</span> <span style="color:#ff79c6">then</span> <span style="color:#f1fa8c">:listen_tcp</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:udp</span> <span style="color:#ff79c6">then</span> <span style="color:#f1fa8c">:listen_udp</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#ff79c6">else</span>
+</span></span><span style="display:flex;"><span>                  <span style="color:#ff79c6">raise</span> ArgumentError, <span style="color:#f1fa8c">&#34;unknown protocol: </span><span style="color:#f1fa8c">#{</span>proto<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>peer <span style="color:#ff79c6">=</span> connect_peer(<span style="color:#8be9fd;font-style:italic">@path</span>)
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">begin</span>
+</span></span><span style="display:flex;"><span>  SocketManager<span style="color:#ff79c6">.</span>send_peer(peer, <span style="color:#ff79c6">[</span>Process<span style="color:#ff79c6">.</span>pid, listen_method, bind, port<span style="color:#ff79c6">]</span>)
+</span></span><span style="display:flex;"><span>  res <span style="color:#ff79c6">=</span> SocketManager<span style="color:#ff79c6">.</span>recv_peer(peer)
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">if</span> res<span style="color:#ff79c6">.</span>is_a?(Exception)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">raise</span> res
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">else</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">send</span>(<span style="color:#f1fa8c">:recv</span>, family, proto, peer, res)
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">ensure</span>
+</span></span><span style="display:flex;"><span>  peer<span style="color:#ff79c6">.</span>close
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">end</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/8bdd8ef83fa9fc932614a3c5a07c7c41591ead7d/lib/serverengine/socket_manager_unix.rb#L30-L38</span>
+</span></span><span style="display:flex;"><span> <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">recv</span>(family, proto, peer, sent)
+</span></span><span style="display:flex;"><span>  server_class <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">case</span> proto
+</span></span><span style="display:flex;"><span>                  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:tcp</span> <span style="color:#ff79c6">then</span> TCPServer
+</span></span><span style="display:flex;"><span>                  <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:udp</span> <span style="color:#ff79c6">then</span> UDPSocket
+</span></span><span style="display:flex;"><span>                  <span style="color:#ff79c6">else</span>
+</span></span><span style="display:flex;"><span>                    <span style="color:#ff79c6">raise</span> ArgumentError, <span style="color:#f1fa8c">&#34;invalid protocol: </span><span style="color:#f1fa8c">#{</span>proto<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>                  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>  peer<span style="color:#ff79c6">.</span>recv_io(server_class)
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">end</span>
+</span></span></code></pre></div><p>Serverはすでにソケットが作られていればそれを、作られていなければ新たに作って返す。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ruby" data-lang="ruby"><span style="display:flex;"><span><span style="color:#6272a4"># https://github.com/treasure-data/serverengine/blob/v2.2.3/lib/serverengine/socket_manager.rb#L113-L128</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">listen</span>(proto, bind, port)
+</span></span><span style="display:flex;"><span>  sockets, new_method <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">case</span> proto
+</span></span><span style="display:flex;"><span>                        <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:tcp</span> <span style="color:#ff79c6">then</span> <span style="color:#ff79c6">[</span><span style="color:#8be9fd;font-style:italic">@tcp_sockets</span>, <span style="color:#f1fa8c">:listen_tcp_new</span><span style="color:#ff79c6">]</span>
+</span></span><span style="display:flex;"><span>                        <span style="color:#ff79c6">when</span> <span style="color:#f1fa8c">:udp</span> <span style="color:#ff79c6">then</span> <span style="color:#ff79c6">[</span><span style="color:#8be9fd;font-style:italic">@udp_sockets</span>, <span style="color:#f1fa8c">:listen_udp_new</span><span style="color:#ff79c6">]</span>
+</span></span><span style="display:flex;"><span>                        <span style="color:#ff79c6">else</span>
+</span></span><span style="display:flex;"><span>                          <span style="color:#ff79c6">raise</span> ArgumentError, <span style="color:#f1fa8c">&#34;invalid protocol: </span><span style="color:#f1fa8c">#{</span>proto<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>                        <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>  key, bind_ip <span style="color:#ff79c6">=</span> resolve_bind_key(bind, port)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd;font-style:italic">@mutex</span><span style="color:#ff79c6">.</span>synchronize <span style="color:#ff79c6">do</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">unless</span> sockets<span style="color:#ff79c6">.</span>has_key?(key)
+</span></span><span style="display:flex;"><span>      sockets<span style="color:#ff79c6">[</span>key<span style="color:#ff79c6">]</span> <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">send</span>(new_method, bind_ip, port)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> sockets<span style="color:#ff79c6">[</span>key<span style="color:#ff79c6">]</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">end</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">end</span>
+</span></span></code></pre></div><h2 id="挙動確認">挙動確認</h2>
 <p>次の設定で動かす。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat fluent.conf
-&lt;system&gt;
-  workers 4
-&lt;/system&gt;
-
-&lt;source&gt;
-  @type forward
-  port 24224
-  bind 0.0.0.0
-&lt;/source&gt;
-
-$ docker run -it --rm --name fluentd -v $(pwd)/fluent.conf:/fluentd/etc/fluent.conf fluent/fluentd:v1.12
-...
-2021-04-26 13:31:18 +0000 [info]: #2 starting fluentd worker pid=18 ppid=7 worker=2
-2021-04-26 13:31:18 +0000 [info]: #2 listening port port=24224 bind=&#34;0.0.0.0&#34;
-2021-04-26 13:31:18 +0000 [info]: #2 fluentd worker is now running worker=2
-2021-04-26 13:31:18 +0000 [info]: #3 starting fluentd worker pid=19 ppid=7 worker=3
-2021-04-26 13:31:18 +0000 [info]: #3 listening port port=24224 bind=&#34;0.0.0.0&#34;
-2021-04-26 13:31:18 +0000 [info]: #3 fluentd worker is now running worker=3
-2021-04-26 13:31:18 +0000 [info]: adding source type=&#34;forward&#34;
-2021-04-26 13:31:18 +0000 [info]: #1 starting fluentd worker pid=17 ppid=7 worker=1
-2021-04-26 13:31:18 +0000 [info]: #1 listening port port=24224 bind=&#34;0.0.0.0&#34;
-2021-04-26 13:31:18 +0000 [info]: #1 fluentd worker is now running worker=1
-2021-04-26 13:31:18 +0000 [info]: #0 starting fluentd worker pid=16 ppid=7 worker=0
-2021-04-26 13:31:18 +0000 [info]: #0 listening port port=24224 bind=&#34;0.0.0.0&#34;
-2021-04-26 13:31:18 +0000 [info]: #0 fluentd worker is now running worker=0
-</code></pre></div><p><code>netstat</code>の後継である<code>ss</code>コマンドをインストールして実行すると、複数のプロセスが同じfdでlistenしていることが確認できる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker exec --user 0 fluentd apk add iproute2 
-$ docker exec fluentd ss -antp
-State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
-LISTEN 0      128          0.0.0.0:24224      0.0.0.0:*    users:((&#34;ruby&#34;,pid=19,fd=7),(&#34;ruby&#34;,pid=18,fd=7),(&#34;ruby&#34;,pid=17,fd=7),(&#34;ruby&#34;,pid=16,fd=7),(&#34;fluentd&#34;,pid=7,fd=13))
-</code></pre></div><p>何度かログを送ってみたところ、全てのWorkerで処理が行われてはいるが、少なくともラウンドロビンはしていない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ docker exec -it fluentd watch -n 1 &#34;echo &#39;{\&#34;message\&#34;:\&#34;hello\&#34;}&#39; | fluent-cat debug.log&#34;
-
-2021-04-26 16:27:54 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:27:56 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:27:57 +0000 [warn]: #2 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:28:00 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:28:06 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:28:07 +0000 [warn]: #3 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:28:09 +0000 [warn]: #3 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:28:10 +0000 [warn]: #2 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:28:13 +0000 [warn]: #1 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:28:24 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
-2021-04-26 16:28:25 +0000 [warn]: #3 no patterns matched tag=&#34;debug.log&#34;
-</code></pre></div><p>現状Fluentdはロードバランシングの仕組みを持たず、先に<code>accept()</code>したWorkerが処理するようになっていて、
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ cat fluent.conf
+</span></span><span style="display:flex;"><span>&lt;system&gt;
+</span></span><span style="display:flex;"><span>  workers 4
+</span></span><span style="display:flex;"><span>&lt;/system&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>&lt;source&gt;
+</span></span><span style="display:flex;"><span>  @type forward
+</span></span><span style="display:flex;"><span>  port 24224
+</span></span><span style="display:flex;"><span>  bind 0.0.0.0
+</span></span><span style="display:flex;"><span>&lt;/source&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ docker run -it --rm --name fluentd -v $(pwd)/fluent.conf:/fluentd/etc/fluent.conf fluent/fluentd:v1.12
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #2 starting fluentd worker pid=18 ppid=7 worker=2
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #2 listening port port=24224 bind=&#34;0.0.0.0&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #2 fluentd worker is now running worker=2
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #3 starting fluentd worker pid=19 ppid=7 worker=3
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #3 listening port port=24224 bind=&#34;0.0.0.0&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #3 fluentd worker is now running worker=3
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: adding source type=&#34;forward&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #1 starting fluentd worker pid=17 ppid=7 worker=1
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #1 listening port port=24224 bind=&#34;0.0.0.0&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #1 fluentd worker is now running worker=1
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #0 starting fluentd worker pid=16 ppid=7 worker=0
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #0 listening port port=24224 bind=&#34;0.0.0.0&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 13:31:18 +0000 [info]: #0 fluentd worker is now running worker=0
+</span></span></code></pre></div><p><code>netstat</code>の後継である<code>ss</code>コマンドをインストールして実行すると、複数のプロセスが同じfdでlistenしていることが確認できる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ docker exec --user 0 fluentd apk add iproute2 
+</span></span><span style="display:flex;"><span>$ docker exec fluentd ss -antp
+</span></span><span style="display:flex;"><span>State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+</span></span><span style="display:flex;"><span>LISTEN 0      128          0.0.0.0:24224      0.0.0.0:*    users:((&#34;ruby&#34;,pid=19,fd=7),(&#34;ruby&#34;,pid=18,fd=7),(&#34;ruby&#34;,pid=17,fd=7),(&#34;ruby&#34;,pid=16,fd=7),(&#34;fluentd&#34;,pid=7,fd=13))
+</span></span></code></pre></div><p>何度かログを送ってみたところ、全てのWorkerで処理が行われてはいるが、少なくともラウンドロビンはしていない。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ docker exec -it fluentd watch -n 1 &#34;echo &#39;{\&#34;message\&#34;:\&#34;hello\&#34;}&#39; | fluent-cat debug.log&#34;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>2021-04-26 16:27:54 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:27:56 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:27:57 +0000 [warn]: #2 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:28:00 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:28:06 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:28:07 +0000 [warn]: #3 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:28:09 +0000 [warn]: #3 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:28:10 +0000 [warn]: #2 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:28:13 +0000 [warn]: #1 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:28:24 +0000 [warn]: #0 no patterns matched tag=&#34;debug.log&#34;
+</span></span><span style="display:flex;"><span>2021-04-26 16:28:25 +0000 [warn]: #3 no patterns matched tag=&#34;debug.log&#34;
+</span></span></code></pre></div><p>現状Fluentdはロードバランシングの仕組みを持たず、先に<code>accept()</code>したWorkerが処理するようになっていて、
 そのためにLinuxでは偏りが発生する問題がある<a href="https://github.com/fluent/fluentd/issues/3346#issuecomment-824722913">そうだ</a>。</p>
 <h2 id="参考">参考</h2>
 <p><a href="https://www.slideshare.net/treasure-data/fluentd-v1-and-roadmap">Fluentd v1 and Roadmap</a></p>

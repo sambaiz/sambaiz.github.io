@@ -487,38 +487,38 @@
 SparkのマネージドサービスであるGlueと比べると、Glueはサーバーレスで手軽にSparkによるETL処理をを行えるのに対して、EMRはスポットインスタンスなどを利用したコストパフォーマンスの良さと詳細なチューニングを行うことができるという特長があるが、<a href="https://aws.amazon.com/jp/emr/serverless/">EMR Serverless</a>がリリースされたのでその差は少し縮まっているように感じる。Glueにはスキーマを指定する必要がない<a href="https://docs.aws.amazon.com/glue/latest/dg/aws-glue-api-crawler-pyspark-extensions-dynamic-frame.html">DynamicFrame</a>や前の続きから実行できるBookmarkといった便利な機能もあるが、重い処理を立て続けに実行するとコストが嵩んだりDPUなどのクォータに引っかかることもあるので適宜使い分けていきたい。</p>
 <p><a href="https://www.sambaiz.net/article/333/">AWS GlueのJobのBookmarkを有効にして前回の続きから処理を行う - sambaiz-net</a></p>
 <p>今回は次のアプリケーションを実行する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-py" data-lang="py">$ cat test<span style="color:#ff79c6">.</span>py
-<span style="color:#ff79c6">import</span> argparse
-<span style="color:#ff79c6">import</span> logging
-
-<span style="color:#ff79c6">from</span> pyspark.sql <span style="color:#ff79c6">import</span> SparkSession
-
-logger <span style="color:#ff79c6">=</span> logging<span style="color:#ff79c6">.</span>getLogger(__name__)
-logging<span style="color:#ff79c6">.</span>basicConfig(level<span style="color:#ff79c6">=</span>logging<span style="color:#ff79c6">.</span>INFO, format<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;</span><span style="color:#f1fa8c">%(levelname)s</span><span style="color:#f1fa8c">: </span><span style="color:#f1fa8c">%(message)s</span><span style="color:#f1fa8c">&#39;</span>)
-
-output_path <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/emrtest/&#34;</span>
-
-<span style="color:#ff79c6">if</span> __name__ <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;__main__&#34;</span>:
-  parser <span style="color:#ff79c6">=</span> argparse<span style="color:#ff79c6">.</span>ArgumentParser()
-  parser<span style="color:#ff79c6">.</span>add_argument(<span style="color:#f1fa8c">&#39;--value&#39;</span>, default<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, <span style="color:#8be9fd;font-style:italic">type</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">int</span>, help<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;some value&#34;</span>)
-  args <span style="color:#ff79c6">=</span> parser<span style="color:#ff79c6">.</span>parse_args()
-  <span style="color:#ff79c6">with</span> SparkSession<span style="color:#ff79c6">.</span>builder<span style="color:#ff79c6">.</span>appName(<span style="color:#f1fa8c">&#34;testapp&#34;</span>)<span style="color:#ff79c6">.</span>getOrCreate() <span style="color:#ff79c6">as</span> spark:
-    df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>createDataFrame([(args<span style="color:#ff79c6">.</span>value,)], [<span style="color:#f1fa8c">&#39;value&#39;</span>])
-    logger<span style="color:#ff79c6">.</span>info(<span style="color:#f1fa8c">&#34;write </span><span style="color:#f1fa8c">%d</span><span style="color:#f1fa8c"> rows&#34;</span>, df<span style="color:#ff79c6">.</span>count())
-    df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>mode(<span style="color:#f1fa8c">&#39;overwrite&#39;</span>)<span style="color:#ff79c6">.</span>parquet(output_path, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
-
-$ aws s3 cp test<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff79c6">//&lt;</span>bucket<span style="color:#ff79c6">&gt;/</span>
-</code></pre></div><p>Glue Data Catalogのテーブルを参照する場合は<a href="https://docs.aws.amazon.com/ja_jp/emr/latest/ReleaseGuide/emr-spark-glue.html">次の設定</a>を行う。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">with</span> SparkSession<span style="color:#ff79c6">.</span>builder \
-    <span style="color:#ff79c6">.</span>appName(<span style="color:#f1fa8c">&#34;testapp&#34;</span>) \
-    <span style="color:#ff79c6">.</span>config(<span style="color:#f1fa8c">&#34;hive.metastore.client.factory.class&#34;</span>, <span style="color:#f1fa8c">&#34;com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory&#34;</span>) \
-    <span style="color:#ff79c6">.</span>enableHiveSupport() \
-    <span style="color:#ff79c6">.</span>getOrCreate() <span style="color:#ff79c6">as</span> spark:
-    df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT * FROM xxxx.yyyyy&#34;</span>)
-</code></pre></div><p>また、パーティションがDate型の場合 &ldquo;Unsupported expression &lsquo;2022 - 05 - 04&rsquo;&rdquo; のような<a href="https://github.com/awslabs/aws-glue-data-catalog-client-for-apache-hive-metastore/issues/45">エラーが出てしまう</a>のでpartiton pruningを無効にする必要があった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-python" data-lang="python"><span style="color:#ff79c6">.</span>config(<span style="color:#f1fa8c">&#34;spark.sql.hive.metastorePartitionPruning&#34;</span>, <span style="color:#f1fa8c">&#34;false&#34;</span>)\
-</code></pre></div><p><a href="https://awscli.amazonaws.com/v2/documentation/api/latest/reference/emr/create-cluster.html">aws emr create-cluster</a> でクラスタを立ち上げることができ、その際 &ndash;step を渡して &ndash;auto-terminate を付けると処理が完了次第クラスタが終了するので使い捨てることができる。</p>
-<p>その他のフラグは次の通り。扱うデータに対してメモリが不足しているとtaskが失敗したり大量のGCによってdriverからのheartbeatがタイムアウトしてしまうことがあるのである程度余裕を持っておく。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>$ cat test<span style="color:#ff79c6">.</span>py
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> argparse
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> logging
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> pyspark.sql <span style="color:#ff79c6">import</span> SparkSession
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>logger <span style="color:#ff79c6">=</span> logging<span style="color:#ff79c6">.</span>getLogger(__name__)
+</span></span><span style="display:flex;"><span>logging<span style="color:#ff79c6">.</span>basicConfig(level<span style="color:#ff79c6">=</span>logging<span style="color:#ff79c6">.</span>INFO, <span style="color:#8be9fd;font-style:italic">format</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;</span><span style="color:#f1fa8c">%(levelname)s</span><span style="color:#f1fa8c">: </span><span style="color:#f1fa8c">%(message)s</span><span style="color:#f1fa8c">&#39;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>output_path <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/emrtest/&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">if</span> __name__ <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;__main__&#34;</span>:
+</span></span><span style="display:flex;"><span>  parser <span style="color:#ff79c6">=</span> argparse<span style="color:#ff79c6">.</span>ArgumentParser()
+</span></span><span style="display:flex;"><span>  parser<span style="color:#ff79c6">.</span>add_argument(<span style="color:#f1fa8c">&#39;--value&#39;</span>, default<span style="color:#ff79c6">=</span><span style="color:#bd93f9">10</span>, <span style="color:#8be9fd;font-style:italic">type</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">int</span>, help<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;some value&#34;</span>)
+</span></span><span style="display:flex;"><span>  args <span style="color:#ff79c6">=</span> parser<span style="color:#ff79c6">.</span>parse_args()
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">with</span> SparkSession<span style="color:#ff79c6">.</span>builder<span style="color:#ff79c6">.</span>appName(<span style="color:#f1fa8c">&#34;testapp&#34;</span>)<span style="color:#ff79c6">.</span>getOrCreate() <span style="color:#ff79c6">as</span> spark:
+</span></span><span style="display:flex;"><span>    df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>createDataFrame([(args<span style="color:#ff79c6">.</span>value,)], [<span style="color:#f1fa8c">&#39;value&#39;</span>])
+</span></span><span style="display:flex;"><span>    logger<span style="color:#ff79c6">.</span>info(<span style="color:#f1fa8c">&#34;write </span><span style="color:#f1fa8c">%d</span><span style="color:#f1fa8c"> rows&#34;</span>, df<span style="color:#ff79c6">.</span>count())
+</span></span><span style="display:flex;"><span>    df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>mode(<span style="color:#f1fa8c">&#39;overwrite&#39;</span>)<span style="color:#ff79c6">.</span>parquet(output_path, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ aws s3 cp test<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff79c6">//&lt;</span>bucket<span style="color:#ff79c6">&gt;/</span>
+</span></span></code></pre></div><p>Glue Data Catalogのテーブルを参照する場合は<a href="https://docs.aws.amazon.com/ja_jp/emr/latest/ReleaseGuide/emr-spark-glue.html">次の設定</a>を行う。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">with</span> SparkSession<span style="color:#ff79c6">.</span>builder \
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">.</span>appName(<span style="color:#f1fa8c">&#34;testapp&#34;</span>) \
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">.</span>config(<span style="color:#f1fa8c">&#34;hive.metastore.client.factory.class&#34;</span>, <span style="color:#f1fa8c">&#34;com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory&#34;</span>) \
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">.</span>enableHiveSupport() \
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">.</span>getOrCreate() <span style="color:#ff79c6">as</span> spark:
+</span></span><span style="display:flex;"><span>    df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT * FROM xxxx.yyyyy&#34;</span>)
+</span></span></code></pre></div><p>また、パーティションがDate型の場合 &ldquo;Unsupported expression &lsquo;2022 - 05 - 04&rsquo;&rdquo; のような<a href="https://github.com/awslabs/aws-glue-data-catalog-client-for-apache-hive-metastore/issues/45">エラーが出てしまう</a>のでpartiton pruningを無効にする必要があった。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">.</span>config(<span style="color:#f1fa8c">&#34;spark.sql.hive.metastorePartitionPruning&#34;</span>, <span style="color:#f1fa8c">&#34;false&#34;</span>)\
+</span></span></code></pre></div><p><a href="https://awscli.amazonaws.com/v2/documentation/api/latest/reference/emr/create-cluster.html">aws emr create-cluster</a> でクラスタを立ち上げることができ、その際 &ndash;step を渡して &ndash;auto-terminate を付けると処理が完了次第クラスタが終了するので使い捨てることができる。</p>
+<p>その他のフラグは次の通り。</p>
 <ul>
 <li>&ndash;release-label emr-6.3.1: <a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-release-components.html">EMRのバージョン</a>。このバージョンではGlue3.0と同じSpark 3.1.1が動くが、バグを踏む可能性があるのでなるべく新しいバージョンにした方が良いかもしれない。</li>
 <li>&ndash;applications Name=Spark: クラスタにインストールするアプリケーション</li>
@@ -534,46 +534,46 @@ $ aws s3 cp test<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff
 <li><a href="https://spark.apache.org/docs/latest/cluster-overview.html">&ndash;deploy-mode</a>: SparkContextを生成するDriver Programをクライアントで実行するか、Cluster Managerが管理するクラスタで実行するか。 EMRではclientにするとMaster nodeで実行され、clusterにするとCore nodeで実行<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-spark-optimization.html">される</a>。</li>
 </ul>
 <p>を渡している。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ aws emr create-cluster <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --release-label emr-6.3.1 <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --applications <span style="color:#8be9fd;font-style:italic">Name</span><span style="color:#ff79c6">=</span>Spark <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --instance-type m6g.xlarge <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --instance-count <span style="color:#bd93f9">3</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=Instances}&#39;</span><span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --use-default-roles <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --auto-terminate <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --enable-debugging <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --log-uri s3n://&lt;bucket&gt;/emrlogs/ <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --name <span style="color:#8be9fd;font-style:italic">test</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>  --steps <span style="color:#f1fa8c">&#39;[{
-</span><span style="color:#f1fa8c">    &#34;Type&#34;: &#34;CUSTOM_JAR&#34;,
-</span><span style="color:#f1fa8c">    &#34;Name&#34;: &#34;spark-submit&#34;,
-</span><span style="color:#f1fa8c">    &#34;ActionOnFailure&#34;: &#34;TERMINATE_CLUSTER&#34;,
-</span><span style="color:#f1fa8c">    &#34;Jar&#34;: &#34;command-runner.jar&#34;, 
-</span><span style="color:#f1fa8c">    &#34;Args&#34;: [
-</span><span style="color:#f1fa8c">      &#34;spark-submit&#34;,
-</span><span style="color:#f1fa8c">      &#34;--master&#34;,
-</span><span style="color:#f1fa8c">      &#34;yarn&#34;,
-</span><span style="color:#f1fa8c">      &#34;--deploy-mode&#34;,
-</span><span style="color:#f1fa8c">      &#34;client&#34;,
-</span><span style="color:#f1fa8c">      &#34;s3://&lt;bucket&gt;/test.py&#34;,
-</span><span style="color:#f1fa8c">      &#34;--value&#34;,
-</span><span style="color:#f1fa8c">      &#34;123&#34;
-</span><span style="color:#f1fa8c">    ]
-</span><span style="color:#f1fa8c">  }]&#39;</span>
-
-<span style="color:#ff79c6">{</span>
-    <span style="color:#f1fa8c">&#34;ClusterId&#34;</span>: <span style="color:#f1fa8c">&#34;j-DND71AFKD661&#34;</span>,
-    <span style="color:#f1fa8c">&#34;ClusterArn&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:elasticmapreduce:ap-northeast-1:******:cluster/j-DND71AFKD661&#34;</span>
-<span style="color:#ff79c6">}</span>
-</code></pre></div><p>また、&ndash;instance-type や &ndash;instance-count の代わりに<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-instance-fleet.html">instance fleets</a>の設定を行うことでコストが低いスポットインスタンスや複数のインスタンスタイプを混ぜたクラスタを構築することができる。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ aws emr create-cluster <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --release-label emr-6.3.1 <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --applications <span style="color:#8be9fd;font-style:italic">Name</span><span style="color:#ff79c6">=</span>Spark <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --instance-type m6g.xlarge <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --instance-count <span style="color:#bd93f9">3</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=Instances}&#39;</span><span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --use-default-roles <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --auto-terminate <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --enable-debugging <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --log-uri s3n://&lt;bucket&gt;/emrlogs/ <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --name <span style="color:#8be9fd;font-style:italic">test</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --steps <span style="color:#f1fa8c">&#39;[{
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;Type&#34;: &#34;CUSTOM_JAR&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;Name&#34;: &#34;spark-submit&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;ActionOnFailure&#34;: &#34;TERMINATE_CLUSTER&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;Jar&#34;: &#34;command-runner.jar&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;Args&#34;: [
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;spark-submit&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;--master&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;yarn&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;--deploy-mode&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;client&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;s3://&lt;bucket&gt;/test.py&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;--value&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;123&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    ]
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  }]&#39;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;ClusterId&#34;</span>: <span style="color:#f1fa8c">&#34;j-DND71AFKD661&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;ClusterArn&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:elasticmapreduce:ap-northeast-1:******:cluster/j-DND71AFKD661&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span></code></pre></div><p>また、&ndash;instance-type や &ndash;instance-count の代わりに<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-instance-fleet.html">instance fleets</a>の設定を行うことでコストが低いスポットインスタンスや複数のインスタンスタイプを混ぜたクラスタを構築することができる。
 スポットインスタンスはオンデマンドの需要によって突然シャットダウンすることがあるが、もしそれによってシャッフルブロックが失われても再計算して<a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-spark-configure.html#spark-decommissioning">回復する</a>仕組みがあるので特に問題は起きない。</p>
 
 
 
 
 <div class="img_container"><a href="/article/409/images/spotinstance.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/spotinstance_hu9890bd47d3138610da9203487c09d61b_325219_600x370_fit_lanczos_2.png" width="600" height="291" alt="スポットインスタンスのPricing history">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/spotinstance_hu9890bd47d3138610da9203487c09d61b_325219_600x370_fit_lanczos_3.png" width="600" height="291" alt="スポットインスタンスのPricing history">
 </a></div>
 
 
@@ -591,63 +591,63 @@ $ aws s3 cp test<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff
 </li>
 </ul>
 <p>&ndash;managed-scaling-policy の UnitType は InstanceFleetUnits となる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">--instance-fleets <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>MASTER,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>CORE,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,TargetSpotCapacity<span style="color:#ff79c6">=</span>3,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span>,<span style="color:#f1fa8c">&#39;{InstanceType=m6g.2xlarge,WeightedCapacity=2}&#39;</span><span style="color:#ff79c6">]</span>,LaunchSpecifications<span style="color:#ff79c6">={</span><span style="color:#8be9fd;font-style:italic">SpotSpecification</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{TimeoutDurationMinutes=5,TimeoutAction=SWITCH_TO_ON_DEMAND}&#39;</span><span style="color:#ff79c6">}</span> <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>--managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=InstanceFleetUnits}&#39;</span><span style="color:#f1fa8c">\
-</span></code></pre></div><p>インスタンスが立ち上がるとstepの実行が始まる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>--instance-fleets <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>MASTER,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>CORE,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,TargetSpotCapacity<span style="color:#ff79c6">=</span>3,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span>,<span style="color:#f1fa8c">&#39;{InstanceType=m6g.2xlarge,WeightedCapacity=2}&#39;</span><span style="color:#ff79c6">]</span>,LaunchSpecifications<span style="color:#ff79c6">={</span><span style="color:#8be9fd;font-style:italic">SpotSpecification</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{TimeoutDurationMinutes=5,TimeoutAction=SWITCH_TO_ON_DEMAND}&#39;</span><span style="color:#ff79c6">}</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=InstanceFleetUnits}&#39;</span><span style="color:#f1fa8c">\
+</span></span></span></code></pre></div><p>インスタンスが立ち上がるとstepの実行が始まる。</p>
 
 
 
 
 <div class="img_container"><a href="/article/409/images/instances.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/instances_hu2f099206671c72a392846590b15c03f1_321446_600x370_fit_lanczos_2.png" width="600" height="292" alt="インスタンス">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/instances_hu2f099206671c72a392846590b15c03f1_321446_600x370_fit_lanczos_3.png" width="600" height="292" alt="インスタンス">
 </a></div>
 
 
 <p>実行状況はコンソールか aws emr list-steps から確認できる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">$ aws emr list-steps --cluster-id j-DND<span style="color:#bd93f9">71</span>AFKD<span style="color:#bd93f9">661</span> | jq <span style="color:#f1fa8c">&#34;.Steps[0]&#34;</span>
-{
-  <span style="color:#ff79c6">&#34;Id&#34;</span>: <span style="color:#f1fa8c">&#34;s-2WT4PRXV2S3B0&#34;</span>,
-  <span style="color:#ff79c6">&#34;Name&#34;</span>: <span style="color:#f1fa8c">&#34;spark-submit&#34;</span>,
-  <span style="color:#ff79c6">&#34;Config&#34;</span>: {
-    <span style="color:#ff79c6">&#34;Jar&#34;</span>: <span style="color:#f1fa8c">&#34;command-runner.jar&#34;</span>,
-    <span style="color:#ff79c6">&#34;Properties&#34;</span>: {},
-    <span style="color:#ff79c6">&#34;Args&#34;</span>: [
-      <span style="color:#f1fa8c">&#34;spark-submit&#34;</span>,
-      <span style="color:#f1fa8c">&#34;--master&#34;</span>,
-      <span style="color:#f1fa8c">&#34;yarn&#34;</span>,
-      <span style="color:#f1fa8c">&#34;--deploy-mode&#34;</span>,
-      <span style="color:#f1fa8c">&#34;client&#34;</span>,
-      <span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/test.py&#34;</span>,
-      <span style="color:#f1fa8c">&#34;--value&#34;</span>,
-      <span style="color:#f1fa8c">&#34;123&#34;</span>
-    ]
-  },
-  <span style="color:#ff79c6">&#34;ActionOnFailure&#34;</span>: <span style="color:#f1fa8c">&#34;TERMINATE_CLUSTER&#34;</span>,
-  <span style="color:#ff79c6">&#34;Status&#34;</span>: {
-    <span style="color:#ff79c6">&#34;State&#34;</span>: <span style="color:#f1fa8c">&#34;PENDING&#34;</span>,
-    <span style="color:#ff79c6">&#34;StateChangeReason&#34;</span>: {},
-    <span style="color:#ff79c6">&#34;Timeline&#34;</span>: {
-      <span style="color:#ff79c6">&#34;CreationDateTime&#34;</span>: <span style="color:#f1fa8c">&#34;2022-06-21T23:42:52.594000+09:00&#34;</span>
-    }
-  }
-}
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>$ aws emr list-steps --cluster-id j-DND<span style="color:#bd93f9">71</span>AFKD<span style="color:#bd93f9">661</span> | jq <span style="color:#f1fa8c">&#34;.Steps[0]&#34;</span>
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;Id&#34;</span>: <span style="color:#f1fa8c">&#34;s-2WT4PRXV2S3B0&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;Name&#34;</span>: <span style="color:#f1fa8c">&#34;spark-submit&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;Config&#34;</span>: {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;Jar&#34;</span>: <span style="color:#f1fa8c">&#34;command-runner.jar&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;Properties&#34;</span>: {},
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;Args&#34;</span>: [
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;spark-submit&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;--master&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;yarn&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;--deploy-mode&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;client&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/test.py&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;--value&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;123&#34;</span>
+</span></span><span style="display:flex;"><span>    ]
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;ActionOnFailure&#34;</span>: <span style="color:#f1fa8c">&#34;TERMINATE_CLUSTER&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;Status&#34;</span>: {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;State&#34;</span>: <span style="color:#f1fa8c">&#34;PENDING&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;StateChangeReason&#34;</span>: {},
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;Timeline&#34;</span>: {
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;CreationDateTime&#34;</span>: <span style="color:#f1fa8c">&#34;2022-06-21T23:42:52.594000+09:00&#34;</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div>
 
 
 
 <div class="img_container"><a href="/article/409/images/steps.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/steps_huc71f3881f3d2f8a3ba8afc721c79b246_170128_600x370_fit_lanczos_2.png" width="600" height="260" alt="実行状況">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/409/images/steps_huc71f3881f3d2f8a3ba8afc721c79b246_170128_600x370_fit_lanczos_3.png" width="600" height="260" alt="実行状況">
 </a></div>
 
 
 <p>stepの<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-manage-view-web-log-files.html">ログ</a>は<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-debugging.html#emr-plan-debugging-logs-archive">5分ごと</a>にS3の log-uri/cluster-id/steps/step-id/(stdout|stderr).gz に保存されるので次のような関数を定義しておくとコンソールに見に行かなくて済む。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh">$ brew install watch
-$ <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;function emrlog () { watch -n 300 \&#34;aws emr describe-cluster --cluster-id \${1} | jq &#39;.Cluster | .LogUri + .Id&#39; | sed -e &#39;s/s3n:/s3:/g&#39; | xargs -I{} aws s3 cp \&#34;{}/steps/\$(aws emr list-steps --cluster-id \${1} | jq -r &#39;.Steps[] | select(.Name == \&#34;\${2:-spark-submit}\&#34;) | .Id&#39;)/\${3:-stdout}.gz\&#34; - | gunzip -c | tail -n 20\&#34;; }&#34;</span> &gt;&gt; ~/.bash_profile
-$ <span style="color:#8be9fd;font-style:italic">source</span> ~/.bash_profile
-$ emrlog j-DND71AFKD661
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ brew install watch
+</span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;function emrlog () { watch -n 300 \&#34;aws emr describe-cluster --cluster-id \${1} | jq &#39;.Cluster | .LogUri + .Id&#39; | sed -e &#39;s/s3n:/s3:/g&#39; | xargs -I{} aws s3 cp \&#34;{}/steps/\$(aws emr list-steps --cluster-id \${1} | jq -r &#39;.Steps[] | select(.Name == \&#34;\${2:-spark-submit}\&#34;) | .Id&#39;)/\${3:-stdout}.gz\&#34; - | gunzip -c | tail -n 20\&#34;; }&#34;</span> &gt;&gt; ~/.bash_profile
+</span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">source</span> ~/.bash_profile
+</span></span><span style="display:flex;"><span>$ emrlog j-DND71AFKD661
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://pages.awscloud.com/rs/112-TZM-766/images/AWS_ETL_services_tips_202107.pdf">AWS で実践！Analytics Modernization ～ETL 編～ AWS ETL サービス適材適所選択のコツ</a></p>
 <p><a href="https://developers.cyberagent.co.jp/blog/archives/19150/">Instance Fleetsを使って集計クラスタのランニングコストを1/4にした | CyberAgent Developers Blog</a></p>
 

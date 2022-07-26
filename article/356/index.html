@@ -485,145 +485,145 @@ Raspberry Pi ImagerでOSを書き込む際に3枚ともVerifying write failedに
 <p><a href="https://www.raspberrypi.org/software/">Raspberry Pi Imager</a>でmicroSDにUbuntu Server 21.04 LTSを書き込んで
 起動し他マシンからsshしようとしたが繋がらない。
 sshdのstatusを見ると起動に失敗している。Test modeで実行してhostkeyがないことが分かったので、作成すると無事起動し繋がるようになった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ systemctl status ssh
-...
-  Active: failed (Result: exit-code)
-
-$ sshd -t
-sshd: no hostkeys available -- exiting
-
-$ sudo ssh-keygen -A
-$ sudo systemctl restart ssh
-</code></pre></div><p>次にアドレスがDHCPで変わってしまわないようにする。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ systemctl status ssh
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>  Active: failed (Result: exit-code)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ sshd -t
+</span></span><span style="display:flex;"><span>sshd: no hostkeys available -- exiting
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ sudo ssh-keygen -A
+</span></span><span style="display:flex;"><span>$ sudo systemctl restart ssh
+</span></span></code></pre></div><p>次にアドレスがDHCPで変わってしまわないようにする。
 ルータの方でMACアドレスに対して払い出すアドレスを固定することもできるが、
 今回はNetplanの<a href="https://netplan.io/examples/">設定</a>でアドレスを固定しDHCPを無効にした。
 ついでにPodへの<a href="https://netplan.io/reference/#routing">Routing</a>も行っている。
 今は他と一緒のサブネットに入れているが、無線LANのNICを追加したらサブネットを<code>/24</code>にして<a href="https://github.com/CyberAgentHack/home-kubernetes-2020/tree/master/how-to-create-cluster-logical-hardway#notes-1">クラスタ内通信を分離</a>しようと考えている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sudo vi /etc/netplan/60-eth0-fix-address.yaml
-network:
-  ethernets:
-    eth0:
-      dhcp4: no
-      addresses: [192.168.10.1/23]
-      gateway4: 192.168.11.1
-      nameservers:
-        addresses: [8.8.8.8]
-      routes:
-      - to: 10.10.2.0/24
-        via: 192.168.10.2
-      - to: 10.10.3.0/24
-        via: 192.168.10.3
-  version: 2
-
-$ sudo netplan apply
-</code></pre></div><p>KubernetesのNode名になるhostnameを設定する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sudo hostnamectl set-hostname r4k1
-</code></pre></div><p>SSHしやすいように<code>/etc/hosts</code>に追記する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sudo vi /etc/hosts
-192.168.10.2 r4k2
-192.168.10.3 r4k3
-</code></pre></div><h2 id="kubernetesのインストールhttpsgithubcomcyberagenthackhome-kubernetes-2020treemasterhow-to-create-cluster-logical-hardway"><a href="https://github.com/CyberAgentHack/home-kubernetes-2020/tree/master/how-to-create-cluster-logical-hardway">Kubernetesのインストール</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ sudo vi /etc/netplan/60-eth0-fix-address.yaml
+</span></span><span style="display:flex;"><span>network:
+</span></span><span style="display:flex;"><span>  ethernets:
+</span></span><span style="display:flex;"><span>    eth0:
+</span></span><span style="display:flex;"><span>      dhcp4: no
+</span></span><span style="display:flex;"><span>      addresses: [192.168.10.1/23]
+</span></span><span style="display:flex;"><span>      gateway4: 192.168.11.1
+</span></span><span style="display:flex;"><span>      nameservers:
+</span></span><span style="display:flex;"><span>        addresses: [8.8.8.8]
+</span></span><span style="display:flex;"><span>      routes:
+</span></span><span style="display:flex;"><span>      - to: 10.10.2.0/24
+</span></span><span style="display:flex;"><span>        via: 192.168.10.2
+</span></span><span style="display:flex;"><span>      - to: 10.10.3.0/24
+</span></span><span style="display:flex;"><span>        via: 192.168.10.3
+</span></span><span style="display:flex;"><span>  version: 2
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ sudo netplan apply
+</span></span></code></pre></div><p>KubernetesのNode名になるhostnameを設定する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ sudo hostnamectl set-hostname r4k1
+</span></span></code></pre></div><p>SSHしやすいように<code>/etc/hosts</code>に追記する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ sudo vi /etc/hosts
+</span></span><span style="display:flex;"><span>192.168.10.2 r4k2
+</span></span><span style="display:flex;"><span>192.168.10.3 r4k3
+</span></span></code></pre></div><h2 id="kubernetesのインストールhttpsgithubcomcyberagenthackhome-kubernetes-2020treemasterhow-to-create-cluster-logical-hardway"><a href="https://github.com/CyberAgentHack/home-kubernetes-2020/tree/master/how-to-create-cluster-logical-hardway">Kubernetesのインストール</a></h2>
 <p>せっかくなので<a href="https://github.com/CyberAgentHack/home-kubernetes-2020/tree/master/how-to-create-cluster-logical-kubeadm">kubeadmの方</a>ではなく<a href="https://github.com/kelseyhightower/kubernetes-the-hard-way">Hard Way</a>でやる。</p>
 <h3 id="証明書の生成">証明書の生成</h3>
 <p>まずコンポーネント間の通信で認証に<a href="https://kubernetes.io/ja/docs/setup/best-practices/certificates/">用いられる</a>クライアント証明書や、apiserverの証明書を生成する。</p>
 <p><a href="https://www.sambaiz.net/article/317/">IstioのSidecarでmTLS認証を行いServiceAccountによるアクセス制御を行う - sambaiz-net</a></p>
 <p>用意されている<a href="https://github.com/CyberAgentHack/home-kubernetes-2020/blob/master/how-to-create-cluster-logical-hardway/generate-cert.sh">スクリプト</a>を実行すると、<a href="https://github.com/cloudflare/cfssl">cfssl</a>でオレオレ証明書<code>ca.pem</code>とその秘密鍵<code>ca-key.pem</code>及び、それで署名したNodeやコンポーネント、admin userの証明書と秘密鍵が作られる。
 <a href="https://kubernetes.io/ja/docs/concepts/">Kubernetes Master</a>を動かす1台目で実行している。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sudo apt install -y golang-cfssl
-$ wget https://raw.githubusercontent.com/CyberAgentHack/home-kubernetes-2020/master/how-to-create-cluster-logical-hardway/generate-cert.sh 
-$ bash generate-cert.sh
-Hostname of Node1: r4k1
-Hostname of Node2: r4k2
-Hostname of Node3: r4k3
-Addresses of Node1 (x.x.x.x[,x.x.x.x]): 192.168.10.1
-Addresses of Node2 (x.x.x.x[,x.x.x.x]): 192.168.10.2
-Addresses of Node3 (x.x.x.x[,x.x.x.x]): 192.168.10.3
-Address of Kubernetes ClusterIP (first address of ClusterIP subnet): 10.32.0.1
-...
----&gt; Complete to generate certificate
-
-$ ls cert/
-admin-csr.json	ca.csr				  kube-proxy-key.pem	   kubernetes-csr.json	r4k1.pem       r4k3.csr
-admin-key.pem	ca.pem				  kube-proxy.csr	   kubernetes-key.pem	r4k2-csr.json  r4k3.pem
-admin.csr	kube-controller-manager-csr.json  kube-proxy.pem	   kubernetes.csr	r4k2-key.pem   service-account-csr.json
-admin.pem	kube-controller-manager-key.pem   kube-scheduler-csr.json  kubernetes.pem	r4k2.csr       service-account-key.pem
-ca-config.json	kube-controller-manager.csr	  kube-scheduler-key.pem   r4k1-csr.json	r4k2.pem       service-account.csr
-ca-csr.json	kube-controller-manager.pem	  kube-scheduler.csr	   r4k1-key.pem		r4k3-csr.json  service-account.pem
-ca-key.pem	kube-proxy-csr.json		  kube-scheduler.pem	   r4k1.csr		r4k3-key.pem
-</code></pre></div><p>他Nodeに<code>ca.pem</code>と証明書を送る。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cd cert
-$ scp r4k2.pem r4k2-key.pem ca.pem ubuntu@r4k2:/home/ubuntu &amp;&amp;
-  scp r4k3.pem r4k3-key.pem ca.pem ubuntu@r4k3:/home/ubuntu
-</code></pre></div><p>Masterのコンポーネント起動時にフラグで渡すファイルは、kubeadmと同じパスに配置することがk8sのドキュメントで<a href="https://kubernetes.io/ja/docs/setup/best-practices/certificates/#%E8%A8%BC%E6%98%8E%E6%9B%B8%E3%81%AE%E3%83%91%E3%82%B9">推奨</a>されていたのでそれに合わせることにした。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ sudo mkdir -p /etc/kubernetes/pki/etcd &amp;&amp;
-  sudo cp ca-key.pem /etc/kubernetes/pki/etcd/ca.key &amp;&amp;
-  sudo cp ca.pem /etc/kubernetes/pki/etcd/ca.crt &amp;&amp;
-
-  sudo cp kubernetes-key.pem /etc/kubernetes/pki/apiserver-etcd-client.key &amp;&amp;
-  sudo cp kubernetes.pem /etc/kubernetes/pki/apiserver-etcd-client.crt &amp;&amp;
-
-  sudo cp ca-key.pem /etc/kubernetes/pki/ca.key &amp;&amp;
-  sudo cp ca.pem /etc/kubernetes/pki/ca.crt &amp;&amp;
-
-  sudo cp kubernetes-key.pem /etc/kubernetes/pki/apiserver.key &amp;&amp;
-  sudo cp kubernetes.pem /etc/kubernetes/pki/apiserver.crt &amp;&amp;
-
-  sudo cp kubernetes-key.pem /etc/kubernetes/pki/apiserver-kubelet-client.key &amp;&amp;
-  sudo cp kubernetes.pem /etc/kubernetes/pki/apiserver-kubelet-client.crt &amp;&amp;
-
-  sudo cp kubernetes-key.pem /etc/kubernetes/pki/etcd/server.key &amp;&amp;
-  sudo cp kubernetes.pem /etc/kubernetes/pki/etcd/server.crt &amp;&amp;
-
-  sudo cp kubernetes-key.pem /etc/kubernetes/pki/etcd/peer.key &amp;&amp;
-  sudo cp kubernetes.pem /etc/kubernetes/pki/etcd/peer.crt &amp;&amp;
-
-  sudo cp kubernetes-key.pem /etc/kubernetes/pki/etcd/healthcheck-client.key &amp;&amp;
-  sudo cp kubernetes.pem /etc/kubernetes/pki/etcd/healthcheck-client.crt &amp;&amp;
-
-  sudo cp service-account-key.pem /etc/kubernetes/pki/sa.key &amp;&amp;
-  sudo cp service-account.pem /etc/kubernetes/pki/sa.pub
-</code></pre></div><h3 id="kubeconfigの生成">kubeconfigの生成</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ sudo apt install -y golang-cfssl
+</span></span><span style="display:flex;"><span>$ wget https://raw.githubusercontent.com/CyberAgentHack/home-kubernetes-2020/master/how-to-create-cluster-logical-hardway/generate-cert.sh 
+</span></span><span style="display:flex;"><span>$ bash generate-cert.sh
+</span></span><span style="display:flex;"><span>Hostname of Node1: r4k1
+</span></span><span style="display:flex;"><span>Hostname of Node2: r4k2
+</span></span><span style="display:flex;"><span>Hostname of Node3: r4k3
+</span></span><span style="display:flex;"><span>Addresses of Node1 (x.x.x.x[,x.x.x.x]): 192.168.10.1
+</span></span><span style="display:flex;"><span>Addresses of Node2 (x.x.x.x[,x.x.x.x]): 192.168.10.2
+</span></span><span style="display:flex;"><span>Addresses of Node3 (x.x.x.x[,x.x.x.x]): 192.168.10.3
+</span></span><span style="display:flex;"><span>Address of Kubernetes ClusterIP (first address of ClusterIP subnet): 10.32.0.1
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>---&gt; Complete to generate certificate
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ls cert/
+</span></span><span style="display:flex;"><span>admin-csr.json	ca.csr				  kube-proxy-key.pem	   kubernetes-csr.json	r4k1.pem       r4k3.csr
+</span></span><span style="display:flex;"><span>admin-key.pem	ca.pem				  kube-proxy.csr	   kubernetes-key.pem	r4k2-csr.json  r4k3.pem
+</span></span><span style="display:flex;"><span>admin.csr	kube-controller-manager-csr.json  kube-proxy.pem	   kubernetes.csr	r4k2-key.pem   service-account-csr.json
+</span></span><span style="display:flex;"><span>admin.pem	kube-controller-manager-key.pem   kube-scheduler-csr.json  kubernetes.pem	r4k2.csr       service-account-key.pem
+</span></span><span style="display:flex;"><span>ca-config.json	kube-controller-manager.csr	  kube-scheduler-key.pem   r4k1-csr.json	r4k2.pem       service-account.csr
+</span></span><span style="display:flex;"><span>ca-csr.json	kube-controller-manager.pem	  kube-scheduler.csr	   r4k1-key.pem		r4k3-csr.json  service-account.pem
+</span></span><span style="display:flex;"><span>ca-key.pem	kube-proxy-csr.json		  kube-scheduler.pem	   r4k1.csr		r4k3-key.pem
+</span></span></code></pre></div><p>他Nodeに<code>ca.pem</code>と証明書を送る。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ cd cert
+</span></span><span style="display:flex;"><span>$ scp r4k2.pem r4k2-key.pem ca.pem ubuntu@r4k2:/home/ubuntu &amp;&amp;
+</span></span><span style="display:flex;"><span>  scp r4k3.pem r4k3-key.pem ca.pem ubuntu@r4k3:/home/ubuntu
+</span></span></code></pre></div><p>Masterのコンポーネント起動時にフラグで渡すファイルは、kubeadmと同じパスに配置することがk8sのドキュメントで<a href="https://kubernetes.io/ja/docs/setup/best-practices/certificates/#%E8%A8%BC%E6%98%8E%E6%9B%B8%E3%81%AE%E3%83%91%E3%82%B9">推奨</a>されていたのでそれに合わせることにした。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ sudo mkdir -p /etc/kubernetes/pki/etcd &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp ca-key.pem /etc/kubernetes/pki/etcd/ca.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp ca.pem /etc/kubernetes/pki/etcd/ca.crt &amp;&amp;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes-key.pem /etc/kubernetes/pki/apiserver-etcd-client.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes.pem /etc/kubernetes/pki/apiserver-etcd-client.crt &amp;&amp;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  sudo cp ca-key.pem /etc/kubernetes/pki/ca.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp ca.pem /etc/kubernetes/pki/ca.crt &amp;&amp;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes-key.pem /etc/kubernetes/pki/apiserver.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes.pem /etc/kubernetes/pki/apiserver.crt &amp;&amp;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes-key.pem /etc/kubernetes/pki/apiserver-kubelet-client.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes.pem /etc/kubernetes/pki/apiserver-kubelet-client.crt &amp;&amp;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes-key.pem /etc/kubernetes/pki/etcd/server.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes.pem /etc/kubernetes/pki/etcd/server.crt &amp;&amp;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes-key.pem /etc/kubernetes/pki/etcd/peer.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes.pem /etc/kubernetes/pki/etcd/peer.crt &amp;&amp;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes-key.pem /etc/kubernetes/pki/etcd/healthcheck-client.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp kubernetes.pem /etc/kubernetes/pki/etcd/healthcheck-client.crt &amp;&amp;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  sudo cp service-account-key.pem /etc/kubernetes/pki/sa.key &amp;&amp;
+</span></span><span style="display:flex;"><span>  sudo cp service-account.pem /etc/kubernetes/pki/sa.pub
+</span></span></code></pre></div><h3 id="kubeconfigの生成">kubeconfigの生成</h3>
 <p>これも<a href="https://github.com/CyberAgentHack/home-kubernetes-2020/blob/master/how-to-create-cluster-logical-hardway/generate-kubeconfig.sh">スクリプト</a>が用意されていて、実行すると<code>kubectl config set-cluster/credentials/context</code>したkubeconfigが作られる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ wget https://storage.googleapis.com/kubernetes-release/release/v1.20.6/bin/linux/arm64/kubectl
-$ chmod +x kubectl
-$ sudo mv kubectl /usr/local/bin
-$ wget https://raw.githubusercontent.com/CyberAgentHack/home-kubernetes-2020/master/how-to-create-cluster-logical-hardway/generate-kubeconfig.sh
-$ bash generate-kubeconfig.sh
-Hostname of Node1: r4k1
-Hostname of Node2: r4k2
-Hostname of Node3: r4k3
-Address of Master Node: 192.168.10.1
-...
----&gt; Complete to generate kubeconfig
-
-$ ls kubeconfig/
-admin.kubeconfig  kube-controller-manager.kubeconfig  kube-proxy.kubeconfig  kube-scheduler.kubeconfig	r4k1.kubeconfig  r4k2.kubeconfig  r4k3.kubeconfig
-
-$ cat kubeconfig/admin.kubeconfig 
-apiVersion: v1
-clusters:
-- cluster:
-    certificate-authority-data: LS0tLS1C...tLS0K
-    server: https://127.0.0.1:6443
-  name: kubernetes-the-hard-way
-contexts:
-- context:
-    cluster: kubernetes-the-hard-way
-    user: admin
-  name: default
-current-context: default
-kind: Config
-preferences: {}
-users:
-- name: admin
-  user:
-    client-certificate-data: LS0tLS1C...tLQo=
-    client-key-data: LS0tLS1C...tLQo=
-</code></pre></div><p>他のNodeで使うものを送る。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cd kubeconfig
-$ scp r4k2.kubeconfig kube-proxy.kubeconfig ubuntu@r4k2:/home/ubuntu &amp;&amp;
-  scp r4k3.kubeconfig kube-proxy.kubeconfig ubuntu@r4k3:/home/ubuntu
-</code></pre></div><h3 id="コンポーネントのデプロイ">コンポーネントのデプロイ</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ wget https://storage.googleapis.com/kubernetes-release/release/v1.20.6/bin/linux/arm64/kubectl
+</span></span><span style="display:flex;"><span>$ chmod +x kubectl
+</span></span><span style="display:flex;"><span>$ sudo mv kubectl /usr/local/bin
+</span></span><span style="display:flex;"><span>$ wget https://raw.githubusercontent.com/CyberAgentHack/home-kubernetes-2020/master/how-to-create-cluster-logical-hardway/generate-kubeconfig.sh
+</span></span><span style="display:flex;"><span>$ bash generate-kubeconfig.sh
+</span></span><span style="display:flex;"><span>Hostname of Node1: r4k1
+</span></span><span style="display:flex;"><span>Hostname of Node2: r4k2
+</span></span><span style="display:flex;"><span>Hostname of Node3: r4k3
+</span></span><span style="display:flex;"><span>Address of Master Node: 192.168.10.1
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>---&gt; Complete to generate kubeconfig
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ ls kubeconfig/
+</span></span><span style="display:flex;"><span>admin.kubeconfig  kube-controller-manager.kubeconfig  kube-proxy.kubeconfig  kube-scheduler.kubeconfig	r4k1.kubeconfig  r4k2.kubeconfig  r4k3.kubeconfig
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ cat kubeconfig/admin.kubeconfig 
+</span></span><span style="display:flex;"><span>apiVersion: v1
+</span></span><span style="display:flex;"><span>clusters:
+</span></span><span style="display:flex;"><span>- cluster:
+</span></span><span style="display:flex;"><span>    certificate-authority-data: LS0tLS1C...tLS0K
+</span></span><span style="display:flex;"><span>    server: https://127.0.0.1:6443
+</span></span><span style="display:flex;"><span>  name: kubernetes-the-hard-way
+</span></span><span style="display:flex;"><span>contexts:
+</span></span><span style="display:flex;"><span>- context:
+</span></span><span style="display:flex;"><span>    cluster: kubernetes-the-hard-way
+</span></span><span style="display:flex;"><span>    user: admin
+</span></span><span style="display:flex;"><span>  name: default
+</span></span><span style="display:flex;"><span>current-context: default
+</span></span><span style="display:flex;"><span>kind: Config
+</span></span><span style="display:flex;"><span>preferences: {}
+</span></span><span style="display:flex;"><span>users:
+</span></span><span style="display:flex;"><span>- name: admin
+</span></span><span style="display:flex;"><span>  user:
+</span></span><span style="display:flex;"><span>    client-certificate-data: LS0tLS1C...tLQo=
+</span></span><span style="display:flex;"><span>    client-key-data: LS0tLS1C...tLQo=
+</span></span></code></pre></div><p>他のNodeで使うものを送る。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ cd kubeconfig
+</span></span><span style="display:flex;"><span>$ scp r4k2.kubeconfig kube-proxy.kubeconfig ubuntu@r4k2:/home/ubuntu &amp;&amp;
+</span></span><span style="display:flex;"><span>  scp r4k3.kubeconfig kube-proxy.kubeconfig ubuntu@r4k3:/home/ubuntu
+</span></span></code></pre></div><h3 id="コンポーネントのデプロイ">コンポーネントのデプロイ</h3>
 <p>資料に従い<a href="https://kubernetes.io/ja/docs/concepts/overview/components/">コンポーネント</a>をデプロイしていく。</p>
 <ul>
 <li>Kubernetes Master
@@ -641,69 +641,69 @@ $ scp r4k2.kubeconfig kube-proxy.kubeconfig ubuntu@r4k2:/home/ubuntu &amp;&amp;
 <p><a href="https://www.sambaiz.net/article/182/">KubernetesのCustom Resource Definition(CRD)とCustom Controller - sambaiz-net</a></p>
 <p>前準備としてcgroupのmemory subsystemを有効にすると書いてあったが元からenabledになっていた。
 これによりグループのメモリ使用量を出したり制限をかけることができる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat /proc/cgroups
-#subsys_name	hierarchy	num_cgroups	enabled
-cpuset	2	1	1
-cpu	7	41	1
-cpuacct	7	41	1
-blkio	3	41	1
-memory	10	86	1
-devices	6	41	1
-freezer	11	2	1
-net_cls	4	1	1
-perf_event	5	1	1
-net_prio	4	1	1
-pids	9	46	1
-rdma	8	1	1
-</code></pre></div><p>kube-apiserverのデプロイ時に次のエラーが出た。v1.20でstableになった<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#service-account-token-volume-projection">Service Account Token Volume Projection</a>に関するもので、audienceや有効期限などを指定したServiceAccount TokenをPodのProjected Volumeにマウントしてくれるようだ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">May 04 10:28:12 r4k1 kube-apiserver[9746]: Error: [service-account-issuer is a required flag, --service-account-signing-key-file and --service-account-issuer are required flags]
-</code></pre></div><p>次のフラグを追加したら起動した。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">--service-account-signing-key-file=/etc/kubernetes/pki/sa.key \\
---service-account-issuer=api \\
-</code></pre></div><p>あとは証明書のパスを変えたので設定ミスでapiserver-etcd間の通信が<code>remote error: tls: bad certificate</code>になったりした。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ cat /proc/cgroups
+</span></span><span style="display:flex;"><span>#subsys_name	hierarchy	num_cgroups	enabled
+</span></span><span style="display:flex;"><span>cpuset	2	1	1
+</span></span><span style="display:flex;"><span>cpu	7	41	1
+</span></span><span style="display:flex;"><span>cpuacct	7	41	1
+</span></span><span style="display:flex;"><span>blkio	3	41	1
+</span></span><span style="display:flex;"><span>memory	10	86	1
+</span></span><span style="display:flex;"><span>devices	6	41	1
+</span></span><span style="display:flex;"><span>freezer	11	2	1
+</span></span><span style="display:flex;"><span>net_cls	4	1	1
+</span></span><span style="display:flex;"><span>perf_event	5	1	1
+</span></span><span style="display:flex;"><span>net_prio	4	1	1
+</span></span><span style="display:flex;"><span>pids	9	46	1
+</span></span><span style="display:flex;"><span>rdma	8	1	1
+</span></span></code></pre></div><p>kube-apiserverのデプロイ時に次のエラーが出た。v1.20でstableになった<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#service-account-token-volume-projection">Service Account Token Volume Projection</a>に関するもので、audienceや有効期限などを指定したServiceAccount TokenをPodのProjected Volumeにマウントしてくれるようだ。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>May 04 10:28:12 r4k1 kube-apiserver[9746]: Error: [service-account-issuer is a required flag, --service-account-signing-key-file and --service-account-issuer are required flags]
+</span></span></code></pre></div><p>次のフラグを追加したら起動した。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>--service-account-signing-key-file=/etc/kubernetes/pki/sa.key \\
+</span></span><span style="display:flex;"><span>--service-account-issuer=api \\
+</span></span></code></pre></div><p>あとは証明書のパスを変えたので設定ミスでapiserver-etcd間の通信が<code>remote error: tls: bad certificate</code>になったりした。
 大体のエラーは設定ミスか、ファイルの作り忘れか、修正が反映されてないことによるものだったが、どこに問題があるか探すのに苦労した。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sh" data-lang="sh"><span style="color:#6272a4"># etcd</span>
---cert-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/server.crt <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>--key-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/server.key  <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>--peer-cert-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/peer.crt <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>--peer-key-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/peer.key <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>--trusted-ca-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/ca.crt <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>--peer-trusted-ca-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/ca.crt <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span><span style="color:#6272a4"># apiserver</span>
---etcd-cafile<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/ca.crt <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>--etcd-certfile<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/apiserver-etcd-client.crt <span style="color:#f1fa8c">\
-</span><span style="color:#f1fa8c"></span>--etcd-keyfile<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/apiserver-etcd-client.key <span style="color:#f1fa8c">\
-</span></code></pre></div><h2 id="動作確認">動作確認</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span><span style="color:#6272a4"># etcd</span>
+</span></span><span style="display:flex;"><span>--cert-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/server.crt <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--key-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/server.key  <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--peer-cert-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/peer.crt <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--peer-key-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/peer.key <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--trusted-ca-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/ca.crt <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--peer-trusted-ca-file<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/ca.crt <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span><span style="color:#6272a4"># apiserver</span>
+</span></span><span style="display:flex;"><span>--etcd-cafile<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/etcd/ca.crt <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--etcd-certfile<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/apiserver-etcd-client.crt <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--etcd-keyfile<span style="color:#ff79c6">=</span>/etc/kubernetes/pki/apiserver-etcd-client.key <span style="color:#f1fa8c">\
+</span></span></span></code></pre></div><h2 id="動作確認">動作確認</h2>
 <p>Nodeが認識されて、corednsも動いている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ export KUBECONFIG=${PWD}/admin.kubeconfig
-$ kubectl get node
-NAME   STATUS   ROLES    AGE   VERSION
-r4k1   Ready    &lt;none&gt;   39m   v1.20.6
-r4k2   Ready    &lt;none&gt;   17h   v1.20.6
-r4k3   Ready    &lt;none&gt;   16h   v1.20.6
-
-$ kubectl get pod -n kube-system
-NAME                       READY   STATUS    RESTARTS   AGE
-coredns-75774bf574-4mrp4   1/1     Running   0          43m
-coredns-75774bf574-h69gs   1/1     Running   0          67m
-
-$ kubectl run test --image busybox:1.28 --restart Never -it --rm -- nslookup kubernetes
-If you don&#39;t see a command prompt, try pressing enter.
-Name:      kubernetes
-Address 1: 10.32.0.1 kubernetes.default.svc.cluster.local
-pod &#34;test&#34; deleted
-</code></pre></div><p>nginxを起動しport-forwardしてアクセスする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ kubectl create deployment nginx --image=nginx
-deployment.apps/nginx created
-
-$ kubectl get pods -l app=nginx
-NAME                     READY   STATUS    RESTARTS   AGE
-nginx-6799fc88d8-9f7m5   1/1     Running   0          43s
-
-$ kubectl port-forward nginx-6799fc88d8-tkd4w 8081:80 &amp;
-$ curl localhost:8081 -o /dev/null -w &#39;%{http_code}\n&#39; -s
-200
-</code></pre></div><p>クラウドのマネージドサービスを使っていると触らない所なので面白かった。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ export KUBECONFIG=${PWD}/admin.kubeconfig
+</span></span><span style="display:flex;"><span>$ kubectl get node
+</span></span><span style="display:flex;"><span>NAME   STATUS   ROLES    AGE   VERSION
+</span></span><span style="display:flex;"><span>r4k1   Ready    &lt;none&gt;   39m   v1.20.6
+</span></span><span style="display:flex;"><span>r4k2   Ready    &lt;none&gt;   17h   v1.20.6
+</span></span><span style="display:flex;"><span>r4k3   Ready    &lt;none&gt;   16h   v1.20.6
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ kubectl get pod -n kube-system
+</span></span><span style="display:flex;"><span>NAME                       READY   STATUS    RESTARTS   AGE
+</span></span><span style="display:flex;"><span>coredns-75774bf574-4mrp4   1/1     Running   0          43m
+</span></span><span style="display:flex;"><span>coredns-75774bf574-h69gs   1/1     Running   0          67m
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ kubectl run test --image busybox:1.28 --restart Never -it --rm -- nslookup kubernetes
+</span></span><span style="display:flex;"><span>If you don&#39;t see a command prompt, try pressing enter.
+</span></span><span style="display:flex;"><span>Name:      kubernetes
+</span></span><span style="display:flex;"><span>Address 1: 10.32.0.1 kubernetes.default.svc.cluster.local
+</span></span><span style="display:flex;"><span>pod &#34;test&#34; deleted
+</span></span></code></pre></div><p>nginxを起動しport-forwardしてアクセスする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ kubectl create deployment nginx --image=nginx
+</span></span><span style="display:flex;"><span>deployment.apps/nginx created
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ kubectl get pods -l app=nginx
+</span></span><span style="display:flex;"><span>NAME                     READY   STATUS    RESTARTS   AGE
+</span></span><span style="display:flex;"><span>nginx-6799fc88d8-9f7m5   1/1     Running   0          43s
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ kubectl port-forward nginx-6799fc88d8-tkd4w 8081:80 &amp;
+</span></span><span style="display:flex;"><span>$ curl localhost:8081 -o /dev/null -w &#39;%{http_code}\n&#39; -s
+</span></span><span style="display:flex;"><span>200
+</span></span></code></pre></div><p>クラウドのマネージドサービスを使っていると触らない所なので面白かった。</p>
 <h2 id="参考">参考</h2>
 <p><a href="https://www.m-system.co.jp/mstoday/plan/mame/b_network/0912/index.html">計装豆知識｜PoE（IEEE802.3af）</a></p>
 <p><a href="https://blog.soracom.com/ja-jp/2021/01/07/how-to-choise-of-microsd-for-raspberry-pi-in-2021-spring/">Raspberry Pi 3および4で使うSDカード(microSDカード)の選び方 ― 2021年新春 - SORACOM公式ブログ</a></p>

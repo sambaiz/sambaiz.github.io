@@ -472,13 +472,13 @@
 <p><a href="https://aws.amazon.com/jp/forecast/pricing/">料金</a>はデータストレージに<code>$0.088/GB</code>、学習に<code>$0.24/hour</code>、予測に<code>$0.60/1000回</code>かかる。</p>
 <p>今回は<a href="https://docs.aws.amazon.com/ja_jp/forecast/latest/dg/getting-started.html">開発者ガイド</a>と同じく
 <a href="https://docs.aws.amazon.com/ja_jp/forecast/latest/dg/samples/electricityusagedata.zip">電力消費量のデータセット</a>を用いて動かしてみる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ head electricityusagedata.csv 
-2014-01-01 01:00:00,2.53807106598985,client_0
-2014-01-01 01:00:00,23.648648648648624,client_1
-2014-01-01 01:00:00,0.0,client_2
-2014-01-01 01:00:00,144.81707317073176,client_3
-...
-</code></pre></div><h2 id="データのインポート">データのインポート</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ head electricityusagedata.csv 
+</span></span><span style="display:flex;"><span>2014-01-01 01:00:00,2.53807106598985,client_0
+</span></span><span style="display:flex;"><span>2014-01-01 01:00:00,23.648648648648624,client_1
+</span></span><span style="display:flex;"><span>2014-01-01 01:00:00,0.0,client_2
+</span></span><span style="display:flex;"><span>2014-01-01 01:00:00,144.81707317073176,client_3
+</span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><h2 id="データのインポート">データのインポート</h2>
 <p>まずドメインを選んでDataset groupを作成する。Dataset groupには予測対象の時系列データに加えて、他の関連する時系列データやメタデータを含めることができる。</p>
 <p><img src="https://www.sambaiz.net/images/327-1.png" alt="Dataset groupの作成"></p>
 <p>CSVをS3に置き、それを読めるRoleを渡してインポートする。データの間隔とカラムの順は元データと合致するように設定する。
@@ -494,39 +494,39 @@
 <p>学習が終わるとCreate a forecastして予測値を得られる。</p>
 <p><img src="https://www.sambaiz.net/images/327-4.png" alt="予測"></p>
 <p>Goでの取得はこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
-
-<span style="color:#ff79c6">import</span> (
-	<span style="color:#f1fa8c">&#34;context&#34;</span>
-	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
-
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/session&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/service/forecastqueryservice&#34;</span>
-)
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
-	mySession <span style="color:#ff79c6">:=</span> session.<span style="color:#50fa7b">Must</span>(session.<span style="color:#50fa7b">NewSession</span>())
-	svc <span style="color:#ff79c6">:=</span> forecastqueryservice.<span style="color:#50fa7b">New</span>(mySession)
-	ctx <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">TODO</span>()
-	output, err <span style="color:#ff79c6">:=</span> svc.<span style="color:#50fa7b">QueryForecastWithContext</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecastqueryservice.QueryForecastInput{
-		ForecastArn: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;arn:aws:forecast:ap-northeast-1:*****:forecast/testforecast&#34;</span>),
-		Filters:     <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;item_id&#34;</span>: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;client_367&#34;</span>)},
-		<span style="color:#6272a4">// StartDate: aws.String(&#34;2015-01-01T01:00:00&#34;),
-</span><span style="color:#6272a4"></span>		<span style="color:#6272a4">// EndDate: aws.String(&#34;2015-01-02T12:00:00&#34;),
-</span><span style="color:#6272a4"></span>	})
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
-	}
-	fmt.<span style="color:#50fa7b">Println</span>(output.Forecast.Predictions[<span style="color:#f1fa8c">&#34;p50&#34;</span>][<span style="color:#bd93f9">0</span>])
-	<span style="color:#6272a4">/*
-</span><span style="color:#6272a4">		{
-</span><span style="color:#6272a4">			Timestamp: &#34;2015-01-01T01:00:00&#34;,
-</span><span style="color:#6272a4">			Value: 178.90061950683594
-</span><span style="color:#6272a4">		}
-</span><span style="color:#6272a4">	*/</span>
-}
-</code></pre></div><p><a href="https://www.sambaiz.net/article/380/">GoでAmazon Forecastに時系列データをimportしPredictorを作成して予測結果をS3にexportする - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;context&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/session&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/service/forecastqueryservice&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+</span></span><span style="display:flex;"><span>	mySession <span style="color:#ff79c6">:=</span> session.<span style="color:#50fa7b">Must</span>(session.<span style="color:#50fa7b">NewSession</span>())
+</span></span><span style="display:flex;"><span>	svc <span style="color:#ff79c6">:=</span> forecastqueryservice.<span style="color:#50fa7b">New</span>(mySession)
+</span></span><span style="display:flex;"><span>	ctx <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">TODO</span>()
+</span></span><span style="display:flex;"><span>	output, err <span style="color:#ff79c6">:=</span> svc.<span style="color:#50fa7b">QueryForecastWithContext</span>(ctx, <span style="color:#ff79c6">&amp;</span>forecastqueryservice.QueryForecastInput{
+</span></span><span style="display:flex;"><span>		ForecastArn: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;arn:aws:forecast:ap-northeast-1:*****:forecast/testforecast&#34;</span>),
+</span></span><span style="display:flex;"><span>		Filters:     <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#ff79c6">*</span><span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;item_id&#34;</span>: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;client_367&#34;</span>)},
+</span></span><span style="display:flex;"><span>		<span style="color:#6272a4">// StartDate: aws.String(&#34;2015-01-01T01:00:00&#34;),
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>		<span style="color:#6272a4">// EndDate: aws.String(&#34;2015-01-02T12:00:00&#34;),
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>	})
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(output.Forecast.Predictions[<span style="color:#f1fa8c">&#34;p50&#34;</span>][<span style="color:#bd93f9">0</span>])
+</span></span><span style="display:flex;"><span>	<span style="color:#6272a4">/*
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">		{
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">			Timestamp: &#34;2015-01-01T01:00:00&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">			Value: 178.90061950683594
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">		}
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">	*/</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p><a href="https://www.sambaiz.net/article/380/">GoでAmazon Forecastに時系列データをimportしPredictorを作成して予測結果をS3にexportする - sambaiz-net</a></p>
 
     </div>
     <div class="share">

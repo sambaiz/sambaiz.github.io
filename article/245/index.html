@@ -478,48 +478,48 @@ rootなしで動く<a href="https://github.com/indigo-dc/udocker">udocker</a>で
 <h2 id="taskへのパラメータの受け渡し">Taskへのパラメータの受け渡し</h2>
 <p><code>runTask</code>の<code>containerOverrides</code>でコマンドの引数としてlambdaに来たリクエストをそのまま渡そうとしたところ、<a href="https://docs.aws.amazon.com/ja_jp/AmazonECS/latest/APIReference/API_RunTask.html">8192文字</a>文字の上限に当たってしまったので
 SQSで受け渡すことにした。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">sess <span style="color:#ff79c6">:=</span> session.<span style="color:#50fa7b">New</span>()
-sqsSvc <span style="color:#ff79c6">:=</span> sqs.<span style="color:#50fa7b">New</span>(sess)
-<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> sqsSvc.<span style="color:#50fa7b">SendMessage</span>(<span style="color:#ff79c6">&amp;</span>sqs.SendMessageInput{
-    MessageBody:    aws.<span style="color:#50fa7b">String</span>(<span style="color:#8be9fd;font-style:italic">string</span>(payload)),
-    QueueUrl:       aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_QUEUE_URL&#34;</span>)),
-    MessageGroupId: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;group&#34;</span>),
-}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-    fmt.<span style="color:#50fa7b">Println</span>(err.<span style="color:#50fa7b">Error</span>())
-    <span style="color:#ff79c6">return</span> response{
-        StatusCode: http.StatusInternalServerError,
-    }, err
-}
-</code></pre></div><h2 id="同時実行数を制限する">同時実行数を制限する</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span>sess <span style="color:#ff79c6">:=</span> session.<span style="color:#50fa7b">New</span>()
+</span></span><span style="display:flex;"><span>sqsSvc <span style="color:#ff79c6">:=</span> sqs.<span style="color:#50fa7b">New</span>(sess)
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> sqsSvc.<span style="color:#50fa7b">SendMessage</span>(<span style="color:#ff79c6">&amp;</span>sqs.SendMessageInput{
+</span></span><span style="display:flex;"><span>    MessageBody:    aws.<span style="color:#50fa7b">String</span>(<span style="color:#8be9fd;font-style:italic">string</span>(payload)),
+</span></span><span style="display:flex;"><span>    QueueUrl:       aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_QUEUE_URL&#34;</span>)),
+</span></span><span style="display:flex;"><span>    MessageGroupId: aws.<span style="color:#50fa7b">String</span>(<span style="color:#f1fa8c">&#34;group&#34;</span>),
+</span></span><span style="display:flex;"><span>}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>    fmt.<span style="color:#50fa7b">Println</span>(err.<span style="color:#50fa7b">Error</span>())
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> response{
+</span></span><span style="display:flex;"><span>        StatusCode: http.StatusInternalServerError,
+</span></span><span style="display:flex;"><span>    }, err
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="同時実行数を制限する">同時実行数を制限する</h2>
 <p>アプリケーションの特性上、同時実行されないようにしたい。
 そこで普段はTask0のServiceを作成し、実行するときは要求Taskを1にして、Queueが空になるまで実行させ、最後に0に戻すようにした。Taskがない場合は立ち上がりにやや時間がかかるが、元々Lambdaで動いていたこともあって常に料金が発生する常駐リソースをなるべく使いたくなかった。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">sess <span style="color:#ff79c6">:=</span> session.<span style="color:#50fa7b">New</span>()
-sqsSvc <span style="color:#ff79c6">:=</span> sqs.<span style="color:#50fa7b">New</span>(sess)
-<span style="color:#ff79c6">for</span> {
-    res, err <span style="color:#ff79c6">:=</span> sqsSvc.<span style="color:#50fa7b">ReceiveMessage</span>(<span style="color:#ff79c6">&amp;</span>sqs.ReceiveMessageInput{
-        QueueUrl:            aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_QUEUE_URL&#34;</span>)),
-        MaxNumberOfMessages: aws.<span style="color:#50fa7b">Int64</span>(<span style="color:#bd93f9">1</span>),
-    })
-    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-        logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;receive message error&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
-        <span style="color:#ff79c6">break</span>
-    }
-
-    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(res.Messages) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span> {
-        <span style="color:#ff79c6">break</span>
-    }
-    <span style="color:#ff79c6">...</span>
-}
-
-ecsSvc <span style="color:#ff79c6">:=</span> ecs.<span style="color:#50fa7b">New</span>(sess)
-<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> ecsSvc.<span style="color:#50fa7b">UpdateService</span>(<span style="color:#ff79c6">&amp;</span>ecs.UpdateServiceInput{
-    Cluster:      aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;TASK_ECS_CLUSTER_ARN&#34;</span>)),
-    DesiredCount: aws.<span style="color:#50fa7b">Int64</span>(<span style="color:#bd93f9">0</span>),
-    Service:      aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_SERVICE_ARN&#34;</span>)),
-}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-    logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;shutdown task error&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
-}
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span>sess <span style="color:#ff79c6">:=</span> session.<span style="color:#50fa7b">New</span>()
+</span></span><span style="display:flex;"><span>sqsSvc <span style="color:#ff79c6">:=</span> sqs.<span style="color:#50fa7b">New</span>(sess)
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">for</span> {
+</span></span><span style="display:flex;"><span>    res, err <span style="color:#ff79c6">:=</span> sqsSvc.<span style="color:#50fa7b">ReceiveMessage</span>(<span style="color:#ff79c6">&amp;</span>sqs.ReceiveMessageInput{
+</span></span><span style="display:flex;"><span>        QueueUrl:            aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_QUEUE_URL&#34;</span>)),
+</span></span><span style="display:flex;"><span>        MaxNumberOfMessages: aws.<span style="color:#50fa7b">Int64</span>(<span style="color:#bd93f9">1</span>),
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>        logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;receive message error&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">break</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">len</span>(res.Messages) <span style="color:#ff79c6">==</span> <span style="color:#bd93f9">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">break</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">...</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>ecsSvc <span style="color:#ff79c6">:=</span> ecs.<span style="color:#50fa7b">New</span>(sess)
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> ecsSvc.<span style="color:#50fa7b">UpdateService</span>(<span style="color:#ff79c6">&amp;</span>ecs.UpdateServiceInput{
+</span></span><span style="display:flex;"><span>    Cluster:      aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;TASK_ECS_CLUSTER_ARN&#34;</span>)),
+</span></span><span style="display:flex;"><span>    DesiredCount: aws.<span style="color:#50fa7b">Int64</span>(<span style="color:#bd93f9">0</span>),
+</span></span><span style="display:flex;"><span>    Service:      aws.<span style="color:#50fa7b">String</span>(os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;OPERATION_SERVICE_ARN&#34;</span>)),
+</span></span><span style="display:flex;"><span>}); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>    logger.<span style="color:#50fa7b">Error</span>(<span style="color:#f1fa8c">&#34;shutdown task error&#34;</span>, zap.<span style="color:#50fa7b">Error</span>(err))
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div>
     </div>
     <div class="share">
       <div class="cell">

@@ -473,32 +473,32 @@ fluentdのmonitor_agentの値を<a href="https://docs.datadoghq.com/ja/integrati
 <p><a href="https://www.sambaiz.net/article/66/">fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する - sambaiz-net</a></p>
 <p>レコードへの付加にはfluentdのコアに含まれている<a href="https://docs.fluentd.org/filter/record_transformer">record_transformer</a>を使うこともできるが、性能が良い<a href="https://github.com/repeatedly/fluent-plugin-record-modifier">fluent-plugin-record-modifier</a>という選択肢もある。</p>
 <p><a href="https://www.sambaiz.net/article/55/">fluentdのrecord_transformerでログを加工する - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">&lt;filter test.log&gt;
-  @type record_modifier
-  &lt;record&gt;
-    ts_aggr ${Time.now().strftime(&#39;%Y-%m-%dT%H:%M:%S.%L%z&#39;)}
-  &lt;/record&gt;
-&lt;/filter&gt;
-</code></pre></div><p>また、ログのタイムスタンプをtime_keyとしている場合、<code>keep_time_key true</code>にするか<code>&lt;inject&gt;</code>してKDSに送られるようにする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>&lt;filter test.log&gt;
+</span></span><span style="display:flex;"><span>  @type record_modifier
+</span></span><span style="display:flex;"><span>  &lt;record&gt;
+</span></span><span style="display:flex;"><span>    ts_aggr ${Time.now().strftime(&#39;%Y-%m-%dT%H:%M:%S.%L%z&#39;)}
+</span></span><span style="display:flex;"><span>  &lt;/record&gt;
+</span></span><span style="display:flex;"><span>&lt;/filter&gt;
+</span></span></code></pre></div><p>また、ログのタイムスタンプをtime_keyとしている場合、<code>keep_time_key true</code>にするか<code>&lt;inject&gt;</code>してKDSに送られるようにする。</p>
 <p><a href="https://www.sambaiz.net/article/322/">fluentdの<!-- raw HTML omitted -->と<!-- raw HTML omitted -->でtime_formatを指定しなかった場合の挙動と内部処理 - sambaiz-net</a></p>
 <h2 id="timestampのパース">TIMESTAMPのパース</h2>
 <p>タイムスタンプ文字列をTIMESTAMP型のカラムに<a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/sch-mapping.html#sch-mapping-datatypes">マッピング</a>することもできるが、<code>2021-01-01T00:00:00.000+0900</code>形式の文字列をマッピングしたところ、<a href="https://docs.aws.amazon.com/kinesisanalytics/latest/sqlref/sql-reference-date-time-functions.html#sql-reference-date-time-functions-time-zones">UTCで</a>18時間後ろにずれた時間になってしまった。</p>
 <p><img src="https://www.sambaiz.net/images/324.png" alt="タイムスタンプ文字列とマッピングしたTIMESTAMP型のカラム"></p>
-<p>そこで一度CHARにマッピングしてからフォーマットを明示して<a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/sqlref/sql-reference-char-to-timestamp.html">CHAR_TO_TIMESTAMP('&lt;format_string&gt;',&ldquo;column_name&rdquo;)</a>することにした。
+<p>そこで一度CHARにマッピングしてからフォーマットを明示して<a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/sqlref/sql-reference-char-to-timestamp.html">CHAR_TO_TIMESTAMP(&rsquo;&lt;format_string&gt;&rsquo;,&ldquo;column_name&rdquo;)</a>することにした。
 <code>&lt;format_string&gt;</code>はJavaの<a href="https://docs.oracle.com/javase/7/docs/api/index.html?java/text/SimpleDateFormat.html">SimpleDateFormat</a>で記述し、この例の場合は<code>yyyy-MM-dd''T''HH:mm:ss.SSSZ</code>のようになる。</p>
 <p>マッピングの変更後にSourcesの方に何も出てこなくなった場合は、クエリの方で問題が起きている可能性があるので、コンソール上でクエリを保存してみてエラーにならないか確認し、必要なら修正する。</p>
 <h2 id="クエリ">クエリ</h2>
 <p><a href="https://www.sambaiz.net/article/302/">Kinesis Data AnalyticsのSQL, Lambdaへの出力とCDKによるリソースの作成 - sambaiz-net</a></p>
 <p>各タイムスタンプのMINを取って現在時刻との差を取れば、そのウインドウ集計対象のログのうち最も古いものの各箇所からのレイテンシが出せる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-sql" data-lang="sql"><span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">OR</span> <span style="color:#ff79c6">REPLACE</span> PUMP <span style="color:#f1fa8c">&#34;TEST_PUMP&#34;</span> <span style="color:#ff79c6">AS</span> 
-  <span style="color:#ff79c6">INSERT</span> <span style="color:#ff79c6">INTO</span> <span style="color:#f1fa8c">&#34;TEST_STREAM&#34;</span> (<span style="color:#f1fa8c">&#34;min_ts&#34;</span>, <span style="color:#f1fa8c">&#34;min_ts_kds&#34;</span>, <span style="color:#f1fa8c">&#34;min_ts_kda&#34;</span>)
-  <span style="color:#ff79c6">SELECT</span> STREAM 
-    <span style="color:#ff79c6">MIN</span>(CHAR_TO_TIMESTAMP(<span style="color:#f1fa8c">&#39;yyyy-MM-dd&#39;&#39;T&#39;&#39;HH:mm:ss.SSSZ&#39;</span>, <span style="color:#f1fa8c">&#34;ts&#34;</span>)) <span style="color:#ff79c6">as</span> min_ts,
-    <span style="color:#ff79c6">MIN</span>(<span style="color:#f1fa8c">&#34;APPROXIMATE_ARRIVAL_TIME&#34;</span>) <span style="color:#ff79c6">as</span> min_ts_kds,
-    <span style="color:#f1fa8c">&#34;ROWTIME&#34;</span> <span style="color:#ff79c6">as</span> min_ts_kda
-  <span style="color:#ff79c6">FROM</span> <span style="color:#f1fa8c">&#34;SOURCE_SQL_STREAM_001&#34;</span>
-  <span style="color:#ff79c6">GROUP</span> <span style="color:#ff79c6">BY</span> STEP(<span style="color:#f1fa8c">&#34;SOURCE_SQL_STREAM_001&#34;</span>.ROWTIME <span style="color:#ff79c6">BY</span> <span style="color:#8be9fd;font-style:italic">INTERVAL</span> <span style="color:#f1fa8c">&#39;10&#39;</span> SECOUND)
-</code></pre></div><h2 id="メトリクス">メトリクス</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">OR</span> <span style="color:#ff79c6">REPLACE</span> PUMP <span style="color:#f1fa8c">&#34;TEST_PUMP&#34;</span> <span style="color:#ff79c6">AS</span> 
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">INSERT</span> <span style="color:#ff79c6">INTO</span> <span style="color:#f1fa8c">&#34;TEST_STREAM&#34;</span> (<span style="color:#f1fa8c">&#34;min_ts&#34;</span>, <span style="color:#f1fa8c">&#34;min_ts_kds&#34;</span>, <span style="color:#f1fa8c">&#34;min_ts_kda&#34;</span>)
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">SELECT</span> STREAM 
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">MIN</span>(CHAR_TO_TIMESTAMP(<span style="color:#f1fa8c">&#39;yyyy-MM-dd&#39;&#39;T&#39;&#39;HH:mm:ss.SSSZ&#39;</span>, <span style="color:#f1fa8c">&#34;ts&#34;</span>)) <span style="color:#ff79c6">as</span> min_ts,
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">MIN</span>(<span style="color:#f1fa8c">&#34;APPROXIMATE_ARRIVAL_TIME&#34;</span>) <span style="color:#ff79c6">as</span> min_ts_kds,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;ROWTIME&#34;</span> <span style="color:#ff79c6">as</span> min_ts_kda
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span> <span style="color:#f1fa8c">&#34;SOURCE_SQL_STREAM_001&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">GROUP</span> <span style="color:#ff79c6">BY</span> STEP(<span style="color:#f1fa8c">&#34;SOURCE_SQL_STREAM_001&#34;</span>.ROWTIME <span style="color:#ff79c6">BY</span> <span style="color:#8be9fd;font-style:italic">INTERVAL</span> <span style="color:#f1fa8c">&#39;10&#39;</span> SECOUND)
+</span></span></code></pre></div><h2 id="メトリクス">メトリクス</h2>
 <p>関連するKDAのメトリクスとしてストリームからの読み込みのレイテンシである<code>MillisBehindLatest</code>がある。これが通常の<a href="https://docs.aws.amazon.com/ja_jp/kinesisanalytics/latest/dev/best-practices.html#bp-manage-apps">読み込みの頻度</a>である1000msを超えて上昇し続けている<a href="https://docs.aws.amazon.com/kinesisanalytics/latest/dev/troubleshooting.html#insufficient-throughput">場合</a>、InputBytesのスループットやdestinationへの送信に問題がないかを確認する。なお、この1000msという値はKDSで<a href="https://docs.aws.amazon.com/streams/latest/dev/kinesis-low-latency.html">推奨されている</a>読み込み頻度で、<code>GetRecords</code> APIの呼び出し上限に当たるのを防いでいる。</p>
 
     </div>

@@ -480,67 +480,67 @@
 ただし、Parameter Storeは現状一度に大量のリクエストが飛ぶような使い方をするとRate exceededに<a href="https://forums.aws.amazon.com/thread.jspa?messageID=834134&amp;tstart=0">なってしまう</a>問題がある。</p>
 <h2 id="実行時の値取得">実行時の値取得</h2>
 <p>実行時に値を取得するのはこんな感じ。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
-
-<span style="color:#ff79c6">import</span> (
-	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
-
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/awserr&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/session&#34;</span>
-	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/service/ssm&#34;</span>
-)
-
-<span style="color:#8be9fd;font-style:italic">type</span> Parameter <span style="color:#8be9fd;font-style:italic">struct</span> {
-	ssm <span style="color:#ff79c6">*</span>ssm.SSM
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">newParameter</span>(sess <span style="color:#ff79c6">*</span>session.Session) <span style="color:#ff79c6">*</span>Parameter {
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>Parameter{
-		ssm: ssm.<span style="color:#50fa7b">New</span>(sess),
-	}
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> (s <span style="color:#ff79c6">*</span>Parameter) <span style="color:#50fa7b">Get</span>(name <span style="color:#8be9fd">string</span>, decrypt <span style="color:#8be9fd">bool</span>) (<span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
-	param, err <span style="color:#ff79c6">:=</span> s.ssm.<span style="color:#50fa7b">GetParameter</span>(<span style="color:#ff79c6">&amp;</span>ssm.GetParameterInput{
-		Name:           aws.<span style="color:#50fa7b">String</span>(name),
-		WithDecryption: aws.<span style="color:#50fa7b">Bool</span>(decrypt),
-	})
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#f1fa8c">&#34;&#34;</span>, err
-	}
-	<span style="color:#8be9fd;font-style:italic">var</span> secret <span style="color:#8be9fd">string</span>
-	<span style="color:#ff79c6">if</span> param.Parameter.Value <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		secret = <span style="color:#ff79c6">*</span>param.Parameter.Value
-	}
-	<span style="color:#ff79c6">return</span> secret, <span style="color:#ff79c6">nil</span>
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
-	secret <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">newParameter</span>(session.<span style="color:#50fa7b">New</span>())
-	param, err <span style="color:#ff79c6">:=</span> secret.<span style="color:#50fa7b">Get</span>(<span style="color:#f1fa8c">&#34;test&#34;</span>, <span style="color:#ff79c6">true</span>)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
-	}
-	fmt.<span style="color:#50fa7b">Println</span>(param) <span style="color:#6272a4">// =&gt; ok
-</span><span style="color:#6272a4"></span>
-	param, err = secret.<span style="color:#50fa7b">Get</span>(<span style="color:#f1fa8c">&#34;notfound&#34;</span>, <span style="color:#ff79c6">true</span>)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">if</span> awsErr, ok <span style="color:#ff79c6">:=</span> err.(awserr.Error); ok {
-			fmt.<span style="color:#50fa7b">Println</span>(awsErr.<span style="color:#50fa7b">Code</span>()) <span style="color:#6272a4">// =&gt; ParameterNotFound
-</span><span style="color:#6272a4"></span>		}
-	}
-}
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ AWS_SDK_LOAD_CONFIG=1 AWS_PROFILE=**** go run main.go
-</code></pre></div><h2 id="serverless-framework">Serverless Framework</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/awserr&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/aws/session&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/aws/aws-sdk-go/service/ssm&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Parameter <span style="color:#8be9fd;font-style:italic">struct</span> {
+</span></span><span style="display:flex;"><span>	ssm <span style="color:#ff79c6">*</span>ssm.SSM
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">newParameter</span>(sess <span style="color:#ff79c6">*</span>session.Session) <span style="color:#ff79c6">*</span>Parameter {
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">&amp;</span>Parameter{
+</span></span><span style="display:flex;"><span>		ssm: ssm.<span style="color:#50fa7b">New</span>(sess),
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> (s <span style="color:#ff79c6">*</span>Parameter) <span style="color:#50fa7b">Get</span>(name <span style="color:#8be9fd">string</span>, decrypt <span style="color:#8be9fd">bool</span>) (<span style="color:#8be9fd">string</span>, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>	param, err <span style="color:#ff79c6">:=</span> s.ssm.<span style="color:#50fa7b">GetParameter</span>(<span style="color:#ff79c6">&amp;</span>ssm.GetParameterInput{
+</span></span><span style="display:flex;"><span>		Name:           aws.<span style="color:#50fa7b">String</span>(name),
+</span></span><span style="display:flex;"><span>		WithDecryption: aws.<span style="color:#50fa7b">Bool</span>(decrypt),
+</span></span><span style="display:flex;"><span>	})
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#f1fa8c">&#34;&#34;</span>, err
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#8be9fd;font-style:italic">var</span> secret <span style="color:#8be9fd">string</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> param.Parameter.Value <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		secret = <span style="color:#ff79c6">*</span>param.Parameter.Value
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> secret, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+</span></span><span style="display:flex;"><span>	secret <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">newParameter</span>(session.<span style="color:#50fa7b">New</span>())
+</span></span><span style="display:flex;"><span>	param, err <span style="color:#ff79c6">:=</span> secret.<span style="color:#50fa7b">Get</span>(<span style="color:#f1fa8c">&#34;test&#34;</span>, <span style="color:#ff79c6">true</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(param) <span style="color:#6272a4">// =&gt; ok
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>
+</span></span><span style="display:flex;"><span>	param, err = secret.<span style="color:#50fa7b">Get</span>(<span style="color:#f1fa8c">&#34;notfound&#34;</span>, <span style="color:#ff79c6">true</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">if</span> awsErr, ok <span style="color:#ff79c6">:=</span> err.(awserr.Error); ok {
+</span></span><span style="display:flex;"><span>			fmt.<span style="color:#50fa7b">Println</span>(awsErr.<span style="color:#50fa7b">Code</span>()) <span style="color:#6272a4">// =&gt; ParameterNotFound
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ AWS_SDK_LOAD_CONFIG=1 AWS_PROFILE=**** go run main.go
+</span></span></code></pre></div><h2 id="serverless-framework">Serverless Framework</h2>
 <p>Serverless Frameworkの設定ファイルserverless.ymlでもSSMを<a href="https://serverless.com/framework/docs/providers/aws/guide/variables/#reference-variables-using-the-ssm-parameter-store">参照でき</a>、デプロイ時に解決される。</p>
 <p><a href="https://www.sambaiz.net/article/155/">Serverless FrameworkでLambdaをデプロイする - sambaiz-net</a></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml"><span style="color:#ff79c6">provider</span>:
-  <span style="color:#ff79c6">name</span>: aws
-  ...
-  <span style="color:#ff79c6">environment</span>:
-    <span style="color:#ff79c6">SECRET</span>: ${ssm:test~true}
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">provider</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: aws
+</span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">environment</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">SECRET</span>: ${ssm:test~true}
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://qiita.com/tomoya_oka/items/a3dd44879eea0d1e3ef5">AWSのParameter StoreとSecrets Manager、結局どちらを使えばいいのか？比較 - Qiita</a></p>
 
     </div>

@@ -471,124 +471,124 @@
 <p>(追記: 2021-02-17) <a href="https://golang.org/doc/go1.16">Go 1.16</a>でラベルのないループがInliningされるようになった</p>
 </blockquote>
 <p>まずは次の例で挙動を確認する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#ff79c6">package</span> main
-
-<span style="color:#ff79c6">import</span> <span style="color:#f1fa8c">&#34;fmt&#34;</span>
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">myfunc</span>(a, b <span style="color:#8be9fd">int</span>) <span style="color:#8be9fd">int</span> {
-        <span style="color:#ff79c6">return</span> a <span style="color:#ff79c6">+</span> b
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
-        fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#50fa7b">myfunc</span>(<span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>))
-}
-</code></pre></div><p><code>-gcflags</code> に <code>-m</code> を渡してビルドすると最適化の内容が確認でき、2つ渡すとより詳細な出力が得られる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go tool compile -help
-usage: compile [options] file.go...
-...
-  -m    print optimization decisions
-</code></pre></div><p><code>myfunc()</code>や<code>fmt.Println()</code>がInliningされたことや、<code>myfunc(1, 2)</code>がヒープに割り当てられたことなどが分かる。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#f1fa8c">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">myfunc</span>(a, b <span style="color:#8be9fd">int</span>) <span style="color:#8be9fd">int</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> a <span style="color:#ff79c6">+</span> b
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+</span></span><span style="display:flex;"><span>        fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#50fa7b">myfunc</span>(<span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>))
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p><code>-gcflags</code> に <code>-m</code> を渡してビルドすると最適化の内容が確認でき、2つ渡すとより詳細な出力が得られる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go tool compile -help
+</span></span><span style="display:flex;"><span>usage: compile [options] file.go...
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>  -m    print optimization decisions
+</span></span></code></pre></div><p><code>myfunc()</code>や<code>fmt.Println()</code>がInliningされたことや、<code>myfunc(1, 2)</code>がヒープに割り当てられたことなどが分かる。
 ちなみにコストの低いスタックか、高いヒープのどちらに割り当てるかは<a href="https://github.com/golang/go/wiki/CompilerOptimizations#escape-analysis">Escape analysis</a>によって決まる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go build -gcflags &#39;-m -m&#39; main.go 
-# command-line-arguments
-./main.go:5:6: can inline myfunc with cost 4 as: func(int, int) int { return a + b }  &lt;----
-./main.go:9:6: cannot inline main: function too complex: cost 83 exceeds budget 80
-./main.go:10:20: inlining call to myfunc func(int, int) int { return a + b }
-./main.go:10:13: inlining call to fmt.Println func(...interface {}) (int, error) { var fmt..autotmp_3 int; fmt..autotmp_3 = &lt;N&gt;; var fmt..autotmp_4 error; fmt..autotmp_4 = &lt;N&gt;; fmt..autotmp_3, fmt..autotmp_4 = fmt.Fprintln(io.Writer(os.Stdout), fmt.a...); return fmt..autotmp_3, fmt..autotmp_4 }
-./main.go:10:20: myfunc(1, 2) escapes to heap:
-./main.go:10:20:   flow: ~arg0 = &amp;{storage for myfunc(1, 2)}:
-./main.go:10:20:     from myfunc(1, 2) (spill) at ./main.go:10:20
-./main.go:10:20:     from ~arg0 = &lt;N&gt; (assign-pair) at ./main.go:10:13
-./main.go:10:20:   flow: {storage for []interface {} literal} = ~arg0:
-./main.go:10:20:     from []interface {} literal (slice-literal-element) at ./main.go:10:13
-./main.go:10:20:   flow: fmt.a = &amp;{storage for []interface {} literal}:
-./main.go:10:20:     from []interface {} literal (spill) at ./main.go:10:13
-./main.go:10:20:     from fmt.a = []interface {} literal (assign) at ./main.go:10:13
-./main.go:10:20:   flow: {heap} = *fmt.a:
-./main.go:10:20:     from fmt.Fprintln(io.Writer(os.Stdout), fmt.a...) (call parameter) at ./main.go:10:13
-./main.go:10:20: myfunc(1, 2) escapes to heap
-./main.go:10:13: []interface {} literal does not escape
-&lt;autogenerated&gt;:1: .this does not escape
-</code></pre></div><p><a href="https://golang.org/cmd/objdump/">objdump</a>で逆アセンブルしたものを見ても関数が呼び出しされている形跡はない。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go build -gcflags &#39;-m -m&#39; main.go 
+</span></span><span style="display:flex;"><span># command-line-arguments
+</span></span><span style="display:flex;"><span>./main.go:5:6: can inline myfunc with cost 4 as: func(int, int) int { return a + b }  &lt;----
+</span></span><span style="display:flex;"><span>./main.go:9:6: cannot inline main: function too complex: cost 83 exceeds budget 80
+</span></span><span style="display:flex;"><span>./main.go:10:20: inlining call to myfunc func(int, int) int { return a + b }
+</span></span><span style="display:flex;"><span>./main.go:10:13: inlining call to fmt.Println func(...interface {}) (int, error) { var fmt..autotmp_3 int; fmt..autotmp_3 = &lt;N&gt;; var fmt..autotmp_4 error; fmt..autotmp_4 = &lt;N&gt;; fmt..autotmp_3, fmt..autotmp_4 = fmt.Fprintln(io.Writer(os.Stdout), fmt.a...); return fmt..autotmp_3, fmt..autotmp_4 }
+</span></span><span style="display:flex;"><span>./main.go:10:20: myfunc(1, 2) escapes to heap:
+</span></span><span style="display:flex;"><span>./main.go:10:20:   flow: ~arg0 = &amp;{storage for myfunc(1, 2)}:
+</span></span><span style="display:flex;"><span>./main.go:10:20:     from myfunc(1, 2) (spill) at ./main.go:10:20
+</span></span><span style="display:flex;"><span>./main.go:10:20:     from ~arg0 = &lt;N&gt; (assign-pair) at ./main.go:10:13
+</span></span><span style="display:flex;"><span>./main.go:10:20:   flow: {storage for []interface {} literal} = ~arg0:
+</span></span><span style="display:flex;"><span>./main.go:10:20:     from []interface {} literal (slice-literal-element) at ./main.go:10:13
+</span></span><span style="display:flex;"><span>./main.go:10:20:   flow: fmt.a = &amp;{storage for []interface {} literal}:
+</span></span><span style="display:flex;"><span>./main.go:10:20:     from []interface {} literal (spill) at ./main.go:10:13
+</span></span><span style="display:flex;"><span>./main.go:10:20:     from fmt.a = []interface {} literal (assign) at ./main.go:10:13
+</span></span><span style="display:flex;"><span>./main.go:10:20:   flow: {heap} = *fmt.a:
+</span></span><span style="display:flex;"><span>./main.go:10:20:     from fmt.Fprintln(io.Writer(os.Stdout), fmt.a...) (call parameter) at ./main.go:10:13
+</span></span><span style="display:flex;"><span>./main.go:10:20: myfunc(1, 2) escapes to heap
+</span></span><span style="display:flex;"><span>./main.go:10:13: []interface {} literal does not escape
+</span></span><span style="display:flex;"><span>&lt;autogenerated&gt;:1: .this does not escape
+</span></span></code></pre></div><p><a href="https://golang.org/cmd/objdump/">objdump</a>で逆アセンブルしたものを見ても関数が呼び出しされている形跡はない。
 さらに<code>1+2</code>が既に評価されている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go tool objdump main | less
-...
-TEXT main.main(SB) /Users/sambaiz/go/src/github.com/sambaiz/hoge/main.go
-  main.go:9             0x10a6a40               65488b0c2530000000      MOVQ GS:0x30, CX                        
-  main.go:9             0x10a6a49               483b6110                CMPQ 0x10(CX), SP                       
-  main.go:9             0x10a6a4d               0f867c000000            JBE 0x10a6acf                           
-  main.go:9             0x10a6a53               4883ec58                SUBQ $0x58, SP                          
-  main.go:9             0x10a6a57               48896c2450              MOVQ BP, 0x50(SP)                       
-  main.go:9             0x10a6a5c               488d6c2450              LEAQ 0x50(SP), BP                       
-  main.go:10            0x10a6a61               48c7042403000000        MOVQ $0x3, 0(SP)  &lt;---- 1 + 2                      
-  main.go:10            0x10a6a69               e83233f6ff              CALL runtime.convT64(SB)                
-  main.go:10            0x10a6a6e               488b442408              MOVQ 0x8(SP), AX                        
-  main.go:10            0x10a6a73               0f57c0                  XORPS X0, X0                            
-  main.go:10            0x10a6a76               0f11442440              MOVUPS X0, 0x40(SP)                     
-  main.go:10            0x10a6a7b               488d0d7ea90000          LEAQ runtime.rodata+43296(SB), CX       
-  main.go:10            0x10a6a82               48894c2440              MOVQ CX, 0x40(SP)                       
-  main.go:10            0x10a6a87               4889442448              MOVQ AX, 0x48(SP) 
-</code></pre></div><p>次にInliningされないパターンを見るためループを入れてみる。<code>//go:noinline</code> pragmaを付けてもInliningさせなくすることができる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">myfunc</span>() <span style="color:#8be9fd">int</span> {
-	n <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>
-	<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; <span style="color:#bd93f9">10</span>; i<span style="color:#ff79c6">++</span> {
-		n <span style="color:#ff79c6">+=</span> i
-	}
-	<span style="color:#ff79c6">return</span> n
-}
-</code></pre></div><p>Inliningされていないことを確認。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go build -gcflags &#39;-m -m&#39; main.go 
-# command-line-arguments
-./main.go:7:6: cannot inline myfunc: unhandled op FOR  &lt;----
-./main.go:15:6: cannot inline main: function too complex: cost 134 exceeds budget 80
-./main.go:16:13: inlining call to fmt.Println func(...interface {}) (int, error) { var fmt..autotmp_3 int; fmt..autotmp_3 = &lt;N&gt;; var fmt..autotmp_4 error; fmt..autotmp_4 = &lt;N&gt;; fmt..autotmp_3, fmt..autotmp_4 = fmt.Fprintln(io.Writer(os.Stdout), fmt.a...); return fmt..autotmp_3, fmt..autotmp_4 }
-./main.go:16:20: myfunc() escapes to heap:
-./main.go:16:20:   flow: ~arg0 = &amp;{storage for myfunc()}:
-./main.go:16:20:     from myfunc() (spill) at ./main.go:16:20
-./main.go:16:20:     from ~arg0 = &lt;N&gt; (assign-pair) at ./main.go:16:13
-./main.go:16:20:   flow: {storage for []interface {} literal} = ~arg0:
-./main.go:16:20:     from []interface {} literal (slice-literal-element) at ./main.go:16:13
-./main.go:16:20:   flow: fmt.a = &amp;{storage for []interface {} literal}:
-./main.go:16:20:     from []interface {} literal (spill) at ./main.go:16:13
-./main.go:16:20:     from fmt.a = []interface {} literal (assign) at ./main.go:16:13
-./main.go:16:20:   flow: {heap} = *fmt.a:
-./main.go:16:20:     from fmt.Fprintln(io.Writer(os.Stdout), fmt.a...) (call parameter) at ./main.go:16:13
-./main.go:16:20: myfunc() escapes to heap
-./main.go:16:13: []interface {} literal does not escape
-&lt;autogenerated&gt;:1: .this does not escape
-</code></pre></div><p><code>objdump</code> からも <code>myfunc()</code> が呼び出されていることが確認できる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go tool objdump main | less
-...
-TEXT main.main(SB) /Users/sambaiz/go/src/github.com/sambaiz/hoge/main.go
-  main.go:15            0x10a6a60               65488b0c2530000000      MOVQ GS:0x30, CX                        
-  main.go:15            0x10a6a69               483b6110                CMPQ 0x10(CX), SP                       
-  main.go:15            0x10a6a6d               0f867c000000            JBE 0x10a6aef                           
-  main.go:15            0x10a6a73               4883ec58                SUBQ $0x58, SP                          
-  main.go:15            0x10a6a77               48896c2450              MOVQ BP, 0x50(SP)                       
-  main.go:15            0x10a6a7c               488d6c2450              LEAQ 0x50(SP), BP                       
-  main.go:16            0x10a6a81               e8baffffff              CALL main.myfunc(SB)  &lt;----
-  main.go:16            0x10a6a86               e81533f6ff              CALL runtime.convT64(SB)                
-  main.go:16            0x10a6a8b               488b442408              MOVQ 0x8(SP), AX                        
-  main.go:16            0x10a6a90               0f57c0                  XORPS X0, X0                            
-  main.go:16            0x10a6a93               0f11442440              MOVUPS X0, 0x40(SP)                     
-  main.go:16            0x10a6a98               488d0d81a90000          LEAQ runtime.types+43296(SB), CX        
-  main.go:16            0x10a6a9f               48894c2440              MOVQ CX, 0x40(SP)                       
-  main.go:16            0x10a6aa4               4889442448              MOVQ AX, 0x48(SP)                       
-</code></pre></div><p>無名関数も同様にInliningできる場合はされ、できない場合はされない。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
-	<span style="color:#8be9fd;font-style:italic">var</span> myfunc = <span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">int</span> {
-		n <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>
-		<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; <span style="color:#bd93f9">10</span>; i<span style="color:#ff79c6">++</span> {
-			n <span style="color:#ff79c6">+=</span> i
-		}
-		<span style="color:#ff79c6">return</span> n
-	}
-	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#50fa7b">myfunc</span>())
-}
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">main.go:23            0x10a6a61               488b0570c30200          MOVQ go.func.*+125(SB), AX              
-main.go:23            0x10a6a68               488d1569c30200          LEAQ go.func.*+125(SB), DX              
-main.go:23            0x10a6a6f               ffd0                    CALL AX
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go tool objdump main | less
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>TEXT main.main(SB) /Users/sambaiz/go/src/github.com/sambaiz/hoge/main.go
+</span></span><span style="display:flex;"><span>  main.go:9             0x10a6a40               65488b0c2530000000      MOVQ GS:0x30, CX                        
+</span></span><span style="display:flex;"><span>  main.go:9             0x10a6a49               483b6110                CMPQ 0x10(CX), SP                       
+</span></span><span style="display:flex;"><span>  main.go:9             0x10a6a4d               0f867c000000            JBE 0x10a6acf                           
+</span></span><span style="display:flex;"><span>  main.go:9             0x10a6a53               4883ec58                SUBQ $0x58, SP                          
+</span></span><span style="display:flex;"><span>  main.go:9             0x10a6a57               48896c2450              MOVQ BP, 0x50(SP)                       
+</span></span><span style="display:flex;"><span>  main.go:9             0x10a6a5c               488d6c2450              LEAQ 0x50(SP), BP                       
+</span></span><span style="display:flex;"><span>  main.go:10            0x10a6a61               48c7042403000000        MOVQ $0x3, 0(SP)  &lt;---- 1 + 2                      
+</span></span><span style="display:flex;"><span>  main.go:10            0x10a6a69               e83233f6ff              CALL runtime.convT64(SB)                
+</span></span><span style="display:flex;"><span>  main.go:10            0x10a6a6e               488b442408              MOVQ 0x8(SP), AX                        
+</span></span><span style="display:flex;"><span>  main.go:10            0x10a6a73               0f57c0                  XORPS X0, X0                            
+</span></span><span style="display:flex;"><span>  main.go:10            0x10a6a76               0f11442440              MOVUPS X0, 0x40(SP)                     
+</span></span><span style="display:flex;"><span>  main.go:10            0x10a6a7b               488d0d7ea90000          LEAQ runtime.rodata+43296(SB), CX       
+</span></span><span style="display:flex;"><span>  main.go:10            0x10a6a82               48894c2440              MOVQ CX, 0x40(SP)                       
+</span></span><span style="display:flex;"><span>  main.go:10            0x10a6a87               4889442448              MOVQ AX, 0x48(SP) 
+</span></span></code></pre></div><p>次にInliningされないパターンを見るためループを入れてみる。<code>//go:noinline</code> pragmaを付けてもInliningさせなくすることができる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">myfunc</span>() <span style="color:#8be9fd">int</span> {
+</span></span><span style="display:flex;"><span>	n <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; <span style="color:#bd93f9">10</span>; i<span style="color:#ff79c6">++</span> {
+</span></span><span style="display:flex;"><span>		n <span style="color:#ff79c6">+=</span> i
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> n
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Inliningされていないことを確認。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go build -gcflags &#39;-m -m&#39; main.go 
+</span></span><span style="display:flex;"><span># command-line-arguments
+</span></span><span style="display:flex;"><span>./main.go:7:6: cannot inline myfunc: unhandled op FOR  &lt;----
+</span></span><span style="display:flex;"><span>./main.go:15:6: cannot inline main: function too complex: cost 134 exceeds budget 80
+</span></span><span style="display:flex;"><span>./main.go:16:13: inlining call to fmt.Println func(...interface {}) (int, error) { var fmt..autotmp_3 int; fmt..autotmp_3 = &lt;N&gt;; var fmt..autotmp_4 error; fmt..autotmp_4 = &lt;N&gt;; fmt..autotmp_3, fmt..autotmp_4 = fmt.Fprintln(io.Writer(os.Stdout), fmt.a...); return fmt..autotmp_3, fmt..autotmp_4 }
+</span></span><span style="display:flex;"><span>./main.go:16:20: myfunc() escapes to heap:
+</span></span><span style="display:flex;"><span>./main.go:16:20:   flow: ~arg0 = &amp;{storage for myfunc()}:
+</span></span><span style="display:flex;"><span>./main.go:16:20:     from myfunc() (spill) at ./main.go:16:20
+</span></span><span style="display:flex;"><span>./main.go:16:20:     from ~arg0 = &lt;N&gt; (assign-pair) at ./main.go:16:13
+</span></span><span style="display:flex;"><span>./main.go:16:20:   flow: {storage for []interface {} literal} = ~arg0:
+</span></span><span style="display:flex;"><span>./main.go:16:20:     from []interface {} literal (slice-literal-element) at ./main.go:16:13
+</span></span><span style="display:flex;"><span>./main.go:16:20:   flow: fmt.a = &amp;{storage for []interface {} literal}:
+</span></span><span style="display:flex;"><span>./main.go:16:20:     from []interface {} literal (spill) at ./main.go:16:13
+</span></span><span style="display:flex;"><span>./main.go:16:20:     from fmt.a = []interface {} literal (assign) at ./main.go:16:13
+</span></span><span style="display:flex;"><span>./main.go:16:20:   flow: {heap} = *fmt.a:
+</span></span><span style="display:flex;"><span>./main.go:16:20:     from fmt.Fprintln(io.Writer(os.Stdout), fmt.a...) (call parameter) at ./main.go:16:13
+</span></span><span style="display:flex;"><span>./main.go:16:20: myfunc() escapes to heap
+</span></span><span style="display:flex;"><span>./main.go:16:13: []interface {} literal does not escape
+</span></span><span style="display:flex;"><span>&lt;autogenerated&gt;:1: .this does not escape
+</span></span></code></pre></div><p><code>objdump</code> からも <code>myfunc()</code> が呼び出されていることが確認できる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go tool objdump main | less
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>TEXT main.main(SB) /Users/sambaiz/go/src/github.com/sambaiz/hoge/main.go
+</span></span><span style="display:flex;"><span>  main.go:15            0x10a6a60               65488b0c2530000000      MOVQ GS:0x30, CX                        
+</span></span><span style="display:flex;"><span>  main.go:15            0x10a6a69               483b6110                CMPQ 0x10(CX), SP                       
+</span></span><span style="display:flex;"><span>  main.go:15            0x10a6a6d               0f867c000000            JBE 0x10a6aef                           
+</span></span><span style="display:flex;"><span>  main.go:15            0x10a6a73               4883ec58                SUBQ $0x58, SP                          
+</span></span><span style="display:flex;"><span>  main.go:15            0x10a6a77               48896c2450              MOVQ BP, 0x50(SP)                       
+</span></span><span style="display:flex;"><span>  main.go:15            0x10a6a7c               488d6c2450              LEAQ 0x50(SP), BP                       
+</span></span><span style="display:flex;"><span>  main.go:16            0x10a6a81               e8baffffff              CALL main.myfunc(SB)  &lt;----
+</span></span><span style="display:flex;"><span>  main.go:16            0x10a6a86               e81533f6ff              CALL runtime.convT64(SB)                
+</span></span><span style="display:flex;"><span>  main.go:16            0x10a6a8b               488b442408              MOVQ 0x8(SP), AX                        
+</span></span><span style="display:flex;"><span>  main.go:16            0x10a6a90               0f57c0                  XORPS X0, X0                            
+</span></span><span style="display:flex;"><span>  main.go:16            0x10a6a93               0f11442440              MOVUPS X0, 0x40(SP)                     
+</span></span><span style="display:flex;"><span>  main.go:16            0x10a6a98               488d0d81a90000          LEAQ runtime.types+43296(SB), CX        
+</span></span><span style="display:flex;"><span>  main.go:16            0x10a6a9f               48894c2440              MOVQ CX, 0x40(SP)                       
+</span></span><span style="display:flex;"><span>  main.go:16            0x10a6aa4               4889442448              MOVQ AX, 0x48(SP)                       
+</span></span></code></pre></div><p>無名関数も同様にInliningできる場合はされ、できない場合はされない。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+</span></span><span style="display:flex;"><span>	<span style="color:#8be9fd;font-style:italic">var</span> myfunc = <span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">int</span> {
+</span></span><span style="display:flex;"><span>		n <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; <span style="color:#bd93f9">10</span>; i<span style="color:#ff79c6">++</span> {
+</span></span><span style="display:flex;"><span>			n <span style="color:#ff79c6">+=</span> i
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> n
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#50fa7b">myfunc</span>())
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>main.go:23            0x10a6a61               488b0570c30200          MOVQ go.func.*+125(SB), AX              
+</span></span><span style="display:flex;"><span>main.go:23            0x10a6a68               488d1569c30200          LEAQ go.func.*+125(SB), DX              
+</span></span><span style="display:flex;"><span>main.go:23            0x10a6a6f               ffd0                    CALL AX
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://qiita.com/tutuz/items/caa5d85544c398a2da9a">Go Compilerのインライン展開についてまとめた - Qiita</a></p>
 
     </div>

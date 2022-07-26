@@ -485,128 +485,128 @@ ActionとしてCognito認証を入れて認証に失敗したらログイン画�
 <h2 id="ruleの作成">Ruleの作成</h2>
 <p>Serverless FrameworkではALBの<a href="https://serverless.com/framework/docs/providers/aws/events/alb/">enent</a>を付けるだけでLambdaに向くRuleが作成されるが、そこにはCognitoを追加できなさそうなので使っていない。OnUnauthenticatedRequestで認証失敗時の挙動を選択できる。UserPoolとSecretありのClientはあらかじめ作っておく。コールバックURLには<code>https://&lt;domain&gt;/oauth2/idpresponse</code>を追加する。</p>
 <p>API Gatewayだとタイムアウトの上限が<a href="https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/limits.html">30秒</a>なのに対してALBはLambdaの上限まで待てる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-yaml" data-lang="yaml">$ cat serverless.yml
-<span style="color:#ff79c6">service</span>: alb-cognito-auth-example
-<span style="color:#ff79c6">frameworkVersion</span>: <span style="color:#f1fa8c">&#34;&gt;=1.28.0 &lt;2.0.0&#34;</span>
-
-<span style="color:#ff79c6">provider</span>:
-  <span style="color:#ff79c6">name</span>: aws
-  <span style="color:#ff79c6">runtime</span>: go1.x
-  <span style="color:#ff79c6">region</span>: ap-northeast-1
-
-<span style="color:#ff79c6">package</span>:
- <span style="color:#ff79c6">exclude</span>:
-   - ./**
- <span style="color:#ff79c6">include</span>:
-   - ./bin/**
-
-<span style="color:#ff79c6">functions</span>:
-  <span style="color:#ff79c6">privateapi</span>:
-    <span style="color:#ff79c6">handler</span>: bin/privateapi
-    <span style="color:#ff79c6">timeout</span>: <span style="color:#bd93f9">30</span>
-
-<span style="color:#ff79c6">resources</span>:
-  <span style="color:#ff79c6">Resources</span>:
-    <span style="color:#ff79c6">ALBTargetGroup</span>:
-      <span style="color:#ff79c6">DependsOn</span>: InvokeLambdaPermissionForALB
-      <span style="color:#ff79c6">Type</span>: AWS::ElasticLoadBalancingV2::TargetGroup
-      <span style="color:#ff79c6">Properties</span>:
-        <span style="color:#ff79c6">Name</span>: <span style="color:#f1fa8c">&#34;private-lambda-target-group&#34;</span>
-        <span style="color:#ff79c6">TargetType</span>: <span style="color:#f1fa8c">&#34;lambda&#34;</span>
-        <span style="color:#ff79c6">Targets</span>:
-          - <span style="color:#ff79c6">Id</span>: !GetAtt PrivateapiLambdaFunction.Arn <span style="color:#6272a4"># Reference functions.privateapi</span>
-    <span style="color:#ff79c6">InvokeLambdaPermissionForALB</span>:
-      <span style="color:#ff79c6">Type</span>: AWS::Lambda::Permission
-      <span style="color:#ff79c6">Properties</span>: 
-        <span style="color:#ff79c6">Action</span>: <span style="color:#f1fa8c">&#34;lambda:InvokeFunction&#34;</span>
-        <span style="color:#ff79c6">FunctionName</span>: !Ref PrivateapiLambdaFunction
-        <span style="color:#ff79c6">Principal</span>: <span style="color:#f1fa8c">&#34;elasticloadbalancing.amazonaws.com&#34;</span>
-    <span style="color:#ff79c6">ALB</span>: 
-      <span style="color:#ff79c6">Type</span>: <span style="color:#f1fa8c">&#34;AWS::ElasticLoadBalancingV2::LoadBalancer&#34;</span>
-      <span style="color:#ff79c6">Properties</span>: 
-        <span style="color:#ff79c6">Name</span>: <span style="color:#f1fa8c">&#34;serverless-auth-example-alb&#34;</span>
-        <span style="color:#ff79c6">Scheme</span>: <span style="color:#f1fa8c">&#34;internet-facing&#34;</span>
-        <span style="color:#ff79c6">LoadBalancerAttributes</span>: 
-          - <span style="color:#ff79c6">Key</span>: <span style="color:#f1fa8c">&#34;idle_timeout.timeout_seconds&#34;</span>
-            <span style="color:#ff79c6">Value</span>: <span style="color:#bd93f9">30</span>
-        <span style="color:#ff79c6">SecurityGroups</span>:
-          - <span style="color:#f1fa8c">&#34;sg-*****&#34;</span>
-        <span style="color:#ff79c6">Subnets</span>:
-          - <span style="color:#f1fa8c">&#34;subnet-*****&#34;</span>
-          - <span style="color:#f1fa8c">&#34;subnet-*****&#34;</span>
-    <span style="color:#ff79c6">ALBListener</span>: 
-      <span style="color:#ff79c6">Type</span>: <span style="color:#f1fa8c">&#34;AWS::ElasticLoadBalancingV2::Listener&#34;</span>
-      <span style="color:#ff79c6">Properties</span>: 
-        <span style="color:#ff79c6">DefaultActions</span>: 
-          - <span style="color:#ff79c6">Type</span>: authenticate-cognito
-            <span style="color:#ff79c6">Order</span>: <span style="color:#bd93f9">1</span>
-            <span style="color:#ff79c6">AuthenticateCognitoConfig</span>: 
-              <span style="color:#ff79c6">OnUnauthenticatedRequest</span>: authenticate
-              <span style="color:#ff79c6">UserPoolArn</span>: <span style="color:#f1fa8c">&#34;arn:aws:cognito-idp:ap-northeast-1:*****&#34;</span>
-              <span style="color:#ff79c6">UserPoolClientId</span>: <span style="color:#f1fa8c">&#34;*****&#34;</span>
-              <span style="color:#ff79c6">UserPoolDomain</span>: <span style="color:#f1fa8c">&#34;*****.auth.ap-northeast-1.amazoncognito.com&#34;</span>
-          - <span style="color:#ff79c6">Type</span>: forward
-            <span style="color:#ff79c6">Order</span>: <span style="color:#bd93f9">2</span>
-            <span style="color:#ff79c6">TargetGroupArn</span>: !Ref ALBTargetGroup
-        <span style="color:#ff79c6">LoadBalancerArn</span>: !Ref ALB
-        <span style="color:#ff79c6">Port</span>: <span style="color:#bd93f9">443</span>
-        <span style="color:#ff79c6">Protocol</span>: HTTPS
-        <span style="color:#ff79c6">Certificates</span>: 
-          - <span style="color:#ff79c6">CertificateArn</span>: <span style="color:#f1fa8c">&#34;arn:aws:acm:ap-northeast-1:*****:certificate/*****&#34;</span>
-    <span style="color:#ff79c6">RecordSet</span>:
-      <span style="color:#ff79c6">Type</span>: AWS::Route53::RecordSet
-      <span style="color:#ff79c6">Properties</span>: 
-        <span style="color:#ff79c6">Type</span>: <span style="color:#f1fa8c">&#34;A&#34;</span> <span style="color:#6272a4"># or AAAA (IPv6)</span>
-        <span style="color:#ff79c6">HostedZoneName</span>: <span style="color:#f1fa8c">&#34;foo.example.com.&#34;</span>
-        <span style="color:#ff79c6">Name</span>: <span style="color:#f1fa8c">&#34;auth-example.foo.example.com.&#34;</span>
-        <span style="color:#ff79c6">AliasTarget</span>: 
-          <span style="color:#ff79c6">HostedZoneId</span>: !GetAtt ALB.CanonicalHostedZoneID
-          <span style="color:#ff79c6">DNSName</span>: !GetAtt ALB.DNSName
-        <span style="color:#ff79c6">Comment</span>: <span style="color:#f1fa8c">&#34;Added by servereless-alb-cognito-auth-example&#34;</span>
-</code></pre></div><p><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-authenticate-users.html#user-claims-encoding">x-amzn-oidc-data</a> HeaderにALBが署名したJWTトークンが入っているので、
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span>$ cat serverless.yml
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">service</span>: alb-cognito-auth-example
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">frameworkVersion</span>: <span style="color:#f1fa8c">&#34;&gt;=1.28.0 &lt;2.0.0&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">provider</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: aws
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">runtime</span>: go1.x
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">region</span>: ap-northeast-1
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">package</span>:
+</span></span><span style="display:flex;"><span> <span style="color:#ff79c6">exclude</span>:
+</span></span><span style="display:flex;"><span>   - ./**
+</span></span><span style="display:flex;"><span> <span style="color:#ff79c6">include</span>:
+</span></span><span style="display:flex;"><span>   - ./bin/**
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">functions</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">privateapi</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">handler</span>: bin/privateapi
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">timeout</span>: <span style="color:#bd93f9">30</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">resources</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">Resources</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">ALBTargetGroup</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">DependsOn</span>: InvokeLambdaPermissionForALB
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Type</span>: AWS::ElasticLoadBalancingV2::TargetGroup
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Properties</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Name</span>: <span style="color:#f1fa8c">&#34;private-lambda-target-group&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">TargetType</span>: <span style="color:#f1fa8c">&#34;lambda&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Targets</span>:
+</span></span><span style="display:flex;"><span>          - <span style="color:#ff79c6">Id</span>: !GetAtt PrivateapiLambdaFunction.Arn <span style="color:#6272a4"># Reference functions.privateapi</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">InvokeLambdaPermissionForALB</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Type</span>: AWS::Lambda::Permission
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Properties</span>: 
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Action</span>: <span style="color:#f1fa8c">&#34;lambda:InvokeFunction&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">FunctionName</span>: !Ref PrivateapiLambdaFunction
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Principal</span>: <span style="color:#f1fa8c">&#34;elasticloadbalancing.amazonaws.com&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">ALB</span>: 
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Type</span>: <span style="color:#f1fa8c">&#34;AWS::ElasticLoadBalancingV2::LoadBalancer&#34;</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Properties</span>: 
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Name</span>: <span style="color:#f1fa8c">&#34;serverless-auth-example-alb&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Scheme</span>: <span style="color:#f1fa8c">&#34;internet-facing&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">LoadBalancerAttributes</span>: 
+</span></span><span style="display:flex;"><span>          - <span style="color:#ff79c6">Key</span>: <span style="color:#f1fa8c">&#34;idle_timeout.timeout_seconds&#34;</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">Value</span>: <span style="color:#bd93f9">30</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">SecurityGroups</span>:
+</span></span><span style="display:flex;"><span>          - <span style="color:#f1fa8c">&#34;sg-*****&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Subnets</span>:
+</span></span><span style="display:flex;"><span>          - <span style="color:#f1fa8c">&#34;subnet-*****&#34;</span>
+</span></span><span style="display:flex;"><span>          - <span style="color:#f1fa8c">&#34;subnet-*****&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">ALBListener</span>: 
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Type</span>: <span style="color:#f1fa8c">&#34;AWS::ElasticLoadBalancingV2::Listener&#34;</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Properties</span>: 
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">DefaultActions</span>: 
+</span></span><span style="display:flex;"><span>          - <span style="color:#ff79c6">Type</span>: authenticate-cognito
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">Order</span>: <span style="color:#bd93f9">1</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">AuthenticateCognitoConfig</span>: 
+</span></span><span style="display:flex;"><span>              <span style="color:#ff79c6">OnUnauthenticatedRequest</span>: authenticate
+</span></span><span style="display:flex;"><span>              <span style="color:#ff79c6">UserPoolArn</span>: <span style="color:#f1fa8c">&#34;arn:aws:cognito-idp:ap-northeast-1:*****&#34;</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ff79c6">UserPoolClientId</span>: <span style="color:#f1fa8c">&#34;*****&#34;</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#ff79c6">UserPoolDomain</span>: <span style="color:#f1fa8c">&#34;*****.auth.ap-northeast-1.amazoncognito.com&#34;</span>
+</span></span><span style="display:flex;"><span>          - <span style="color:#ff79c6">Type</span>: forward
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">Order</span>: <span style="color:#bd93f9">2</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">TargetGroupArn</span>: !Ref ALBTargetGroup
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">LoadBalancerArn</span>: !Ref ALB
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Port</span>: <span style="color:#bd93f9">443</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Protocol</span>: HTTPS
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Certificates</span>: 
+</span></span><span style="display:flex;"><span>          - <span style="color:#ff79c6">CertificateArn</span>: <span style="color:#f1fa8c">&#34;arn:aws:acm:ap-northeast-1:*****:certificate/*****&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">RecordSet</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Type</span>: AWS::Route53::RecordSet
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Properties</span>: 
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Type</span>: <span style="color:#f1fa8c">&#34;A&#34;</span> <span style="color:#6272a4"># or AAAA (IPv6)</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">HostedZoneName</span>: <span style="color:#f1fa8c">&#34;foo.example.com.&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Name</span>: <span style="color:#f1fa8c">&#34;auth-example.foo.example.com.&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">AliasTarget</span>: 
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">HostedZoneId</span>: !GetAtt ALB.CanonicalHostedZoneID
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">DNSName</span>: !GetAtt ALB.DNSName
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">Comment</span>: <span style="color:#f1fa8c">&#34;Added by servereless-alb-cognito-auth-example&#34;</span>
+</span></span></code></pre></div><p><a href="https://docs.aws.amazon.com/ja_jp/elasticloadbalancing/latest/application/listener-authenticate-users.html#user-claims-encoding">x-amzn-oidc-data</a> HeaderにALBが署名したJWTトークンが入っているので、
 それがALBから来ているものかを検証しclaimを参照できる。リクエストはAPI Gatewayと同じような形式。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">ParseToken</span>(tokenString <span style="color:#8be9fd">string</span>) (jwt.MapClaims, <span style="color:#8be9fd">error</span>) {
-	token, err <span style="color:#ff79c6">:=</span> jwt.<span style="color:#50fa7b">Parse</span>(tokenString, <span style="color:#8be9fd;font-style:italic">func</span>(token <span style="color:#ff79c6">*</span>jwt.Token) (<span style="color:#8be9fd;font-style:italic">interface</span>{}, <span style="color:#8be9fd">error</span>) {
-		<span style="color:#6272a4">// ES256
-</span><span style="color:#6272a4"></span>		<span style="color:#ff79c6">if</span> _, ok <span style="color:#ff79c6">:=</span> token.Method.(<span style="color:#ff79c6">*</span>jwt.SigningMethodECDSA); !ok {
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;unexpected signing method: %v&#34;</span>, token.Header[<span style="color:#f1fa8c">&#34;alg&#34;</span>])
-		}
-		url <span style="color:#ff79c6">:=</span> fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;https://public-keys.auth.elb.ap-northeast-1.amazonaws.com/%s&#34;</span>, token.Header[<span style="color:#f1fa8c">&#34;kid&#34;</span>])
-		resp, err <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">Get</span>(url)
-		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
-		}
-		body, err <span style="color:#ff79c6">:=</span> ioutil.<span style="color:#50fa7b">ReadAll</span>(resp.Body)
-		<span style="color:#ff79c6">return</span> jwt.<span style="color:#50fa7b">ParseECPublicKeyFromPEM</span>(body)
-	})
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
-	}
-	<span style="color:#ff79c6">if</span> claims, ok <span style="color:#ff79c6">:=</span> token.Claims.(jwt.MapClaims); ok <span style="color:#ff79c6">&amp;&amp;</span> token.Valid {
-		<span style="color:#ff79c6">return</span> claims, <span style="color:#ff79c6">nil</span>
-	} <span style="color:#ff79c6">else</span> {
-		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;token is invalid&#34;</span>)
-	}
-}
-
-<span style="color:#8be9fd;font-style:italic">type</span> Response events.APIGatewayProxyResponse
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">Handler</span>(request events.APIGatewayProxyRequest) (Response, <span style="color:#8be9fd">error</span>) {
-	<span style="color:#8be9fd;font-style:italic">var</span> buf bytes.Buffer
-
-	_, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">ParseToken</span>(request.Headers[<span style="color:#f1fa8c">&#34;x-amzn-oidc-data&#34;</span>])
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#ff79c6">return</span> Response{StatusCode: http.StatusUnauthorizeds}, err
-	}
-
-	resp <span style="color:#ff79c6">:=</span> Response{
-		StatusCode:      http.StatusOK,
-		Body:            <span style="color:#f1fa8c">&#34;ok&#34;</span>,
-	}
-
-	<span style="color:#ff79c6">return</span> resp, <span style="color:#ff79c6">nil</span>
-}
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">ParseToken</span>(tokenString <span style="color:#8be9fd">string</span>) (jwt.MapClaims, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>	token, err <span style="color:#ff79c6">:=</span> jwt.<span style="color:#50fa7b">Parse</span>(tokenString, <span style="color:#8be9fd;font-style:italic">func</span>(token <span style="color:#ff79c6">*</span>jwt.Token) (<span style="color:#8be9fd;font-style:italic">interface</span>{}, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#6272a4">// ES256
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>		<span style="color:#ff79c6">if</span> _, ok <span style="color:#ff79c6">:=</span> token.Method.(<span style="color:#ff79c6">*</span>jwt.SigningMethodECDSA); !ok {
+</span></span><span style="display:flex;"><span>			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;unexpected signing method: %v&#34;</span>, token.Header[<span style="color:#f1fa8c">&#34;alg&#34;</span>])
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		url <span style="color:#ff79c6">:=</span> fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;https://public-keys.auth.elb.ap-northeast-1.amazonaws.com/%s&#34;</span>, token.Header[<span style="color:#f1fa8c">&#34;kid&#34;</span>])
+</span></span><span style="display:flex;"><span>		resp, err <span style="color:#ff79c6">:=</span> http.<span style="color:#50fa7b">Get</span>(url)
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		body, err <span style="color:#ff79c6">:=</span> ioutil.<span style="color:#50fa7b">ReadAll</span>(resp.Body)
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> jwt.<span style="color:#50fa7b">ParseECPublicKeyFromPEM</span>(body)
+</span></span><span style="display:flex;"><span>	})
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> claims, ok <span style="color:#ff79c6">:=</span> token.Claims.(jwt.MapClaims); ok <span style="color:#ff79c6">&amp;&amp;</span> token.Valid {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> claims, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>	} <span style="color:#ff79c6">else</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, errors.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;token is invalid&#34;</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Response events.APIGatewayProxyResponse
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">Handler</span>(request events.APIGatewayProxyRequest) (Response, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>	<span style="color:#8be9fd;font-style:italic">var</span> buf bytes.Buffer
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	_, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">ParseToken</span>(request.Headers[<span style="color:#f1fa8c">&#34;x-amzn-oidc-data&#34;</span>])
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> Response{StatusCode: http.StatusUnauthorizeds}, err
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	resp <span style="color:#ff79c6">:=</span> Response{
+</span></span><span style="display:flex;"><span>		StatusCode:      http.StatusOK,
+</span></span><span style="display:flex;"><span>		Body:            <span style="color:#f1fa8c">&#34;ok&#34;</span>,
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> resp, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://tech.gunosy.io/entry/alb-login">まだログイン認証で消耗してるの？ ~ALBで簡単認証機構~ - Gunosy Tech Blog</a></p>
 
     </div>

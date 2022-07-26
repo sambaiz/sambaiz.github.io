@@ -511,89 +511,89 @@ DataNodeはレプリカの設定数分選ばれ、順に書き込まれるよう
 NameNodeはブロックがあるDataNodeをクライアントからネットワークトポロジ上で近い順にソートしてアドレスを返す。
 ファイルシステムはそのアドレスが含まれたFSDataInputStreamをクライアントに返してクライアントが順にreadしていく。</p>
 <h2 id="singlenode-clusterで動かすhttphadoopapacheorgdocscurrenthadoop-project-disthadoop-commonsingleclusterhtml"><a href="http://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-common/SingleCluster.html">SingleNode Clusterで動かす</a></h2>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ yum --enablerepo=epel -y install pdsh
-$ echo $JAVA_HOME
-/usr/lib/jvm/jre
-$ wget http://ftp.jaist.ac.jp/pub/apache/hadoop/common/hadoop-2.7.3/hadoop-2.7.3.tar.gz
-$ tar xvzf hadoop-2.7.3.tar.gz 
-$ cd hadoop-2.7.3
-$ bin/hadoop version
-Hadoop 2.7.3
-</code></pre></div><p>デフォルトのファイルシステムをHDFSにしてレプリカを1にする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-xml" data-lang="xml">$ vi etc/hadoop/core-site.xml
-<span style="color:#ff79c6">&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;</span>
-<span style="color:#ff79c6">&lt;?xml-stylesheet type=&#34;text/xsl&#34; href=&#34;configuration.xsl&#34;?&gt;</span>
-...
-<span style="color:#ff79c6">&lt;configuration&gt;</span>
-    <span style="color:#ff79c6">&lt;property&gt;</span>
-        <span style="color:#ff79c6">&lt;name&gt;</span>fs.defaultFS<span style="color:#ff79c6">&lt;/name&gt;</span>
-        <span style="color:#ff79c6">&lt;value&gt;</span>hdfs://localhost:9000<span style="color:#ff79c6">&lt;/value&gt;</span>
-    <span style="color:#ff79c6">&lt;/property&gt;</span>
-<span style="color:#ff79c6">&lt;/configuration&gt;</span>
-
-$ vi etc/hadoop/hdfs-site.xml
-<span style="color:#ff79c6">&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;</span>
-<span style="color:#ff79c6">&lt;?xml-stylesheet type=&#34;text/xsl&#34; href=&#34;configuration.xsl&#34;?&gt;</span>
-...
-<span style="color:#ff79c6">&lt;configuration&gt;</span>
-    <span style="color:#ff79c6">&lt;property&gt;</span>
-        <span style="color:#ff79c6">&lt;name&gt;</span>dfs.replication<span style="color:#ff79c6">&lt;/name&gt;</span>
-        <span style="color:#ff79c6">&lt;value&gt;</span>1<span style="color:#ff79c6">&lt;/value&gt;</span>
-    <span style="color:#ff79c6">&lt;/property&gt;</span>
-<span style="color:#ff79c6">&lt;/configuration&gt;</span>
-</code></pre></div><p>Hadoopデーモンを起動/終了させるためにsshできるようにする。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ ssh-keygen -t rsa -P &#39;&#39; -f ~/.ssh/id_rsa
-$ cat ~/.ssh/id_rsa.pub &gt;&gt; ~/.ssh/authorized_keys
-$ chmod 0600 ~/.ssh/authorized_keys
-$ ssh localhost
-</code></pre></div><p>起動。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ bin/hdfs namenode -format
-$ sbin/start-dfs.sh
-localhost: starting namenode, ...
-localhost: starting datanode, ...
-0.0.0.0: starting secondarynamenode, ...
-</code></pre></div><p>ディレクトリやファイルを作成して参照する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ bin/hdfs dfs -mkdir /home
-$ bin/hdfs dfs -mkdir /user/ec2-user
-$ echo &#39;aaaaa&#39; &gt; hoge
-$ bin/hdfs dfs -put hoge ./
-$ bin/hdfs dfs -put hoge ./
-put: `hoge&#39;: File exists
-
-$ bin/hdfs dfs -appendToFile hoge hoge
-$ bin/hdfs dfs -ls ./
-Found 1 items
--rw-r--r--   1 ec2-user supergroup         12 2017-08-14 13:44 hoge
-
-$ bin/hdfs dfs -cat hoge
-aaaaa
-aaaaa
-</code></pre></div><p>Filesystem check utilityを実行する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ bin/hdfs fsck ./ -files -blocks
-Connecting to namenode via http://localhost:50070/fsck?ugi=ec2-user&amp;files=1&amp;blocks=1&amp;path=%2Fuser%2Fec2-user
-FSCK started by ec2-user (auth:SIMPLE) from /127.0.0.1 for path /user/ec2-user at Mon Aug 14 13:44:48 UTC 2017
-/user/ec2-user &lt;dir&gt;
-/user/ec2-user/hoge 12 bytes, 1 block(s):  OK
-0. BP-478671077-172.31.3.159-1502715364675:blk_1073741825_1002 len=12 repl=1
-
-Status: HEALTHY
- Total size:	12 B
- Total dirs:	1
- Total files:	1
- Total symlinks:		0
- Total blocks (validated):	1 (avg. block size 12 B)
- Minimally replicated blocks:	1 (100.0 %)
- Over-replicated blocks:	0 (0.0 %)
- Under-replicated blocks:	0 (0.0 %)
- Mis-replicated blocks:		0 (0.0 %)
- Default replication factor:	1
- Average block replication:	1.0
- Corrupt blocks:		0
- Missing replicas:		0 (0.0 %)
- Number of data-nodes:		1
- Number of racks:		1
-FSCK ended at Mon Aug 14 13:44:48 UTC 2017 in 2 milliseconds
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ yum --enablerepo=epel -y install pdsh
+</span></span><span style="display:flex;"><span>$ echo $JAVA_HOME
+</span></span><span style="display:flex;"><span>/usr/lib/jvm/jre
+</span></span><span style="display:flex;"><span>$ wget http://ftp.jaist.ac.jp/pub/apache/hadoop/common/hadoop-2.7.3/hadoop-2.7.3.tar.gz
+</span></span><span style="display:flex;"><span>$ tar xvzf hadoop-2.7.3.tar.gz 
+</span></span><span style="display:flex;"><span>$ cd hadoop-2.7.3
+</span></span><span style="display:flex;"><span>$ bin/hadoop version
+</span></span><span style="display:flex;"><span>Hadoop 2.7.3
+</span></span></code></pre></div><p>デフォルトのファイルシステムをHDFSにしてレプリカを1にする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span>$ vi etc/hadoop/core-site.xml
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;?xml-stylesheet type=&#34;text/xsl&#34; href=&#34;configuration.xsl&#34;?&gt;</span>
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;configuration&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&lt;property&gt;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&lt;name&gt;</span>fs.defaultFS<span style="color:#ff79c6">&lt;/name&gt;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&lt;value&gt;</span>hdfs://localhost:9000<span style="color:#ff79c6">&lt;/value&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&lt;/property&gt;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;/configuration&gt;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ vi etc/hadoop/hdfs-site.xml
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;?xml version=&#34;1.0&#34; encoding=&#34;UTF-8&#34;?&gt;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;?xml-stylesheet type=&#34;text/xsl&#34; href=&#34;configuration.xsl&#34;?&gt;</span>
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;configuration&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&lt;property&gt;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&lt;name&gt;</span>dfs.replication<span style="color:#ff79c6">&lt;/name&gt;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&lt;value&gt;</span>1<span style="color:#ff79c6">&lt;/value&gt;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&lt;/property&gt;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;/configuration&gt;</span>
+</span></span></code></pre></div><p>Hadoopデーモンを起動/終了させるためにsshできるようにする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ ssh-keygen -t rsa -P &#39;&#39; -f ~/.ssh/id_rsa
+</span></span><span style="display:flex;"><span>$ cat ~/.ssh/id_rsa.pub &gt;&gt; ~/.ssh/authorized_keys
+</span></span><span style="display:flex;"><span>$ chmod 0600 ~/.ssh/authorized_keys
+</span></span><span style="display:flex;"><span>$ ssh localhost
+</span></span></code></pre></div><p>起動。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ bin/hdfs namenode -format
+</span></span><span style="display:flex;"><span>$ sbin/start-dfs.sh
+</span></span><span style="display:flex;"><span>localhost: starting namenode, ...
+</span></span><span style="display:flex;"><span>localhost: starting datanode, ...
+</span></span><span style="display:flex;"><span>0.0.0.0: starting secondarynamenode, ...
+</span></span></code></pre></div><p>ディレクトリやファイルを作成して参照する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ bin/hdfs dfs -mkdir /home
+</span></span><span style="display:flex;"><span>$ bin/hdfs dfs -mkdir /user/ec2-user
+</span></span><span style="display:flex;"><span>$ echo &#39;aaaaa&#39; &gt; hoge
+</span></span><span style="display:flex;"><span>$ bin/hdfs dfs -put hoge ./
+</span></span><span style="display:flex;"><span>$ bin/hdfs dfs -put hoge ./
+</span></span><span style="display:flex;"><span>put: `hoge&#39;: File exists
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ bin/hdfs dfs -appendToFile hoge hoge
+</span></span><span style="display:flex;"><span>$ bin/hdfs dfs -ls ./
+</span></span><span style="display:flex;"><span>Found 1 items
+</span></span><span style="display:flex;"><span>-rw-r--r--   1 ec2-user supergroup         12 2017-08-14 13:44 hoge
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ bin/hdfs dfs -cat hoge
+</span></span><span style="display:flex;"><span>aaaaa
+</span></span><span style="display:flex;"><span>aaaaa
+</span></span></code></pre></div><p>Filesystem check utilityを実行する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ bin/hdfs fsck ./ -files -blocks
+</span></span><span style="display:flex;"><span>Connecting to namenode via http://localhost:50070/fsck?ugi=ec2-user&amp;files=1&amp;blocks=1&amp;path=%2Fuser%2Fec2-user
+</span></span><span style="display:flex;"><span>FSCK started by ec2-user (auth:SIMPLE) from /127.0.0.1 for path /user/ec2-user at Mon Aug 14 13:44:48 UTC 2017
+</span></span><span style="display:flex;"><span>/user/ec2-user &lt;dir&gt;
+</span></span><span style="display:flex;"><span>/user/ec2-user/hoge 12 bytes, 1 block(s):  OK
+</span></span><span style="display:flex;"><span>0. BP-478671077-172.31.3.159-1502715364675:blk_1073741825_1002 len=12 repl=1
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Status: HEALTHY
+</span></span><span style="display:flex;"><span> Total size:	12 B
+</span></span><span style="display:flex;"><span> Total dirs:	1
+</span></span><span style="display:flex;"><span> Total files:	1
+</span></span><span style="display:flex;"><span> Total symlinks:		0
+</span></span><span style="display:flex;"><span> Total blocks (validated):	1 (avg. block size 12 B)
+</span></span><span style="display:flex;"><span> Minimally replicated blocks:	1 (100.0 %)
+</span></span><span style="display:flex;"><span> Over-replicated blocks:	0 (0.0 %)
+</span></span><span style="display:flex;"><span> Under-replicated blocks:	0 (0.0 %)
+</span></span><span style="display:flex;"><span> Mis-replicated blocks:		0 (0.0 %)
+</span></span><span style="display:flex;"><span> Default replication factor:	1
+</span></span><span style="display:flex;"><span> Average block replication:	1.0
+</span></span><span style="display:flex;"><span> Corrupt blocks:		0
+</span></span><span style="display:flex;"><span> Missing replicas:		0 (0.0 %)
+</span></span><span style="display:flex;"><span> Number of data-nodes:		1
+</span></span><span style="display:flex;"><span> Number of racks:		1
+</span></span><span style="display:flex;"><span>FSCK ended at Mon Aug 14 13:44:48 UTC 2017 in 2 milliseconds
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="http://shop.oreilly.com/product/0636920033448.do">Hadoop: The Definitive Guide, 4th Edition</a></p>
 <p><a href="https://blog.cloudera.com/blog/2014/03/a-guide-to-checkpointing-in-hadoop/">A Guide to Checkpointing in Hadoop – Cloudera Engineering Blog</a></p>
 

@@ -470,164 +470,164 @@
 <p>そこで今回はECS上にLocust masterとworkerのServiceをデプロイする。</p>
 <h2 id="dockerfile">Dockerfile</h2>
 <p>次のようなDockerfileを用意する。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ cat Dockerfile
-FROM locustio/locust
-
-COPY locustfile.py /mnt/locust/
-</code></pre></div><h2 id="stack">Stack</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ cat Dockerfile
+</span></span><span style="display:flex;"><span>FROM locustio/locust
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>COPY locustfile.py /mnt/locust/
+</span></span></code></pre></div><h2 id="stack">Stack</h2>
 <p>クラスタの作成については以前のものを使い回す。</p>
 <p><a href="https://www.sambaiz.net/article/377/">CDKでALBとECS(EC2)クラスタを作成し、ecs-cliでDocker Composeの構成をデプロイする - sambaiz-net</a></p>
 <p>locustfileを更新する度にデプロイすることになるので、ALBのヘルスチェックの間隔と回数および登録解除のタイムアウト時間を減らして高速化している。また、locustに認証の仕組みがないためIPアドレスでアクセス制限をしているが、ApplicationListenerのopenがデフォルトのtrueのままだと<code>Allow from anyone</code>の設定が<a href="https://github.com/aws/aws-cdk/blob/v1.121.0/packages/@aws-cdk/aws-elasticloadbalancingv2/lib/alb/application-listener.ts#L231">追加され</a>フルオープンになってしまうのでfalseにしている。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-typescript" data-lang="typescript"><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> ecs <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-ecs&#39;</span>
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> ec2 <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-ec2&#39;</span>
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> iam <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-iam&#39;</span>
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> autoscaling <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-autoscaling&#39;</span>
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> elbv2 <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-elasticloadbalancingv2&#39;</span>
-<span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> logs <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-logs&#39;</span>
-
-<span style="color:#ff79c6">export</span> <span style="color:#ff79c6">class</span> LocustECSStack <span style="color:#ff79c6">extends</span> cdk.Stack {
-  <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">cdk.Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span>) {
-    <span style="color:#ff79c6">super</span>(scope, id, props)
-    <span style="color:#ff79c6">const</span> cluster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">this</span>.createECSCluster(<span style="color:#bd93f9">2</span>)
-    <span style="color:#ff79c6">const</span> logGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">this</span>.createLogGroup()
-    <span style="color:#ff79c6">const</span> locustMaster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">this</span>.createLocustMasterService(cluster, logGroup)
-    <span style="color:#ff79c6">this</span>.createALB(cluster.vpc, locustMaster)
-    <span style="color:#ff79c6">this</span>.createLocustWorkerService(cluster, logGroup, <span style="color:#bd93f9">1</span>).node.addDependency(locustMaster)
-  }
-
-  createECSCluster(capacity: <span style="color:#8be9fd">number</span>) {
-    <span style="color:#ff79c6">const</span> cluster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ecs.Cluster(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`ECSCluster`</span>, {
-      clusterName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust-ecs&#39;</span>,
-      defaultCloudMapNamespace<span style="color:#ff79c6">:</span> {
-        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust-ecs.local&#39;</span>
-      }
-    })
-    <span style="color:#ff79c6">const</span> securityGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.SecurityGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`EC2SecurityGroup`</span>, {
-      vpc: <span style="color:#8be9fd">cluster.vpc</span>,
-    })
-    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.allTcp())
-    <span style="color:#ff79c6">const</span> autoScalingGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> autoscaling.AutoScalingGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`AutoScalingGroup`</span>, {
-      vpc: <span style="color:#8be9fd">cluster.vpc</span>,
-      instanceType: <span style="color:#8be9fd">ec2.InstanceType.of</span>(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
-      machineImage:  <span style="color:#8be9fd">ecs.EcsOptimizedImage.amazonLinux2</span>(),
-      minCapacity: <span style="color:#8be9fd">capacity</span>,
-      maxCapacity: <span style="color:#8be9fd">capacity</span>,
-      securityGroup,
-    })
-    cluster.addAsgCapacityProvider(<span style="color:#ff79c6">new</span> ecs.AsgCapacityProvider(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`AsgCapacityProvider`</span>, {
-      autoScalingGroup
-    }))
-    autoScalingGroup.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#f1fa8c">&#39;service-role/AmazonECSTaskExecutionRolePolicy&#39;</span>))
-    <span style="color:#ff79c6">return</span> cluster
-  }
-
-  createLogGroup() {
-    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> logs.LogGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LogGroup&#39;</span>, {
-      logGroupName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust-ecs&#39;</span>,
-      retention: <span style="color:#8be9fd">logs.RetentionDays.TWO_WEEKS</span> 
-    })
-  }
-
-  createLocustMasterService(cluster: <span style="color:#8be9fd">ecs.ICluster</span>, logGroup: <span style="color:#8be9fd">logs.ILogGroup</span>) {
-    <span style="color:#ff79c6">const</span> taskDefinition <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ecs.Ec2TaskDefinition(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LocustMasterTaskDefinition&#39;</span>, {
-      networkMode: <span style="color:#8be9fd">ecs.NetworkMode.AWS_VPC</span>,
-    })
-    taskDefinition.addContainer(<span style="color:#f1fa8c">&#39;LocustMasterContainer&#39;</span>, {
-      containerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust&#34;</span>,
-      image: <span style="color:#8be9fd">ecs.ContainerImage.fromAsset</span>(<span style="color:#f1fa8c">&#34;./lib&#34;</span>),
-      memoryLimitMiB: <span style="color:#8be9fd">256</span>,
-      cpu: <span style="color:#8be9fd">128</span>,
-      command<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;-f&#34;</span>, <span style="color:#f1fa8c">&#34;/mnt/locust/locustfile.py&#34;</span>, <span style="color:#f1fa8c">&#34;--master&#34;</span>],
-      logging: <span style="color:#8be9fd">new</span> ecs.AwsLogDriver({
-        logGroup,
-        streamPrefix<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-master&#34;</span>
-      })
-    }).addPortMappings({
-      containerPort: <span style="color:#8be9fd">8089</span>,
-    }, {
-      containerPort: <span style="color:#8be9fd">5557</span>,
-    }, {
-      containerPort: <span style="color:#8be9fd">5558</span>,
-    })
-    <span style="color:#ff79c6">const</span> securityGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.SecurityGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`LocustMasterServiceSecurityGroup`</span>, {
-      vpc: <span style="color:#8be9fd">cluster.vpc</span>,
-    })
-    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.allTcp())
-    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> ecs.Ec2Service(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LocustMasterService&#39;</span>, {
-      serviceName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-master&#34;</span>,
-      cluster,
-      taskDefinition,
-      cloudMapOptions<span style="color:#ff79c6">:</span> {
-        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;master&#34;</span>,
-      },
-      securityGroups<span style="color:#ff79c6">:</span> [securityGroup]
-    })
-  }
-
-  createLocustWorkerService(cluster: <span style="color:#8be9fd">ecs.ICluster</span>, logGroup: <span style="color:#8be9fd">logs.ILogGroup</span>, desiredCount: <span style="color:#8be9fd">number</span>) {
-    <span style="color:#ff79c6">const</span> taskDefinition <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ecs.Ec2TaskDefinition(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LocustWorkerTaskDefinition&#39;</span>)
-    taskDefinition.addContainer(<span style="color:#f1fa8c">&#39;LocustWorkerContainer&#39;</span>, {
-      containerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust&#34;</span>,
-      image: <span style="color:#8be9fd">ecs.ContainerImage.fromAsset</span>(<span style="color:#f1fa8c">&#34;./lib&#34;</span>),
-      memoryLimitMiB: <span style="color:#8be9fd">256</span>,
-      cpu: <span style="color:#8be9fd">128</span>,
-      command<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;-f&#34;</span>, <span style="color:#f1fa8c">&#34;/mnt/locust/locustfile.py&#34;</span>, <span style="color:#f1fa8c">&#34;--worker&#34;</span>, <span style="color:#f1fa8c">&#34;--master-host&#34;</span>, <span style="color:#f1fa8c">&#34;master.locust-ecs.local&#34;</span>],
-      logging: <span style="color:#8be9fd">new</span> ecs.AwsLogDriver({
-        logGroup,
-        streamPrefix<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-worker&#34;</span>
-      }),
-    }).addUlimits({
-      name: <span style="color:#8be9fd">UlimitName.FSIZE</span>,
-      hardLimit: <span style="color:#8be9fd">65535</span>,
-      softLimit: <span style="color:#8be9fd">65535</span>
-    })
-    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> ecs.Ec2Service(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LocustWorkerService&#39;</span>, {
-      serviceName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-worker&#34;</span>,
-      cluster,
-      taskDefinition,
-      desiredCount,
-    })
-  }
-
-  createALB(vpc: <span style="color:#8be9fd">ec2.IVpc</span>, service: <span style="color:#8be9fd">ecs.Ec2Service</span>) {
-    <span style="color:#ff79c6">const</span> securityGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.SecurityGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALBSecurityGroup&#39;</span>, {
-      vpc: <span style="color:#8be9fd">vpc</span>,
-    })
-    securityGroup.addIngressRule(ec2.Peer.ipv4(<span style="color:#f1fa8c">&#34;xxx.xxx.xxx.xxx/32&#34;</span>), ec2.Port.tcp(<span style="color:#bd93f9">80</span>))
-    <span style="color:#ff79c6">const</span> alb <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> elbv2.ApplicationLoadBalancer(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALB&#39;</span>, {
-      loadBalancerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-ecs&#34;</span>,
-      vpc: <span style="color:#8be9fd">vpc</span>,
-      internetFacing: <span style="color:#8be9fd">true</span>,
-      securityGroup
-    })
-    <span style="color:#ff79c6">const</span> target <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> elbv2.ApplicationTargetGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALBTargetGroup&#39;</span>, {
-      targetType: <span style="color:#8be9fd">elbv2.TargetType.IP</span>,
-      vpc: <span style="color:#8be9fd">vpc</span>,
-      protocol: <span style="color:#8be9fd">elbv2.ApplicationProtocol.HTTP</span>,
-      port: <span style="color:#8be9fd">80</span>,
-      targets<span style="color:#ff79c6">:</span> [service.loadBalancerTarget({
-        containerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust&#39;</span>,
-        containerPort: <span style="color:#8be9fd">8089</span>
-      })],
-      healthCheck<span style="color:#ff79c6">:</span> {
-        interval: <span style="color:#8be9fd">cdk.Duration.seconds</span>(<span style="color:#bd93f9">6</span>),
-        healthyThresholdCount: <span style="color:#8be9fd">2</span>
-      },
-      deregistrationDelay: <span style="color:#8be9fd">cdk.Duration.seconds</span>(<span style="color:#bd93f9">5</span>)
-    })
-    <span style="color:#ff79c6">new</span> elbv2.ApplicationListener(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALBListener&#39;</span>, {
-      loadBalancer: <span style="color:#8be9fd">alb</span>,
-      defaultTargetGroups<span style="color:#ff79c6">:</span> [target],
-      protocol: <span style="color:#8be9fd">elbv2.ApplicationProtocol.HTTP</span>,
-      port: <span style="color:#8be9fd">80</span>,
-      open: <span style="color:#8be9fd">false</span>
-    })
-    <span style="color:#ff79c6">return</span> alb
-  }
-}
-</code></pre></div><h2 id="cloud-maphttpsawsamazoncomjpcloud-map"><a href="https://aws.amazon.com/jp/cloud-map/">Cloud Map</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-typescript" data-lang="typescript"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/core&#39;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> ecs <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-ecs&#39;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> ec2 <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-ec2&#39;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> iam <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-iam&#39;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> autoscaling <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-autoscaling&#39;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> elbv2 <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-elasticloadbalancingv2&#39;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> logs <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-cdk/aws-logs&#39;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">export</span> <span style="color:#ff79c6">class</span> LocustECSStack <span style="color:#ff79c6">extends</span> cdk.Stack {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">cdk.Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">super</span>(scope, id, props)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> cluster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">this</span>.createECSCluster(<span style="color:#bd93f9">2</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> logGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">this</span>.createLogGroup()
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> locustMaster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">this</span>.createLocustMasterService(cluster, logGroup)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">this</span>.createALB(cluster.vpc, locustMaster)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">this</span>.createLocustWorkerService(cluster, logGroup, <span style="color:#bd93f9">1</span>).node.addDependency(locustMaster)
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  createECSCluster(capacity: <span style="color:#8be9fd">number</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> cluster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ecs.Cluster(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`ECSCluster`</span>, {
+</span></span><span style="display:flex;"><span>      clusterName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust-ecs&#39;</span>,
+</span></span><span style="display:flex;"><span>      defaultCloudMapNamespace<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust-ecs.local&#39;</span>
+</span></span><span style="display:flex;"><span>      }
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> securityGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.SecurityGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`EC2SecurityGroup`</span>, {
+</span></span><span style="display:flex;"><span>      vpc: <span style="color:#8be9fd">cluster.vpc</span>,
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.allTcp())
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> autoScalingGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> autoscaling.AutoScalingGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`AutoScalingGroup`</span>, {
+</span></span><span style="display:flex;"><span>      vpc: <span style="color:#8be9fd">cluster.vpc</span>,
+</span></span><span style="display:flex;"><span>      instanceType: <span style="color:#8be9fd">ec2.InstanceType.of</span>(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
+</span></span><span style="display:flex;"><span>      machineImage:  <span style="color:#8be9fd">ecs.EcsOptimizedImage.amazonLinux2</span>(),
+</span></span><span style="display:flex;"><span>      minCapacity: <span style="color:#8be9fd">capacity</span>,
+</span></span><span style="display:flex;"><span>      maxCapacity: <span style="color:#8be9fd">capacity</span>,
+</span></span><span style="display:flex;"><span>      securityGroup,
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    cluster.addAsgCapacityProvider(<span style="color:#ff79c6">new</span> ecs.AsgCapacityProvider(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`AsgCapacityProvider`</span>, {
+</span></span><span style="display:flex;"><span>      autoScalingGroup
+</span></span><span style="display:flex;"><span>    }))
+</span></span><span style="display:flex;"><span>    autoScalingGroup.role.addManagedPolicy(
+</span></span><span style="display:flex;"><span>      iam.ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#f1fa8c">&#39;service-role/AmazonECSTaskExecutionRolePolicy&#39;</span>))
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> cluster
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  createLogGroup() {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> logs.LogGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LogGroup&#39;</span>, {
+</span></span><span style="display:flex;"><span>      logGroupName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust-ecs&#39;</span>,
+</span></span><span style="display:flex;"><span>      retention: <span style="color:#8be9fd">logs.RetentionDays.TWO_WEEKS</span> 
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  createLocustMasterService(cluster: <span style="color:#8be9fd">ecs.ICluster</span>, logGroup: <span style="color:#8be9fd">logs.ILogGroup</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> taskDefinition <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ecs.Ec2TaskDefinition(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LocustMasterTaskDefinition&#39;</span>, {
+</span></span><span style="display:flex;"><span>      networkMode: <span style="color:#8be9fd">ecs.NetworkMode.AWS_VPC</span>,
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    taskDefinition.addContainer(<span style="color:#f1fa8c">&#39;LocustMasterContainer&#39;</span>, {
+</span></span><span style="display:flex;"><span>      containerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust&#34;</span>,
+</span></span><span style="display:flex;"><span>      image: <span style="color:#8be9fd">ecs.ContainerImage.fromAsset</span>(<span style="color:#f1fa8c">&#34;./lib&#34;</span>),
+</span></span><span style="display:flex;"><span>      memoryLimitMiB: <span style="color:#8be9fd">256</span>,
+</span></span><span style="display:flex;"><span>      cpu: <span style="color:#8be9fd">128</span>,
+</span></span><span style="display:flex;"><span>      command<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;-f&#34;</span>, <span style="color:#f1fa8c">&#34;/mnt/locust/locustfile.py&#34;</span>, <span style="color:#f1fa8c">&#34;--master&#34;</span>],
+</span></span><span style="display:flex;"><span>      logging: <span style="color:#8be9fd">new</span> ecs.AwsLogDriver({
+</span></span><span style="display:flex;"><span>        logGroup,
+</span></span><span style="display:flex;"><span>        streamPrefix<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-master&#34;</span>
+</span></span><span style="display:flex;"><span>      })
+</span></span><span style="display:flex;"><span>    }).addPortMappings({
+</span></span><span style="display:flex;"><span>      containerPort: <span style="color:#8be9fd">8089</span>,
+</span></span><span style="display:flex;"><span>    }, {
+</span></span><span style="display:flex;"><span>      containerPort: <span style="color:#8be9fd">5557</span>,
+</span></span><span style="display:flex;"><span>    }, {
+</span></span><span style="display:flex;"><span>      containerPort: <span style="color:#8be9fd">5558</span>,
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> securityGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.SecurityGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`LocustMasterServiceSecurityGroup`</span>, {
+</span></span><span style="display:flex;"><span>      vpc: <span style="color:#8be9fd">cluster.vpc</span>,
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.allTcp())
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> ecs.Ec2Service(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LocustMasterService&#39;</span>, {
+</span></span><span style="display:flex;"><span>      serviceName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-master&#34;</span>,
+</span></span><span style="display:flex;"><span>      cluster,
+</span></span><span style="display:flex;"><span>      taskDefinition,
+</span></span><span style="display:flex;"><span>      cloudMapOptions<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;master&#34;</span>,
+</span></span><span style="display:flex;"><span>      },
+</span></span><span style="display:flex;"><span>      securityGroups<span style="color:#ff79c6">:</span> [securityGroup]
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  createLocustWorkerService(cluster: <span style="color:#8be9fd">ecs.ICluster</span>, logGroup: <span style="color:#8be9fd">logs.ILogGroup</span>, desiredCount: <span style="color:#8be9fd">number</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> taskDefinition <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ecs.Ec2TaskDefinition(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LocustWorkerTaskDefinition&#39;</span>)
+</span></span><span style="display:flex;"><span>    taskDefinition.addContainer(<span style="color:#f1fa8c">&#39;LocustWorkerContainer&#39;</span>, {
+</span></span><span style="display:flex;"><span>      containerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust&#34;</span>,
+</span></span><span style="display:flex;"><span>      image: <span style="color:#8be9fd">ecs.ContainerImage.fromAsset</span>(<span style="color:#f1fa8c">&#34;./lib&#34;</span>),
+</span></span><span style="display:flex;"><span>      memoryLimitMiB: <span style="color:#8be9fd">256</span>,
+</span></span><span style="display:flex;"><span>      cpu: <span style="color:#8be9fd">128</span>,
+</span></span><span style="display:flex;"><span>      command<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;-f&#34;</span>, <span style="color:#f1fa8c">&#34;/mnt/locust/locustfile.py&#34;</span>, <span style="color:#f1fa8c">&#34;--worker&#34;</span>, <span style="color:#f1fa8c">&#34;--master-host&#34;</span>, <span style="color:#f1fa8c">&#34;master.locust-ecs.local&#34;</span>],
+</span></span><span style="display:flex;"><span>      logging: <span style="color:#8be9fd">new</span> ecs.AwsLogDriver({
+</span></span><span style="display:flex;"><span>        logGroup,
+</span></span><span style="display:flex;"><span>        streamPrefix<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-worker&#34;</span>
+</span></span><span style="display:flex;"><span>      }),
+</span></span><span style="display:flex;"><span>    }).addUlimits({
+</span></span><span style="display:flex;"><span>      name: <span style="color:#8be9fd">UlimitName.FSIZE</span>,
+</span></span><span style="display:flex;"><span>      hardLimit: <span style="color:#8be9fd">65535</span>,
+</span></span><span style="display:flex;"><span>      softLimit: <span style="color:#8be9fd">65535</span>
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> ecs.Ec2Service(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;LocustWorkerService&#39;</span>, {
+</span></span><span style="display:flex;"><span>      serviceName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-worker&#34;</span>,
+</span></span><span style="display:flex;"><span>      cluster,
+</span></span><span style="display:flex;"><span>      taskDefinition,
+</span></span><span style="display:flex;"><span>      desiredCount,
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  createALB(vpc: <span style="color:#8be9fd">ec2.IVpc</span>, service: <span style="color:#8be9fd">ecs.Ec2Service</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> securityGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.SecurityGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALBSecurityGroup&#39;</span>, {
+</span></span><span style="display:flex;"><span>      vpc: <span style="color:#8be9fd">vpc</span>,
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    securityGroup.addIngressRule(ec2.Peer.ipv4(<span style="color:#f1fa8c">&#34;xxx.xxx.xxx.xxx/32&#34;</span>), ec2.Port.tcp(<span style="color:#bd93f9">80</span>))
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> alb <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> elbv2.ApplicationLoadBalancer(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALB&#39;</span>, {
+</span></span><span style="display:flex;"><span>      loadBalancerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;locust-ecs&#34;</span>,
+</span></span><span style="display:flex;"><span>      vpc: <span style="color:#8be9fd">vpc</span>,
+</span></span><span style="display:flex;"><span>      internetFacing: <span style="color:#8be9fd">true</span>,
+</span></span><span style="display:flex;"><span>      securityGroup
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">const</span> target <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> elbv2.ApplicationTargetGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALBTargetGroup&#39;</span>, {
+</span></span><span style="display:flex;"><span>      targetType: <span style="color:#8be9fd">elbv2.TargetType.IP</span>,
+</span></span><span style="display:flex;"><span>      vpc: <span style="color:#8be9fd">vpc</span>,
+</span></span><span style="display:flex;"><span>      protocol: <span style="color:#8be9fd">elbv2.ApplicationProtocol.HTTP</span>,
+</span></span><span style="display:flex;"><span>      port: <span style="color:#8be9fd">80</span>,
+</span></span><span style="display:flex;"><span>      targets<span style="color:#ff79c6">:</span> [service.loadBalancerTarget({
+</span></span><span style="display:flex;"><span>        containerName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;locust&#39;</span>,
+</span></span><span style="display:flex;"><span>        containerPort: <span style="color:#8be9fd">8089</span>
+</span></span><span style="display:flex;"><span>      })],
+</span></span><span style="display:flex;"><span>      healthCheck<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        interval: <span style="color:#8be9fd">cdk.Duration.seconds</span>(<span style="color:#bd93f9">6</span>),
+</span></span><span style="display:flex;"><span>        healthyThresholdCount: <span style="color:#8be9fd">2</span>
+</span></span><span style="display:flex;"><span>      },
+</span></span><span style="display:flex;"><span>      deregistrationDelay: <span style="color:#8be9fd">cdk.Duration.seconds</span>(<span style="color:#bd93f9">5</span>)
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">new</span> elbv2.ApplicationListener(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;ALBListener&#39;</span>, {
+</span></span><span style="display:flex;"><span>      loadBalancer: <span style="color:#8be9fd">alb</span>,
+</span></span><span style="display:flex;"><span>      defaultTargetGroups<span style="color:#ff79c6">:</span> [target],
+</span></span><span style="display:flex;"><span>      protocol: <span style="color:#8be9fd">elbv2.ApplicationProtocol.HTTP</span>,
+</span></span><span style="display:flex;"><span>      port: <span style="color:#8be9fd">80</span>,
+</span></span><span style="display:flex;"><span>      open: <span style="color:#8be9fd">false</span>
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> alb
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="cloud-maphttpsawsamazoncomjpcloud-map"><a href="https://aws.amazon.com/jp/cloud-map/">Cloud Map</a></h2>
 <p>workerは<code>--master-host</code>としてLBのDNS名やインスタンスのIPアドレスではなく<code>master.locust-ecs.local</code>を渡している。
 これはCloud MapによってRoute53に登録される動的なレコードで、
 Taskの<a href="https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-networkmode.html">network mode</a>がawsvpcの場合、

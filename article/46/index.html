@@ -464,15 +464,15 @@
       </div>
       <h2 id="messagepackhttpmsgpackorgとは"><a href="http://msgpack.org/">MessagePack</a>とは</h2>
 <p>JSONのように使うことができ、速くてサイズが小さい。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-json" data-lang="json">{<span style="color:#ff79c6">&#34;compact&#34;</span>:<span style="color:#ff79c6">true</span>,<span style="color:#ff79c6">&#34;スキーマ&#34;</span>:{<span style="color:#ff79c6">&#34;number&#34;</span>: <span style="color:#bd93f9">999</span>, <span style="color:#ff79c6">&#34;string&#34;</span>: <span style="color:#f1fa8c">&#34;aaa&#34;</span>}}
-</code></pre></div><p>のjson(61bytes)をMessagePack(45bytes)に変換したのがこれ。見やすいように改行している。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">82 
-a7 63 6f 6d 70 61 63 74 c3 
-ac e3 82 b9 e3 82 ad e3 83 bc e3 83 9e 
-   82 
-   a6 6e 75 6d 62 65 72 cd 03 e7 
-   a6 73 74 72 69 6e 67 a3 61 61 61
-</code></pre></div><p>一行目の<code>82</code>は<a href="https://github.com/msgpack/msgpack/blob/master/spec.md#map-format-family">要素数2のfixmap(要素数15まで)</a>を表す。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>{<span style="color:#ff79c6">&#34;compact&#34;</span>:<span style="color:#ff79c6">true</span>,<span style="color:#ff79c6">&#34;スキーマ&#34;</span>:{<span style="color:#ff79c6">&#34;number&#34;</span>: <span style="color:#bd93f9">999</span>, <span style="color:#ff79c6">&#34;string&#34;</span>: <span style="color:#f1fa8c">&#34;aaa&#34;</span>}}
+</span></span></code></pre></div><p>のjson(61bytes)をMessagePack(45bytes)に変換したのがこれ。見やすいように改行している。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>82 
+</span></span><span style="display:flex;"><span>a7 63 6f 6d 70 61 63 74 c3 
+</span></span><span style="display:flex;"><span>ac e3 82 b9 e3 82 ad e3 83 bc e3 83 9e 
+</span></span><span style="display:flex;"><span>   82 
+</span></span><span style="display:flex;"><span>   a6 6e 75 6d 62 65 72 cd 03 e7 
+</span></span><span style="display:flex;"><span>   a6 73 74 72 69 6e 67 a3 61 61 61
+</span></span></code></pre></div><p>一行目の<code>82</code>は<a href="https://github.com/msgpack/msgpack/blob/master/spec.md#map-format-family">要素数2のfixmap(要素数15まで)</a>を表す。</p>
 <p>二行目の<code>a7</code>が<a href="https://github.com/msgpack/msgpack/blob/master/spec.md#str-format-family">7バイトのfixstr(31bytesまで)</a>で、
 <code>63 6f 6d 70 61 63 74</code>が&quot;compact&quot;。<code>c3</code>は<a href="https://github.com/msgpack/msgpack/blob/master/spec.md#bool-format-family">true</a>。</p>
 <p>三行目の<code>ac</code>は12バイトのfixstrで、<code>e3 82 b9 e3 82 ad e3 83 bc e3 83 9e</code>が&quot;スキーマ&quot;。</p>
@@ -482,49 +482,49 @@ ac e3 82 b9 e3 82 ad e3 83 bc e3 83 9e
 <p>六行目は6バイトのfixstr(<code>a6</code>)、&ldquo;string&rdquo;(<code>73 74 72 69 6e 67</code>)、3バイトのfixstr(<code>a3</code>)、&ldquo;aaa&rdquo;(<code>61 61 61</code>)。</p>
 <p>と、こんな感じで分かりやすいバイナリになっている。文字列が多いとあまりサイズが変わらない。</p>
 <h3 id="使い方">使い方</h3>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go get github.com/ugorji/go/codec
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go">mh <span style="color:#ff79c6">:=</span> codec.MsgpackHandle{RawToString: <span style="color:#ff79c6">true</span>}
-origin <span style="color:#ff79c6">:=</span> serialize.Data{
-	Title: <span style="color:#f1fa8c">&#34;aaaa&#34;</span>,
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">MessagePackEncode</span>(mh codec.MsgpackHandle, origin Data) []<span style="color:#8be9fd">byte</span> {
-	<span style="color:#8be9fd;font-style:italic">var</span> encoded []<span style="color:#8be9fd">byte</span>
-
-	enc <span style="color:#ff79c6">:=</span> codec.<span style="color:#50fa7b">NewEncoderBytes</span>(<span style="color:#ff79c6">&amp;</span>encoded, <span style="color:#ff79c6">&amp;</span>mh)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> enc.<span style="color:#50fa7b">Encode</span>(<span style="color:#ff79c6">&amp;</span>origin); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
-	}
-
-	<span style="color:#ff79c6">return</span> encoded
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">MessagePackDecode</span>(mh codec.MsgpackHandle, bytes []<span style="color:#8be9fd">byte</span>) Data {
-	<span style="color:#8be9fd;font-style:italic">var</span> decoded Data
-
-	dec <span style="color:#ff79c6">:=</span> codec.<span style="color:#50fa7b">NewDecoderBytes</span>(bytes, <span style="color:#ff79c6">&amp;</span>mh)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> dec.<span style="color:#50fa7b">Decode</span>(<span style="color:#ff79c6">&amp;</span>decoded); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
-	}
-
-	<span style="color:#ff79c6">return</span> decoded
-}
-</code></pre></div><h2 id="protocol-buffershttpsdevelopersgooglecomprotocol-buffersとは"><a href="https://developers.google.com/protocol-buffers/">Protocol Buffers</a>とは</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go get github.com/ugorji/go/codec
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span>mh <span style="color:#ff79c6">:=</span> codec.MsgpackHandle{RawToString: <span style="color:#ff79c6">true</span>}
+</span></span><span style="display:flex;"><span>origin <span style="color:#ff79c6">:=</span> serialize.Data{
+</span></span><span style="display:flex;"><span>	Title: <span style="color:#f1fa8c">&#34;aaaa&#34;</span>,
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">MessagePackEncode</span>(mh codec.MsgpackHandle, origin Data) []<span style="color:#8be9fd">byte</span> {
+</span></span><span style="display:flex;"><span>	<span style="color:#8be9fd;font-style:italic">var</span> encoded []<span style="color:#8be9fd">byte</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	enc <span style="color:#ff79c6">:=</span> codec.<span style="color:#50fa7b">NewEncoderBytes</span>(<span style="color:#ff79c6">&amp;</span>encoded, <span style="color:#ff79c6">&amp;</span>mh)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> enc.<span style="color:#50fa7b">Encode</span>(<span style="color:#ff79c6">&amp;</span>origin); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> encoded
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">MessagePackDecode</span>(mh codec.MsgpackHandle, bytes []<span style="color:#8be9fd">byte</span>) Data {
+</span></span><span style="display:flex;"><span>	<span style="color:#8be9fd;font-style:italic">var</span> decoded Data
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	dec <span style="color:#ff79c6">:=</span> codec.<span style="color:#50fa7b">NewDecoderBytes</span>(bytes, <span style="color:#ff79c6">&amp;</span>mh)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> dec.<span style="color:#50fa7b">Decode</span>(<span style="color:#ff79c6">&amp;</span>decoded); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> decoded
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="protocol-buffershttpsdevelopersgooglecomprotocol-buffersとは"><a href="https://developers.google.com/protocol-buffers/">Protocol Buffers</a>とは</h2>
 <p>Googleのシリアライズライブラリ。gRPCでも使われる。</p>
 <p><a href="https://www.sambaiz.net/article/12/">Googleが作ったRPCフレームワークgRPCを使ってみた</a></p>
 <p>message typeを<code>proto</code>ファイルで定義する(proto3)。このファイルから各言語のコードを生成することができる。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-proto" data-lang="proto">syntax <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;proto3&#34;</span>;
-
-<span style="color:#8be9fd;font-style:italic">message</span> <span style="color:#50fa7b">SearchResponse</span> {
-  <span style="color:#ff79c6">repeated</span> Result results <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
-}
-
-<span style="color:#8be9fd;font-style:italic">message</span> <span style="color:#50fa7b">Result</span> {
-  <span style="color:#8be9fd">string</span> url <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
-  <span style="color:#8be9fd">string</span> title <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">2</span>;
-  <span style="color:#ff79c6">repeated</span> <span style="color:#8be9fd">string</span> snippets <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">3</span>;
-}
-</code></pre></div><p>それぞれのmessage typeには名前と型を持つユニークな数値のフィールドが含まれる。一度割り当てた数値のtypeは変更しないようにする。
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-proto" data-lang="proto"><span style="display:flex;"><span>syntax <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;proto3&#34;</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">message</span> <span style="color:#50fa7b">SearchResponse</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">repeated</span> Result results <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">message</span> <span style="color:#50fa7b">Result</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd">string</span> url <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd">string</span> title <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">2</span>;
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">repeated</span> <span style="color:#8be9fd">string</span> snippets <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">3</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>それぞれのmessage typeには名前と型を持つユニークな数値のフィールドが含まれる。一度割り当てた数値のtypeは変更しないようにする。
 <a href="https://developers.google.com/protocol-buffers/docs/proto3#assigning-tags">(Assigning Tags)</a></p>
 <p><code>repeated</code>は0以上の任意の個数で、順番は保存される。
 <a href="https://developers.google.com/protocol-buffers/docs/proto3#specifying-field-rules">(Specifying Field Rules)</a></p>
@@ -534,182 +534,182 @@ origin <span style="color:#ff79c6">:=</span> serialize.Data{
 <a href="https://developers.google.com/protocol-buffers/docs/proto3#updating">(Updating A Message Type)</a></p>
 <h3 id="使い方-1">使い方</h3>
 <p>protoファイル。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-proto" data-lang="proto">syntax <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;proto3&#34;</span>;
-
-<span style="color:#8be9fd;font-style:italic">message</span> <span style="color:#50fa7b">Data</span> {
-  <span style="color:#8be9fd">string</span> title <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
-}
-</code></pre></div><p>goのコードを生成。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ brew install protobuf
-$ protoc --version
-libprotoc 3.1.0
-
-$ go get github.com/golang/protobuf/protoc-gen-go
-
-$ mkdir -p build/gen 
-$ protoc --proto_path=proto --go_out=data proto/data.proto
-$ ls data
-data.pb.go
-</code></pre></div><p>生成されたコード。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#6272a4">// Code generated by protoc-gen-go.
-</span><span style="color:#6272a4">// source: data.proto
-</span><span style="color:#6272a4">// DO NOT EDIT!
-</span><span style="color:#6272a4"></span>
-<span style="color:#6272a4">/*
-</span><span style="color:#6272a4">Package data is a generated protocol buffer package.
-</span><span style="color:#6272a4">
-</span><span style="color:#6272a4">It is generated from these files:
-</span><span style="color:#6272a4">	data.proto
-</span><span style="color:#6272a4">
-</span><span style="color:#6272a4">It has these top-level messages:
-</span><span style="color:#6272a4">	Data
-</span><span style="color:#6272a4">*/</span>
-<span style="color:#ff79c6">package</span> data
-
-<span style="color:#ff79c6">import</span> proto <span style="color:#f1fa8c">&#34;github.com/golang/protobuf/proto&#34;</span>
-<span style="color:#ff79c6">import</span> fmt <span style="color:#f1fa8c">&#34;fmt&#34;</span>
-<span style="color:#ff79c6">import</span> math <span style="color:#f1fa8c">&#34;math&#34;</span>
-
-<span style="color:#6272a4">// Reference imports to suppress errors if they are not otherwise used.
-</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">var</span> _ = proto.Marshal
-<span style="color:#8be9fd;font-style:italic">var</span> _ = fmt.Errorf
-<span style="color:#8be9fd;font-style:italic">var</span> _ = math.Inf
-
-<span style="color:#6272a4">// This is a compile-time assertion to ensure that this generated file
-</span><span style="color:#6272a4">// is compatible with the proto package it is being compiled against.
-</span><span style="color:#6272a4">// A compilation error at this line likely means your copy of the
-</span><span style="color:#6272a4">// proto package needs to be updated.
-</span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">const</span> _ = proto.ProtoPackageIsVersion2 <span style="color:#6272a4">// please upgrade the proto package
-</span><span style="color:#6272a4"></span>
-<span style="color:#8be9fd;font-style:italic">type</span> Data <span style="color:#8be9fd;font-style:italic">struct</span> {
-	Title <span style="color:#8be9fd">string</span> <span style="color:#f1fa8c">`protobuf:&#34;bytes,1,opt,name=title&#34; json:&#34;title,omitempty&#34;`</span>
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>Data) <span style="color:#50fa7b">Reset</span>()                    { <span style="color:#ff79c6">*</span>m = Data{} }
-<span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>Data) <span style="color:#50fa7b">String</span>() <span style="color:#8be9fd">string</span>            { <span style="color:#ff79c6">return</span> proto.<span style="color:#50fa7b">CompactTextString</span>(m) }
-<span style="color:#8be9fd;font-style:italic">func</span> (<span style="color:#ff79c6">*</span>Data) <span style="color:#50fa7b">ProtoMessage</span>()               {}
-<span style="color:#8be9fd;font-style:italic">func</span> (<span style="color:#ff79c6">*</span>Data) <span style="color:#50fa7b">Descriptor</span>() ([]<span style="color:#8be9fd">byte</span>, []<span style="color:#8be9fd">int</span>) { <span style="color:#ff79c6">return</span> fileDescriptor0, []<span style="color:#8be9fd">int</span>{<span style="color:#bd93f9">0</span>} }
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">init</span>() {
-	proto.<span style="color:#50fa7b">RegisterType</span>((<span style="color:#ff79c6">*</span>Data)(<span style="color:#ff79c6">nil</span>), <span style="color:#f1fa8c">&#34;Data&#34;</span>)
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">init</span>() { proto.<span style="color:#50fa7b">RegisterFile</span>(<span style="color:#f1fa8c">&#34;data.proto&#34;</span>, fileDescriptor0) }
-
-<span style="color:#8be9fd;font-style:italic">var</span> fileDescriptor0 = []<span style="color:#8be9fd">byte</span>{
-	<span style="color:#6272a4">// 67 bytes of a gzipped FileDescriptorProto
-</span><span style="color:#6272a4"></span>	<span style="color:#bd93f9">0x1f</span>, <span style="color:#bd93f9">0x8b</span>, <span style="color:#bd93f9">0x08</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x09</span>, <span style="color:#bd93f9">0x6e</span>, <span style="color:#bd93f9">0x88</span>, <span style="color:#bd93f9">0x02</span>, <span style="color:#bd93f9">0xff</span>, <span style="color:#bd93f9">0xe2</span>, <span style="color:#bd93f9">0xe2</span>, <span style="color:#bd93f9">0x4a</span>, <span style="color:#bd93f9">0x49</span>, <span style="color:#bd93f9">0x2c</span>, <span style="color:#bd93f9">0x49</span>,
-	<span style="color:#bd93f9">0xd4</span>, <span style="color:#bd93f9">0x2b</span>, <span style="color:#bd93f9">0x28</span>, <span style="color:#bd93f9">0xca</span>, <span style="color:#bd93f9">0x2f</span>, <span style="color:#bd93f9">0xc9</span>, <span style="color:#bd93f9">0x57</span>, <span style="color:#bd93f9">0x92</span>, <span style="color:#bd93f9">0xe1</span>, <span style="color:#bd93f9">0x62</span>, <span style="color:#bd93f9">0x71</span>, <span style="color:#bd93f9">0x49</span>, <span style="color:#bd93f9">0x2c</span>, <span style="color:#bd93f9">0x49</span>, <span style="color:#bd93f9">0x14</span>, <span style="color:#bd93f9">0x12</span>,
-	<span style="color:#bd93f9">0xe1</span>, <span style="color:#bd93f9">0x62</span>, <span style="color:#bd93f9">0x2d</span>, <span style="color:#bd93f9">0xc9</span>, <span style="color:#bd93f9">0x2c</span>, <span style="color:#bd93f9">0xc9</span>, <span style="color:#bd93f9">0x49</span>, <span style="color:#bd93f9">0x95</span>, <span style="color:#bd93f9">0x60</span>, <span style="color:#bd93f9">0x54</span>, <span style="color:#bd93f9">0x60</span>, <span style="color:#bd93f9">0xd4</span>, <span style="color:#bd93f9">0xe0</span>, <span style="color:#bd93f9">0x0c</span>, <span style="color:#bd93f9">0x82</span>, <span style="color:#bd93f9">0x70</span>,
-	<span style="color:#bd93f9">0x92</span>, <span style="color:#bd93f9">0xd8</span>, <span style="color:#bd93f9">0xc0</span>, <span style="color:#bd93f9">0x8a</span>, <span style="color:#bd93f9">0x8c</span>, <span style="color:#bd93f9">0x01</span>, <span style="color:#bd93f9">0x01</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0xff</span>, <span style="color:#bd93f9">0xff</span>, <span style="color:#bd93f9">0xf5</span>, <span style="color:#bd93f9">0x0d</span>, <span style="color:#bd93f9">0xbe</span>, <span style="color:#bd93f9">0x9b</span>, <span style="color:#bd93f9">0x32</span>,
-	<span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x00</span>,
-}
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ go get github.com/golang/protobuf/proto
-</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">ProtoBufEncode</span>(origin data.Data) []<span style="color:#8be9fd">byte</span> {
-	encoded, err <span style="color:#ff79c6">:=</span> proto.<span style="color:#50fa7b">Marshal</span>(<span style="color:#ff79c6">&amp;</span>origin)
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
-	}
-
-	<span style="color:#ff79c6">return</span> encoded
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">ProtoBufDecode</span>(bytes []<span style="color:#8be9fd">byte</span>) data.Data {
-	<span style="color:#8be9fd;font-style:italic">var</span> decoded data.Data
-	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> proto.<span style="color:#50fa7b">Unmarshal</span>(bytes, <span style="color:#ff79c6">&amp;</span>decoded); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
-	}
-
-	<span style="color:#ff79c6">return</span> decoded
-}
-</code></pre></div><h2 id="flatbuffershttpgooglegithubioflatbuffers"><a href="http://google.github.io/flatbuffers/">FlatBuffers</a></h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-proto" data-lang="proto"><span style="display:flex;"><span>syntax <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;proto3&#34;</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">message</span> <span style="color:#50fa7b">Data</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd">string</span> title <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>goのコードを生成。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ brew install protobuf
+</span></span><span style="display:flex;"><span>$ protoc --version
+</span></span><span style="display:flex;"><span>libprotoc 3.1.0
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ go get github.com/golang/protobuf/protoc-gen-go
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ mkdir -p build/gen 
+</span></span><span style="display:flex;"><span>$ protoc --proto_path=proto --go_out=data proto/data.proto
+</span></span><span style="display:flex;"><span>$ ls data
+</span></span><span style="display:flex;"><span>data.pb.go
+</span></span></code></pre></div><p>生成されたコード。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#6272a4">// Code generated by protoc-gen-go.
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">// source: data.proto
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">// DO NOT EDIT!
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">/*
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">Package data is a generated protocol buffer package.
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">It is generated from these files:
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">	data.proto
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">It has these top-level messages:
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">	Data
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">*/</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">package</span> data
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> proto <span style="color:#f1fa8c">&#34;github.com/golang/protobuf/proto&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> fmt <span style="color:#f1fa8c">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> math <span style="color:#f1fa8c">&#34;math&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">// Reference imports to suppress errors if they are not otherwise used.
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">var</span> _ = proto.Marshal
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">var</span> _ = fmt.Errorf
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">var</span> _ = math.Inf
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">// This is a compile-time assertion to ensure that this generated file
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">// is compatible with the proto package it is being compiled against.
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">// A compilation error at this line likely means your copy of the
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">// proto package needs to be updated.
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#8be9fd;font-style:italic">const</span> _ = proto.ProtoPackageIsVersion2 <span style="color:#6272a4">// please upgrade the proto package
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Data <span style="color:#8be9fd;font-style:italic">struct</span> {
+</span></span><span style="display:flex;"><span>	Title <span style="color:#8be9fd">string</span> <span style="color:#f1fa8c">`protobuf:&#34;bytes,1,opt,name=title&#34; json:&#34;title,omitempty&#34;`</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>Data) <span style="color:#50fa7b">Reset</span>()                    { <span style="color:#ff79c6">*</span>m = Data{} }
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> (m <span style="color:#ff79c6">*</span>Data) <span style="color:#50fa7b">String</span>() <span style="color:#8be9fd">string</span>            { <span style="color:#ff79c6">return</span> proto.<span style="color:#50fa7b">CompactTextString</span>(m) }
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> (<span style="color:#ff79c6">*</span>Data) <span style="color:#50fa7b">ProtoMessage</span>()               {}
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> (<span style="color:#ff79c6">*</span>Data) <span style="color:#50fa7b">Descriptor</span>() ([]<span style="color:#8be9fd">byte</span>, []<span style="color:#8be9fd">int</span>) { <span style="color:#ff79c6">return</span> fileDescriptor0, []<span style="color:#8be9fd">int</span>{<span style="color:#bd93f9">0</span>} }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">init</span>() {
+</span></span><span style="display:flex;"><span>	proto.<span style="color:#50fa7b">RegisterType</span>((<span style="color:#ff79c6">*</span>Data)(<span style="color:#ff79c6">nil</span>), <span style="color:#f1fa8c">&#34;Data&#34;</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">init</span>() { proto.<span style="color:#50fa7b">RegisterFile</span>(<span style="color:#f1fa8c">&#34;data.proto&#34;</span>, fileDescriptor0) }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">var</span> fileDescriptor0 = []<span style="color:#8be9fd">byte</span>{
+</span></span><span style="display:flex;"><span>	<span style="color:#6272a4">// 67 bytes of a gzipped FileDescriptorProto
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>	<span style="color:#bd93f9">0x1f</span>, <span style="color:#bd93f9">0x8b</span>, <span style="color:#bd93f9">0x08</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x09</span>, <span style="color:#bd93f9">0x6e</span>, <span style="color:#bd93f9">0x88</span>, <span style="color:#bd93f9">0x02</span>, <span style="color:#bd93f9">0xff</span>, <span style="color:#bd93f9">0xe2</span>, <span style="color:#bd93f9">0xe2</span>, <span style="color:#bd93f9">0x4a</span>, <span style="color:#bd93f9">0x49</span>, <span style="color:#bd93f9">0x2c</span>, <span style="color:#bd93f9">0x49</span>,
+</span></span><span style="display:flex;"><span>	<span style="color:#bd93f9">0xd4</span>, <span style="color:#bd93f9">0x2b</span>, <span style="color:#bd93f9">0x28</span>, <span style="color:#bd93f9">0xca</span>, <span style="color:#bd93f9">0x2f</span>, <span style="color:#bd93f9">0xc9</span>, <span style="color:#bd93f9">0x57</span>, <span style="color:#bd93f9">0x92</span>, <span style="color:#bd93f9">0xe1</span>, <span style="color:#bd93f9">0x62</span>, <span style="color:#bd93f9">0x71</span>, <span style="color:#bd93f9">0x49</span>, <span style="color:#bd93f9">0x2c</span>, <span style="color:#bd93f9">0x49</span>, <span style="color:#bd93f9">0x14</span>, <span style="color:#bd93f9">0x12</span>,
+</span></span><span style="display:flex;"><span>	<span style="color:#bd93f9">0xe1</span>, <span style="color:#bd93f9">0x62</span>, <span style="color:#bd93f9">0x2d</span>, <span style="color:#bd93f9">0xc9</span>, <span style="color:#bd93f9">0x2c</span>, <span style="color:#bd93f9">0xc9</span>, <span style="color:#bd93f9">0x49</span>, <span style="color:#bd93f9">0x95</span>, <span style="color:#bd93f9">0x60</span>, <span style="color:#bd93f9">0x54</span>, <span style="color:#bd93f9">0x60</span>, <span style="color:#bd93f9">0xd4</span>, <span style="color:#bd93f9">0xe0</span>, <span style="color:#bd93f9">0x0c</span>, <span style="color:#bd93f9">0x82</span>, <span style="color:#bd93f9">0x70</span>,
+</span></span><span style="display:flex;"><span>	<span style="color:#bd93f9">0x92</span>, <span style="color:#bd93f9">0xd8</span>, <span style="color:#bd93f9">0xc0</span>, <span style="color:#bd93f9">0x8a</span>, <span style="color:#bd93f9">0x8c</span>, <span style="color:#bd93f9">0x01</span>, <span style="color:#bd93f9">0x01</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0xff</span>, <span style="color:#bd93f9">0xff</span>, <span style="color:#bd93f9">0xf5</span>, <span style="color:#bd93f9">0x0d</span>, <span style="color:#bd93f9">0xbe</span>, <span style="color:#bd93f9">0x9b</span>, <span style="color:#bd93f9">0x32</span>,
+</span></span><span style="display:flex;"><span>	<span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x00</span>, <span style="color:#bd93f9">0x00</span>,
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go get github.com/golang/protobuf/proto
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">ProtoBufEncode</span>(origin data.Data) []<span style="color:#8be9fd">byte</span> {
+</span></span><span style="display:flex;"><span>	encoded, err <span style="color:#ff79c6">:=</span> proto.<span style="color:#50fa7b">Marshal</span>(<span style="color:#ff79c6">&amp;</span>origin)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> encoded
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">ProtoBufDecode</span>(bytes []<span style="color:#8be9fd">byte</span>) data.Data {
+</span></span><span style="display:flex;"><span>	<span style="color:#8be9fd;font-style:italic">var</span> decoded data.Data
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> proto.<span style="color:#50fa7b">Unmarshal</span>(bytes, <span style="color:#ff79c6">&amp;</span>decoded); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> decoded
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="flatbuffershttpgooglegithubioflatbuffers"><a href="http://google.github.io/flatbuffers/">FlatBuffers</a></h2>
 <p>Googleの、ゲームなどパフォーマンスを要求するアプリケーションのためのシリアライズライブラリ。
 データにアクセスする前にparseやunpackする必要がなく、オブジェクトごとのメモリ割り当てが必要。</p>
 <p><code>proto</code>の代わりにこんな<code>schema</code>ファイルを書く。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">namespace MyGame.Sample;
-enum Color:byte { Red = 0, Green, Blue = 2 }
-union Equipment { Weapon } // Optionally add more tables.
-struct Vec3 {
-  x:float;
-  y:float;
-  z:float;
-}
-table Monster {
-  pos:Vec3; // Struct.
-  mana:short = 150;
-  hp:short = 100;
-  name:string;
-  friendly:bool = false (deprecated);
-  inventory:[ubyte];  // Vector of scalars.
-  color:Color = Blue; // Enum.
-  weapons:[Weapon];   // Vector of tables.
-  equipped:Equipment; // Union.
-}
-table Weapon {
-  name:string;
-  damage:short;
-}
-root_type Monster;
-</code></pre></div><h3 id="使い方-2">使い方</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>namespace MyGame.Sample;
+</span></span><span style="display:flex;"><span>enum Color:byte { Red = 0, Green, Blue = 2 }
+</span></span><span style="display:flex;"><span>union Equipment { Weapon } // Optionally add more tables.
+</span></span><span style="display:flex;"><span>struct Vec3 {
+</span></span><span style="display:flex;"><span>  x:float;
+</span></span><span style="display:flex;"><span>  y:float;
+</span></span><span style="display:flex;"><span>  z:float;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>table Monster {
+</span></span><span style="display:flex;"><span>  pos:Vec3; // Struct.
+</span></span><span style="display:flex;"><span>  mana:short = 150;
+</span></span><span style="display:flex;"><span>  hp:short = 100;
+</span></span><span style="display:flex;"><span>  name:string;
+</span></span><span style="display:flex;"><span>  friendly:bool = false (deprecated);
+</span></span><span style="display:flex;"><span>  inventory:[ubyte];  // Vector of scalars.
+</span></span><span style="display:flex;"><span>  color:Color = Blue; // Enum.
+</span></span><span style="display:flex;"><span>  weapons:[Weapon];   // Vector of tables.
+</span></span><span style="display:flex;"><span>  equipped:Equipment; // Union.
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>table Weapon {
+</span></span><span style="display:flex;"><span>  name:string;
+</span></span><span style="display:flex;"><span>  damage:short;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>root_type Monster;
+</span></span></code></pre></div><h3 id="使い方-2">使い方</h3>
 <p>schemaファイル。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">namespace dataf;
-
-table Data {
-    title:string;
-}
-
-root_type Data;
-</code></pre></div><p>goのコードを生成。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-fallback" data-lang="fallback">$ brew install flatbuffers
-
-$ flatc --go fbs/dataf.fbs
-$ ls dataf/
-data.go
-
-$ go get github.com/google/flatbuffers/go
-</code></pre></div><p>生成されたコード。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2"><code class="language-go" data-lang="go"><span style="color:#6272a4">// automatically generated by the FlatBuffers compiler, do not modify
-</span><span style="color:#6272a4"></span>
-<span style="color:#ff79c6">package</span> dataf
-
-<span style="color:#ff79c6">import</span> (
-	flatbuffers <span style="color:#f1fa8c">&#34;github.com/google/flatbuffers/go&#34;</span>
-)
-
-<span style="color:#8be9fd;font-style:italic">type</span> data <span style="color:#8be9fd;font-style:italic">struct</span> {
-	_tab flatbuffers.Table
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">GetRootAsdata</span>(buf []<span style="color:#8be9fd">byte</span>, offset flatbuffers.UOffsetT) <span style="color:#ff79c6">*</span>data {
-	n <span style="color:#ff79c6">:=</span> flatbuffers.<span style="color:#50fa7b">GetUOffsetT</span>(buf[offset:])
-	x <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>data{}
-	x.<span style="color:#50fa7b">Init</span>(buf, n<span style="color:#ff79c6">+</span>offset)
-	<span style="color:#ff79c6">return</span> x
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> (rcv <span style="color:#ff79c6">*</span>data) <span style="color:#50fa7b">Init</span>(buf []<span style="color:#8be9fd">byte</span>, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> (rcv <span style="color:#ff79c6">*</span>data) <span style="color:#50fa7b">Title</span>() []<span style="color:#8be9fd">byte</span> {
-	o <span style="color:#ff79c6">:=</span> flatbuffers.<span style="color:#50fa7b">UOffsetT</span>(rcv._tab.<span style="color:#50fa7b">Offset</span>(<span style="color:#bd93f9">4</span>))
-	<span style="color:#ff79c6">if</span> o <span style="color:#ff79c6">!=</span> <span style="color:#bd93f9">0</span> {
-		<span style="color:#ff79c6">return</span> rcv._tab.<span style="color:#50fa7b">ByteVector</span>(o <span style="color:#ff79c6">+</span> rcv._tab.Pos)
-	}
-	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
-}
-
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">dataStart</span>(builder <span style="color:#ff79c6">*</span>flatbuffers.Builder) {
-	builder.<span style="color:#50fa7b">StartObject</span>(<span style="color:#bd93f9">1</span>)
-}
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">dataAddTitle</span>(builder <span style="color:#ff79c6">*</span>flatbuffers.Builder, title flatbuffers.UOffsetT) {
-	builder.<span style="color:#50fa7b">PrependUOffsetTSlot</span>(<span style="color:#bd93f9">0</span>, flatbuffers.<span style="color:#50fa7b">UOffsetT</span>(title), <span style="color:#bd93f9">0</span>)
-}
-<span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">dataEnd</span>(builder <span style="color:#ff79c6">*</span>flatbuffers.Builder) flatbuffers.UOffsetT {
-	<span style="color:#ff79c6">return</span> builder.<span style="color:#50fa7b">EndObject</span>()
-}
-</code></pre></div><h2 id="参考">参考</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>namespace dataf;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>table Data {
+</span></span><span style="display:flex;"><span>    title:string;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>root_type Data;
+</span></span></code></pre></div><p>goのコードを生成。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ brew install flatbuffers
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ flatc --go fbs/dataf.fbs
+</span></span><span style="display:flex;"><span>$ ls dataf/
+</span></span><span style="display:flex;"><span>data.go
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ go get github.com/google/flatbuffers/go
+</span></span></code></pre></div><p>生成されたコード。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#6272a4">// automatically generated by the FlatBuffers compiler, do not modify
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">package</span> dataf
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
+</span></span><span style="display:flex;"><span>	flatbuffers <span style="color:#f1fa8c">&#34;github.com/google/flatbuffers/go&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> data <span style="color:#8be9fd;font-style:italic">struct</span> {
+</span></span><span style="display:flex;"><span>	_tab flatbuffers.Table
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">GetRootAsdata</span>(buf []<span style="color:#8be9fd">byte</span>, offset flatbuffers.UOffsetT) <span style="color:#ff79c6">*</span>data {
+</span></span><span style="display:flex;"><span>	n <span style="color:#ff79c6">:=</span> flatbuffers.<span style="color:#50fa7b">GetUOffsetT</span>(buf[offset:])
+</span></span><span style="display:flex;"><span>	x <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">&amp;</span>data{}
+</span></span><span style="display:flex;"><span>	x.<span style="color:#50fa7b">Init</span>(buf, n<span style="color:#ff79c6">+</span>offset)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> x
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> (rcv <span style="color:#ff79c6">*</span>data) <span style="color:#50fa7b">Init</span>(buf []<span style="color:#8be9fd">byte</span>, i flatbuffers.UOffsetT) {
+</span></span><span style="display:flex;"><span>	rcv._tab.Bytes = buf
+</span></span><span style="display:flex;"><span>	rcv._tab.Pos = i
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> (rcv <span style="color:#ff79c6">*</span>data) <span style="color:#50fa7b">Title</span>() []<span style="color:#8be9fd">byte</span> {
+</span></span><span style="display:flex;"><span>	o <span style="color:#ff79c6">:=</span> flatbuffers.<span style="color:#50fa7b">UOffsetT</span>(rcv._tab.<span style="color:#50fa7b">Offset</span>(<span style="color:#bd93f9">4</span>))
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> o <span style="color:#ff79c6">!=</span> <span style="color:#bd93f9">0</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> rcv._tab.<span style="color:#50fa7b">ByteVector</span>(o <span style="color:#ff79c6">+</span> rcv._tab.Pos)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">dataStart</span>(builder <span style="color:#ff79c6">*</span>flatbuffers.Builder) {
+</span></span><span style="display:flex;"><span>	builder.<span style="color:#50fa7b">StartObject</span>(<span style="color:#bd93f9">1</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">dataAddTitle</span>(builder <span style="color:#ff79c6">*</span>flatbuffers.Builder, title flatbuffers.UOffsetT) {
+</span></span><span style="display:flex;"><span>	builder.<span style="color:#50fa7b">PrependUOffsetTSlot</span>(<span style="color:#bd93f9">0</span>, flatbuffers.<span style="color:#50fa7b">UOffsetT</span>(title), <span style="color:#bd93f9">0</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">dataEnd</span>(builder <span style="color:#ff79c6">*</span>flatbuffers.Builder) flatbuffers.UOffsetT {
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> builder.<span style="color:#50fa7b">EndObject</span>()
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://rwinslow.com/posts/use-flatbuffers-in-golang/">Tutorial: Use FlatBuffers in Go · Robert Winslow</a></p>
 
     </div>
