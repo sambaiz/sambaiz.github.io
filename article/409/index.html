@@ -520,12 +520,11 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 </span></span></code></pre></div><p><a href="https://awscli.amazonaws.com/v2/documentation/api/latest/reference/emr/create-cluster.html">aws emr create-cluster</a> でクラスタを立ち上げることができ、その際 &ndash;step を渡して &ndash;auto-terminate を付けると処理が完了次第クラスタが終了するので使い捨てることができる。</p>
 <p>その他のフラグは次の通り。扱うデータに対してメモリが不足しているとtaskが失敗したり大量のGCによってdriverからのheartbeatがタイムアウトしてしまうことがあるのである程度余裕を持っておく。</p>
 <ul>
-<li>&ndash;release-label emr-6.3.1: <a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-release-components.html">EMRのバージョン</a>。このバージョンではGlue3.0と同じSpark 3.1.1が動くが、バグを踏む可能性があるのでなるべく新しいバージョンにした方が良いかもしれない。</li>
+<li>&ndash;release-label emr-6.3.1: <a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-release-components.html">EMRのバージョン</a>。このバージョンではGlue3.0と同じSpark 3.1.1が動くが、なるべく新しいバージョンにした方が不具合を回避できて良いかもしれない。</li>
 <li>&ndash;applications Name=Spark: クラスタにインストールするアプリケーション</li>
 <li>&ndash;instance-type, &ndash;instance-count: <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-supported-instance-types.html">インスタンスタイプ</a>と数。この内の1つがMaster nodeで残りはCore nodeとなる。</li>
 <li><a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-managed-scaling.html">&ndash;managed-scaling-policy</a>: オートスケールの設定</li>
 <li>&ndash;use-default-roles: インスタンスプロファイルにEMR_EC2_DefaultRole、EMR RoleにEMR_DefaultRoleを使う</li>
-<li>&ndash;enable-debugging, &ndash;log-uri: ログをコンソール上から見られるようにする</li>
 <li>&ndash;name: クラスタ名。デフォルトは&quot;Development Cluster&quot;</li>
 </ul>
 <p><a href="https://spark.apache.org/docs/latest/submitting-applications.html">spark-submit</a>には</p>
@@ -595,7 +594,33 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>MASTER,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>CORE,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,TargetSpotCapacity<span style="color:#ff79c6">=</span>3,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span>,<span style="color:#f1fa8c">&#39;{InstanceType=m6g.2xlarge,WeightedCapacity=2}&#39;</span><span style="color:#ff79c6">]</span>,LaunchSpecifications<span style="color:#ff79c6">={</span><span style="color:#8be9fd;font-style:italic">SpotSpecification</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{TimeoutDurationMinutes=5,TimeoutAction=SWITCH_TO_ON_DEMAND}&#39;</span><span style="color:#ff79c6">}</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=InstanceFleetUnits}&#39;</span><span style="color:#f1fa8c">\
-</span></span></span></code></pre></div><p>インスタンスが立ち上がるとstepの実行が始まる。</p>
+</span></span></span></code></pre></div><p>&ndash;bootstrap-actions でインスタンス起動時に <a href="https://aws.amazon.com/jp/blogs/big-data/securing-access-to-emr-clusters-using-aws-systems-manager/">ssm-agent をインストール</a>すれば Key Pair を登録することなく中に入ってコマンドを実行することができる。</p>
+<p><a href="https://www.sambaiz.net/article/410/">AWS CopilotでECS on Fargate上にコンテナをデプロイしECS Execによるコマンドの実行やSession Managerによるポートフォワーディングを行う - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>--bootstrap-actions <span style="color:#8be9fd;font-style:italic">Path</span><span style="color:#ff79c6">=</span>s3://&lt;bucket&gt;/install-ssm-agent.sh,Name<span style="color:#ff79c6">=</span>insatall-ssm-agent <span style="color:#f1fa8c">\
+</span></span></span></code></pre></div><p>併せてEC2のRoleに AmazonSSMManagedInstanceCore と次のpolicyをアタッチする必要がある。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;Version&#34;</span>: <span style="color:#f1fa8c">&#34;2012-10-17&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;Statement&#34;</span>: [
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Effect&#34;</span>: <span style="color:#f1fa8c">&#34;Allow&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Action&#34;</span>: [
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ssm:DescribeInstanceProperties&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ssm:DescribeSessions&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ec2:describeInstances&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ssm:GetConnectionStatus&#34;</span>
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Resource&#34;</span>: <span style="color:#f1fa8c">&#34;*&#34;</span>
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Effect&#34;</span>: <span style="color:#f1fa8c">&#34;Allow&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Action&#34;</span>: [
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ssm:StartSession&#34;</span>
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Resource&#34;</span>: <span style="color:#f1fa8c">&#34;*&#34;</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>  ]
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>bootstrapが完了するとstepの実行が始まる。</p>
 
 
 

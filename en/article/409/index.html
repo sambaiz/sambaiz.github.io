@@ -526,7 +526,6 @@ To refer to the Glue Data Catalog table, apply <a href="https://docs.aws.amazon.
 <li>&ndash;instance-type, &ndash;instance-count: <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-supported-instance-types.html">Instance type</a> and the number. One of these is the Master node and the rest are the Core node.</li>
 <li><a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-managed-scaling.html">&ndash;managed-scaling-policy</a>: auto scale settings</li>
 <li>&ndash;use-default-roles: Use EMR_EC2_DefaultRole as the instance profile, and EMR_DefaultRole as the EMR role.</li>
-<li>&ndash;enable-debugging, &ndash;log-uri: Make logs visible from the console</li>
 <li>&ndash;name: Cluster name. The default is &ldquo;Development Cluster&rdquo;</li>
 </ul>
 <p><a href="https://spark.apache.org/docs/latest/submitting-applications.html">spark-submit</a> is passed:</p>
@@ -595,7 +594,33 @@ In EMR, if it is set to &ldquo;client&rdquo;, the Driver Program is <a href="htt
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>MASTER,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>CORE,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,TargetSpotCapacity<span style="color:#ff79c6">=</span>3,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span>,<span style="color:#f1fa8c">&#39;{InstanceType=m6g.2xlarge,WeightedCapacity=2}&#39;</span><span style="color:#ff79c6">]</span>,LaunchSpecifications<span style="color:#ff79c6">={</span><span style="color:#8be9fd;font-style:italic">SpotSpecification</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{TimeoutDurationMinutes=5,TimeoutAction=SWITCH_TO_ON_DEMAND}&#39;</span><span style="color:#ff79c6">}</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=InstanceFleetUnits}&#39;</span><span style="color:#f1fa8c">\
-</span></span></span></code></pre></div><p>The step starts to run when the instances are launched.</p>
+</span></span></span></code></pre></div><p><a href="https://aws.amazon.com/jp/blogs/big-data/securing-access-to-emr-clusters-using-aws-systems-manager/">Install ssm-agent</a> at instance startup with &ndash;bootstrap-actions allows to connect the instance and execute commands without registering a Key Pair.</p>
+<p><a href="https://www.sambaiz.net/en/article/410/">Deploy a container to ECS on Fargate, execute commands by ECS Exec, and perform port forwarding by Session Manager - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>--bootstrap-actions <span style="color:#8be9fd;font-style:italic">Path</span><span style="color:#ff79c6">=</span>s3://&lt;bucket&gt;/install-ssm-agent.sh,Name<span style="color:#ff79c6">=</span>insatall-ssm-agent <span style="color:#f1fa8c">\
+</span></span></span></code></pre></div><p>It is necessary to attach AmazonSSMManagedInstanceCore and the following policy to the EC2 Role.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;Version&#34;</span>: <span style="color:#f1fa8c">&#34;2012-10-17&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&#34;Statement&#34;</span>: [
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Effect&#34;</span>: <span style="color:#f1fa8c">&#34;Allow&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Action&#34;</span>: [
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ssm:DescribeInstanceProperties&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ssm:DescribeSessions&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ec2:describeInstances&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ssm:GetConnectionStatus&#34;</span>
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Resource&#34;</span>: <span style="color:#f1fa8c">&#34;*&#34;</span>
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Effect&#34;</span>: <span style="color:#f1fa8c">&#34;Allow&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Action&#34;</span>: [
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;ssm:StartSession&#34;</span>
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">&#34;Resource&#34;</span>: <span style="color:#f1fa8c">&#34;*&#34;</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>  ]
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The step starts to run after bootstrapping.</p>
 
 
 
