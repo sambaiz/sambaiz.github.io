@@ -508,7 +508,8 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 </span></span><span style="display:flex;"><span>    df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>mode(<span style="color:#f1fa8c">&#39;overwrite&#39;</span>)<span style="color:#ff79c6">.</span>parquet(output_path, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>$ aws s3 cp test<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff79c6">//&lt;</span>bucket<span style="color:#ff79c6">&gt;/</span>
-</span></span></code></pre></div><p>Glue Data Catalogのテーブルを参照する場合は<a href="https://docs.aws.amazon.com/ja_jp/emr/latest/ReleaseGuide/emr-spark-glue.html">次の設定</a>を行う。</p>
+</span></span></code></pre></div><h2 id="glue-data-catalogの有効化">Glue Data Catalogの有効化</h2>
+<p>Glue Data Catalogのテーブルを参照する場合は<a href="https://docs.aws.amazon.com/ja_jp/emr/latest/ReleaseGuide/emr-spark-glue.html">次の設定</a>を行う。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">with</span> SparkSession<span style="color:#ff79c6">.</span>builder \
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">.</span>appName(<span style="color:#f1fa8c">&#34;testapp&#34;</span>) \
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">.</span>config(<span style="color:#f1fa8c">&#34;hive.metastore.client.factory.class&#34;</span>, <span style="color:#f1fa8c">&#34;com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory&#34;</span>) \
@@ -517,7 +518,8 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 </span></span><span style="display:flex;"><span>    df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT * FROM xxxx.yyyyy&#34;</span>)
 </span></span></code></pre></div><p>また、パーティションがDate型の場合 &ldquo;Unsupported expression &lsquo;2022 - 05 - 04&rsquo;&rdquo; のような<a href="https://github.com/awslabs/aws-glue-data-catalog-client-for-apache-hive-metastore/issues/45">エラーが出てしまう</a>のでpartiton pruningを無効にする必要があった。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">.</span>config(<span style="color:#f1fa8c">&#34;spark.sql.hive.metastorePartitionPruning&#34;</span>, <span style="color:#f1fa8c">&#34;false&#34;</span>)\
-</span></span></code></pre></div><p><a href="https://awscli.amazonaws.com/v2/documentation/api/latest/reference/emr/create-cluster.html">aws emr create-cluster</a> でクラスタを立ち上げることができ、その際 &ndash;step を渡して &ndash;auto-terminate を付けると処理が完了次第クラスタが終了するので使い捨てることができる。</p>
+</span></span></code></pre></div><h2 id="クラスタの起動">クラスタの起動</h2>
+<p><a href="https://awscli.amazonaws.com/v2/documentation/api/latest/reference/emr/create-cluster.html">aws emr create-cluster</a> でクラスタを立ち上げることができ、その際 &ndash;step を渡して &ndash;auto-terminate を付けると処理が完了次第クラスタが終了するので使い捨てることができる。</p>
 <p>その他のフラグは次の通り。扱うデータに対してメモリが不足しているとtaskが失敗したり大量のGCによってdriverからのheartbeatがタイムアウトしてしまうことがあるのである程度余裕を持っておく。</p>
 <ul>
 <li>&ndash;release-label emr-6.3.1: <a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-release-components.html">EMRのバージョン</a>。このバージョンではGlue3.0と同じSpark 3.1.1が動くが、なるべく新しいバージョンにした方が不具合を回避できて良いかもしれない。</li>
@@ -565,7 +567,8 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 </span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;ClusterId&#34;</span>: <span style="color:#f1fa8c">&#34;j-DND71AFKD661&#34;</span>,
 </span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;ClusterArn&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:elasticmapreduce:ap-northeast-1:******:cluster/j-DND71AFKD661&#34;</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
-</span></span></code></pre></div><p>また、&ndash;instance-type や &ndash;instance-count の代わりに<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-instance-fleet.html">instance fleets</a>の設定を行うことでコストが低いスポットインスタンスや複数のインスタンスタイプを混ぜたクラスタを構築することができる。
+</span></span></code></pre></div><h2 id="スポットインスタンスの利用">スポットインスタンスの利用</h2>
+<p>また、&ndash;instance-type や &ndash;instance-count の代わりに<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-instance-fleet.html">instance fleets</a>の設定を行うことでコストが低いスポットインスタンスや複数のインスタンスタイプを混ぜたクラスタを構築することができる。
 スポットインスタンスはオンデマンドの需要によって突然シャットダウンすることがあるが、もしそれによってシャッフルブロックが失われても再計算して<a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-spark-configure.html#spark-decommissioning">回復する</a>仕組みがあるので特に問題は起きない。</p>
 
 
@@ -594,7 +597,8 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>MASTER,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span><span style="color:#ff79c6">]</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#8be9fd;font-style:italic">InstanceFleetType</span><span style="color:#ff79c6">=</span>CORE,TargetOnDemandCapacity<span style="color:#ff79c6">=</span>1,TargetSpotCapacity<span style="color:#ff79c6">=</span>3,InstanceTypeConfigs<span style="color:#ff79c6">=[</span><span style="color:#f1fa8c">&#39;{InstanceType=m6g.xlarge}&#39;</span>,<span style="color:#f1fa8c">&#39;{InstanceType=m6g.2xlarge,WeightedCapacity=2}&#39;</span><span style="color:#ff79c6">]</span>,LaunchSpecifications<span style="color:#ff79c6">={</span><span style="color:#8be9fd;font-style:italic">SpotSpecification</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{TimeoutDurationMinutes=5,TimeoutAction=SWITCH_TO_ON_DEMAND}&#39;</span><span style="color:#ff79c6">}</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>--managed-scaling-policy <span style="color:#8be9fd;font-style:italic">ComputeLimits</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{MinimumCapacityUnits=3,MaximumCapacityUnits=5,UnitType=InstanceFleetUnits}&#39;</span><span style="color:#f1fa8c">\
-</span></span></span></code></pre></div><p>&ndash;bootstrap-actions でインスタンス起動時に <a href="https://aws.amazon.com/jp/blogs/big-data/securing-access-to-emr-clusters-using-aws-systems-manager/">ssm-agent をインストール</a>すれば Key Pair を登録することなく中に入ってコマンドを実行することができる。</p>
+</span></span></span></code></pre></div><h2 id="ssm-agentのインストール">ssm-agentのインストール</h2>
+<p>&ndash;bootstrap-actions でインスタンス起動時に <a href="https://aws.amazon.com/jp/blogs/big-data/securing-access-to-emr-clusters-using-aws-systems-manager/">ssm-agent をインストール</a>すれば Key Pair を登録することなく中に入ってコマンドを実行することができる。</p>
 <p><a href="https://www.sambaiz.net/article/410/">AWS CopilotでECS on Fargate上にコンテナをデプロイしECS Execによるコマンドの実行やSession Managerによるポートフォワーディングを行う - sambaiz-net</a></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>--bootstrap-actions <span style="color:#8be9fd;font-style:italic">Path</span><span style="color:#ff79c6">=</span>s3://&lt;bucket&gt;/install-ssm-agent.sh,Name<span style="color:#ff79c6">=</span>insatall-ssm-agent <span style="color:#f1fa8c">\
 </span></span></span></code></pre></div><p>併せてEC2のRoleに AmazonSSMManagedInstanceCore と次のpolicyをアタッチする必要がある。</p>
@@ -620,7 +624,8 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 </span></span><span style="display:flex;"><span>    }
 </span></span><span style="display:flex;"><span>  ]
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>bootstrapが完了するとstepの実行が始まる。</p>
+</span></span></code></pre></div><h2 id="stepの実行">stepの実行</h2>
+<p>bootstrapが完了するとstepの実行が始まる。</p>
 
 
 
