@@ -331,20 +331,59 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>jvm - sambaiz-net</title>
-  <meta name="twitter:title" content="jvm - sambaiz-net">
-  <meta property='og:title' content="jvm - sambaiz-net">
+  <title>Javaで発生したOOMの原因をGCログとヒープダンプから探る - sambaiz-net</title>
+  <meta name="twitter:title" content="Javaで発生したOOMの原因をGCログとヒープダンプから探る - sambaiz-net">
+  <meta property='og:title' content="Javaで発生したOOMの原因をGCログとヒープダンプから探る - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="GCViewerでGCログを可視化しMATでヒープダンプを分析する">
+  <meta name="twitter:description" content="GCViewerでGCログを可視化しMATでヒープダンプを分析する">
   
   
 
-  <meta property="og:url" content="https://www.sambaiz.net/tags/jvm/">
+  <meta property="og:url" content="https://www.sambaiz.net/article/413/">
   <meta property="og:image" content="https://www.sambaiz.net/images/my_l.jpg">
   <meta name="twitter:image" content="https://www.sambaiz.net/images/my.jpg" />
 
   
 
   
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BlogPosting",
+    "mainEntityOfPage":{
+      "@type":"WebPage",
+      "@id": "https://www.sambaiz.net/"
+    },
+    "headline": "Javaで発生したOOMの原因をGCログとヒープダンプから探る",
+    "datePublished": "2022-07-30T00:34:00JST",
+    "dateModified": "2022-07-30T00:34:00JST",
+    "author": {
+      "@type": "Person",
+      "name": "sambaiz",
+      "url": "https://www.sambaiz.net/",
+      "image": "https://www.sambaiz.net/images/my.jpg"
+    },
+    "publisher": {
+      "@type": "Person",
+      "name": "sambaiz-net",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sambaiz.net/images/my.jpg",
+        "height": 60,
+        "width": 60
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": "https://www.sambaiz.net/images/my.jpg",
+      "height": 138,
+      "width": 138
+    },
+    "description": "GCViewerでGCログを可視化しMATでヒープダンプを分析する"
+  }
+</script>
 </head>
 
 <body>
@@ -419,27 +458,76 @@
     </header>
 
 <div class="container">
-  <div class="list">
-    <h1 class="title">jvm</h1>
-    <div class="grid">
-    
-    
-    
-      <div>
-        <a class="nl grid-nl" href="https://www.sambaiz.net/article/35/" aria-label="JVMのヒープ領域とFull GC">
-  <article class="cell grid-cell">
-    <div class="date">
-      <time>2016-11-14</time>
-    </div>
-    <p class="title">JVMのヒープ領域とFull GC</p>
-  </article>
-</a>
+  <article class="single">
+    <div class="cell">
+      <div class="single-header">
+        <h1>Javaで発生したOOMの原因をGCログとヒープダンプから探る</h1>
+        <time>2022-07-30</time>
+        <a class="tag" href='/tags/java/'>java</a>
       </div>
-    
-    </div>
-  </div>
+      <h2 id="gcログの可視化">GCログの可視化</h2>
+<ul>
+<li>-Xloggc:/tmp/gc.log</li>
+<li>-XX:+PrintGCDetails</li>
+<li>-XX:+PrintGCDateStamps</li>
+</ul>
+<p>で次のようなGCのログが出力される。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ cat /tmp/gc.log
+</span></span><span style="display:flex;"><span>2022-08-08T16:35:30.738+0000: [GC (Allocation Failure) [PSYoungGen: 638269K-&gt;3108K(665600K)] 2017703K-&gt;1382542K(2063872K), 0.0084360 secs] [Times: user=0.04 sys=0.00, real=0.01 secs] 
+</span></span><span style="display:flex;"><span>2022-08-08T16:35:31.320+0000: [GC (Allocation Failure) [PSYoungGen: 640548K-&gt;2565K(666624K)] 2019982K-&gt;1382000K(2064896K), 0.0086070 secs] [Times: user=0.05 sys=0.00, real=0.01 secs] 
+</span></span><span style="display:flex;"><span>2022-08-08T16:35:31.878+0000: [GC (Allocation Failure) [PSYoungGen: 640005K-&gt;2565K(667136K)] 2019440K-&gt;1382000K(2065408K), 0.0086495 secs] [Times: user=0.04 sys=0.00, real=0.01 secs] 
+</span></span><span style="display:flex;"><span>2022-08-08T16:35:32.451+0000: [GC (Allocation Failure) [PSYoungGen: 643589K-&gt;3301K(668672K)] 2023024K-&gt;1382736K(2066944K), 0.0087513 secs] [Times: user=0.04 sys=0.00, real=0.01 secs] 
+</span></span></code></pre></div><p><a href="https://github.com/chewiebug/GCViewer">GCViewer</a>でこのファイルを開くと次のようなグラフが描画される。
+上部がNew領域、下部がOld領域を表し、Old領域の使用量である紫の線が一杯になると黒い線のFull GCが走り、ヒープ使用量の合計である青い線も下がっている。
+この例では徐々にGCでの減り分が少なくなっていき、後半はほとんど真っ黒なので常にFull GCが発生していることが分かる。</p>
+<p><a href="https://www.sambaiz.net/article/35/">JVMのヒープ領域とFull GC - sambaiz-net</a></p>
 
-  
+
+
+
+<div class="img_container"><a href="/article/413/images/gcviewer.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/413/images/gcviewer_hu50019407fe44e1e6ddf2cdf20cf50c0b_564816_600x370_fit_lanczos_3.png" width="600" height="340" alt="GCViewのChart">
+</a></div>
+
+
+<p>頻発するFull GCへの対応としては -XX:NewRatio で New領域の大きさを変えたり、
+-XX:+UseG1GC で性能の良いG1GCにして -XX:InitiatingHeapOccupancyPercent で閾値を下げるというものがあるが、
+今回はGCの性能というより単純にメモリが足りてないように見える。ひょっとするとメモリリークしてるのかもしれない。</p>
+<h2 id="ヒープダンプの調査">ヒープダンプの調査</h2>
+<p>そこで</p>
+<ul>
+<li>-XX:+HeapDumpOnOutOfMemoryError</li>
+<li>-XX:HeapDumpPath=/tmp</li>
+</ul>
+<p>でOOM時にヒープダンプを出して<a href="https://www.eclipse.org/mat/">Eclipse Memory Analyzer (MAT)</a>で見てみる。</p>
+
+
+
+
+<div class="img_container"><a href="/article/413/images/mat.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/413/images/mat_hu4b02f611c27130cbecc1e473e430642a_635770_600x370_fit_lanczos_3.png" width="582" height="370" alt="Leak Suspects">
+</a></div>
+
+
+<p>Leak Suspectsを見てみたが明らかに問題がありそうなオブジェクトは見当たらなかった。こうなると -Xms, -Xmx でヒープメモリを増やすしかなさそうだ。</p>
+<h2 id="参考">参考</h2>
+<p><a href="https://x1.inkenkun.com/archives/372">まじめにJVMチューニング: 第2回 GCログをみる</a></p>
+
+    </div>
+    <div class="share">
+      <div class="cell">
+        <div>share</div>
+        <div>
+          <a class="share-button" href='https://twitter.com/intent/tweet?url=https://www.sambaiz.net/article/413/&text=Java%e3%81%a7%e7%99%ba%e7%94%9f%e3%81%97%e3%81%9fOOM%e3%81%ae%e5%8e%9f%e5%9b%a0%e3%82%92GC%e3%83%ad%e3%82%b0%e3%81%a8%e3%83%92%e3%83%bc%e3%83%97%e3%83%80%e3%83%b3%e3%83%97%e3%81%8b%e3%82%89%e6%8e%a2%e3%82%8b%20-%20sambaiz-net'>
+            <img src="/image/twitter.png" width="40px" height="40px" alt="twitter">
+          </a>
+          <a href="https://b.hatena.ne.jp/entry/" class="share-button hatena-bookmark-button" data-hatena-bookmark-layout="touch" data-hatena-bookmark-width="40" data-hatena-bookmark-height="40" title="このエントリーをはてなブックマークに追加">
+            <img src="https://b.st-hatena.com/images/v4/public/entry-button/button-only@2x.png" alt="このエントリーをはてなブックマークに追加" width="40" height="40" style="border: none;" />
+          </a><script type="text/javascript" src="https://b.st-hatena.com/js/bookmark_button.js" charset="utf-8" async="async"></script>
+        </div>
+      </div>
+    </div>
+  </article>
 </div>
 
 </div>
