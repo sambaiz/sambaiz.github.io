@@ -532,7 +532,7 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 <p><a href="https://spark.apache.org/docs/latest/submitting-applications.html">spark-submit</a>には</p>
 <ul>
 <li>&ndash;master yarn: Hadoopのリソースマネージャーである<a href="https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/YARN.html">YARN</a>をCluster Managerとして用いる</li>
-<li><a href="https://spark.apache.org/docs/latest/cluster-overview.html">&ndash;deploy-mode</a>: SparkContextを生成するDriver Programをクライアントで実行するか、Cluster Managerが管理するクラスタで実行するか。 EMRではclientにするとMaster nodeで実行され、clusterにするとCore nodeで実行<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-spark-optimization.html">される</a>。</li>
+<li><a href="https://spark.apache.org/docs/latest/cluster-overview.html">&ndash;deploy-mode</a>: SparkContextを生成するDriver Programをクライアントで実行するかクラスタ内で実行するか。EMRではclientにするとMaster nodeで実行され、clusterにするとCore nodeで実行<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-spark-optimization.html">される</a>。clientだとコンソール上から<a href="https://aws.amazon.com/premiumsupport/knowledge-center/spark-driver-logs-emr-cluster/">stepログ</a>を見られて便利だが、複数のアプリケーションを同時に動かす場合はclusterが<a href="https://aws.github.io/aws-emr-best-practices/applications/spark/best_practices/#cluster-deploy-mode">適している</a>。</li>
 </ul>
 <p>を渡している。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ aws emr create-cluster <span style="color:#f1fa8c">\
@@ -686,7 +686,8 @@ SparkのマネージドサービスであるGlueと比べると、Glueはサー�
 </a></div>
 
 
-<p>stepの<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-manage-view-web-log-files.html">ログ</a>は<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-debugging.html#emr-plan-debugging-logs-archive">5分ごと</a>にS3の log-uri/cluster-id/steps/step-id/(stdout|stderr).gz に保存されるので次のような関数を定義しておくとコンソールに見に行かなくて済む。</p>
+<p>ログは <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-debugging.html#emr-plan-debugging-logs-archive">5分ごと</a>にS3に保存される。
+&ndash;deploy-mode=client の場合 log-uri/cluster-id/steps/step-id/(stdout|stderr).gz にあるので次のような関数を定義しておくとコンソールに見に行かなくて済む。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ brew install watch
 </span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;function emrlog () { watch -n 300 \&#34;aws emr describe-cluster --cluster-id \${1} | jq &#39;.Cluster | .LogUri + .Id&#39; | sed -e &#39;s/s3n:/s3:/g&#39; | xargs -I{} aws s3 cp \&#34;{}/steps/\$(aws emr list-steps --cluster-id \${1} | jq -r &#39;.Steps[] | select(.Name == \&#34;\${2:-spark-submit}\&#34;) | .Id&#39;)/\${3:-stdout}.gz\&#34; - | gunzip -c | tail -n 20\&#34;; }&#34;</span> &gt;&gt; ~/.bash_profile
 </span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">source</span> ~/.bash_profile

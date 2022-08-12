@@ -533,8 +533,9 @@ To refer to the Glue Data Catalog table, apply <a href="https://docs.aws.amazon.
 <p><a href="https://spark.apache.org/docs/latest/submitting-applications.html">spark-submit</a> is passed:</p>
 <ul>
 <li>&ndash;master yarn: Use <a href="https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/YARN.html">YARN</a>, the resource manager of Hadoop, as a Cluster Manager.</li>
-<li><a href="https://spark.apache.org/docs/latest/cluster-overview.html">&ndash;deploy-mode</a>: Whether to execute the Driver Program that generates SparkContext on the client or in the cluster managed by Cluster Manager.
-In EMR, if it is set to &ldquo;client&rdquo;, the Driver Program is <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-spark-optimization.html">executed</a> on the Master node, and if it is set to &ldquo;cluster&rdquo;, the Driver Program executed on the Core node.</li>
+<li><a href="https://spark.apache.org/docs/latest/cluster-overview.html">&ndash;deploy-mode</a>: Whether to execute the Driver Program that generates SparkContext on the client or in the cluster.
+In EMR, if it is set to &ldquo;client&rdquo;, the Driver Program is <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-spark-optimization.html">executed</a> on the Master node, and if it is set to &ldquo;cluster&rdquo;, the Driver Program executed on the Core node.
+While client mode is handy as <a href="https://aws.amazon.com/premiumsupport/knowledge-center/spark-driver-logs-emr-cluster/">step logs</a> can be seen in the console, if multiple applications run in the cluster simultaneously, cluster mode is <a href="https://aws.github.io/aws-emr-best-practices/applications/spark/best_practices/#cluster-deploy-mode">suitable</a>.</li>
 </ul>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ aws emr create-cluster <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --release-label emr-6.3.1 <span style="color:#f1fa8c">\
@@ -685,7 +686,8 @@ In EMR, if it is set to &ldquo;client&rdquo;, the Driver Program is <a href="htt
 </a></div>
 
 
-<p>Step <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-manage-view-web-log-files.html">logs</a> are stored in the S3 location you specified, log-uri/cluster-id/steps/step-id/(stdout|stderr).gz, <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-debugging.html#emr-plan-debugging-logs-archive">every 5 minutes</a>, so if you define a function like the following, you can see the logs without accessing the management console.</p>
+<p><a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-manage-view-web-log-files.html">Logs</a> are stored in S3 <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-debugging.html#emr-plan-debugging-logs-archive">every 5 minutes</a>.
+If &ndash;deploy-mode=client, they are in log-uri/cluster-id/steps/step-id/(stdout|stderr).gz, so the following function can avoid going to the console to see them.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ brew install watch
 </span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#f1fa8c">&#34;function emrlog () { watch -n 300 \&#34;aws emr describe-cluster --cluster-id \${1} | jq &#39;.Cluster | .LogUri + .Id&#39; | sed -e &#39;s/s3n:/s3:/g&#39; | xargs -I{} aws s3 cp \&#34;{}/steps/\$(aws emr list-steps --cluster-id \${1} | jq -r &#39;.Steps[] | select(.Name == \&#34;\${2:-spark-submit}\&#34;) | .Id&#39;)/\${3:-stdout}.gz\&#34; - | gunzip -c | tail -n 20\&#34;; }&#34;</span> &gt;&gt; ~/.bash_profile
 </span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">source</span> ~/.bash_profile
