@@ -336,8 +336,8 @@
   <meta property='og:title' content="MySQLのtime_zoneとgo-sql-driver/mysqlのlocの関係 - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="DBのタイムゾーンとアプリケーションのタイムゾーンが異なるとき適切なパラメータを渡さないと go-sql-driver/mysql で取得した日時が意図しない値になる">
-  <meta name="twitter:description" content="DBのタイムゾーンとアプリケーションのタイムゾーンが異なるとき適切なパラメータを渡さないと go-sql-driver/mysql で取得した日時が意図しない値になる">
+  <meta name="description" content="go-sql-driver/mysql で MySQL に接続するとき適切なパラメータを渡さないと日時が意図しない値になる">
+  <meta name="twitter:description" content="go-sql-driver/mysql で MySQL に接続するとき適切なパラメータを渡さないと日時が意図しない値になる">
   
   
 
@@ -381,7 +381,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "DBのタイムゾーンとアプリケーションのタイムゾーンが異なるとき適切なパラメータを渡さないと go-sql-driver/mysql で取得した日時が意図しない値になる"
+    "description": "go-sql-driver/mysql で MySQL に接続するとき適切なパラメータを渡さないと日時が意図しない値になる"
   }
 </script>
 </head>
@@ -465,7 +465,7 @@
         <time>2018-10-02</time>
         <a class="tag" href='/tags/database/'>database</a><a class="tag" href='/tags/mysql/'>mysql</a><a class="tag" href='/tags/golang/'>golang</a>
       </div>
-      <p>DBのタイムゾーンとアプリケーションのタイムゾーンが異なるとき適切なパラメータを渡さないと go-sql-driver/mysql で取得した日時が意図しない値になる。</p>
+      <p>go-sql-driver/mysql で MySQL に接続するとき適切なパラメータを渡さないと日時が意図しない値になる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">version</span>();
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">+</span><span style="color:#6272a4">-----------+
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">|</span> <span style="color:#ff79c6">version</span>() <span style="color:#ff79c6">|</span>
@@ -592,14 +592,14 @@ MySQLの NOW() の値とGoの time.Now() の値を DATETIME型 と TIMESTAMP 型
 <li>time.Now(): 2018-10-02 03:43:13 -0800</li>
 <li>set none
 <ul>
-<li>mysql NOW(): 2018-10-02 20:43:13 <strong>Z</strong>, 2018-10-02 20:43:13 Z -&gt; false</li>
+<li>mysql NOW(): 2018-10-02 <strong>20</strong>:43:13 <strong>Z</strong>, 2018-10-02 20:43:13 Z -&gt; false</li>
 <li>go time.Now(): 2018-10-02 20:43:13 Z, 2018-10-02 20:43:13 Z -&gt; false</li>
 </ul>
 </li>
 <li>set loc (mysql&rsquo;s timezone != Local timezone)
 <ul>
 <li>mysql NOW(): 2018-10-02 20:43:13 <strong>-0800</strong>, 2018-10-02 20:43:13 -0800 -&gt; false</li>
-<li>go time.Now(): 2018-10-02 03:43:14 -0800, 2018-10-02 03:43:14 -0800 -&gt; true</li>
+<li>go time.Now(): 2018-10-02 <strong>03</strong>:43:14 -0800, 2018-10-02 03:43:14 -0800 -&gt; true</li>
 </ul>
 </li>
 <li>set loc &amp; time_zone
@@ -612,14 +612,14 @@ MySQLの NOW() の値とGoの time.Now() の値を DATETIME型 と TIMESTAMP 型
 <p>loc は time.Time の タイムゾーンで、付けないと UTC になる。
 これは MySQL サーバーの time_zone には影響せず MySQL の NOW() の値は JST のままなので 20:43 (+0900) が返り、
 これを loc のタイムゾーンの値として扱ってしまう。
-また、Go の time.Now() を格納する場合は loc を 設定すればタイムゾーンが正しくハンドリングされて意図した値が入る。
-time_zone を付けると SET time_zone され MySQLの NOW() が意図した値を返すようになる。</p>
+time_zone を渡すと SET time_zone され MySQLの NOW() が意図した値を返すようになる。</p>
+<p>一方、Go の time.Now() を格納する場合は loc のみでタイムゾーンが正しくハンドリングされて意図した値が入っている。</p>
 <p>DATETIME型 と TIMESTAMP型 については 全ての例において値が一致している。
 これは上にも書いた通り格納時と取得時で time_zone を変えていないためで、
 既に格納されている行の TIMESTAMP型 カラムを time_stamp を渡さないで取得すると意図した値を返さないことがある。</p>
 <h2 id="まとめ">まとめ</h2>
 <p>loc=Local は渡さないと読み書きともに問題があるので必須。
-NOW() や TIMETAMP型 を 扱う際は time_zone も渡さないと意図した値が得られない。
+NOW() や TIMETAMP型 を 扱う際は time_zone も渡さないと意図した値が得られないことがある。
 time.Local と MySQL の time_zone が一致している場合はこの問題は起こらないが、それに依存しているなら明示的に渡すべきだと考えている。</p>
 
     </div>
