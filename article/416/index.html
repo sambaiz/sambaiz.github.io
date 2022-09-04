@@ -336,8 +336,8 @@
   <meta property='og:title' content="EMRクラスタのEC2にFluent BitをインストールしログをNew Relicに送信する - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="Cluster modeでSpark jobを動かすと、ログが step/ 下に出力されないためコンソール上でもログを確認しづらい">
-  <meta name="twitter:description" content="Cluster modeでSpark jobを動かすと、ログが step/ 下に出力されないためコンソール上でもログを確認しづらい">
+  <meta name="description" content="Cluster modeでSpark jobを動かすとログが step/ 下に出力されないためコンソール上でもログを確認しづらい">
+  <meta name="twitter:description" content="Cluster modeでSpark jobを動かすとログが step/ 下に出力されないためコンソール上でもログを確認しづらい">
   
   
 
@@ -381,7 +381,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "Cluster modeでSpark jobを動かすと、ログが step/ 下に出力されないためコンソール上でもログを確認しづらい"
+    "description": "Cluster modeでSpark jobを動かすとログが step/ 下に出力されないためコンソール上でもログを確認しづらい"
   }
 </script>
 </head>
@@ -465,7 +465,7 @@
         <time>2022-09-04</time>
         <a class="tag" href='/tags/aws/'>aws</a><a class="tag" href='/tags/spark/'>spark</a><a class="tag" href='/tags/log/'>log</a><a class="tag" href='/tags/fluentd/'>fluentd</a><a class="tag" href='/tags/newrelic/'>newrelic</a>
       </div>
-      <p>Cluster modeでSpark jobを動かすと、ログが step/ 下に出力されないためコンソール上でもログを確認しづらいこともあり、
+      <p>Cluster modeでSpark jobを動かすとログが step/ 下に出力されないためコンソール上でもログを確認しづらいので、
 EMRのEC2に省メモリ版のFluentdである<a href="https://docs.fluentbit.io/manual/about/fluentd-and-fluent-bit">Fluent Bit</a>をインストールしNew Relicに集約する。</p>
 <p><a href="https://www.sambaiz.net/article/409/">AWS CLIでEMRクラスタを立ち上げSparkのアプリケーションを実行する - sambaiz-net</a></p>
 <p><a href="https://www.sambaiz.net/article/399/">New Relicでインフラやアプリケーションをモニタリングする - sambaiz-net</a></p>
@@ -474,10 +474,9 @@ EMRのEC2に省メモリ版のFluentdである<a href="https://docs.fluentbit.io
 <a href="https://docs.newrelic.com/docs/logs/forward-logs/fluent-bit-plugin-log-forwarding/">New Relicのプラグイン</a>を配置する。</p>
 <p>Fluent Bit 1.9 から <a href="https://docs.fluentbit.io/manual/administration/configuring-fluent-bit/yaml">YAML</a>でも設定ファイルが書けるようになったが、
 現状 not recommended for production とのことなので<a href="https://docs.fluentbit.io/manual/administration/configuring-fluent-bit/classic-mode">旧来の形式</a>で書いている。</p>
-<p>stdout/stderr に出力したログはDriverが動いているCore nodeの /mnt/var/log/hadoop-yarn/containers/application_id/container_id/(stdout|stderr) に出るのでこれを送信する。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ cat install-fluentbit.tsh
-</span></span><span style="display:flex;"><span><span style="color:#6272a4">#!/bin/bash -e</span>
-</span></span><span style="display:flex;"><span>
+<p>Cluster mode では stdout/stderr に出力したログはDriverが動いているCore nodeの /mnt/var/log/hadoop-yarn/containers/application_id/container_id/(stdout|stderr) に出力される。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span><span style="color:#ff79c6">#!/bin/bash -e
+</span></span></span><span style="display:flex;"><span><span style="color:#ff79c6"></span>
 </span></span><span style="display:flex;"><span>sudo tee /etc/yum.repos.d/fluent-bit.repo <span style="color:#f1fa8c">&lt;&lt; EOF &gt; /dev/null
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">[fluent-bit]
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">name = Fluent Bit
@@ -507,6 +506,11 @@ EMRのEC2に省メモリ版のFluentdである<a href="https://docs.fluentbit.io
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">[INPUT]
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    name tail
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    path /mnt/var/log/hadoop-yarn/containers/*/*/stdout
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">[FILTER]
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    name modify
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    mach *
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    add emr_cluster_name $(aws emr list-clusters --query &#34;Clusters[?Id==&#39;$(sudo cat /mnt/var/lib/info/job-flow.json | jq -r &#34;.jobFlowId&#34;)&#39;]&#34; --region &lt;region&gt; | jq -r &#34;.[0].Name&#34;)
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">[OUTPUT]
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    name newrelic
