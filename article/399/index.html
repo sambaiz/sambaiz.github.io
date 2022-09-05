@@ -561,7 +561,7 @@ DashboardやAlertについては全てのユーザーが使える一方<a href="
 
 
 <h3 id="new-relic-flexhttpsdocsnewreliccomjpdocsinfrastructurehost-integrationshost-integrations-listflex-integration-tool-build-your-own-integration"><a href="https://docs.newrelic.com/jp/docs/infrastructure/host-integrations/host-integrations-list/flex-integration-tool-build-your-own-integration/">New Relic Flex</a></h3>
-<p>/etc/newrelic-infra/integrations.d下に次のようなyamlファイルを置くと<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/commands.md">コマンドの出力</a>や<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/url.md">HTTPのレスポンス</a>、<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/file.md">ファイルの内容</a>を定期的に送ることができる。</p>
+<p>/etc/newrelic-infra/integrations.d下に次のようなyamlファイルを置くと<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/commands.md">コマンドの出力</a>や<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/url.md">HTTPのレスポンス</a>、<a href="https://github.com/newrelic/nri-flex/blob/v1.4.4/docs/apis/file.md">ファイルの内容</a>をもとにメトリクスを定期的に送ることができる。</p>
 <p>Fluentdをモニタリングするのにmonitor_agentの値を<a href="https://docs.newrelic.com/docs/data-apis/ingest-apis/telemetry-sdks-report-custom-telemetry-data/">Telemetry SDK</a>で送ることもできるが、この機能を用いれば集約サーバーでアプリケーションを動かす必要がない。</p>
 <p><a href="https://www.sambaiz.net/article/66/">fluentdのmonitor_agentのデータをGoでGoogle Stackdriverに送って監視する - sambaiz-net</a></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span>$ cat /etc/newrelic-infra/integrations.d/fluentd.yml
@@ -574,7 +574,34 @@ DashboardやAlertについては全てのユーザーが使える一方<a href="
 </span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">url</span>: http://localhost:24220/api/plugins.json?@type=forward
 </span></span></code></pre></div><p>次のようなNRQLで値を確認できる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">FROM</span> fluentd <span style="color:#ff79c6">SELECT</span> rate(average(buffer_total_queued_size), <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">minute</span>) FACET <span style="color:#ff79c6">`</span>config.<span style="color:#ff79c6">@</span>id<span style="color:#ff79c6">`</span> TIMESERIES 
-</span></span></code></pre></div><h2 id="apmhttpsdocsnewreliccomdocsapmagentsgo-agentget-startedintroduction-new-relic-go"><a href="https://docs.newrelic.com/docs/apm/agents/go-agent/get-started/introduction-new-relic-go">APM</a></h2>
+</span></span></code></pre></div><h3 id="ログの転送">ログの転送</h3>
+<p>Infrastructure agent によって<a href="https://docs.newrelic.com/docs/logs/forward-logs/forward-your-logs-using-infrastructure-agent/">インストールされる</a> Fluent Bit ほか自前の Fluentd や Logstash の<a href="https://github.com/newrelic/newrelic-fluentd-output">plugin</a>を用いてログを転送できる。</p>
+<p><a href="https://www.sambaiz.net/article/416/">EMRクラスタのEC2にFluent BitをインストールしログをNew Relicに送信する - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ td-agent-gem install fluent-plugin-newrelic
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span><span style="color:#ff79c6">&lt;filter</span> foo<span style="color:#ff79c6">&gt;</span>
+</span></span><span style="display:flex;"><span>  @type record_transformer
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&lt;record&gt;</span>
+</span></span><span style="display:flex;"><span>    service_name ${tag}
+</span></span><span style="display:flex;"><span>    hostname &#34;#{Socket.gethostname}&#34;
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&lt;/record&gt;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;/filter&gt;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;match</span> foo<span style="color:#ff79c6">&gt;</span>
+</span></span><span style="display:flex;"><span>  @type newrelic
+</span></span><span style="display:flex;"><span>  api_key ****
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;/match&gt;</span>
+</span></span></code></pre></div><p>Goの場合logrusのintegrationが提供されていて、これを用いると次のフィールドがログに<a href="https://github.com/newrelic/go-agent/blob/v3.15.2/_integrations/logcontext/logcontext.go#L34">追加され</a>、リクエストトレースとログを紐づけることができるようになる。同様のことを自前で行えば他のloggerも使える。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">AddLinkingMetadata</span>(m <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd;font-style:italic">interface</span>{}, md newrelic.LinkingMetadata) {
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyTraceID, md.TraceID)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeySpanID, md.SpanID)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyEntityName, md.EntityName)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyEntityType, md.EntityType)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyEntityGUID, md.EntityGUID)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyHostname, md.Hostname)
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>ログを紐づけるとErrors Eventからも飛べるようになるので原因調査の際に役立つ。</p>
+<p><a href="https://www.sambaiz.net/article/401/">CloudWatch Logsを介さずにLambdaのテレメトリを行うnewrelic-lambda-extensionとその仕組み - sambaiz-net</a></p>
+<h2 id="apmhttpsdocsnewreliccomdocsapmagentsgo-agentget-startedintroduction-new-relic-go"><a href="https://docs.newrelic.com/docs/apm/agents/go-agent/get-started/introduction-new-relic-go">APM</a></h2>
 <p>Goroutineの数やGCの実行時間といったランタイム情報や、X-Rayのようなリクエストトレースやそのサマリーを見ることができる。
 C, Go, Java, .NET, Node.js, PHP, Python, Rubyのライブラリが提供されている。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ go get github.com/newrelic/go-agent
@@ -633,32 +660,6 @@ C, Go, Java, .NET, Node.js, PHP, Python, Rubyのライブラリが提供され�
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WITH</span> METRIC_FORMAT <span style="color:#f1fa8c">&#39;Custom/{name}&#39;</span> 
 </span></span><span style="display:flex;"><span>  TIMESERIES FACET name
 </span></span></code></pre></div><p><a href="https://www.sambaiz.net/article/408/">NewRelicのMetricsとEventsの特性とNRQLによるクエリ - sambaiz-net</a></p>
-<h2 id="ログの転送httpsdocsnewreliccomdocslogsforward-logsfluentd-plugin-log-forwarding"><a href="https://docs.newrelic.com/docs/logs/forward-logs/fluentd-plugin-log-forwarding/">ログの転送</a></h2>
-<p>FluentdやFluent Bit, Logstashの<a href="https://github.com/newrelic/newrelic-fluentd-output">plugin</a>でログを転送できる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ td-agent-gem install fluent-plugin-newrelic
-</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span><span style="color:#ff79c6">&lt;filter</span> foo<span style="color:#ff79c6">&gt;</span>
-</span></span><span style="display:flex;"><span>  @type record_transformer
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&lt;record&gt;</span>
-</span></span><span style="display:flex;"><span>    service_name ${tag}
-</span></span><span style="display:flex;"><span>    hostname &#34;#{Socket.gethostname}&#34;
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">&lt;/record&gt;</span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;/filter&gt;</span>
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;match</span> foo<span style="color:#ff79c6">&gt;</span>
-</span></span><span style="display:flex;"><span>  @type newrelic
-</span></span><span style="display:flex;"><span>  api_key ****
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;/match&gt;</span>
-</span></span></code></pre></div><p>Goの場合logrusのintegrationが提供されていて、これを用いると次のフィールドがログに<a href="https://github.com/newrelic/go-agent/blob/v3.15.2/_integrations/logcontext/logcontext.go#L34">追加され</a>、リクエストトレースとログを紐づけることができるようになる。同様のことを自前で行えば他のloggerも使える。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">AddLinkingMetadata</span>(m <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd;font-style:italic">interface</span>{}, md newrelic.LinkingMetadata) {
-</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyTraceID, md.TraceID)
-</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeySpanID, md.SpanID)
-</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyEntityName, md.EntityName)
-</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyEntityType, md.EntityType)
-</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyEntityGUID, md.EntityGUID)
-</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">metadataMapField</span>(m, KeyHostname, md.Hostname)
-</span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>ログを紐づけるとErrors Eventからも飛べるようになるので原因調査の際に役立つ。</p>
-<p><a href="https://www.sambaiz.net/article/401/">CloudWatch Logsを介さずにLambdaのテレメトリを行うnewrelic-lambda-extensionとその仕組み - sambaiz-net</a></p>
 <h2 id="参考">参考</h2>
 <p><a href="https://y-ohgi.blog/entry/2020/12/24/NewRelic_%E3%81%A7td-agent%28fluentd%29_%E3%81%AB%E3%83%A1%E3%83%88%E3%83%AA%E3%82%AF%E3%82%B9%E3%82%92%E7%9B%A3%E8%A6%96%E3%81%99%E3%82%8B">NewRelic でtd-agent(fluentd) にメトリクスを監視する - y-ohgi&rsquo;s blog</a></p>
 
