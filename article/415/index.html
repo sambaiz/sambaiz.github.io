@@ -488,7 +488,7 @@
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Log <span style="color:#8be9fd;font-style:italic">struct</span> {
 </span></span><span style="display:flex;"><span>    A <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">string</span>]<span style="color:#8be9fd">int</span>
 </span></span><span style="display:flex;"><span>}
-</span></span><span style="display:flex;"><span>=&gt; {<span style="color:#f1fa8c">&#34;A&#34;</span>:{<span style="color:#f1fa8c">&#34;B&#34;</span>:<span style="color:#bd93f9">10</span>, <span style="color:#f1fa8c">&#34;C&#34;</span>: <span style="color:#bd93f9">20</span>}}
+</span></span><span style="display:flex;"><span>=&gt; {<span style="color:#f1fa8c">&#34;A&#34;</span>:{<span style="color:#f1fa8c">&#34;B&#34;</span>:<span style="color:#bd93f9">10</span>,<span style="color:#f1fa8c">&#34;C&#34;</span>:<span style="color:#bd93f9">20</span>}}
 </span></span></code></pre></div><p>parquetのmetadataは次のようになっておりmapという情報は失われている。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ parquet meta test.parquet
 </span></span><span style="display:flex;"><span>File path:  test.parquet
@@ -509,7 +509,7 @@
 </span></span><span style="display:flex;"><span>     <span style="color:#8be9fd;font-style:italic">type</span>      encodings count     avg size   nulls   min / max
 </span></span><span style="display:flex;"><span>A.B  INT32     S   _     <span style="color:#bd93f9">1</span>         58.00 B    <span style="color:#bd93f9">0</span>       <span style="color:#f1fa8c">&#34;10&#34;</span> / <span style="color:#f1fa8c">&#34;10&#34;</span>
 </span></span><span style="display:flex;"><span>A.C  INT32     S   _     <span style="color:#bd93f9">1</span>         58.00 B    <span style="color:#bd93f9">0</span>       <span style="color:#f1fa8c">&#34;20&#34;</span> / <span style="color:#f1fa8c">&#34;20&#34;</span>
-</span></span></code></pre></div><p>これに対してカラムの型をmapにすると必ず失敗すると思いきや、key,valueをいずれも値の型にするとクエリ自体は成功してしまう。</p>
+</span></span></code></pre></div><p>これに対してカラムの型をmapにすると必ず失敗すると思いきや、key,valueをいずれも値の型にしたときにクエリ自体は成功してしまう。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">select</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">from</span> test
 </span></span><span style="display:flex;"><span><span style="color:#6272a4">-- struct&lt;B:int,C:int&gt; =&gt; {b=10, c=20}
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4">-- map&lt;string,int&gt; =&gt; HIVE_BAD_DATA: Field b&#39;s type INT32 in parquet file s3://***/test.parquet is incompatible with type varchar defined in table schema
@@ -545,8 +545,9 @@
 </span></span><span style="display:flex;"><span>  optional int32 c;
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
 </span></span></code></pre></div><p>エラーを出しているコードを見てみると Presto v0.226 で<a href="https://github.com/prestodb/presto/commit/5d18a1c01d048bec435e587887bf20ffbe9794f8">型のチェック</a>が入ったようで、
-<a href="https://docs.aws.amazon.com/athena/latest/ug/presto-functions.html">v0.217 ベース</a>のAthena v2には反映されていないようだ。
-いずれにせよ期待する結果は返らないのでテーブルのスキーマを明示的に渡す。</p>
+<a href="https://docs.aws.amazon.com/athena/latest/ug/presto-functions.html">v0.217 ベース</a>のAthena v2には反映されていないようだ。</p>
+<h2 id="スキーマを明示した-parquet-の生成">スキーマを明示した parquet の生成</h2>
+<p>いずれにせよ期待する結果は返らないのでテーブルのスキーマを明示的に渡して parquet を生成する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span><span style="color:#ff79c6">from</span> pyspark.sql <span style="color:#ff79c6">import</span> SparkSession
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> pyspark.sql.types <span style="color:#ff79c6">import</span> StructType, StructField, MapType, IntegerType, StringType
 </span></span><span style="display:flex;"><span>
@@ -555,7 +556,7 @@
 </span></span><span style="display:flex;"><span>  schema[<span style="color:#bd93f9">0</span>]<span style="color:#ff79c6">.</span>name <span style="color:#ff79c6">=</span> schema[<span style="color:#bd93f9">0</span>]<span style="color:#ff79c6">.</span>name<span style="color:#ff79c6">.</span>upper()
 </span></span><span style="display:flex;"><span>  df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>read<span style="color:#ff79c6">.</span>schema(schema)<span style="color:#ff79c6">.</span>json(<span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/test.json&#34;</span>)
 </span></span><span style="display:flex;"><span>  df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>parquet(<span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/&#34;</span>, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
-</span></span></code></pre></div><p>すると次のようなparquetが出力され、map&lt;string,int&gt; としてアクセスできるようになった。</p>
+</span></span></code></pre></div><p>すると次のような key, value のフィールドを持つ parquet が出力され、map&lt;string,int&gt; としてアクセスできるようになった。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ parquet meta test.parquet 
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>File path:  test.parquet
@@ -579,6 +580,11 @@
 </span></span><span style="display:flex;"><span>                   <span style="color:#8be9fd;font-style:italic">type</span>      encodings count     avg size   nulls   min / max
 </span></span><span style="display:flex;"><span>A.key_value.key    BINARY    G   _     <span style="color:#bd93f9">2</span>         32.00 B    <span style="color:#bd93f9">0</span>       <span style="color:#f1fa8c">&#34;B&#34;</span> / <span style="color:#f1fa8c">&#34;C&#34;</span>
 </span></span><span style="display:flex;"><span>A.key_value.value  INT32     G   _     <span style="color:#bd93f9">2</span>         40.00 B    <span style="color:#bd93f9">0</span>       <span style="color:#f1fa8c">&#34;10&#34;</span> / <span style="color:#f1fa8c">&#34;20&#34;</span>
+</span></span></code></pre></div><p>ちなみにコード上の key が int だからといってスキーマの型を map&lt;int,int&gt; にすると json の読み込みが org.apache.spark.unsafe.types.UTF8String cannot be cast to java.lang.Integer で失敗する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Log <span style="color:#8be9fd;font-style:italic">struct</span> {
+</span></span><span style="display:flex;"><span>    A <span style="color:#8be9fd;font-style:italic">map</span>[<span style="color:#8be9fd">int</span>]<span style="color:#8be9fd">string</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>=&gt; {<span style="color:#f1fa8c">&#34;A&#34;</span>:{<span style="color:#f1fa8c">&#34;10&#34;</span>:<span style="color:#f1fa8c">&#34;aaa&#34;</span>,<span style="color:#f1fa8c">&#34;20&#34;</span>:<span style="color:#f1fa8c">&#34;bbb&#34;</span>}}
 </span></span></code></pre></div>
     </div>
     <div class="share">
