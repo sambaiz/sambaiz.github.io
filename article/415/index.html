@@ -547,14 +547,16 @@
 </span></span></code></pre></div><p>エラーを出しているコードを見てみると Presto v0.226 で<a href="https://github.com/prestodb/presto/commit/5d18a1c01d048bec435e587887bf20ffbe9794f8">型のチェック</a>が入ったようで、
 <a href="https://docs.aws.amazon.com/athena/latest/ug/presto-functions.html">v0.217 ベース</a>のAthena v2には反映されていないようだ。</p>
 <h2 id="スキーマを明示した-parquet-の生成">スキーマを明示した parquet の生成</h2>
-<p>いずれにせよ期待する結果は返らないのでテーブルのスキーマを明示的に渡して parquet を生成する。</p>
+<p>いずれにせよ期待する結果は返らないのでテーブルのスキーマを明示的に渡して parquet を生成する。
+デフォルトの <a href="https://spark.apache.org/docs/latest/sql-data-sources-json.html#data-source-option">mode=&lsquo;PERMISSIVE&rsquo;</a> だと
+型が一致しないフィールドの値は null になるが、FAILFAST だとエラーになる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span><span style="color:#ff79c6">from</span> pyspark.sql <span style="color:#ff79c6">import</span> SparkSession
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> pyspark.sql.types <span style="color:#ff79c6">import</span> StructType, StructField, MapType, IntegerType, StringType
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">with</span> SparkSession<span style="color:#ff79c6">.</span>builder<span style="color:#ff79c6">.</span>appName(<span style="color:#f1fa8c">&#34;json_to_parquet&#34;</span>)<span style="color:#ff79c6">.</span>getOrCreate() <span style="color:#ff79c6">as</span> spark:
 </span></span><span style="display:flex;"><span>  schema <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>table(<span style="color:#f1fa8c">&#34;default.test&#34;</span>)<span style="color:#ff79c6">.</span>schema <span style="color:#6272a4"># StructType(List(StructField(a,MapType(StringType,IntegerType,true),true)))</span>
 </span></span><span style="display:flex;"><span>  schema[<span style="color:#bd93f9">0</span>]<span style="color:#ff79c6">.</span>name <span style="color:#ff79c6">=</span> schema[<span style="color:#bd93f9">0</span>]<span style="color:#ff79c6">.</span>name<span style="color:#ff79c6">.</span>upper()
-</span></span><span style="display:flex;"><span>  df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>read<span style="color:#ff79c6">.</span>schema(schema)<span style="color:#ff79c6">.</span>json(<span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/test.json&#34;</span>)
+</span></span><span style="display:flex;"><span>  df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>read<span style="color:#ff79c6">.</span>schema(schema)<span style="color:#ff79c6">.</span>json(<span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/test.json&#34;</span>, mode<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;FAILFAST&#39;</span>)
 </span></span><span style="display:flex;"><span>  df<span style="color:#ff79c6">.</span>write<span style="color:#ff79c6">.</span>parquet(<span style="color:#f1fa8c">&#34;s3://&lt;bucket&gt;/&#34;</span>, compression<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;gzip&#34;</span>)
 </span></span></code></pre></div><p>すると次のような key, value のフィールドを持つ parquet が出力され、map&lt;string,int&gt; としてアクセスできるようになった。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ parquet meta test.parquet 
