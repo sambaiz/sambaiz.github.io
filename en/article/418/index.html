@@ -485,45 +485,89 @@
       </div>
       <p><a href="https://github.com/deanishe/awgo">deanishe/awgo</a> is a library to implement scripts running in Alfred Workflows.
 It enables to pass values to the next object with <a href="https://pkg.go.dev/github.com/deanishe/awgo#Feedback.NewItem">NewItem()</a>,
-access <a href="https://pkg.go.dev/github.com/deanishe/awgo/keychain">keychain</a>, and check logs with <a href="https://pkg.go.dev/github.com/deanishe/awgo#MagicAction">MagicAction</a> by passing workflow:log as arguments.</p>
+access <a href="https://pkg.go.dev/github.com/deanishe/awgo/keychain">keychain</a>, and check logs with <a href="https://pkg.go.dev/github.com/deanishe/awgo#MagicAction">MagicAction</a> by calling wf.Args() and passing workflow:log as arguments.</p>
 
 
 
 
 <div class="img_container"><a href="/en/article/418/images/run.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/418/images/run_hu72c09f0a7503a02030d6a8954afbdf60_99714_600x370_fit_lanczos_3.png" width="600" height="159" alt="Execution example">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/418/images/run_hu91f7478b9adceed975d3e41f0d815442_109424_600x370_fit_lanczos_3.png" width="600" height="182" alt="Execution example">
 </a></div>
 
 
+<p>The code is executed every time a character is typed by default, so it would be better to cache results of API calls, etc. as follows.
+There are full codes in <a href="https://github.com/sambaiz/test-alfred-workflow">GitHub</a>.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;flag&#34;</span>
 </span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
 </span></span><span style="display:flex;"><span>	aw <span style="color:#f1fa8c">&#34;github.com/deanishe/awgo&#34;</span>
 </span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/deanishe/awgo/keychain&#34;</span>
 </span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;log&#34;</span>
-</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;strings&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;time&#34;</span>
 </span></span><span style="display:flex;"><span>)
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">var</span> wf <span style="color:#ff79c6">*</span>aw.Workflow
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">var</span> (
+</span></span><span style="display:flex;"><span>	wf     <span style="color:#ff79c6">*</span>aw.Workflow
+</span></span><span style="display:flex;"><span>	action <span style="color:#8be9fd">string</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">const</span> (
+</span></span><span style="display:flex;"><span>	cacheDir            = <span style="color:#f1fa8c">&#34;./cache&#34;</span>
+</span></span><span style="display:flex;"><span>	cacheKey            = <span style="color:#f1fa8c">&#34;time&#34;</span>
+</span></span><span style="display:flex;"><span>	actionSetCredential = <span style="color:#f1fa8c">&#34;set-credential&#34;</span>
+</span></span><span style="display:flex;"><span>	actionLogCredential = <span style="color:#f1fa8c">&#34;log-credential&#34;</span>
+</span></span><span style="display:flex;"><span>)
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">init</span>() {
 </span></span><span style="display:flex;"><span>	wf = aw.<span style="color:#50fa7b">New</span>()
+</span></span><span style="display:flex;"><span>	flag.<span style="color:#50fa7b">StringVar</span>(<span style="color:#ff79c6">&amp;</span>action, <span style="color:#f1fa8c">&#34;action&#34;</span>, <span style="color:#f1fa8c">&#34;&#34;</span>, <span style="color:#f1fa8c">&#34;action to be executed&#34;</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">fetchTime</span>() (time.Time, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>	cache <span style="color:#ff79c6">:=</span> aw.<span style="color:#50fa7b">NewCache</span>(cacheDir)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> !cache.<span style="color:#50fa7b">Expired</span>(cacheKey, time.Second<span style="color:#ff79c6">*</span><span style="color:#bd93f9">20</span>) {
+</span></span><span style="display:flex;"><span>		bytes, err <span style="color:#ff79c6">:=</span> cache.<span style="color:#50fa7b">Load</span>(cacheKey)
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#ff79c6">return</span> time.Time{}, err
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> time.<span style="color:#50fa7b">Parse</span>(time.RFC3339, <span style="color:#8be9fd;font-style:italic">string</span>(bytes))
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	now <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>()
+</span></span><span style="display:flex;"><span>	cache.<span style="color:#50fa7b">Store</span>(cacheKey, []<span style="color:#8be9fd;font-style:italic">byte</span>(now.<span style="color:#50fa7b">Format</span>(time.RFC3339)))
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> now, <span style="color:#ff79c6">nil</span>
 </span></span><span style="display:flex;"><span>}
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">run</span>() {
-</span></span><span style="display:flex;"><span>	kc <span style="color:#ff79c6">:=</span> keychain.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;test-alfred-workflow&#34;</span>)
-</span></span><span style="display:flex;"><span>	kc.<span style="color:#50fa7b">Set</span>(<span style="color:#f1fa8c">&#34;test&#34;</span>, strings.<span style="color:#50fa7b">Join</span>(wf.<span style="color:#50fa7b">Args</span>(), <span style="color:#f1fa8c">&#34;, &#34;</span>))
+</span></span><span style="display:flex;"><span>	wf.<span style="color:#50fa7b">Args</span>()
+</span></span><span style="display:flex;"><span>	flag.<span style="color:#50fa7b">Parse</span>()
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>	password, err <span style="color:#ff79c6">:=</span> kc.<span style="color:#50fa7b">Get</span>(<span style="color:#f1fa8c">&#34;test&#34;</span>)
-</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	kc <span style="color:#ff79c6">:=</span> keychain.<span style="color:#50fa7b">New</span>(<span style="color:#f1fa8c">&#34;test-alfred-workflow&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> action <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;&#34;</span> {
+</span></span><span style="display:flex;"><span>		wf.<span style="color:#50fa7b">NewItem</span>(<span style="color:#f1fa8c">&#34;Set credential&#34;</span>).<span style="color:#50fa7b">Arg</span>(actionSetCredential, flag.<span style="color:#50fa7b">Arg</span>(<span style="color:#bd93f9">0</span>)).<span style="color:#50fa7b">Valid</span>(<span style="color:#8be9fd;font-style:italic">len</span>(flag.<span style="color:#50fa7b">Arg</span>(<span style="color:#bd93f9">0</span>)) &gt; <span style="color:#bd93f9">0</span>)
+</span></span><span style="display:flex;"><span>		wf.<span style="color:#50fa7b">NewItem</span>(<span style="color:#f1fa8c">&#34;Log credential&#34;</span>).<span style="color:#50fa7b">Arg</span>(actionLogCredential).<span style="color:#50fa7b">Valid</span>(<span style="color:#ff79c6">true</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		t, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">fetchTime</span>()
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>			wf.<span style="color:#50fa7b">FatalError</span>(err)
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		wf.<span style="color:#50fa7b">NewItem</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;now: %s, cache: %s&#34;</span>, time.<span style="color:#50fa7b">Now</span>().<span style="color:#50fa7b">Format</span>(<span style="color:#f1fa8c">&#34;15:04:05&#34;</span>), t.<span style="color:#50fa7b">Format</span>(<span style="color:#f1fa8c">&#34;15:04:05&#34;</span>)))
+</span></span><span style="display:flex;"><span>		wf.<span style="color:#50fa7b">SendFeedback</span>()
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span>
 </span></span><span style="display:flex;"><span>	}
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>	log.<span style="color:#50fa7b">Println</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;password: %s&#34;</span>, password))
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>	wf.<span style="color:#50fa7b">NewItem</span>(<span style="color:#f1fa8c">&#34;show password&#34;</span>).<span style="color:#50fa7b">Arg</span>(password).<span style="color:#50fa7b">Valid</span>(<span style="color:#ff79c6">true</span>)
-</span></span><span style="display:flex;"><span>	wf.<span style="color:#50fa7b">NewItem</span>(<span style="color:#f1fa8c">&#34;password is secret&#34;</span>).<span style="color:#50fa7b">Arg</span>(<span style="color:#f1fa8c">&#34;:D&#34;</span>).<span style="color:#50fa7b">Valid</span>(<span style="color:#ff79c6">true</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">switch</span> action {
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">case</span> actionSetCredential:
+</span></span><span style="display:flex;"><span>		kc.<span style="color:#50fa7b">Set</span>(<span style="color:#f1fa8c">&#34;test&#34;</span>, flag.<span style="color:#50fa7b">Arg</span>(<span style="color:#bd93f9">0</span>))
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">case</span> actionLogCredential:
+</span></span><span style="display:flex;"><span>		cred, err <span style="color:#ff79c6">:=</span> kc.<span style="color:#50fa7b">Get</span>(<span style="color:#f1fa8c">&#34;test&#34;</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>			wf.<span style="color:#50fa7b">FatalError</span>(err)
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		log.<span style="color:#50fa7b">Println</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;credenital: %s&#34;</span>, cred))
+</span></span><span style="display:flex;"><span>	}
 </span></span><span style="display:flex;"><span>	wf.<span style="color:#50fa7b">SendFeedback</span>()
 </span></span><span style="display:flex;"><span>}
 </span></span><span style="display:flex;"><span>
@@ -536,7 +580,7 @@ access <a href="https://pkg.go.dev/github.com/deanishe/awgo/keychain">keychain</
 
 
 <div class="img_container"><a href="/en/article/418/images/workflow.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/418/images/workflow_hu88a816a7773090caf00ffe07e1760d8b_661622_600x370_fit_lanczos_3.png" width="600" height="250" alt="Workflow">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/418/images/workflow_hu2fdb8f913416f5de96ec37d60078b5c4_285065_600x370_fit_lanczos_3.png" width="414" height="370" alt="Workflow">
 </a></div>
 
 
@@ -548,7 +592,7 @@ access <a href="https://pkg.go.dev/github.com/deanishe/awgo/keychain">keychain</
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#50fa7b">install</span><span style="color:#ff79c6">:</span> package
 </span></span><span style="display:flex;"><span>	open test.alfredworkflow
-</span></span></code></pre></div><p>The keyword and the command can be set on Script Filter.</p>
+</span></span></code></pre></div><p>The keyword and the command can be set on Script Filter, and arguments passed by the previous element can be referred to like ./test-alfred-workflow -action &ldquo;$1&rdquo; &ldquo;$2&rdquo;.</p>
 
 
 
