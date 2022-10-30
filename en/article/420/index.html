@@ -331,9 +331,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Develop Spark Applications in Scala and perform remote debugging on EMR - sambaiz-net</title>
-  <meta name="twitter:title" content="Develop Spark Applications in Scala and perform remote debugging on EMR - sambaiz-net">
-  <meta property='og:title' content="Develop Spark Applications in Scala and perform remote debugging on EMR - sambaiz-net">
+  <title>Develop Spark Applications in Scala, deploy with GitHub Actions, and perform remote debugging on EMR - sambaiz-net</title>
+  <meta name="twitter:title" content="Develop Spark Applications in Scala, deploy with GitHub Actions, and perform remote debugging on EMR - sambaiz-net">
+  <meta property='og:title' content="Develop Spark Applications in Scala, deploy with GitHub Actions, and perform remote debugging on EMR - sambaiz-net">
   <meta property="og:type" content="article">
   
   <meta name="description" content="It can be performed remote debugging without inserting codes with JDWP, and written easily because Spark API is close to the standard library&#39;s one">
@@ -366,7 +366,7 @@
       "@type":"WebPage",
       "@id": "https://www.sambaiz.net/"
     },
-    "headline": "Develop Spark Applications in Scala and perform remote debugging on EMR",
+    "headline": "Develop Spark Applications in Scala, deploy with GitHub Actions, and perform remote debugging on EMR",
     "datePublished": "2022-10-21T23:36:00JST",
     "dateModified": "2022-10-21T23:36:00JST",
     "author": {
@@ -479,7 +479,7 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>Develop Spark Applications in Scala and perform remote debugging on EMR</h1>
+        <h1>Develop Spark Applications in Scala, deploy with GitHub Actions, and perform remote debugging on EMR</h1>
         <time>2022-10-21</time>
         <a class="tag" href='/en/tags/spark/'>spark</a><a class="tag" href='/en/tags/scala/'>scala</a><a class="tag" href='/en/tags/aws/'>aws</a>
       </div>
@@ -561,6 +561,40 @@ Moreover, it also has the advantage that can perform remote debugging without in
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>1,2,3
 </span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><h2 id="deploy">Deploy</h2>
+<p>Upload the jar file to S3 with GitHub Actions.</p>
+<p><a href="https://www.sambaiz.net/en/article/421/">Create a role that can assume with OIDC from GitHub Actions with CDK - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span>$ cat .github/workflows/ci.yml 
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">name</span>: CI
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">on</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">push</span>:
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">env</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">DEPLOY_ROLE_NAME</span>: <span style="color:#f1fa8c">&#34;arn:aws:iam::&lt;aws_account_id&gt;:role/ScalaSparkCiRemoteDebugStack_DeployRole&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">DEPLOY_BUCKET_NAME</span>: <span style="color:#f1fa8c">&#34;scalasparkciremotedebugstack-&lt;aws_account_id&gt;-deploy-bucket&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">AWS_REGION</span>: <span style="color:#f1fa8c">&#34;ap-northeast-1&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">permissions</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">id-token</span>: write <span style="color:#6272a4"># This is required for requesting the JWT</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">contents</span>: read  <span style="color:#6272a4"># This is required for actions/checkout</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">jobs</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">test</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">runs-on</span>: ubuntu-latest
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">steps</span>:
+</span></span><span style="display:flex;"><span>      - <span style="color:#ff79c6">name</span>: Checkout
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">uses</span>: actions/checkout@v2
+</span></span><span style="display:flex;"><span>      - <span style="color:#ff79c6">name</span>: Setup JDK
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">uses</span>: actions/setup-java@v3
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">with</span>:
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">distribution</span>: temurin
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">java-version</span>: <span style="color:#bd93f9">8</span>
+</span></span><span style="display:flex;"><span>      - <span style="color:#ff79c6">name</span>: Creates a jar file
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">run</span>: sbt package
+</span></span><span style="display:flex;"><span>      - <span style="color:#ff79c6">name</span>: Configure AWS Credentials
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">uses</span>: aws-actions/configure-aws-credentials@v1
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">with</span>:
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">role-to-assume</span>: ${{ env.DEPLOY_ROLE_NAME }}
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">aws-region</span>: ${{ env.AWS_REGION }}
+</span></span><span style="display:flex;"><span>      - <span style="color:#ff79c6">name</span>: Deploy the jar file
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">run</span>: aws s3 cp target/scala-2.12/simple-project_2.12-1.0.jar s3://${{ env.DEPLOY_BUCKET_NAME }}/
 </span></span></code></pre></div><h2 id="remote-debugging">Remote debugging</h2>
 <p>With preventing the application from running until a debugger connects with server=y,suspend=y, spark-submit to EMR.</p>
 <p><a href="https://www.sambaiz.net/en/article/411/">Debug a Java application running on a remote machine by enabling JDWP - sambaiz-net</a></p>
@@ -601,7 +635,7 @@ If handshake failed occurs, check the port number is correct and so on.</p>
       <div class="cell">
         <div>share</div>
         <div>
-          <a class="share-button" href='https://twitter.com/intent/tweet?url=https://www.sambaiz.net/en/article/420/&text=Develop%20Spark%20Applications%20in%20Scala%20and%20perform%20remote%20debugging%20on%20EMR%20-%20sambaiz-net'>
+          <a class="share-button" href='https://twitter.com/intent/tweet?url=https://www.sambaiz.net/en/article/420/&text=Develop%20Spark%20Applications%20in%20Scala,%20deploy%20with%20GitHub%20Actions,%20and%20perform%20remote%20debugging%20on%20EMR%20-%20sambaiz-net'>
             <img src="/image/twitter.png" width="40px" height="40px" alt="twitter">
           </a>
           <a href="https://b.hatena.ne.jp/entry/" class="share-button hatena-bookmark-button" data-hatena-bookmark-layout="touch" data-hatena-bookmark-width="40" data-hatena-bookmark-height="40" title="このエントリーをはてなブックマークに追加">
