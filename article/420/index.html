@@ -489,7 +489,23 @@ Python は データ分析や機械学習のスキルセットと親和性が高
 <p>Scala は 敷居が高いとされがちだが、Spark の API を呼ぶという点では Python とさほど変わらない。
 ただ、もし Scala の経験があれば API が 標準ライブラリと近しいので書きやすく感じると思う。
 また、JDWP によってコードに手を入れることなくリモートデバッグができるのも大きい。</p>
-<h2 id="scalaの環境構築httpsdocsscala-langorggetting-startedindexhtml"><a href="https://docs.scala-lang.org/getting-started/index.html">Scalaの環境構築</a></h2>
+<p>Spark 3.2.0 から <a href="https://spark.apache.org/docs/latest/index.html#downloading">Scala 2.12/2.13</a> 対応になったので、
+<a href="https://www.scala-lang.org/blog/2021/04/08/scala-3-in-sbt.html#using-scala-213-libraries-in-scala-3">CrossVersion.for3Use2_13</a> によって
+Scala 3 で追加された <a href="https://docs.scala-lang.org/scala3/reference/enums/enums.html">enum</a> や <a href="https://docs.scala-lang.org/scala3/reference/contextual/extension-methods.html">extension</a>
+が使えるかと思いきや、依然デフォルトのバージョンは 2.12 のようで、実際 EMR の Spark も 2.12 でビルドされており現状動かなかった。</p>
+<p><a href="https://www.sambaiz.net/article/423/">Scala 2/3 の列挙型と既存の型へのフィールドの追加 - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ spark-shell --version
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>Using Scala version 2.12.15, OpenJDK 64-Bit Server VM, 1.8.0_342
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ spark-submit --class &#34;TestApp&#34; --master &#34;local[4]&#34; target/scala-3.2.1/simple-project_3-1.0.jar
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>Exception in thread &#34;main&#34; java.lang.NoSuchMethodError: &#39;java.lang.Object scala.Predef$.refArrayOps(java.lang.Object[])&#39;
+</span></span><span style="display:flex;"><span>        at TestApp$.main(Main.scala:6)
+</span></span><span style="display:flex;"><span>        at TestApp.main(Main.scala)
+</span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><h2 id="scalaの環境構築httpsdocsscala-langorggetting-startedindexhtml"><a href="https://docs.scala-lang.org/getting-started/index.html">Scalaの環境構築</a></h2>
 <p><a href="https://get-coursier.io/docs/cli-setup">cs setup</a> で sbt などをインストールする。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ brew install coursier/formulas/coursier <span style="color:#ff79c6">&amp;&amp;</span> cs setup
 </span></span><span style="display:flex;"><span>...
@@ -531,14 +547,14 @@ Python は データ分析や機械学習のスキルセットと親和性が高
 </span></span><span style="display:flex;"><span>version :<span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;1.0&#34;</span>
 </span></span><span style="display:flex;"><span>scalaVersion :<span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;2.12.17&#34;</span>
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">libraryDependencies</span> <span style="color:#ff79c6">+=</span> <span style="color:#f1fa8c">&#34;org.apache.spark&#34;</span> %% <span style="color:#f1fa8c">&#34;spark-sql&#34;</span> % <span style="color:#f1fa8c">&#34;3.3.0&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">libraryDependencies</span> <span style="color:#ff79c6">+=</span> <span style="color:#f1fa8c">&#34;org.apache.spark&#34;</span> %% <span style="color:#f1fa8c">&#34;spark-sql&#34;</span> % <span style="color:#f1fa8c">&#34;3.3.0&#34;</span> % <span style="color:#f1fa8c">&#34;provided&#34;</span>
 </span></span></code></pre></div><p>簡単なSQLを実行してみる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> org.apache.spark.sql.SparkSession
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">object</span> <span style="color:#50fa7b">TestApp</span> <span style="color:#ff79c6">{</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> main<span style="color:#ff79c6">(</span>args<span style="color:#ff79c6">:</span> <span style="color:#8be9fd">Array</span><span style="color:#ff79c6">[</span><span style="color:#8be9fd">String</span><span style="color:#ff79c6">])</span> <span style="color:#ff79c6">{</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">val</span> spark <span style="color:#ff79c6">=</span> <span style="color:#50fa7b">SparkSession</span><span style="color:#ff79c6">.</span>builder<span style="color:#ff79c6">.</span>appName<span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;Test Application&#34;</span><span style="color:#ff79c6">).</span>getOrCreate<span style="color:#ff79c6">()</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">var</span> out <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql<span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;SELECT 1 as a, 2 as b, 3 as c&#34;</span><span style="color:#ff79c6">).</span>collect<span style="color:#ff79c6">().</span>map<span style="color:#ff79c6">(</span>row <span style="color:#ff79c6">=&gt;</span> row<span style="color:#ff79c6">.</span>mkString<span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;,&#34;</span><span style="color:#ff79c6">))</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">val</span> out <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>sql<span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;SELECT 1 as a, 2 as b, 3 as c&#34;</span><span style="color:#ff79c6">).</span>collect<span style="color:#ff79c6">().</span>map<span style="color:#ff79c6">(</span>row <span style="color:#ff79c6">=&gt;</span> row<span style="color:#ff79c6">.</span>mkString<span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;,&#34;</span><span style="color:#ff79c6">))</span>
 </span></span><span style="display:flex;"><span>    println<span style="color:#ff79c6">(</span>out<span style="color:#ff79c6">.</span>head<span style="color:#ff79c6">)</span>
 </span></span><span style="display:flex;"><span>    spark<span style="color:#ff79c6">.</span>stop<span style="color:#ff79c6">()</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">}</span>
@@ -622,6 +638,8 @@ handshake failed する場合はポートが正しいかなどを確認する。
 </a></div>
 
 
+<h2 id="参考">参考</h2>
+<p><a href="https://www.47deg.com/blog/using-scala-3-with-spark/">Using Scala 3 with Spark | 47 Degrees</a></p>
 
     </div>
     <div class="share">
