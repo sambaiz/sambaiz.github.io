@@ -490,7 +490,7 @@ Airflow の豊富な機能や、AWSを含むサードパーティの <a href="ht
 <p><a href="https://www.sambaiz.net/article/425/">Docker Compose で Apache Airflow を起動しワークフローを実行する - sambaiz-net</a></p>
 <p>Step Functions は現状ワークフローの途中からの実行をサポートしていないため長いワークフローの再実行が大変だったり、
 EmrAddStep の args のような Object の値の配列に input の値を含めたい場合に Lambda を挟んで配列に加工する必要があったりするので、
-それらに不便を感じている場合は移行すると良いかもしれない。</p>
+それらに不便を感じている場合は移行するのも一つの手だと思う。</p>
 <p><a href="https://www.sambaiz.net/article/332/">CDKでStep Functionsによるワークフローを構築する - sambaiz-net</a></p>
 <h2 id="cdk-による環境の作成">CDK による環境の作成</h2>
 <p><a href="https://docs.aws.amazon.com/mwaa/latest/userguide/quick-start.html">Quick start</a> にある CloudFormation のテンプレートを参考に CDK のコードを記述していく。</p>
@@ -505,7 +505,11 @@ EmrAddStep の args のような Object の値の配列に input の値を含め
 <li>DAG のソースや requirements.txt を置くS3 Bucket</li>
 <li><a href="https://docs.aws.amazon.com/mwaa/latest/userguide/mwaa-create-role.html">Execution Role</a>
 <ul>
-<li>s3</li>
+<li>s3
+<ul>
+<li>blockPublicAccess がないと Unable to check PublicAccessBlock configuration になる</li>
+</ul>
+</li>
 <li>cloudwatch: メトリクスとログの送信</li>
 <li>sqs: タスクのキューイング</li>
 <li>kms: データの暗号化</li>
@@ -563,7 +567,7 @@ EmrAddStep の args のような Object の値の配列に input の値を含め
 </span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">new</span> iam.PolicyStatement({
 </span></span><span style="display:flex;"><span>              effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
 </span></span><span style="display:flex;"><span>              actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;airflow:PublishMetrics&#39;</span>],
-</span></span><span style="display:flex;"><span>              resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:airflow:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.region<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:environment/$</span><span style="color:#f1fa8c">${</span>mwaaEnvironmentName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>]
+</span></span><span style="display:flex;"><span>              resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:airflow:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.region<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:environment/</span><span style="color:#f1fa8c">${</span>mwaaEnvironmentName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>]
 </span></span><span style="display:flex;"><span>            }),
 </span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">new</span> iam.PolicyStatement({
 </span></span><span style="display:flex;"><span>              effect: <span style="color:#8be9fd">iam.Effect.DENY</span>,
@@ -645,14 +649,16 @@ EmrAddStep の args のような Object の値の配列に input の値を含め
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>environmentClass ごとにデフォルトで含まれるスケジューラー/ワーカーの数が異なり、それを超える分は追加料金が発生する。</p>
 <p>そのままでは 実行時に渡す config で params を上書きできなかったので
-airflowConfigurationOptions で <a href="https://airflow.apache.org/docs/apache-airflow/2.2.2/configurations-ref.html#dag-run-conf-overrides-params">core.dag_run_conf_overrides_params</a> を true にしている。</p>
+airflowConfigurationOptions で <a href="https://airflow.apache.org/docs/apache-airflow/2.2.2/configurations-ref.html#dag-run-conf-overrides-params">core.dag_run_conf_overrides_params</a> を true にしている。
+config の値は環境変数 AIRFLOW__{SECTION}__{KEY} で<a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/howto/set-config.html">取得できる</a>。</p>
 <p>Environment の作成には数十分かかる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> mwaaEnvironment <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> mwaa.CfnEnvironment(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;MwaaEnvironment&#39;</span>, {
 </span></span><span style="display:flex;"><span>  name: <span style="color:#8be9fd">mwaaEnvironmentName</span>,
 </span></span><span style="display:flex;"><span>  airflowVersion<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;2.2.2&#39;</span>,
 </span></span><span style="display:flex;"><span>  airflowConfigurationOptions<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#39;core.dag_run_conf_overrides_params&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;true&#39;</span>
-</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;core.dag_run_conf_overrides_params&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;true&#39;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;app.env&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;prd&#39;</span>, <span style="color:#6272a4">// os.getenv(&#34;AIRFLOW__APP__ENV&#34;)
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>  },
 </span></span><span style="display:flex;"><span>   
 </span></span><span style="display:flex;"><span>  sourceBucketArn: <span style="color:#8be9fd">sourceBucket.bucketArn</span>,
 </span></span><span style="display:flex;"><span>  executionRoleArn: <span style="color:#8be9fd">executionRole.roleArn</span>,

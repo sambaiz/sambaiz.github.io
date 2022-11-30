@@ -504,7 +504,11 @@ If you feel inconvenienced with such things now, migrating to MWAA may be a opti
 <li>S3 Bucket that DAG&rsquo;s sources and requirements.txt place</li>
 <li><a href="https://docs.aws.amazon.com/mwaa/latest/userguide/mwaa-create-role.html">Execution Role</a>
 <ul>
-<li>s3</li>
+<li>s3
+<ul>
+<li>if no blockPublicAccess, &ldquo;Unable to check PublicAccessBlock configuration&rdquo; error occurs</li>
+</ul>
+</li>
 <li>cloudwatch: sending metrics and logs</li>
 <li>sqs: queueing tasks</li>
 <li>kms: encrypting data</li>
@@ -561,7 +565,7 @@ If you feel inconvenienced with such things now, migrating to MWAA may be a opti
 </span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">new</span> iam.PolicyStatement({
 </span></span><span style="display:flex;"><span>              effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
 </span></span><span style="display:flex;"><span>              actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;airflow:PublishMetrics&#39;</span>],
-</span></span><span style="display:flex;"><span>              resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:airflow:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.region<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:environment/$</span><span style="color:#f1fa8c">${</span>mwaaEnvironmentName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>]
+</span></span><span style="display:flex;"><span>              resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:airflow:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.region<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:environment/</span><span style="color:#f1fa8c">${</span>mwaaEnvironmentName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>]
 </span></span><span style="display:flex;"><span>            }),
 </span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">new</span> iam.PolicyStatement({
 </span></span><span style="display:flex;"><span>              effect: <span style="color:#8be9fd">iam.Effect.DENY</span>,
@@ -642,14 +646,16 @@ If you feel inconvenienced with such things now, migrating to MWAA may be a opti
 </span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>Each environmentClass has a different number of schedulers/workers included by default, and additional resources are charged an extra fee.</p>
-<p>As it is, params couldn&rsquo;t be overwritten with configs passed on triggered, so set <a href="https://airflow.apache.org/docs/apache-airflow/2.2.2/configurations-ref.html#dag-run-conf-overrides-params">core.dag_run_conf_overrides_params</a> to true with airflowConfigurationOptions.</p>
+<p>As it is, params couldn&rsquo;t be overwritten with configs passed on triggered, so set <a href="https://airflow.apache.org/docs/apache-airflow/2.2.2/configurations-ref.html#dag-run-conf-overrides-params">core.dag_run_conf_overrides_params</a> to true with airflowConfigurationOptions.
+Configs can be <a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/howto/set-config.html">obtained</a> with AIRFLOW__{SECTION}__{KEY} environment variables.</p>
 <p>Creating an environment takes tens of minutes.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> mwaaEnvironment <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> mwaa.CfnEnvironment(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;MwaaEnvironment&#39;</span>, {
 </span></span><span style="display:flex;"><span>  name: <span style="color:#8be9fd">mwaaEnvironmentName</span>,
 </span></span><span style="display:flex;"><span>  airflowVersion<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;2.2.2&#39;</span>,
 </span></span><span style="display:flex;"><span>  airflowConfigurationOptions<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#39;core.dag_run_conf_overrides_params&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;true&#39;</span>
-</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;core.dag_run_conf_overrides_params&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;true&#39;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;app.env&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;prd&#39;</span>, <span style="color:#6272a4">// os.getenv(&#34;AIRFLOW__APP__ENV&#34;)
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>  },
 </span></span><span style="display:flex;"><span>   
 </span></span><span style="display:flex;"><span>  sourceBucketArn: <span style="color:#8be9fd">sourceBucket.bucketArn</span>,
 </span></span><span style="display:flex;"><span>  executionRoleArn: <span style="color:#8be9fd">executionRole.roleArn</span>,
