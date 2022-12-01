@@ -708,50 +708,89 @@ config の値は環境変数 AIRFLOW__{SECTION}__{KEY} で<a href="https://airfl
 </span></span></code></pre></div><h2 id="ワークフローの実行">ワークフローの実行</h2>
 <p><a href="https://airflow.apache.org/docs/apache-airflow-providers-amazon/6.1.0/_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrAddStepsOperator">EmrAddStepsOperator</a> で EMR クラスタに step を追加し
 <a href="https://airflow.apache.org/docs/apache-airflow-providers-amazon/6.1.0/_api/airflow/providers/amazon/aws/sensors/emr/index.html#airflow.providers.amazon.aws.sensors.emr.EmrStepSensor">EmrStepSensor</a> で完了まで待つ次のコードを
-dagS3Path にアップロードする。Step Functions の <a href="https://docs.aws.amazon.com/step-functions/latest/dg/connect-emr.html">elasticmapreduce:addStep.sync</a> 相当の処理だが、タスクが失敗しても step がキャンセルされない。</p>
+dagS3Path にアップロードする。Step Functions の <a href="https://docs.aws.amazon.com/step-functions/latest/dg/connect-emr.html">elasticmapreduce:addStep.sync</a> 相当の処理だが、タスクが失敗しても step がキャンセルされない。
+Operator と Sensor を TaskGroup にまとめると DAG が見やすい。</p>
+
+
+
+
+<div class="img_container"><a href="/article/428/images/taskgroup.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/428/images/taskgroup_hu98ae7cb84e3423cf896c965e80ccf842_31798_600x370_fit_lanczos_3.png" width="600" height="183" alt="TaskGroup">
+</a></div>
+
+
 <p><a href="https://www.sambaiz.net/article/409/">AWS CLIでEMRクラスタを立ち上げSparkのアプリケーションを実行する - sambaiz-net</a></p>
 <p><a href="https://docs.aws.amazon.com/mwaa/latest/userguide/connections-packages.html#connections-packages-table-222">Airflow v2.2.2</a> にインストールされている apache-airflow-providers-amazon は <a href="apache-airflow-providers-amazon">v2.4.0</a> と少し古いためモジュール名が異なっている。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>$ cat test<span style="color:#ff79c6">.</span>pyfrom datetime <span style="color:#ff79c6">import</span> datetime
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>$ cat test<span style="color:#ff79c6">.</span>py
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> datetime <span style="color:#ff79c6">import</span> datetime
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> airflow <span style="color:#ff79c6">import</span> DAG
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> airflow.providers.amazon.aws.operators.emr_add_steps <span style="color:#ff79c6">import</span> EmrAddStepsOperator
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> airflow.providers.amazon.aws.sensors.emr_step <span style="color:#ff79c6">import</span> EmrStepSensor
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> airflow.utils.task_group <span style="color:#ff79c6">import</span> TaskGroup
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">with</span> DAG(
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;test&#39;</span>,
-</span></span><span style="display:flex;"><span>        default_args<span style="color:#ff79c6">=</span>{},
-</span></span><span style="display:flex;"><span>        description<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;Test DAG&#39;</span>,
-</span></span><span style="display:flex;"><span>        start_date<span style="color:#ff79c6">=</span>datetime(<span style="color:#bd93f9">2022</span>, <span style="color:#bd93f9">11</span>, <span style="color:#bd93f9">17</span>),
-</span></span><span style="display:flex;"><span>        params<span style="color:#ff79c6">=</span>{
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#34;cluster_id&#34;</span>: <span style="color:#f1fa8c">&#34;j-xxxxxxxxx&#34;</span>
-</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#39;test&#39;</span>,
+</span></span><span style="display:flex;"><span>  default_args<span style="color:#ff79c6">=</span>{},
+</span></span><span style="display:flex;"><span>  start_date<span style="color:#ff79c6">=</span>datetime(<span style="color:#bd93f9">2022</span>, <span style="color:#bd93f9">11</span>, <span style="color:#bd93f9">17</span>),
+</span></span><span style="display:flex;"><span>  params<span style="color:#ff79c6">=</span>{
+</span></span><span style="display:flex;"><span>     <span style="color:#f1fa8c">&#34;cluster_id&#34;</span>: <span style="color:#f1fa8c">&#34;j-3C4OVZL6MAM6H&#34;</span>
+</span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>) <span style="color:#ff79c6">as</span> dag:
-</span></span><span style="display:flex;"><span>    clusterId <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;{{ params.cluster_id }}&#39;</span>
+</span></span><span style="display:flex;"><span>  clusterId <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;{{ params.cluster_id }}&#39;</span>
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>    step_adder <span style="color:#ff79c6">=</span> EmrAddStepsOperator(
-</span></span><span style="display:flex;"><span>        task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;add_steps&#34;</span>,
-</span></span><span style="display:flex;"><span>        job_flow_id<span style="color:#ff79c6">=</span>clusterId,
-</span></span><span style="display:flex;"><span>        steps<span style="color:#ff79c6">=</span>[
-</span></span><span style="display:flex;"><span>            {
-</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#34;Name&#34;</span>: <span style="color:#f1fa8c">&#34;calculate_pi&#34;</span>,
-</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#34;ActionOnFailure&#34;</span>: <span style="color:#f1fa8c">&#34;CONTINUE&#34;</span>,
-</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#34;HadoopJarStep&#34;</span>: {
-</span></span><span style="display:flex;"><span>                    <span style="color:#f1fa8c">&#34;Jar&#34;</span>: <span style="color:#f1fa8c">&#34;command-runner.jar&#34;</span>,
-</span></span><span style="display:flex;"><span>                    <span style="color:#f1fa8c">&#34;Args&#34;</span>: [<span style="color:#f1fa8c">&#34;/usr/lib/spark/bin/run-example&#34;</span>, <span style="color:#f1fa8c">&#34;SparkPi&#34;</span>, <span style="color:#f1fa8c">&#34;10&#34;</span>],
-</span></span><span style="display:flex;"><span>                },
-</span></span><span style="display:flex;"><span>            }
-</span></span><span style="display:flex;"><span>        ])
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>    step_checker <span style="color:#ff79c6">=</span> EmrStepSensor(
-</span></span><span style="display:flex;"><span>        task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;watch_step&#34;</span>,
-</span></span><span style="display:flex;"><span>        job_flow_id<span style="color:#ff79c6">=</span>clusterId,
-</span></span><span style="display:flex;"><span>        step_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;{{ ti.xcom_pull(task_ids=&#39;add_steps&#39;, key=&#39;return_value&#39;)[0] }}&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">with</span> TaskGroup(<span style="color:#f1fa8c">&#34;app1&#34;</span>) <span style="color:#ff79c6">as</span> app1:
+</span></span><span style="display:flex;"><span>    add_app1_step <span style="color:#ff79c6">=</span> EmrAddStepsOperator(
+</span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;add_app1_step&#34;</span>,
+</span></span><span style="display:flex;"><span>      job_flow_id<span style="color:#ff79c6">=</span>clusterId,
+</span></span><span style="display:flex;"><span>      steps<span style="color:#ff79c6">=</span>[
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;Name&#34;</span>: <span style="color:#f1fa8c">&#34;calculate_pi&#34;</span>,
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;ActionOnFailure&#34;</span>: <span style="color:#f1fa8c">&#34;CONTINUE&#34;</span>,
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;HadoopJarStep&#34;</span>: {
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Jar&#34;</span>: <span style="color:#f1fa8c">&#34;command-runner.jar&#34;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Args&#34;</span>: [<span style="color:#f1fa8c">&#34;/usr/lib/spark/bin/run-example&#34;</span>, <span style="color:#f1fa8c">&#34;SparkPi&#34;</span>, <span style="color:#f1fa8c">&#34;10&#34;</span>],
+</span></span><span style="display:flex;"><span>          },
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>      ]
 </span></span><span style="display:flex;"><span>    )
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>    step_adder <span style="color:#ff79c6">&gt;&gt;</span> step_checker
+</span></span><span style="display:flex;"><span>    wait_app1_step <span style="color:#ff79c6">=</span> EmrStepSensor(
+</span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;wait_app1_step&#34;</span>,
+</span></span><span style="display:flex;"><span>      job_flow_id<span style="color:#ff79c6">=</span>clusterId,
+</span></span><span style="display:flex;"><span>      step_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">f</span><span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">{{{{</span><span style="color:#f1fa8c"> ti.xcom_pull(task_ids=&#39;</span><span style="color:#f1fa8c">{</span>add_app1_step<span style="color:#ff79c6">.</span>task_id<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#39;, key=&#39;return_value&#39;)[0] </span><span style="color:#f1fa8c">}}}}</span><span style="color:#f1fa8c">&#34;</span>,
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    add_app1_step <span style="color:#ff79c6">&gt;&gt;</span> wait_app1_step
+</span></span><span style="display:flex;"><span>  
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">with</span> TaskGroup(<span style="color:#f1fa8c">&#34;app2&#34;</span>) <span style="color:#ff79c6">as</span> app2:
+</span></span><span style="display:flex;"><span>    add_app2_step <span style="color:#ff79c6">=</span> EmrAddStepsOperator(
+</span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;add_app2_step&#34;</span>,
+</span></span><span style="display:flex;"><span>      job_flow_id<span style="color:#ff79c6">=</span>clusterId,
+</span></span><span style="display:flex;"><span>      steps<span style="color:#ff79c6">=</span>[
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;Name&#34;</span>: <span style="color:#f1fa8c">&#34;calculate_pi&#34;</span>,
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;ActionOnFailure&#34;</span>: <span style="color:#f1fa8c">&#34;CONTINUE&#34;</span>,
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;HadoopJarStep&#34;</span>: {
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Jar&#34;</span>: <span style="color:#f1fa8c">&#34;command-runner.jar&#34;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Args&#34;</span>: [<span style="color:#f1fa8c">&#34;/usr/lib/spark/bin/run-example&#34;</span>, <span style="color:#f1fa8c">&#34;SparkPi&#34;</span>, <span style="color:#f1fa8c">&#34;10&#34;</span>],
+</span></span><span style="display:flex;"><span>          },
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>      ]
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    wait_app2_step <span style="color:#ff79c6">=</span> EmrStepSensor(
+</span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;wait_app2_step&#34;</span>,
+</span></span><span style="display:flex;"><span>      job_flow_id<span style="color:#ff79c6">=</span>clusterId,
+</span></span><span style="display:flex;"><span>      step_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">f</span><span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">{{{{</span><span style="color:#f1fa8c"> ti.xcom_pull(task_ids=&#39;</span><span style="color:#f1fa8c">{</span>add_app2_step<span style="color:#ff79c6">.</span>task_id<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#39;, key=&#39;return_value&#39;)[0] </span><span style="color:#f1fa8c">}}}}</span><span style="color:#f1fa8c">&#34;</span>,
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    add_app2_step <span style="color:#ff79c6">&gt;&gt;</span> wait_app2_step
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  app1 <span style="color:#ff79c6">&gt;&gt;</span> app2
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>$ aws s3 cp text<span style="color:#ff79c6">.</span>py s3:<span style="color:#ff79c6">//&lt;</span>source_bucket_name<span style="color:#ff79c6">&gt;/</span>dags<span style="color:#ff79c6">/</span>
 </span></span></code></pre></div><p>これを実行すると失敗し AccessDeniedException がログに出るので 必要な Policy を Execution Role に追加する。
-ログに何も出ない場合は、Role が正しいか確認する。</p>
+ログに何も出ない場合は、Role を修正し Environment を作り直すことで出るようになった。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">new</span> iam.PolicyStatement({
 </span></span><span style="display:flex;"><span>  effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
 </span></span><span style="display:flex;"><span>  actions<span style="color:#ff79c6">:</span> [
