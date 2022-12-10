@@ -646,7 +646,7 @@ EmrAddStep の args のような Object の値の配列に input の値を含め
 </span></span><span style="display:flex;"><span>    })
 </span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>environmentClass ごとにデフォルトで含まれるスケジューラー/ワーカーの数が異なり、それを超える分は追加料金が発生する。</p>
+</span></span></code></pre></div><p><a href="https://docs.aws.amazon.com/mwaa/latest/userguide/environment-class.html#environment-class-onconsole">environmentClass</a> によってスケジューラー/ワーカーのリソース量が異なり、Small のワーカーはデフォルトで <a href="https://docs.aws.amazon.com/mwaa/latest/userguide/best-practices-tuning.html#best-practices-tuning-tasks">5 つのタスク</a>を並列に実行する。</p>
 <p>そのままでは 実行時に渡す config で params を上書きできなかったので
 airflowConfigurationOptions で <a href="https://airflow.apache.org/docs/apache-airflow/2.2.2/configurations-ref.html#dag-run-conf-overrides-params">core.dag_run_conf_overrides_params</a> を true にしている。
 config の値は環境変数 AIRFLOW__{SECTION}__{KEY} で<a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/howto/set-config.html">取得できる</a>。</p>
@@ -708,7 +708,8 @@ config の値は環境変数 AIRFLOW__{SECTION}__{KEY} で<a href="https://airfl
 <p><a href="https://airflow.apache.org/docs/apache-airflow-providers-amazon/6.1.0/_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrAddStepsOperator">EmrAddStepsOperator</a> で EMR クラスタに step を追加し
 <a href="https://airflow.apache.org/docs/apache-airflow-providers-amazon/6.1.0/_api/airflow/providers/amazon/aws/sensors/emr/index.html#airflow.providers.amazon.aws.sensors.emr.EmrStepSensor">EmrStepSensor</a> で完了まで待つ次のコードを
 dagS3Path にアップロードする。Step Functions の <a href="https://docs.aws.amazon.com/step-functions/latest/dg/connect-emr.html">elasticmapreduce:addStep.sync</a> 相当の処理だが、タスクが失敗しても step がキャンセルされない。
-Operator と Sensor を TaskGroup にまとめると DAG が見やすい。</p>
+<a href="https://airflow.apache.org/docs/apache-airflow/2.5.0/_api/airflow/sensors/base/index.html">BaseSensorOperator</a> の mode のデフォルト値は poke で待っている間ワーカーの slot を埋めてしまうため、reschedule にしている。</p>
+<p>Operator と Sensor を TaskGroup にまとめると DAG が見やすい。</p>
 
 
 
@@ -759,6 +760,7 @@ Operator と Sensor を TaskGroup にまとめると DAG が見やすい。</p>
 </span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;wait_app1_step&#34;</span>,
 </span></span><span style="display:flex;"><span>      job_flow_id<span style="color:#ff79c6">=</span>clusterId,
 </span></span><span style="display:flex;"><span>      step_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">f</span><span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">{{{{</span><span style="color:#f1fa8c"> ti.xcom_pull(task_ids=&#39;</span><span style="color:#f1fa8c">{</span>add_app1_step<span style="color:#ff79c6">.</span>task_id<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#39;, key=&#39;return_value&#39;)[0] </span><span style="color:#f1fa8c">}}}}</span><span style="color:#f1fa8c">&#34;</span>,
+</span></span><span style="display:flex;"><span>      mode<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;reschedule&#39;</span>
 </span></span><span style="display:flex;"><span>    )
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>    add_app1_step <span style="color:#ff79c6">&gt;&gt;</span> wait_app1_step
@@ -783,6 +785,7 @@ Operator と Sensor を TaskGroup にまとめると DAG が見やすい。</p>
 </span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;wait_app2_step&#34;</span>,
 </span></span><span style="display:flex;"><span>      job_flow_id<span style="color:#ff79c6">=</span>clusterId,
 </span></span><span style="display:flex;"><span>      step_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">f</span><span style="color:#f1fa8c">&#34;</span><span style="color:#f1fa8c">{{{{</span><span style="color:#f1fa8c"> ti.xcom_pull(task_ids=&#39;</span><span style="color:#f1fa8c">{</span>add_app2_step<span style="color:#ff79c6">.</span>task_id<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">&#39;, key=&#39;return_value&#39;)[0] </span><span style="color:#f1fa8c">}}}}</span><span style="color:#f1fa8c">&#34;</span>,
+</span></span><span style="display:flex;"><span>      mode<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;reschedule&#39;</span>
 </span></span><span style="display:flex;"><span>    )
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>    add_app2_step <span style="color:#ff79c6">&gt;&gt;</span> wait_app2_step
