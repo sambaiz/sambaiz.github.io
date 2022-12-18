@@ -704,12 +704,29 @@ config の値は環境変数 AIRFLOW__{SECTION}__{KEY} で<a href="https://airfl
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>$ open <span style="color:#ff79c6">$(</span>aws mwaa create-web-login-token --name MwaaStack-mwaa-env | jq -r <span style="color:#f1fa8c">&#39;&#34;https://&#34; + .WebServerHostname + &#34;/aws_mwaa/aws-console-sso?login=true#&#34; + .WebToken&#39;</span><span style="color:#ff79c6">)</span>
+</span></span></code></pre></div><p>ちなみに <a href="https://docs.aws.amazon.com/mwaa/latest/userguide/airflow-cli-command-reference.html">Airflow CLI を呼ぶ</a>場合は cli token を取得して認証する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ aws mwaa create-cli-token --name <span style="color:#8be9fd;font-style:italic">$ENV_NAME</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;CliToken&#34;</span>: <span style="color:#f1fa8c">&#34;*****&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;WebServerHostname&#34;</span>: <span style="color:#f1fa8c">&#34;*****.c8.ap-northeast-1.airflow.amazonaws.com&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">CLI_JSON</span><span style="color:#ff79c6">=</span><span style="color:#ff79c6">$(</span>aws mwaa create-cli-token --name <span style="color:#8be9fd;font-style:italic">$ENV_NAME</span><span style="color:#ff79c6">)</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#8be9fd;font-style:italic">CLI_TOKEN</span><span style="color:#ff79c6">=</span><span style="color:#ff79c6">$(</span><span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#8be9fd;font-style:italic">$CLI_JSON</span> | jq -r <span style="color:#f1fa8c">&#39;.CliToken&#39;</span><span style="color:#ff79c6">)</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#ff79c6">&amp;&amp;</span> <span style="color:#8be9fd;font-style:italic">WEB_SERVER_HOSTNAME</span><span style="color:#ff79c6">=</span><span style="color:#ff79c6">$(</span><span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#8be9fd;font-style:italic">$CLI_JSON</span> | jq -r <span style="color:#f1fa8c">&#39;.WebServerHostname&#39;</span><span style="color:#ff79c6">)</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    <span style="color:#ff79c6">&amp;&amp;</span> curl -X POST <span style="color:#f1fa8c">&#34;https://</span><span style="color:#8be9fd;font-style:italic">$WEB_SERVER_HOSTNAME</span><span style="color:#f1fa8c">/aws_mwaa/cli&#34;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    -H <span style="color:#f1fa8c">&#34;Authorization: Bearer </span><span style="color:#8be9fd;font-style:italic">$CLI_TOKEN</span><span style="color:#f1fa8c">&#34;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    -H <span style="color:#f1fa8c">&#34;Content-Type: text/plain&#34;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    -d <span style="color:#f1fa8c">&#34;version&#34;</span> | jq -r <span style="color:#f1fa8c">&#39;.stdout&#39;</span> | base64 -d
+</span></span><span style="display:flex;"><span>2.2.2
 </span></span></code></pre></div><h2 id="ワークフローの実行">ワークフローの実行</h2>
 <p><a href="https://airflow.apache.org/docs/apache-airflow-providers-amazon/6.1.0/_api/airflow/providers/amazon/aws/operators/emr/index.html#airflow.providers.amazon.aws.operators.emr.EmrAddStepsOperator">EmrAddStepsOperator</a> で EMR クラスタに step を追加し
-<a href="https://airflow.apache.org/docs/apache-airflow-providers-amazon/6.1.0/_api/airflow/providers/amazon/aws/sensors/emr/index.html#airflow.providers.amazon.aws.sensors.emr.EmrStepSensor">EmrStepSensor</a> で完了まで待つ次のコードを
-dagS3Path にアップロードする。Step Functions の <a href="https://docs.aws.amazon.com/step-functions/latest/dg/connect-emr.html">elasticmapreduce:addStep.sync</a> 相当の処理だが、タスクが失敗しても step がキャンセルされない。
-<a href="https://airflow.apache.org/docs/apache-airflow/2.5.0/_api/airflow/sensors/base/index.html">BaseSensorOperator</a> の mode のデフォルト値は poke で待っている間ワーカーの slot を埋めてしまうため、reschedule にしている。</p>
-<p>Operator と Sensor を TaskGroup にまとめると DAG が見やすい。</p>
+<a href="https://airflow.apache.org/docs/apache-airflow-providers-amazon/6.1.0/_api/airflow/providers/amazon/aws/sensors/emr/index.html#airflow.providers.amazon.aws.sensors.emr.EmrStepSensor">EmrStepSensor</a> で完了まで待つ、Step Functions の <a href="https://docs.aws.amazon.com/step-functions/latest/dg/connect-emr.html">elasticmapreduce:addStep.sync</a> 相当の処理を行う次のコードを dagS3Path にアップロードする。</p>
+<p><a href="https://www.sambaiz.net/article/409/">AWS CLIでEMRクラスタを立ち上げSparkのアプリケーションを実行する - sambaiz-net</a></p>
+<p><a href="https://airflow.apache.org/docs/apache-airflow/2.5.0/_api/airflow/sensors/base/index.html">BaseSensorOperator</a> の mode のデフォルト値は poke で待っている間ワーカーの slot を埋めてしまうため、reschedule にしている。</p>
+<p>Operator と Sensor を TaskGroup にまとめると UI 上は見やすくなるが、Task は他と同様に個別にスケジューリングされるため、リトライは工夫する必要がある。</p>
+<p><a href="https://www.sambaiz.net/article/432/">Airflow の Callback で複数の Task からなる処理のリトライを行う - sambaiz-net</a></p>
 
 
 
@@ -719,7 +736,6 @@ dagS3Path にアップロードする。Step Functions の <a href="https://docs
 </a></div>
 
 
-<p><a href="https://www.sambaiz.net/article/409/">AWS CLIでEMRクラスタを立ち上げSparkのアプリケーションを実行する - sambaiz-net</a></p>
 <p><a href="https://docs.aws.amazon.com/mwaa/latest/userguide/connections-packages.html#connections-packages-table-222">Airflow v2.2.2</a> にインストールされている apache-airflow-providers-amazon は <a href="apache-airflow-providers-amazon">v2.4.0</a> と少し古いためモジュール名が異なっている。
 また、<a href="https://airflow.apache.org/docs/apache-airflow-providers-amazon/6.2.0/_api/airflow/providers/amazon/aws/operators/lambda_function/index.html">AwsLambdaInvokeFunctionOperator</a> など存在しない Operator も多いので、
 必要なら<a href="https://github.com/apache/airflow/blob/2.2.2/airflow/providers/amazon/aws/hooks/lambda_function.py">hook</a>はあるので自分で実装するか最新バージョンからコードを持ってくる必要がある。</p>
