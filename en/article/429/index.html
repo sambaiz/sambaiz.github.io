@@ -494,26 +494,6 @@ This makes it possible to wait for the past aggregation to finish or to re-execu
 </span></span><span style="display:flex;"><span>    task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;task3&#39;</span>,
 </span></span><span style="display:flex;"><span>    bash_command<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;sleep 20&#39;</span>,
 </span></span><span style="display:flex;"><span>  )
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>  wait_past_t3 <span style="color:#ff79c6">=</span> ExternalTaskSensor(
-</span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;wait_past_task3&#34;</span>,
-</span></span><span style="display:flex;"><span>      external_dag_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{{ dag.dag_id }}&#39;</span>,
-</span></span><span style="display:flex;"><span>      external_task_id<span style="color:#ff79c6">=</span>t3<span style="color:#ff79c6">.</span>task_id,
-</span></span><span style="display:flex;"><span>      execution_delta<span style="color:#ff79c6">=</span>timedelta(hours<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>),
-</span></span><span style="display:flex;"><span>      timeout<span style="color:#ff79c6">=</span><span style="color:#bd93f9">600</span>,
-</span></span><span style="display:flex;"><span>      allowed_states<span style="color:#ff79c6">=</span>[<span style="color:#f1fa8c">&#39;success&#39;</span>],
-</span></span><span style="display:flex;"><span>      failed_states<span style="color:#ff79c6">=</span>[<span style="color:#f1fa8c">&#39;failed&#39;</span>, <span style="color:#f1fa8c">&#39;skipped&#39;</span>],
-</span></span><span style="display:flex;"><span>      mode<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;reschedule&#34;</span>,
-</span></span><span style="display:flex;"><span>  )
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>  clear_future_wait_past_t3 <span style="color:#ff79c6">=</span> ExternalTaskMarker(
-</span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;clear_future_wait_past_task3&#34;</span>,
-</span></span><span style="display:flex;"><span>      external_dag_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{{ dag.dag_id }}&#39;</span>,
-</span></span><span style="display:flex;"><span>      external_task_id<span style="color:#ff79c6">=</span>wait_past_t3<span style="color:#ff79c6">.</span>task_id,
-</span></span><span style="display:flex;"><span>      execution_date<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{{ next_execution_date }}&#39;</span>
-</span></span><span style="display:flex;"><span>  )
-</span></span><span style="display:flex;"><span>  
-</span></span><span style="display:flex;"><span>  t1 <span style="color:#ff79c6">&gt;&gt;</span> [t2, t3]
 </span></span></code></pre></div><h2 id="externaltasksensor-and-externaltaskmarkerhttpsairflowapacheorgdocsapache-airflow243howtooperatorexternal_task_sensorhtml"><a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/howto/operator/external_task_sensor.html">ExternalTaskSensor and ExternalTaskMarker</a></h2>
 <p>You can use <a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/_api/airflow/sensors/external_task/index.html#airflow.sensors.external_task.ExternalTaskSensor">ExternalTaskSensor</a> to wait for the completion of another task in the past.
 This is also supporting a task in another DAG.</p>
@@ -578,7 +558,21 @@ This is also supporting a task in another DAG.</p>
 </span></span><span style="display:flex;"><span>  t1 <span style="color:#ff79c6">&gt;&gt;</span> [t2, t3]
 </span></span><span style="display:flex;"><span>  wait_past_t3 <span style="color:#ff79c6">&gt;&gt;</span> t2
 </span></span><span style="display:flex;"><span>  t3 <span style="color:#ff79c6">&gt;&gt;</span> clear_future_wait_past_t3
-</span></span></code></pre></div>
+</span></span></code></pre></div><h2 id="if-tasks-does-not-progress">If tasks does not progress</h2>
+<p>If the number of active runs reaches to <a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/configurations-ref.html#max-active-runs-per-dag">core.max_active_runs_per_dag</a>,
+other runs do not become running, so if you clear the dependent runs when the upper limit is reached as follows, they will wait until the timeout.
+When this happens, you need to clear active runs to execute new ones.</p>
+
+
+
+
+<div class="img_container"><a href="/en/article/429/images/max_active_runs_per_dag.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/429/images/max_active_runs_per_dag_hu39d5f67a72c03f57ebbb139201caed51_58582_600x370_fit_lanczos_3.png" width="600" height="216" alt="timeout">
+</a></div>
+
+
+<p>Or you can change the settings. If you do that, you might be better to control order which attaches worker slots to tasks with <a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/concepts/priority-weight.html">priority_weight and weight_rule</a>.</p>
+
     </div>
   </article>
 </div>

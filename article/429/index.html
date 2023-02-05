@@ -494,26 +494,6 @@ Airflow では次の方法で過去の Task への依存を記述することが
 </span></span><span style="display:flex;"><span>    task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;task3&#39;</span>,
 </span></span><span style="display:flex;"><span>    bash_command<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;sleep 20&#39;</span>,
 </span></span><span style="display:flex;"><span>  )
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>  wait_past_t3 <span style="color:#ff79c6">=</span> ExternalTaskSensor(
-</span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;wait_past_task3&#34;</span>,
-</span></span><span style="display:flex;"><span>      external_dag_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{{ dag.dag_id }}&#39;</span>,
-</span></span><span style="display:flex;"><span>      external_task_id<span style="color:#ff79c6">=</span>t3<span style="color:#ff79c6">.</span>task_id,
-</span></span><span style="display:flex;"><span>      execution_delta<span style="color:#ff79c6">=</span>timedelta(hours<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>),
-</span></span><span style="display:flex;"><span>      timeout<span style="color:#ff79c6">=</span><span style="color:#bd93f9">600</span>,
-</span></span><span style="display:flex;"><span>      allowed_states<span style="color:#ff79c6">=</span>[<span style="color:#f1fa8c">&#39;success&#39;</span>],
-</span></span><span style="display:flex;"><span>      failed_states<span style="color:#ff79c6">=</span>[<span style="color:#f1fa8c">&#39;failed&#39;</span>, <span style="color:#f1fa8c">&#39;skipped&#39;</span>],
-</span></span><span style="display:flex;"><span>      mode<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;reschedule&#34;</span>,
-</span></span><span style="display:flex;"><span>  )
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>  clear_future_wait_past_t3 <span style="color:#ff79c6">=</span> ExternalTaskMarker(
-</span></span><span style="display:flex;"><span>      task_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;clear_future_wait_past_task3&#34;</span>,
-</span></span><span style="display:flex;"><span>      external_dag_id<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{{ dag.dag_id }}&#39;</span>,
-</span></span><span style="display:flex;"><span>      external_task_id<span style="color:#ff79c6">=</span>wait_past_t3<span style="color:#ff79c6">.</span>task_id,
-</span></span><span style="display:flex;"><span>      execution_date<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{{ next_execution_date }}&#39;</span>
-</span></span><span style="display:flex;"><span>  )
-</span></span><span style="display:flex;"><span>  
-</span></span><span style="display:flex;"><span>  t1 <span style="color:#ff79c6">&gt;&gt;</span> [t2, t3]
 </span></span></code></pre></div><h2 id="externaltasksensor-と-externaltaskmarkerhttpsairflowapacheorgdocsapache-airflow243howtooperatorexternal_task_sensorhtml"><a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/howto/operator/external_task_sensor.html">ExternalTaskSensor と ExternalTaskMarker</a></h2>
 <p>過去の他の Task の完了を待つ場合は <a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/_api/airflow/sensors/external_task/index.html#airflow.sensors.external_task.ExternalTaskSensor">ExternalTaskSensor</a> を用いる。
 異なる DAG の Task を指定することもできる。</p>
@@ -579,7 +559,21 @@ Status が Recursive で Clear された際に対象の Task の Status も Clea
 </span></span><span style="display:flex;"><span>  t1 <span style="color:#ff79c6">&gt;&gt;</span> [t2, t3]
 </span></span><span style="display:flex;"><span>  wait_past_t3 <span style="color:#ff79c6">&gt;&gt;</span> t2
 </span></span><span style="display:flex;"><span>  t3 <span style="color:#ff79c6">&gt;&gt;</span> clear_future_wait_past_t3
-</span></span></code></pre></div>
+</span></span></code></pre></div><h2 id="実行が進まない場合">実行が進まない場合</h2>
+<p>実行している runs の数が <a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/configurations-ref.html#max-active-runs-per-dag">core.max_active_runs_per_dag</a> に当たると
+それ以外の runs が running にならないため、次のように上限に当たった状態で依存先の runs を clear するとタイムアウトまで待ち続けることになってしまう。
+このような状態になってしまった場合は runs を clear するなどして空けると実行される。</p>
+
+
+
+
+<div class="img_container"><a href="/article/429/images/max_active_runs_per_dag.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/429/images/max_active_runs_per_dag_hu39d5f67a72c03f57ebbb139201caed51_58582_600x370_fit_lanczos_3.png" width="600" height="216" alt="timeout">
+</a></div>
+
+
+<p>あるいは設定を変更することもできて、そうする場合は併せて <a href="https://airflow.apache.org/docs/apache-airflow/2.4.3/concepts/priority-weight.html">priority_weight や weight_rule</a> を設定して Task の実行順序をコントロールしても良いかもしれない。</p>
+
     </div>
   </article>
 </div>
