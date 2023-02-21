@@ -496,9 +496,15 @@ C.CString() は malloc() するのでどこかで free() する必要がある�
 </span></span><span style="display:flex;"><span>$ cat libtestjna.h
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>extern char* repeat(char* str, int n);
+</span></span></code></pre></div><h3 id="glibc-の-unsatisfiedlinkerror">glibc の UnsatisfiedLinkError</h3>
+<p>Shared library を Lambda Layer の <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">/lib</a> に置くと LD_LIBRARY_PATH が通るので、
+GitHub Actions の ubuntu-latest でビルドして Layer を作成し、現状 <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">Amazon Linux 2</a> 上で動く Lambda から読もうとしたところ、C の標準ライブラリが含まれている glibc のバージョン違いでエラーになってしまったので
+同環境でビルドしたところ動くようになった。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>GENERIC_USER_ERROR: <span style="color:#8be9fd">Encountered</span> an exception[java.lang.UnsatisfiedLinkError] <span style="color:#ff79c6">from</span> your LambdaFunction[test<span style="color:#ff79c6">-</span><span style="color:#8be9fd;font-style:italic">function</span>] executed <span style="color:#ff79c6">in</span> context[ping] <span style="color:#8be9fd;font-style:italic">with</span> message[<span style="color:#8be9fd;font-style:italic">Error</span> loading <span style="color:#ff79c6">class</span> net.sambaiz.TestHandler<span style="color:#ff79c6">:</span> /opt/lib/libtest.so: /lib64/libc.so.6: version `GLIBC_2.32&#39; not found (required by /opt/lib/libtest.so)]
 </span></span></code></pre></div><h2 id="jni-での呼び出し">JNI での呼び出し</h2>
 <p>まずは引数を取得したりオブジェクトを作成するため cgo では行えない JNIEnv に含まれている JNI の関数のポインタを呼ぶ処理を C で実装する。
-jstring や jint は　${JAVA_HOME}/include/jni.h で定義されている<a href="https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html">Javaの型に対応する型</a>。</p>
+jstring や jint は　${JAVA_HOME}/include/jni.h で定義されている<a href="https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html">Javaの型に対応する型</a>。
+Java から null が渡されたときに GetStringUTFChars() するとエラーになってしまうのでチェックする必要がある。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// calljnifunc.h
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;jni.h&#34;</span><span style="color:#ff79c6">
 </span></span></span><span style="display:flex;"><span><span style="color:#ff79c6"></span>
@@ -510,15 +516,46 @@ jstring や jint は　${JAVA_HOME}/include/jni.h で定義されている<a hre
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;calljnifunc.h&#34;</span><span style="color:#ff79c6">
 </span></span></span><span style="display:flex;"><span><span style="color:#ff79c6"></span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span><span style="color:#ff79c6">*</span> <span style="color:#50fa7b">CallJNIGetStringUTFChars</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jstring str, jboolean <span style="color:#ff79c6">*</span>isCopy) {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">if</span> (str <span style="color:#ff79c6">==</span> <span style="color:#8be9fd;font-style:italic">NULL</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">NULL</span>;
+</span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">return</span> (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">GetStringUTFChars</span>(env, str, isCopy);
 </span></span><span style="display:flex;"><span>}
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd">void</span> <span style="color:#50fa7b">CallJNIReleaseStringUTFChars</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jstring str, <span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span> <span style="color:#ff79c6">*</span>utf) {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">if</span> (str <span style="color:#ff79c6">==</span> <span style="color:#8be9fd;font-style:italic">NULL</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span>;
+</span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>  (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">ReleaseStringUTFChars</span>(env, str, utf);
 </span></span><span style="display:flex;"><span>}
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>jstring <span style="color:#50fa7b">CallJNINewStringUTF</span>(JNIEnv <span style="color:#ff79c6">*</span>env, <span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span> <span style="color:#ff79c6">*</span>bytes) {
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">return</span> (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">NewStringUTF</span>(env, bytes);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>ちなみにプリミティブ型でない配列は jobjectArray で受け取り、GetObjectArrayElement() で取得する。
+配列のポインタは <a href="https://pkg.go.dev/unsafe#Slice">unsafe.Slice()</a> で Go の Slice に変換できる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// C
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#8be9fd">int</span> <span style="color:#50fa7b">GetJStringsFromObjectArray</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jobjectArray stringArray, jstring<span style="color:#ff79c6">**</span> retStrings) {
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd">int</span> len <span style="color:#ff79c6">=</span> (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">GetArrayLength</span>(env, stringArray);
+</span></span><span style="display:flex;"><span>  jstring<span style="color:#ff79c6">*</span> jStrs <span style="color:#ff79c6">=</span> <span style="color:#50fa7b">malloc</span>(<span style="color:#ff79c6">sizeof</span>(jstring) <span style="color:#ff79c6">*</span> len);
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">for</span> (<span style="color:#8be9fd">int</span> i <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0</span>; i <span style="color:#ff79c6">&lt;</span> len; i<span style="color:#ff79c6">++</span>) {
+</span></span><span style="display:flex;"><span>      jStrs[i] <span style="color:#ff79c6">=</span> (jstring) ((<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">GetObjectArrayElement</span>(env, stringArray, i));
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">*</span>retStrings <span style="color:#ff79c6">=</span> jStrs;
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">return</span> len;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">// Go
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>var jStrsPointer <span style="color:#ff79c6">*</span>C.jstring
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">size</span> :<span style="color:#ff79c6">=</span> C.<span style="color:#50fa7b">GetJStringsFromObjectArray</span>(env, stringArray, <span style="color:#ff79c6">&amp;</span>jStrsPointer)
+</span></span><span style="display:flex;"><span>defer C.<span style="color:#50fa7b">free</span>(unsafe.<span style="color:#50fa7b">Pointer</span>(jStrsPointer))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>var jStrsSlice []C.jstring <span style="color:#ff79c6">=</span> unsafe.<span style="color:#50fa7b">Slice</span>(jStrsPointer, <span style="color:#8be9fd">int</span>(size))
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">for</span> _, <span style="color:#8be9fd;font-style:italic">jStr</span> :<span style="color:#ff79c6">=</span> range jStrsSlice {
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd;font-style:italic">cStr</span> :<span style="color:#ff79c6">=</span> C.<span style="color:#50fa7b">CallJNIGetStringUTFChars</span>(env, jStr, (<span style="color:#ff79c6">*</span>C.jboolean)(nil))
+</span></span><span style="display:flex;"><span>  defer C.<span style="color:#50fa7b">CallJNIReleaseStringUTFChars</span>(env, jStr, cStr)
+</span></span><span style="display:flex;"><span>  
+</span></span><span style="display:flex;"><span>  ...
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>ビルドして shared library を生成する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ gcc -shared -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux calljnifunc.c -o libcalljnifunc.so
@@ -569,7 +606,7 @@ loadLibrary() に渡すのはファイル名の先頭の lib と OS ごとに異
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">public</span> <span style="color:#8be9fd;font-style:italic">native</span> String <span style="color:#50fa7b">repeat</span><span style="color:#ff79c6">(</span>String str<span style="color:#ff79c6">,</span> <span style="color:#8be9fd">int</span> n<span style="color:#ff79c6">);</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
-</span></span></code></pre></div><p>Go も含めると 3 言語の型を意識したり、引数を取得するのに C のコードが必要だったりすることもあるが、何よりトラブルシューティングが大変だった。
+</span></span></code></pre></div><p>Go も含めると 3 言語の型を意識したり、引数を取得するのに C のコードが必要だったりすることもあるが、とにかくトラブルシューティングが大変だった。
 LDFLAGS を書き忘れるなど何か間違えるたびに JVM が crash し、関数名を typo すると UnsatisfiedLinkError になってしまう。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[ERROR] org.apache.maven.surefire.booter.SurefireBooterForkException: The forked VM terminated without properly saying goodbye. VM crash or System.exit called?
 </span></span></code></pre></div><h2 id="jna-での呼び出し">JNA での呼び出し</h2>
@@ -591,7 +628,7 @@ LDFLAGS を書き忘れるなど何か間違えるたびに JVM が crash し、
 </span></span><span style="display:flex;"><span>    
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd">void</span> <span style="color:#50fa7b">repeat</span><span style="color:#ff79c6">(</span><span style="color:#8be9fd">byte</span><span style="color:#ff79c6">[]</span> buf<span style="color:#ff79c6">,</span> <span style="color:#8be9fd">int</span> n<span style="color:#ff79c6">);</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
-</span></span></code></pre></div><p>一方、Direct Mapping はプロキシを介さず直接呼び出すので高速だが対応していない型がある。</p>
+</span></span></code></pre></div><p>一方、Direct Mapping はプロキシを介さず直接呼び出すので高速だが String の配列など対応していない型がある。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">public</span> <span style="color:#8be9fd;font-style:italic">class</span> <span style="color:#50fa7b">TestLibJNADirectMapping</span> <span style="color:#ff79c6">{</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">static</span> <span style="color:#ff79c6">{</span>
 </span></span><span style="display:flex;"><span>        Native<span style="color:#ff79c6">.</span><span style="color:#50fa7b">register</span><span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;testjna&#34;</span><span style="color:#ff79c6">);</span>
@@ -650,7 +687,7 @@ export する関数の型は C のものに統一した。</p>
 </span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> Native<span style="color:#ff79c6">.</span><span style="color:#50fa7b">toString</span><span style="color:#ff79c6">(</span>buf<span style="color:#ff79c6">);</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">}</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
-</span></span></code></pre></div><p>結果は次の通り。プリミティブな型のみを扱っている今回の例では DirectMapping は ほぼ JNI と同じ時間で、Interface Mapping でも JNI の 2 倍程度の時間に収まっている。</p>
+</span></span></code></pre></div><p>結果は次の通り。今回の例では DirectMapping は ほぼ JNI と同じ時間で、Interface Mapping でも JNI の 2 倍程度の時間に収まっている。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>Benchmark                                 Mode  Cnt     Score    Error  Units
 </span></span><span style="display:flex;"><span>Benchmarks.repeatWithJNADirectMapping     avgt   25  1690.029 ± 19.361  ns/op
 </span></span><span style="display:flex;"><span>Benchmarks.repeatWithJNAInterfaceMapping  avgt   25  3178.877 ± 29.591  ns/op

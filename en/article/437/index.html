@@ -495,9 +495,15 @@ By the way, when cross-compiling, cgo is disabled by default, so you need to exp
 </span></span><span style="display:flex;"><span>$ cat libtestjna.h
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>extern char* repeat(char* str, int n);
+</span></span></code></pre></div><h3 id="unsatisfiedlinkerror-of-glibc">UnsatisfiedLinkError of glibc</h3>
+<p>Once shared libraries are placed in <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">/lib</a> of Lambda Layer, they are added to LD_LIBRARY_PATH, so
+I built them in ubuntu-latest of GitHub Actions and created the layer, and then tried to call them from Lambda running on <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">Amazon Linux 2</a>, but the error occurred due to glibc version difference.
+When I built them in the same environment, they succeeded to be called.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>GENERIC_USER_ERROR: <span style="color:#8be9fd">Encountered</span> an exception[java.lang.UnsatisfiedLinkError] <span style="color:#ff79c6">from</span> your LambdaFunction[test<span style="color:#ff79c6">-</span><span style="color:#8be9fd;font-style:italic">function</span>] executed <span style="color:#ff79c6">in</span> context[ping] <span style="color:#8be9fd;font-style:italic">with</span> message[<span style="color:#8be9fd;font-style:italic">Error</span> loading <span style="color:#ff79c6">class</span> net.sambaiz.TestHandler<span style="color:#ff79c6">:</span> /opt/lib/libtest.so: /lib64/libc.so.6: version `GLIBC_2.32&#39; not found (required by /opt/lib/libtest.so)]
 </span></span></code></pre></div><h2 id="call-with-jni">Call with JNI</h2>
 <p>First, in order to get the arguments and construct objects, implement the process of calling the JNI function pointers of JNIEnv in C, which cannot be implemented in cgo.
-jstring and jinit defined in ${JAVA_HOME}/include/jni.h is <a href="https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html">types that correspond to Java types</a>.</p>
+jstring and jinit defined in ${JAVA_HOME}/include/jni.h is <a href="https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html">types that correspond to Java types</a>.
+If null is passed from Java, GetStringUTFChars() occurs an error, so you need to check it.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// calljnifunc.h
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;jni.h&#34;</span><span style="color:#ff79c6">
 </span></span></span><span style="display:flex;"><span><span style="color:#ff79c6"></span>
@@ -509,15 +515,46 @@ jstring and jinit defined in ${JAVA_HOME}/include/jni.h is <a href="https://docs
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;calljnifunc.h&#34;</span><span style="color:#ff79c6">
 </span></span></span><span style="display:flex;"><span><span style="color:#ff79c6"></span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span><span style="color:#ff79c6">*</span> <span style="color:#50fa7b">CallJNIGetStringUTFChars</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jstring str, jboolean <span style="color:#ff79c6">*</span>isCopy) {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">if</span> (str <span style="color:#ff79c6">==</span> <span style="color:#8be9fd;font-style:italic">NULL</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">NULL</span>;
+</span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">return</span> (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">GetStringUTFChars</span>(env, str, isCopy);
 </span></span><span style="display:flex;"><span>}
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd">void</span> <span style="color:#50fa7b">CallJNIReleaseStringUTFChars</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jstring str, <span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span> <span style="color:#ff79c6">*</span>utf) {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">if</span> (str <span style="color:#ff79c6">==</span> <span style="color:#8be9fd;font-style:italic">NULL</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span>;
+</span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>  (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">ReleaseStringUTFChars</span>(env, str, utf);
 </span></span><span style="display:flex;"><span>}
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>jstring <span style="color:#50fa7b">CallJNINewStringUTF</span>(JNIEnv <span style="color:#ff79c6">*</span>env, <span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span> <span style="color:#ff79c6">*</span>bytes) {
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">return</span> (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">NewStringUTF</span>(env, bytes);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Besides, non-primitive type arrays can be received as a jobjectArray and obtained by GetObjectArrayElement().
+An array pointer can be converted to a Go Slice with <a href="https://pkg.go.dev/unsafe#Slice">unsafe.Slice()</a>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// C
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#8be9fd">int</span> <span style="color:#50fa7b">GetJStringsFromObjectArray</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jobjectArray stringArray, jstring<span style="color:#ff79c6">**</span> retStrings) {
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd">int</span> len <span style="color:#ff79c6">=</span> (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">GetArrayLength</span>(env, stringArray);
+</span></span><span style="display:flex;"><span>  jstring<span style="color:#ff79c6">*</span> jStrs <span style="color:#ff79c6">=</span> <span style="color:#50fa7b">malloc</span>(<span style="color:#ff79c6">sizeof</span>(jstring) <span style="color:#ff79c6">*</span> len);
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">for</span> (<span style="color:#8be9fd">int</span> i <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0</span>; i <span style="color:#ff79c6">&lt;</span> len; i<span style="color:#ff79c6">++</span>) {
+</span></span><span style="display:flex;"><span>      jStrs[i] <span style="color:#ff79c6">=</span> (jstring) ((<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">GetObjectArrayElement</span>(env, stringArray, i));
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">*</span>retStrings <span style="color:#ff79c6">=</span> jStrs;
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">return</span> len;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">// Go
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>var jStrsPointer <span style="color:#ff79c6">*</span>C.jstring
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">size</span> :<span style="color:#ff79c6">=</span> C.<span style="color:#50fa7b">GetJStringsFromObjectArray</span>(env, stringArray, <span style="color:#ff79c6">&amp;</span>jStrsPointer)
+</span></span><span style="display:flex;"><span>defer C.<span style="color:#50fa7b">free</span>(unsafe.<span style="color:#50fa7b">Pointer</span>(jStrsPointer))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>var jStrsSlice []C.jstring <span style="color:#ff79c6">=</span> unsafe.<span style="color:#50fa7b">Slice</span>(jStrsPointer, <span style="color:#8be9fd">int</span>(size))
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">for</span> _, <span style="color:#8be9fd;font-style:italic">jStr</span> :<span style="color:#ff79c6">=</span> range jStrsSlice {
+</span></span><span style="display:flex;"><span>  <span style="color:#8be9fd;font-style:italic">cStr</span> :<span style="color:#ff79c6">=</span> C.<span style="color:#50fa7b">CallJNIGetStringUTFChars</span>(env, jStr, (<span style="color:#ff79c6">*</span>C.jboolean)(nil))
+</span></span><span style="display:flex;"><span>  defer C.<span style="color:#50fa7b">CallJNIReleaseStringUTFChars</span>(env, jStr, cStr)
+</span></span><span style="display:flex;"><span>  
+</span></span><span style="display:flex;"><span>  ...
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>Build the shared library.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ gcc -shared -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux calljnifunc.c -o libcalljnifunc.so
@@ -568,7 +605,7 @@ The path can be passed with -Djava.library.path, and you can also use LD_LIBRARY
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">public</span> <span style="color:#8be9fd;font-style:italic">native</span> String <span style="color:#50fa7b">repeat</span><span style="color:#ff79c6">(</span>String str<span style="color:#ff79c6">,</span> <span style="color:#8be9fd">int</span> n<span style="color:#ff79c6">);</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
-</span></span></code></pre></div><p>Types of the three languages including Go are needed to be handled and C codes are needed to get arguments, but above all, troubleshooting was difficult.
+</span></span></code></pre></div><p>Types of the three languages including Go are needed to be handled and C codes are needed to get arguments, but anyway, troubleshooting was hard.
 JVM crashed many times due to mistakes such as forgetting LDFLAGS, and UnsatisfiedLinkError occurred due to typo the function name.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[ERROR] org.apache.maven.surefire.booter.SurefireBooterForkException: The forked VM terminated without properly saying goodbye. VM crash or System.exit called?
 </span></span></code></pre></div><h2 id="call-with-jna">Call with JNA</h2>
@@ -588,7 +625,7 @@ Once the methods are called, native functions are called with converted types th
 </span></span><span style="display:flex;"><span>    
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd">void</span> <span style="color:#50fa7b">repeat</span><span style="color:#ff79c6">(</span><span style="color:#8be9fd">byte</span><span style="color:#ff79c6">[]</span> buf<span style="color:#ff79c6">,</span> <span style="color:#8be9fd">int</span> n<span style="color:#ff79c6">);</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
-</span></span></code></pre></div><p>On the other hand, Direct Mapping is faster because it calls directly without going through the proxy, but there are types that are not supported.</p>
+</span></span></code></pre></div><p>On the other hand, Direct Mapping is faster because it calls directly without going through the proxy, but there are unsupported types such as array of Strings.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">public</span> <span style="color:#8be9fd;font-style:italic">class</span> <span style="color:#50fa7b">TestLibJNADirectMapping</span> <span style="color:#ff79c6">{</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">static</span> <span style="color:#ff79c6">{</span>
 </span></span><span style="display:flex;"><span>        Native<span style="color:#ff79c6">.</span><span style="color:#50fa7b">register</span><span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;testjna&#34;</span><span style="color:#ff79c6">);</span>
@@ -648,7 +685,7 @@ Therefore, I am using C types to define functions to be exported.</p>
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">}</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
 </span></span></code></pre></div><p>The results are as follows.
-In this case, which uses only primitive types, DirectMapping takes about the same time as JNI, and Interface Mapping takes about twice as long as JNI.</p>
+In this case, DirectMapping takes about the same time as JNI, and Interface Mapping takes about twice as long as JNI.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>Benchmark                                 Mode  Cnt     Score    Error  Units
 </span></span><span style="display:flex;"><span>Benchmarks.repeatWithJNADirectMapping     avgt   25  1690.029 ± 19.361  ns/op
 </span></span><span style="display:flex;"><span>Benchmarks.repeatWithJNAInterfaceMapping  avgt   25  3178.877 ± 29.591  ns/op
