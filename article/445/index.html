@@ -488,7 +488,7 @@ Core nodes が HDFS の DataNode となるのに対して Task nodes はなら�
 </span></span><span style="display:flex;"><span>Last Block Report: Sun Mar <span style="color:#bd93f9">19</span> 05:27:53 UTC <span style="color:#bd93f9">2023</span>
 </span></span><span style="display:flex;"><span>Num of Blocks: <span style="color:#bd93f9">106</span>
 </span></span><span style="display:flex;"><span>...
-</span></span></code></pre></div><p>Spark のアプリケーションで永続化は S3 で行なっている場合 HDFS の容量はあまり必要としないことが多い。</p>
+</span></span></code></pre></div><p>ただ、永続化をS3で行っている場合、HDFSの容量はそれほど必要ないことが多い。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ sudo -u hdfs hdfs dfs -du -h /
 </span></span><span style="display:flex;"><span><span style="color:#bd93f9">0</span>        <span style="color:#bd93f9">0</span>        /user
 </span></span><span style="display:flex;"><span>12.6 M   12.6 M   /var
@@ -531,7 +531,7 @@ Core nodes が HDFS の DataNode となるのに対して Task nodes はなら�
 </span></span><span style="display:flex;"><span>  }, 
 </span></span><span style="display:flex;"><span>  ...
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>全ての Step の実行が完了してから最低台数までスケールインされるまで 14 分かかった。</p>
+</span></span></code></pre></div><p>全ての Step の実行が完了してから最低台数までスケールインされるまで 14 分程度かかった。</p>
 
 
 
@@ -542,8 +542,10 @@ Core nodes が HDFS の DataNode となるのに対して Task nodes はなら�
 
 
 <h2 id="task-nodes-をスケールアウトさせた場合">Task nodes をスケールアウトさせた場合</h2>
-<p>次に Task nodes を追加して Core nodes はスケールアウトされないようにする。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;display:grid;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>{
+<p>次に Task nodes を追加して Core nodes はスケールアウトされないようにする。
+Core nodes と異なり、突然シャットダウンしても問題が起きづらいためスポットインスタンスにすることでコストを抑えることができるが、
+今回は再現しやすいようオンデマンドインスタンスで動かす。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>{
 </span></span><span style="display:flex;"><span>  instances<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>    masterInstanceFleet<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>      targetOnDemandCapacity: <span style="color:#8be9fd">1</span>,
@@ -554,52 +556,45 @@ Core nodes が HDFS の DataNode となるのに対して Task nodes はなら�
 </span></span><span style="display:flex;"><span>      ],
 </span></span><span style="display:flex;"><span>    },
 </span></span><span style="display:flex;"><span>    coreInstanceFleet<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      targetOnDemandCapacity: <span style="color:#8be9fd">2</span>,
+</span></span><span style="display:flex;"><span>      targetOnDemandCapacity: <span style="color:#8be9fd">1</span>,
 </span></span><span style="display:flex;"><span>      instanceTypeConfigs<span style="color:#ff79c6">:</span> [
 </span></span><span style="display:flex;"><span>        {
 </span></span><span style="display:flex;"><span>          instanceType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;m6g.xlarge&#39;</span>,
 </span></span><span style="display:flex;"><span>        },
 </span></span><span style="display:flex;"><span>      ],
 </span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>    taskInstanceFleets<span style="color:#ff79c6">:</span> [{
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Task nodes&#39;</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      targetSpotCapacity: <span style="color:#8be9fd">1</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      instanceTypeConfigs<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>        {
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>          instanceType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;m6g.xlarge&#39;</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>          bidPriceAsPercentageOfOnDemandPrice: <span style="color:#8be9fd">100</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>        },
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      ],
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      launchSpecifications<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>        spotSpecification<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>          timeoutAction<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;SWITCH_TO_ON_DEMAND&#39;</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>          timeoutDurationMinutes: <span style="color:#8be9fd">5</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>        },
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      },
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>    }],
+</span></span><span style="display:flex;"><span>    taskInstanceFleets<span style="color:#ff79c6">:</span> [{
+</span></span><span style="display:flex;"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Task nodes&#39;</span>,
+</span></span><span style="display:flex;"><span>      targetSpotCapacity: <span style="color:#8be9fd">1</span>,
+</span></span><span style="display:flex;"><span>      instanceTypeConfigs<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>          instanceType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;m6g.xlarge&#39;</span>,
+</span></span><span style="display:flex;"><span>        },
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>    }],
 </span></span><span style="display:flex;"><span>  },
 </span></span><span style="display:flex;"><span>  managedScalingPolicy<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>    computeLimits<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>      maximumCapacityUnits: <span style="color:#8be9fd">10</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      maximumCoreCapacityUnits: <span style="color:#8be9fd">2</span>,
+</span></span><span style="display:flex;"><span>      maximumCoreCapacityUnits: <span style="color:#8be9fd">1</span>,
 </span></span><span style="display:flex;"><span>      minimumCapacityUnits: <span style="color:#8be9fd">2</span>,
 </span></span><span style="display:flex;"><span>      unitType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;InstanceFleetUnits&#39;</span>,
 </span></span><span style="display:flex;"><span>    },
 </span></span><span style="display:flex;"><span>  }, 
 </span></span><span style="display:flex;"><span>  ...
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>今度は 3 分でスケールインされた。</p>
+</span></span></code></pre></div><p>今度は6分ほどでスケールインされた。</p>
 
 
 
 
 <div class="img_container"><a href="/article/445/images/task.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/article/445/images/task_hua7f1d8dbbe33f0376a0d71b47bd551b4_329221_600x370_fit_lanczos_3.png" width="600" height="286" alt="Task nodes をスケールアウトさせた場合のインスタンス数の推移">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/445/images/task_hu7fbfe5303308df57380e7a1804443f1e_342262_600x370_fit_lanczos_3.png" width="600" height="283" alt="Task nodes をスケールアウトさせた場合のインスタンス数の推移">
 </a></div>
 
 
-<p>EMR 6.x から YARN のノードラベル機能が<a href="https://aws.amazon.com/premiumsupport/knowledge-center/emr-configure-node-labeling-yarn/?nc1=h_ls">デフォルトでオフになり</a>、Task nodes でも ApplicationMaster が実行されるようになったため、Core nodes のリソースは最小限でも動きそうだ。
-ただ、スポットインスタンスの場合ノードが落ちてジョブが失敗してしまう可能性があるので、それを避けたい場合はノードラベルを有効にすることでオンデマンドの Core nodes で実行されるようにすることができる。</p>
+<p>EMR 6.x から YARN のノードラベル機能が<a href="https://aws.amazon.com/premiumsupport/knowledge-center/emr-configure-node-labeling-yarn/?nc1=h_ls">デフォルトでオフになり</a>、Task nodes でも ApplicationMaster が実行されるようになったため、Core nodes のコンピューティングリソースは最小限でも動きそうだ。
+ただ、インスタンスタイプによって<a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-storage.html#emr-plan-storage-ebs-storage-default">デフォルトのストレージサイズ</a>が異なるので、小さいインスタンスにしたときは明示的に EBS の設定を行わないと no space left on device で task が即失敗するようになることがある。</p>
 
     </div>
   </article>

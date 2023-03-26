@@ -486,7 +486,7 @@ Therefore, core nodes need to be decommissioned and then terminated to prevent d
 </span></span><span style="display:flex;"><span>Last Block Report: Sun Mar <span style="color:#bd93f9">19</span> 05:27:53 UTC <span style="color:#bd93f9">2023</span>
 </span></span><span style="display:flex;"><span>Num of Blocks: <span style="color:#bd93f9">106</span>
 </span></span><span style="display:flex;"><span>...
-</span></span></code></pre></div><p>If Spark applications persist data to S3, HDFS&rsquo;s capacity is not required much.</p>
+</span></span></code></pre></div><p>However, if the data is persisted in S3, HDFS capacity is not required much.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ sudo -u hdfs hdfs dfs -du -h /
 </span></span><span style="display:flex;"><span><span style="color:#bd93f9">0</span>        <span style="color:#bd93f9">0</span>        /user
 </span></span><span style="display:flex;"><span>12.6 M   12.6 M   /var
@@ -529,7 +529,7 @@ There is a whole code on <a href="https://github.com/sambaiz/emr-core-task-node-
 </span></span><span style="display:flex;"><span>  }, 
 </span></span><span style="display:flex;"><span>  ...
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>It takes 14 minutes to scale in after all steps are completed.</p>
+</span></span></code></pre></div><p>It takes about 14 minutes to scale in after all steps are completed.</p>
 
 
 
@@ -540,64 +540,58 @@ There is a whole code on <a href="https://github.com/sambaiz/emr-core-task-node-
 
 
 <h2 id="when-task-nodes-are-scaled">When task nodes are scaled</h2>
-<p>Next, add Task nodes and prevent Core nodes from scaling out.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;display:grid;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>{
+<p>Next, add Task nodes and prevent Core nodes from scaling out.
+Unlike Core nodes, there is almost no problem even if they suddenly shut down, so you can reduce the cost with Spot Instances, but this time, I run with on-demand instances to make reproduction easy.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>{
 </span></span><span style="display:flex;"><span>  instances<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>    masterInstanceFleet<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>      targetOnDemandCapacity: <span style="color:#8be9fd">1</span>,
-</span></span><span style="display:flex;"><span>      instanceTypeConfigs<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>        instanceTypeConfigs<span style="color:#ff79c6">:</span> [
 </span></span><span style="display:flex;"><span>        {
 </span></span><span style="display:flex;"><span>          instanceType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;m6g.xlarge&#39;</span>,
 </span></span><span style="display:flex;"><span>        },
 </span></span><span style="display:flex;"><span>      ],
 </span></span><span style="display:flex;"><span>    },
 </span></span><span style="display:flex;"><span>    coreInstanceFleet<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      targetOnDemandCapacity: <span style="color:#8be9fd">2</span>,
-</span></span><span style="display:flex;"><span>      instanceTypeConfigs<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>      targetOnDemandCapacity: <span style="color:#8be9fd">1</span>,
+</span></span><span style="display:flex;"><span>        instanceTypeConfigs<span style="color:#ff79c6">:</span> [
 </span></span><span style="display:flex;"><span>        {
 </span></span><span style="display:flex;"><span>          instanceType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;m6g.xlarge&#39;</span>,
 </span></span><span style="display:flex;"><span>        },
 </span></span><span style="display:flex;"><span>      ],
 </span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>    taskInstanceFleets<span style="color:#ff79c6">:</span> [{
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Task nodes&#39;</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      targetSpotCapacity: <span style="color:#8be9fd">1</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      instanceTypeConfigs<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>        {
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>          instanceType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;m6g.xlarge&#39;</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>          bidPriceAsPercentageOfOnDemandPrice: <span style="color:#8be9fd">100</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>        },
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      ],
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      launchSpecifications<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>        spotSpecification<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>          timeoutAction<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;SWITCH_TO_ON_DEMAND&#39;</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>          timeoutDurationMinutes: <span style="color:#8be9fd">5</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>        },
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      },
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>    }],
+</span></span><span style="display:flex;"><span>    taskInstanceFleets<span style="color:#ff79c6">:</span> [{
+</span></span><span style="display:flex;"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Task nodes&#39;</span>,
+</span></span><span style="display:flex;"><span>      targetSpotCapacity: <span style="color:#8be9fd">1</span>,
+</span></span><span style="display:flex;"><span>      instanceTypeConfigs<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>          instanceType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;m6g.xlarge&#39;</span>,
+</span></span><span style="display:flex;"><span>        },
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>    }],
 </span></span><span style="display:flex;"><span>  },
 </span></span><span style="display:flex;"><span>  managedScalingPolicy<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>    computeLimits<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>      maximumCapacityUnits: <span style="color:#8be9fd">10</span>,
-</span></span><span style="display:flex; background-color:#3d3f4a"><span>      maximumCoreCapacityUnits: <span style="color:#8be9fd">2</span>,
-</span></span><span style="display:flex;"><span>      minimumCapacityUnits: <span style="color:#8be9fd">2</span>,
-</span></span><span style="display:flex;"><span>      unitType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;InstanceFleetUnits&#39;</span>,
+</span></span><span style="display:flex;"><span>        maximumCoreCapacityUnits: <span style="color:#8be9fd">1</span>,
+</span></span><span style="display:flex;"><span>        minimumCapacityUnits: <span style="color:#8be9fd">2</span>,
+</span></span><span style="display:flex;"><span>        unitType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;InstanceFleetUnits&#39;</span>,
 </span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>  }, 
-</span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>It takes 3 minutes to scale in.</p>
+</span></span></code></pre></div><p>It takes about 6 minutes to scale in.</p>
 
 
 
 
 <div class="img_container"><a href="/en/article/445/images/task.png">
-    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/445/images/task_hua7f1d8dbbe33f0376a0d71b47bd551b4_329221_600x370_fit_lanczos_3.png" width="600" height="286" alt="Changes in the number of instances when Task nodes are scaled">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/en/article/445/images/task_hu7fbfe5303308df57380e7a1804443f1e_342262_600x370_fit_lanczos_3.png" width="600" height="283" alt="Changes in the number of instances when Task nodes are scaled">
 </a></div>
 
 
-<p>From EMR 6.x, YARN&rsquo;s node label feature is <a href="https://aws.amazon.com/premiumsupport/knowledge-center/emr-configure-node-labeling-yarn/?nc1=h_ls">disabled by default</a>, so ApplicationMaster is executed on even Task nodes.
-But, if you want to avoid the failure of jobs due to spot instances suddenly shutdowned, you can enable node label to run it on on-demand Core nodes.</p>
+<p>From EMR 6.x, YARN&rsquo;s node label feature is <a href="https://aws.amazon.com/premiumsupport/knowledge-center/emr-configure-node-labeling-yarn/?nc1=h_ls">disabled by default</a>, so ApplicationMaster is executed on even Task nodes and core nodes might not need many computing resources.
+But, the <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-storage.html#emr-plan-storage-ebs-storage-default">default storage size</a> depends on the instance type, so if you set a small instance type, you should also set the EBS size explicitly or tasks will fail instantly with no space left on device.</p>
 
     </div>
   </article>
