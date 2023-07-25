@@ -471,12 +471,33 @@
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">libraryDependencies</span> <span style="color:#ff79c6">+=</span> <span style="color:#f1fa8c">&#34;software.amazon.awssdk&#34;</span> % <span style="color:#f1fa8c">&#34;s3&#34;</span> % <span style="color:#f1fa8c">&#34;2.20.14&#34;</span>
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>ThisBuild / assemblyMergeStrategy :<span style="color:#ff79c6">=</span> <span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>assembly / assemblyMergeStrategy :<span style="color:#ff79c6">=</span> <span style="color:#ff79c6">{</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">case</span> PathList<span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;META-INF&#34;</span>, xs @ _*<span style="color:#ff79c6">)</span> <span style="color:#ff79c6">=</span>&gt; MergeStrategy.discard
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">case</span> <span style="color:#8be9fd;font-style:italic">x</span> <span style="color:#ff79c6">=</span>&gt;
 </span></span><span style="display:flex;"><span>    val <span style="color:#8be9fd;font-style:italic">oldStrategy</span> <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">(</span>ThisBuild / assemblyMergeStrategy<span style="color:#ff79c6">)</span>.value
 </span></span><span style="display:flex;"><span>    oldStrategy<span style="color:#ff79c6">(</span>x<span style="color:#ff79c6">)</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span></code></pre></div><p>数が多く解決が面倒な場合は <a href="https://github.com/sbt/sbt-assembly#assemblyexcludedjars">assemblyExcludedJars</a> で über-jar からは除きクラスパスに配置して実行時にロードさせることもできるが、結局互換性のためにエラーになったりする可能性がある。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>assembly / assemblyExcludedJars :<span style="color:#ff79c6">=</span> <span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">(</span>assembly / fullClasspath<span style="color:#ff79c6">)</span>.value.filter <span style="color:#ff79c6">{</span> _.data.getName.contains<span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;testlib&#34;</span><span style="color:#ff79c6">)</span> <span style="color:#ff79c6">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>val <span style="color:#8be9fd;font-style:italic">outputExcludedJar</span> <span style="color:#ff79c6">=</span> taskKey<span style="color:#ff79c6">[</span>Seq<span style="color:#ff79c6">[</span>File<span style="color:#ff79c6">]](</span><span style="color:#f1fa8c">&#34;Output jars that is excluded from the uber jar&#34;</span><span style="color:#ff79c6">)</span>
+</span></span><span style="display:flex;"><span>outputExcludedJar :<span style="color:#ff79c6">=</span> <span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>  val <span style="color:#8be9fd;font-style:italic">targetDir</span> <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">(</span>assembly / Keys.target<span style="color:#ff79c6">)</span>.value
+</span></span><span style="display:flex;"><span>  val <span style="color:#8be9fd;font-style:italic">assemblyJAR</span> <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">(</span>assembly / assemblyOutputPath<span style="color:#ff79c6">)</span>.value
+</span></span><span style="display:flex;"><span>  val <span style="color:#8be9fd;font-style:italic">libraryJARs</span> <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">(</span>assembly / update<span style="color:#ff79c6">)</span>.value matching configurationFilter<span style="color:#ff79c6">(</span>Runtime.name<span style="color:#ff79c6">)</span>
+</span></span><span style="display:flex;"><span>  val <span style="color:#8be9fd;font-style:italic">exludedJARs</span> <span style="color:#ff79c6">=</span> libraryJARs.filter <span style="color:#ff79c6">{</span> <span style="color:#8be9fd;font-style:italic">jar</span> <span style="color:#ff79c6">=</span>&gt; <span style="color:#ff79c6">(</span>assembly / assemblyExcludedJars<span style="color:#ff79c6">)</span>.value.map<span style="color:#ff79c6">(</span>_.data<span style="color:#ff79c6">)</span>.contains<span style="color:#ff79c6">(</span>jar<span style="color:#ff79c6">)</span> <span style="color:#ff79c6">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  IO.createDirectory<span style="color:#ff79c6">(</span>targetDir<span style="color:#ff79c6">)</span>
+</span></span><span style="display:flex;"><span>  exludedJARs.foreach <span style="color:#ff79c6">{</span> <span style="color:#8be9fd;font-style:italic">jar</span> <span style="color:#ff79c6">=</span>&gt;
+</span></span><span style="display:flex;"><span>    IO.copyFile<span style="color:#ff79c6">(</span>jar, targetDir / jar.getName<span style="color:#ff79c6">)</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  Seq<span style="color:#ff79c6">(</span>assemblyJAR<span style="color:#ff79c6">)</span> ++ <span style="color:#ff79c6">(</span>targetDir ** <span style="color:#f1fa8c">&#34;*.jar&#34;</span><span style="color:#ff79c6">)</span>.get
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>assembly :<span style="color:#ff79c6">=</span> assembly.dependsOn<span style="color:#ff79c6">(</span>outputExcludedJar<span style="color:#ff79c6">)</span>.value
 </span></span></code></pre></div><p>また、実行環境に一部のライブラリが存在している場合は、<a href="https://github.com/sbt/sbt-assembly#-provided-configuration">provided</a> を付けることで JAR から除き、
 さらに次のように書くことでローカルでの sbt run 時には含めることができる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ cat build.sbt
