@@ -296,9 +296,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>CDK で立ち上げた EKS クラスタを EMR on EKS に登録し Spark のジョブを動かす - sambaiz-net</title>
-  <meta name="twitter:title" content="CDK で立ち上げた EKS クラスタを EMR on EKS に登録し Spark のジョブを動かす - sambaiz-net">
-  <meta property='og:title' content="CDK で立ち上げた EKS クラスタを EMR on EKS に登録し Spark のジョブを動かす - sambaiz-net">
+  <title>CDK で EKS クラスタを立ち上げ EMR on EKS に登録し Spark のジョブを動かす - sambaiz-net</title>
+  <meta name="twitter:title" content="CDK で EKS クラスタを立ち上げ EMR on EKS に登録し Spark のジョブを動かす - sambaiz-net">
+  <meta property='og:title' content="CDK で EKS クラスタを立ち上げ EMR on EKS に登録し Spark のジョブを動かす - sambaiz-net">
   <meta property="og:type" content="article">
   
   <meta name="description" content="通常の EMR が Hadoop クラスタの管理も行うのに対して、こちらはコンテナの起動のみを担う">
@@ -331,7 +331,7 @@
       "@type":"WebPage",
       "@id": "https://www.sambaiz.net/"
     },
-    "headline": "CDK で立ち上げた EKS クラスタを EMR on EKS に登録し Spark のジョブを動かす",
+    "headline": "CDK で EKS クラスタを立ち上げ EMR on EKS に登録し Spark のジョブを動かす",
     "datePublished": "2023-01-02T14:53:00JST",
     "dateModified": "2023-01-02T14:53:00JST",
     "author": {
@@ -446,7 +446,7 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>CDK で立ち上げた EKS クラスタを EMR on EKS に登録し Spark のジョブを動かす</h1>
+        <h1>CDK で EKS クラスタを立ち上げ EMR on EKS に登録し Spark のジョブを動かす</h1>
         <time>2023-01-02</time>
         <a class="tag" href='/tags/kubernetes/'>kubernetes</a><a class="tag" href='/tags/aws/'>aws</a><a class="tag" href='/tags/spark/'>spark</a><a class="tag" href='/tags/etl/'>etl</a>
       </div>
@@ -458,33 +458,10 @@
 ただ、Kubernetes および EKS の知識はある程度必要。通常の EMR は YARN の知識がなくとも使い始められるが、こちらはないと動かすのも大変だと思う。</p>
 <p>ちなみに、Docker については EMR 6.x (Hadoop 3) から <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-docker.html">サポートされている</a>。</p>
 <p><a href="https://aws.amazon.com/emr/pricing/?nc1=h_ls">料金</a>はリクエストした vCPU とメモリに対してかかる。</p>
+<p>今回は CDK で EKS クラスタの立ち上げから EMR の登録までを行い、Spark のジョブが実行できることを確認する。
+全体のコードは <a href="https://github.com/sambaiz/emr-on-eks-with-cdk">GitHub</a> にある。</p>
 <h2 id="クラスタの立ち上げ">クラスタの立ち上げ</h2>
-<p>CDK で EKS クラスタを立ち上げる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> cdk <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;aws-cdk-lib&#39;</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> { Construct } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;constructs&#39;</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> iam <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;aws-cdk-lib/aws-iam&#39;</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> ec2 <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;aws-cdk-lib/aws-ec2&#39;</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">as</span> eks <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;aws-cdk-lib/aws-eks&#39;</span>;
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> vpc <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.Vpc(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;vpc&#39;</span>, {
-</span></span><span style="display:flex;"><span>  cidr<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;10.0.0.0/16&#39;</span>,
-</span></span><span style="display:flex;"><span>  maxAzs: <span style="color:#8be9fd">2</span>,
-</span></span><span style="display:flex;"><span>  subnetConfiguration<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>    {
-</span></span><span style="display:flex;"><span>      cidrMask: <span style="color:#8be9fd">18</span>,
-</span></span><span style="display:flex;"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;public&#39;</span>,
-</span></span><span style="display:flex;"><span>      subnetType: <span style="color:#8be9fd">ec2.SubnetType.PUBLIC</span>,
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    {
-</span></span><span style="display:flex;"><span>      cidrMask: <span style="color:#8be9fd">18</span>,
-</span></span><span style="display:flex;"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;private&#39;</span>,
-</span></span><span style="display:flex;"><span>      subnetType: <span style="color:#8be9fd">ec2.SubnetType.PRIVATE_WITH_EGRESS</span>,
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>  ]
-</span></span><span style="display:flex;"><span>})
-</span></span><span style="display:flex;"><span>cdk.Tags.<span style="color:#ff79c6">of</span>(vpc).add(<span style="color:#f1fa8c">&#34;Name&#34;</span>, <span style="color:#ff79c6">this</span>.stackName)
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> mastersRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;masters-role&#39;</span>, {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> mastersRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;MastersRole&#39;</span>, {
 </span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.CompositePrincipal(
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">new</span> iam.ServicePrincipal(<span style="color:#f1fa8c">&#39;eks.amazonaws.com&#39;</span>),
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">new</span> iam.AccountRootPrincipal(),
@@ -492,29 +469,31 @@
 </span></span><span style="display:flex;"><span>  managedPolicies<span style="color:#ff79c6">:</span> [
 </span></span><span style="display:flex;"><span>    iam.ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#f1fa8c">&#39;AmazonEKSClusterPolicy&#39;</span>),
 </span></span><span style="display:flex;"><span>  ],
-</span></span><span style="display:flex;"><span>  inlinePolicies<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;eksctl-iamidentitymapping&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> iam.PolicyDocument({
-</span></span><span style="display:flex;"><span>      statements<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
-</span></span><span style="display:flex;"><span>          effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
-</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;eks:DescribeCluster&#39;</span>],
-</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;*&#39;</span>],
-</span></span><span style="display:flex;"><span>        })
-</span></span><span style="display:flex;"><span>      ]
-</span></span><span style="display:flex;"><span>    })
-</span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> eks.Cluster(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;cluster&#39;</span>, {
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> eks.Cluster(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EKSCluster&#39;</span>, {
 </span></span><span style="display:flex;"><span>  vpc,
 </span></span><span style="display:flex;"><span>  mastersRole,
-</span></span><span style="display:flex;"><span>  clusterName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;emr-on-eks-test&#39;</span>,
-</span></span><span style="display:flex;"><span>  version: <span style="color:#8be9fd">eks.KubernetesVersion.V1_23</span>,
+</span></span><span style="display:flex;"><span>  clusterName: <span style="color:#8be9fd">clusterName</span>,
+</span></span><span style="display:flex;"><span>  version: <span style="color:#8be9fd">eks.KubernetesVersion.V1_27</span>,
 </span></span><span style="display:flex;"><span>  defaultCapacity: <span style="color:#8be9fd">3</span>,
 </span></span><span style="display:flex;"><span>  defaultCapacityInstance: <span style="color:#8be9fd">new</span> ec2.InstanceType(<span style="color:#f1fa8c">&#39;m5.large&#39;</span>)
 </span></span><span style="display:flex;"><span>})
-</span></span></code></pre></div><p>この後実行する eksctl create iamidentitymapping で Kubernetes の権限に加えて eks:DescribeCluster が必要になるので master role にこれを追加し、assume する profile を config に追加した。
-代わりにユーザーの role を aws-auth に追加して Kubernetes の権限を与えてもよい。</p>
+</span></span></code></pre></div><p>この後 CDK ではなく eksctl create iamidentitymapping でクラスタへのアクセス権限を付与する場合は、
+Kubernetes の権限に加えて eks:DescribeCluster が必要になるので master role にこれを追加するか、
+ユーザーの role を aws-auth に追加して Kubernetes の権限を与える必要がある。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>inlinePolicies<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#39;eksctl-iamidentitymapping&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> iam.PolicyDocument({
+</span></span><span style="display:flex;"><span>    statements<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>        effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
+</span></span><span style="display:flex;"><span>        actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;eks:DescribeCluster&#39;</span>],
+</span></span><span style="display:flex;"><span>        resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;*&#39;</span>],
+</span></span><span style="display:flex;"><span>      })
+</span></span><span style="display:flex;"><span>    ]
+</span></span><span style="display:flex;"><span>  })
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>その場合は、併せて assume する profile を config に追加する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ brew tap weaveworks/tap
 </span></span><span style="display:flex;"><span>$ brew install weaveworks/tap/eksctl
 </span></span><span style="display:flex;"><span>$ eksctl version
@@ -523,13 +502,14 @@
 </span></span><span style="display:flex;"><span>$ cat ~/.aws/config
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">[</span>profile eks-master<span style="color:#ff79c6">]</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">region</span> <span style="color:#ff79c6">=</span> ap-northeast-1
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">region</span> <span style="color:#ff79c6">=</span> us-east-1 
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">role_arn</span> <span style="color:#ff79c6">=</span> arn:aws:iam::xxxxx:role/EmrOnEksTestStack-clusterMastersRoleEABFBB9C-10Q5X4BE7QN51
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">source_profile</span> <span style="color:#ff79c6">=</span> &lt;user_profile_name&gt; 
 </span></span></code></pre></div><h2 id="クラスタへのアクセス権限の付与httpsdocsawsamazoncomemrlatestemr-on-eks-developmentguidesetting-up-cluster-accesshtml"><a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/setting-up-cluster-access.html">クラスタへのアクセス権限の付与</a></h2>
-<p>EMR on EKS の <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/using-service-linked-roles.html">service-linked role</a> に紐づいた User に Kubernetes role を bind する。</p>
+<p>EMR on EKS の <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/using-service-linked-roles.html">service-linked role</a> に紐づいた User に Kubernetes の Role を bind する。</p>
 <p><a href="https://www.sambaiz.net/article/160/">RBACが有効なGKEでHelmを使う - sambaiz-net</a></p>
-<p>マニュアルで行うこともできるが、次のコマンドを実行するとリソースや設定が自動で追加される。</p>
+<h3 id="a-eksctl-create-iamidentitymapping-による方法">a. eksctl create iamidentitymapping による方法</h3>
+<p>まずはドキュメント通り eksctl でどのようなリソースが作成されるか確認する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">CLUSTER_NAME</span><span style="color:#ff79c6">=</span>emr-on-eks-test
 </span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">NAMESPACE</span><span style="color:#ff79c6">=</span>default
 </span></span><span style="display:flex;"><span>
@@ -541,8 +521,8 @@
 </span></span><span style="display:flex;"><span>2022-12-31 17:40:34 <span style="color:#ff79c6">[</span>ℹ<span style="color:#ff79c6">]</span>  created <span style="color:#f1fa8c">&#34;default:Role.rbac.authorization.k8s.io/emr-containers&#34;</span>
 </span></span><span style="display:flex;"><span>2022-12-31 17:40:34 <span style="color:#ff79c6">[</span>ℹ<span style="color:#ff79c6">]</span>  created <span style="color:#f1fa8c">&#34;default:RoleBinding.rbac.authorization.k8s.io/emr-containers&#34;</span>
 </span></span><span style="display:flex;"><span>2022-12-31 17:40:34 <span style="color:#ff79c6">[</span>ℹ<span style="color:#ff79c6">]</span>  adding identity <span style="color:#f1fa8c">&#34;arn:aws:iam::xxxxx:role/AWSServiceRoleForAmazonEMRContainers&#34;</span> to auth ConfigMap
-</span></span></code></pre></div><p>bind されていることが確認できる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ kubectl describe -n kube-system configmap aws-auth
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ kubectl describe -n kube-system configmap aws-auth
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>mapRoles:
 </span></span><span style="display:flex;"><span>  ----
@@ -550,11 +530,41 @@
 </span></span><span style="display:flex;"><span>- rolearn: arn:aws:iam::xxxxx:role/AWSServiceRoleForAmazonEMRContainers
 </span></span><span style="display:flex;"><span>  username: emr-containers
 </span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><h3 id="b-cdk-による方法">b. CDK による方法</h3>
+<p>eksctl のリポジトリを見ると該当リソースの<a href="https://github.com/eksctl-io/eksctl/blob/4fb29ad0bc523126ea837d1b7061eb639a65bfa4/pkg/authconfigmap/assets/emr-containers-rbac.yaml#L4">マニフェスト</a>があったので、
+これを CDK で表した。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> emrRole <span style="color:#ff79c6">=</span> cluster.addManifest(<span style="color:#f1fa8c">&#39;EMRContainersRole&#39;</span>, {
+</span></span><span style="display:flex;"><span>  apiVersion<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;rbac.authorization.k8s.io/v1&#39;</span>,
+</span></span><span style="display:flex;"><span>  kind<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Role&#39;</span>,
+</span></span><span style="display:flex;"><span>  metadata<span style="color:#ff79c6">:</span> { name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;emr-containers&#39;</span>, <span style="color:#ff79c6">namespace</span><span style="color:#ff79c6">:</span> emrcontainersNamespace },
+</span></span><span style="display:flex;"><span>  rules<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>    { apiGroups<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;&#39;</span>], resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;namespaces&#39;</span>], verbs<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;get&#39;</span>] },
+</span></span><span style="display:flex;"><span>    { apiGroups<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;&#39;</span>], resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;serviceaccounts&#39;</span>, <span style="color:#f1fa8c">&#39;services&#39;</span>, <span style="color:#f1fa8c">&#39;configmaps&#39;</span>, <span style="color:#f1fa8c">&#39;events&#39;</span>, <span style="color:#f1fa8c">&#39;pods&#39;</span>, <span style="color:#f1fa8c">&#39;pods/log&#39;</span>], verbs<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;get&#39;</span>, <span style="color:#f1fa8c">&#39;list&#39;</span>, <span style="color:#f1fa8c">&#39;watch&#39;</span>, <span style="color:#f1fa8c">&#39;describe&#39;</span>, <span style="color:#f1fa8c">&#39;create&#39;</span>, <span style="color:#f1fa8c">&#39;edit&#39;</span>, <span style="color:#f1fa8c">&#39;delete&#39;</span>, <span style="color:#f1fa8c">&#39;deletecollection&#39;</span>, <span style="color:#f1fa8c">&#39;annotate&#39;</span>, <span style="color:#f1fa8c">&#39;patch&#39;</span>, <span style="color:#f1fa8c">&#39;label&#39;</span>] },
+</span></span><span style="display:flex;"><span>    { apiGroups<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;&#39;</span>], resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;secrets&#39;</span>], verbs<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;create&#39;</span>, <span style="color:#f1fa8c">&#39;patch&#39;</span>, <span style="color:#f1fa8c">&#39;delete&#39;</span>, <span style="color:#f1fa8c">&#39;watch&#39;</span>] },
+</span></span><span style="display:flex;"><span>    { apiGroups<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;apps&#39;</span>], resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;statefulsets&#39;</span>, <span style="color:#f1fa8c">&#39;deployments&#39;</span>], verbs<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;get&#39;</span>, <span style="color:#f1fa8c">&#39;list&#39;</span>, <span style="color:#f1fa8c">&#39;watch&#39;</span>, <span style="color:#f1fa8c">&#39;describe&#39;</span>, <span style="color:#f1fa8c">&#39;create&#39;</span>, <span style="color:#f1fa8c">&#39;edit&#39;</span>, <span style="color:#f1fa8c">&#39;delete&#39;</span>, <span style="color:#f1fa8c">&#39;annotate&#39;</span>, <span style="color:#f1fa8c">&#39;patch&#39;</span>, <span style="color:#f1fa8c">&#39;label&#39;</span>] },
+</span></span><span style="display:flex;"><span>    { apiGroups<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;batch&#39;</span>], resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;jobs&#39;</span>], verbs<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;get&#39;</span>, <span style="color:#f1fa8c">&#39;list&#39;</span>, <span style="color:#f1fa8c">&#39;watch&#39;</span>, <span style="color:#f1fa8c">&#39;describe&#39;</span>, <span style="color:#f1fa8c">&#39;create&#39;</span>, <span style="color:#f1fa8c">&#39;edit&#39;</span>, <span style="color:#f1fa8c">&#39;delete&#39;</span>, <span style="color:#f1fa8c">&#39;annotate&#39;</span>, <span style="color:#f1fa8c">&#39;patch&#39;</span>, <span style="color:#f1fa8c">&#39;label&#39;</span>] },
+</span></span><span style="display:flex;"><span>    { apiGroups<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;extensions&#39;</span>], resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;ingresses&#39;</span>], verbs<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;get&#39;</span>, <span style="color:#f1fa8c">&#39;list&#39;</span>, <span style="color:#f1fa8c">&#39;watch&#39;</span>, <span style="color:#f1fa8c">&#39;describe&#39;</span>, <span style="color:#f1fa8c">&#39;create&#39;</span>, <span style="color:#f1fa8c">&#39;edit&#39;</span>, <span style="color:#f1fa8c">&#39;delete&#39;</span>, <span style="color:#f1fa8c">&#39;annotate&#39;</span>, <span style="color:#f1fa8c">&#39;patch&#39;</span>, <span style="color:#f1fa8c">&#39;label&#39;</span>] },
+</span></span><span style="display:flex;"><span>    { apiGroups<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;rbac.authorization.k8s.io&#39;</span>], resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;roles&#39;</span>, <span style="color:#f1fa8c">&#39;rolebindings&#39;</span>], verbs<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;get&#39;</span>, <span style="color:#f1fa8c">&#39;list&#39;</span>, <span style="color:#f1fa8c">&#39;watch&#39;</span>, <span style="color:#f1fa8c">&#39;describe&#39;</span>, <span style="color:#f1fa8c">&#39;create&#39;</span>, <span style="color:#f1fa8c">&#39;edit&#39;</span>, <span style="color:#f1fa8c">&#39;delete&#39;</span>, <span style="color:#f1fa8c">&#39;deletecollection&#39;</span>, <span style="color:#f1fa8c">&#39;annotate&#39;</span>, <span style="color:#f1fa8c">&#39;patch&#39;</span>, <span style="color:#f1fa8c">&#39;label&#39;</span>] },
+</span></span><span style="display:flex;"><span>  ],
+</span></span><span style="display:flex;"><span>});
+</span></span><span style="display:flex;"><span>emrRole.node.addDependency(<span style="color:#ff79c6">namespace</span>)
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>$ kubectl get rolebinding -n <span style="color:#8be9fd;font-style:italic">$NAMESPACE</span> emr-containers
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> emrRoleBind <span style="color:#ff79c6">=</span> cluster.addManifest(<span style="color:#f1fa8c">&#39;EMRContainersRoleBind&#39;</span>, {
+</span></span><span style="display:flex;"><span>  apiVersion<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;rbac.authorization.k8s.io/v1&#39;</span>,
+</span></span><span style="display:flex;"><span>  kind<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;RoleBinding&#39;</span>,
+</span></span><span style="display:flex;"><span>  metadata<span style="color:#ff79c6">:</span> { name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;emr-containers&#39;</span>, <span style="color:#ff79c6">namespace</span><span style="color:#ff79c6">:</span> emrcontainersNamespace },
+</span></span><span style="display:flex;"><span>  subjects<span style="color:#ff79c6">:</span> [{ kind<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;User&#39;</span>, name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;emr-containers&#39;</span>, apiGroup<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;rbac.authorization.k8s.io&#39;</span> }],
+</span></span><span style="display:flex;"><span>  roleRef<span style="color:#ff79c6">:</span> { kind<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Role&#39;</span>, name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;emr-containers&#39;</span>, apiGroup<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;rbac.authorization.k8s.io&#39;</span> },
+</span></span><span style="display:flex;"><span>});
+</span></span><span style="display:flex;"><span>emrRoleBind.node.addDependency(emrRole);
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>  NAME             ROLE                  AGE
-</span></span><span style="display:flex;"><span>  emr-containers   Role/emr-containers   14m
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> emrContainersRole <span style="color:#ff79c6">=</span> iam.Role.fromRoleName(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EMRContainersRole&#39;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#39;AWSServiceRoleForAmazonEMRContainers&#39;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>cluster.awsAuth.addRoleMapping(emrContainersRole, {
+</span></span><span style="display:flex;"><span>  username<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;emr-containers&#34;</span>,
+</span></span><span style="display:flex;"><span>  groups<span style="color:#ff79c6">:</span> []
+</span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div><h2 id="クラスタの登録httpsdocsawsamazoncomemrlatestemr-on-eks-developmentguidesetting-up-registrationhtml"><a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/setting-up-registration.html">クラスタの登録</a></h2>
 <p>EMR にクラスタを登録する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">new</span> emrcontainers.CfnVirtualCluster(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;virtual-cluster&#39;</span>, {
@@ -570,75 +580,59 @@
 </span></span><span style="display:flex;"><span>  }
 </span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div><h2 id="execution-role-の作成httpsdocsawsamazoncomemrlatestemr-on-eks-developmentguideiam-execution-rolehtml"><a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/iam-execution-role.html">Execution role の作成</a></h2>
-<p>Job の実行に必要な Policy を付与した Role を作成する。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;job-exectuion-role&#39;</span>, {
-</span></span><span style="display:flex;"><span>  roleName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;emr-on-eks-test-job-execution-role&#34;</span>,
-</span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.AccountRootPrincipal(), <span style="color:#6272a4">// update later
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>  inlinePolicies<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;job-execution-policy&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> iam.PolicyDocument({
-</span></span><span style="display:flex;"><span>      statements<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
-</span></span><span style="display:flex;"><span>          effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
-</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;s3:PutObject&#39;</span>,
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;s3:GetObject&#39;</span>,
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;s3:ListBucket&#39;</span>,
-</span></span><span style="display:flex;"><span>          ],
-</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;arn:aws:s3:::*&#39;</span>],
-</span></span><span style="display:flex;"><span>        }),
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
-</span></span><span style="display:flex;"><span>          effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
-</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:PutLogEvents&#39;</span>,
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:CreateLogStream&#39;</span>,
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:DescribeLogGroups&#39;</span>,
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:DescribeLogStreams&#39;</span>
-</span></span><span style="display:flex;"><span>          ],
-</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;arn:aws:logs:*:*:*&#39;</span>],
-</span></span><span style="display:flex;"><span>        })
-</span></span><span style="display:flex;"><span>      ]
-</span></span><span style="display:flex;"><span>    })
-</span></span><span style="display:flex;"><span>  }
-</span></span><span style="display:flex;"><span>})
-</span></span></code></pre></div><p>次のコマンドを実行すると ジョブの送信時に作成される EMR on EKS の service account に対する trust policy が追加される。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">EXECUTION_ROLE_NAME</span><span style="color:#ff79c6">=</span>emr-on-eks-test-job-execution-role
+<p>ジョブの実行に用いられる Role を作成する。
+ジョブの送信時に作成される EMR on EKS の ServiceAccount が OIDC で assume できるような trust policy を設定している。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>createJobExecutionRole(cluster: <span style="color:#8be9fd">eks.Cluster</span>, emrcontainersNamespace: <span style="color:#8be9fd">string</span>) {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> roleName <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;emr-on-eks-test-job-execution-role&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> bs36 <span style="color:#ff79c6">=</span> basex(<span style="color:#f1fa8c">&#34;0123456789abcdefghijklmnopqrstuvwxyz&#34;</span>)
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> base36RoleName <span style="color:#ff79c6">=</span> bs36.encode(<span style="color:#ff79c6">new</span> TextEncoder().encode(roleName))
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>$ aws emr-containers update-role-trust-policy <span style="color:#f1fa8c">\
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EMRJobExecutionRole&#39;</span>, {
+</span></span><span style="display:flex;"><span>    roleName: <span style="color:#8be9fd">roleName</span>,
+</span></span><span style="display:flex;"><span>    assumedBy: <span style="color:#8be9fd">new</span> iam.WebIdentityPrincipal(
+</span></span><span style="display:flex;"><span>      cluster.openIdConnectProvider.openIdConnectProviderArn,
+</span></span><span style="display:flex;"><span>      {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;StringLike&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> cdk.CfnJson(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;JobExecutionRoleStringEquals&#39;</span>, {
+</span></span><span style="display:flex;"><span>          value<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>            [<span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>cluster.clusterOpenIdConnectIssuer<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:sub`</span>]<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`system:serviceaccount:</span><span style="color:#f1fa8c">${</span>emrcontainersNamespace<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:emr-containers-sa-*-*-</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">-</span><span style="color:#f1fa8c">${</span>base36RoleName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>
+</span></span><span style="display:flex;"><span>          }
+</span></span><span style="display:flex;"><span>        })
+</span></span><span style="display:flex;"><span>      }
+</span></span><span style="display:flex;"><span>    ),
+</span></span><span style="display:flex;"><span>    inlinePolicies<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#39;job-execution-policy&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> iam.PolicyDocument({
+</span></span><span style="display:flex;"><span>        statements<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>            effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
+</span></span><span style="display:flex;"><span>            actions<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;s3:PutObject&#39;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;s3:GetObject&#39;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;s3:ListBucket&#39;</span>
+</span></span><span style="display:flex;"><span>            ],
+</span></span><span style="display:flex;"><span>            resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;arn:aws:s3:::*&#39;</span>],
+</span></span><span style="display:flex;"><span>          }),
+</span></span><span style="display:flex;"><span>          <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>            effect: <span style="color:#8be9fd">iam.Effect.ALLOW</span>,
+</span></span><span style="display:flex;"><span>            actions<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;logs:PutLogEvents&#39;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;logs:CreateLogStream&#39;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;logs:DescribeLogGroups&#39;</span>,
+</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;logs:DescribeLogStreams&#39;</span>
+</span></span><span style="display:flex;"><span>            ],
+</span></span><span style="display:flex;"><span>            resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;arn:aws:logs:*:*:*&#39;</span>],
+</span></span><span style="display:flex;"><span>          })
+</span></span><span style="display:flex;"><span>        ]
+</span></span><span style="display:flex;"><span>      })
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>  })
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>trust policy は次のコマンドでも追加できる。
+もしこの後エラーになった場合は、このコマンドで追加されたものと CDK で作成したものが一致するかを確認するとよい。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ aws emr-containers update-role-trust-policy <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    --cluster-name <span style="color:#8be9fd;font-style:italic">$CLUSTER_NAME</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    --namespace <span style="color:#8be9fd;font-style:italic">$NAMESPACE</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    --role-name <span style="color:#8be9fd;font-style:italic">$EXECUTION_ROLE_NAME</span>
 </span></span><span style="display:flex;"><span>Successfully updated trust policy of role emr-on-eks-test-job-execution-role
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">{</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;Effect&#34;</span>: <span style="color:#f1fa8c">&#34;Allow&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;Principal&#34;</span>: <span style="color:#ff79c6">{</span>
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;Federated&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:iam::xxxxx:oidc-provider/oidc.eks.ap-northeast-1.amazonaws.com/id/aaaaa&#34;</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">}</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;Action&#34;</span>: <span style="color:#f1fa8c">&#34;sts:AssumeRoleWithWebIdentity&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;Condition&#34;</span>: <span style="color:#ff79c6">{</span>
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;StringLike&#34;</span>: <span style="color:#ff79c6">{</span>
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#34;oidc.eks.ap-northeast-1.amazonaws.com/id/aaaaa:sub&#34;</span>: <span style="color:#f1fa8c">&#34;system:serviceaccount:default:emr-containers-sa-*-*-xxxxx-&lt;BASE36_ENCODED_ROLE_NAME&gt;&#34;</span>
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">}</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">}</span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
-</span></span></code></pre></div><p>クラスタ の issuer url は次のコマンドで取得できる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ aws eks describe-cluster --name <span style="color:#8be9fd;font-style:italic">$CLUSTER_NAME</span> --query <span style="color:#f1fa8c">&#34;cluster.identity.oidc.issuer&#34;</span> --output text 
-</span></span><span style="display:flex;"><span>https://oidc.eks.ap-northeast-1.amazonaws.com/id/aaaaa
-</span></span></code></pre></div><p>IAM OIDC プロバイダーに登録する。</p>
-<p><a href="https://www.sambaiz.net/article/421/">GitHub ActionsからOIDCでassumeできるRoleをCDKで作成する - sambaiz-net</a></p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ eksctl utils associate-iam-oidc-provider --cluster <span style="color:#8be9fd;font-style:italic">$CLUSTER_NAME</span> --approve
-</span></span><span style="display:flex;"><span>2023-01-02 13:39:28 <span style="color:#ff79c6">[</span>ℹ<span style="color:#ff79c6">]</span>  will create IAM Open ID Connect provider <span style="color:#ff79c6">for</span> cluster <span style="color:#f1fa8c">&#34;emr-on-eks-test&#34;</span> in <span style="color:#f1fa8c">&#34;ap-northeast-1&#34;</span>
-</span></span><span style="display:flex;"><span>2023-01-02 13:39:29 <span style="color:#ff79c6">[</span>✔<span style="color:#ff79c6">]</span>  created IAM Open ID Connect provider <span style="color:#ff79c6">for</span> cluster <span style="color:#f1fa8c">&#34;emr-on-eks-test&#34;</span> in <span style="color:#f1fa8c">&#34;ap-northeast-1&#34;</span>
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>$ aws iam list-open-id-connect-providers 
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">{</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;OpenIDConnectProviderList&#34;</span>: <span style="color:#ff79c6">[</span>
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">{</span>
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#34;Arn&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:iam::xxxxx:oidc-provider/oidc.eks.ap-northeast-1.amazonaws.com/id/aaaaa&#34;</span>
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">}</span>,
-</span></span><span style="display:flex;"><span>        ....
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">]</span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
 </span></span></code></pre></div><h2 id="spark-ジョブの実行">Spark ジョブの実行</h2>
 <p>start-job-run すると pod が立ち上がる。リソースが足りないと pending する。
 driver が S3 の AccessDenied で失敗する場合は execution-role が assume できていない可能性があるので、trust policy や IAM OIDC プロバイダーが登録されているか確認する。</p>
@@ -649,10 +643,10 @@ driver が S3 の AccessDenied で失敗する場合は execution-role が assum
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --virtual-cluster-id <span style="color:#8be9fd;font-style:italic">$VIRTUAL_CLUSTER_ID</span> <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --name pi-2 <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --execution-role-arn <span style="color:#8be9fd;font-style:italic">$EXECUTION_ROLE_ARN</span> <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --release-label emr-6.7.0-latest <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --release-label emr-6.13.0-latest <span style="color:#f1fa8c">\
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --job-driver <span style="color:#f1fa8c">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;sparkSubmitJobDriver&#34;: {
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;entryPoint&#34;: &#34;s3://aws-data-analytics-workshops/emr-eks-workshop/scripts/pi.py&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;entryPoint&#34;: &#34;s3://&lt;mybucket&gt;/pi.py&#34;,
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;sparkSubmitParameters&#34;: &#34;--conf spark.executor.instances=1 --conf spark.executor.memory=2G --conf spark.executor.cores=1 --conf spark.driver.cores=1&#34;
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      }
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  }&#39;</span>
@@ -669,19 +663,6 @@ driver が S3 の AccessDenied で失敗する場合は execution-role が assum
 </span></span><span style="display:flex;"><span>000000031bdlkdo0q1k-sn72c          2/2     Running             <span style="color:#bd93f9">0</span>          21s
 </span></span><span style="display:flex;"><span>pythonpi-c4ae29856dad6d33-exec-1   0/1     ContainerCreating   <span style="color:#bd93f9">0</span>          1s
 </span></span><span style="display:flex;"><span>spark-000000031bdlkdo0q1k-driver   2/2     Running             <span style="color:#bd93f9">0</span>          12s
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>$ kubectl describe pod spark-000000031bdlkdo0q1k-driver
-</span></span><span style="display:flex;"><span>...
-</span></span><span style="display:flex;"><span>spark-kubernetes-driver:
-</span></span><span style="display:flex;"><span>  Image:         059004520145.dkr.ecr.ap-northeast-1.amazonaws.com/spark/emr-6.7.0:latest
-</span></span><span style="display:flex;"><span>  Args:
-</span></span><span style="display:flex;"><span>      driver
-</span></span><span style="display:flex;"><span>      --properties-file
-</span></span><span style="display:flex;"><span>      /usr/lib/spark/conf/spark.properties
-</span></span><span style="display:flex;"><span>      --class
-</span></span><span style="display:flex;"><span>      org.apache.spark.deploy.PythonRunner
-</span></span><span style="display:flex;"><span>      local:///usr/lib/spark/examples/src/main/python/pi.py
-</span></span><span style="display:flex;"><span>  ...
 </span></span></code></pre></div>
     </div>
   </article>
