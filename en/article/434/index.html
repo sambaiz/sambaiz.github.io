@@ -644,6 +644,8 @@ If you get an error after this, you would be good to check that what was added w
 </span></span></code></pre></div><h2 id="run-spark-jobs">Run Spark jobs</h2>
 <p>start-job-run launches pods. If the resource is insufficient, it will be pending.
 If the driver fails with S3 AccessDenied, execution-role may be failed to be assumed, so check if trust policy and IAM OIDC provider are registered.</p>
+<p>Enable <a href="https://spark.apache.org/docs/latest/configuration.html#dynamic-allocation">dynamic resource allocation (DAR)</a> to increase or decrease the number of executors based on demand.
+Spark on Kubernetes doesn&rsquo;t support external shuffle service for now, so you need to enable shuffle file tracking instead to prevent executors storing shuffle data from being removed.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">VIRTUAL_CLUSTER_ID</span><span style="color:#ff79c6">=</span>xxxxx
 </span></span><span style="display:flex;"><span>$ <span style="color:#8be9fd;font-style:italic">EXECUTION_ROLE_ARN</span><span style="color:#ff79c6">=</span>arn:aws:iam::xxxxx:role/emr-on-eks-test-job-execution-role
 </span></span><span style="display:flex;"><span>
@@ -657,20 +659,38 @@ If the driver fails with S3 AccessDenied, execution-role may be failed to be ass
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;entryPoint&#34;: &#34;s3://&lt;mybucket&gt;/pi.py&#34;,
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;sparkSubmitParameters&#34;: &#34;--conf spark.executor.instances=1 --conf spark.executor.memory=2G --conf spark.executor.cores=1 --conf spark.driver.cores=1&#34;
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      }
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  }&#39;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --configuration-overrides <span style="color:#f1fa8c">&#39;{
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;monitoringConfiguration&#34;: {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;persistentAppUI&#34;: &#34;ENABLED&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      &#34;s3MonitoringConfiguration&#34;: {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;logUri&#34;: &#34;s3://&lt;mybucket&gt;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      }
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    },
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;applicationConfiguration&#34;: [
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;classification&#34;: &#34;spark-defaults&#34;, 
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;properties&#34;: {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;spark.dynamicAllocation.enabled&#34;:&#34;true&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;spark.dynamicAllocation.shuffleTracking.enabled&#34;:&#34;true&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;spark.dynamicAllocation.minExecutors&#34;:&#34;1&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;spark.dynamicAllocation.maxExecutors&#34;:&#34;100&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">          &#34;spark.dynamicAllocation.initialExecutors&#34;:&#34;1&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">         }
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      }
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    ]
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  }&#39;</span>
+</span></span><span style="display:flex;"><span>  
+</span></span><span style="display:flex;"><span>$ kubectl get pod -n emrcontainers
+</span></span><span style="display:flex;"><span>NAME                               READY   STATUS    RESTARTS   AGE
+</span></span><span style="display:flex;"><span>000000032u7ddboo153-p52fj          3/3     Running    <span style="color:#bd93f9">0</span>          53s
+</span></span><span style="display:flex;"><span>pythonpi-a6561a8bc76bc424-exec-1   1/2     NotReady   <span style="color:#bd93f9">0</span>          25s
+</span></span><span style="display:flex;"><span>pythonpi-a6561a8bc76bc424-exec-2   0/2     Pending    <span style="color:#bd93f9">0</span>          17s
+</span></span><span style="display:flex;"><span>spark-000000032u7ddboo153-driver   1/2     NotReady   <span style="color:#bd93f9">0</span>          40s
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">{</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;id&#34;</span>: <span style="color:#f1fa8c">&#34;000000031bdlkdo0q1k&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;name&#34;</span>: <span style="color:#f1fa8c">&#34;pi-2&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;arn&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:emr-containers:ap-northeast-1:xxxxx:/virtualclusters/xxxxx/jobruns/000000031bdlkdo0q1k&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;virtualClusterId&#34;</span>: <span style="color:#f1fa8c">&#34;xxxxx&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>$ kubectl get pod
-</span></span><span style="display:flex;"><span>NAME                               READY   STATUS              RESTARTS   AGE
-</span></span><span style="display:flex;"><span>000000031bdlkdo0q1k-sn72c          2/2     Running             <span style="color:#bd93f9">0</span>          21s
-</span></span><span style="display:flex;"><span>pythonpi-c4ae29856dad6d33-exec-1   0/1     ContainerCreating   <span style="color:#bd93f9">0</span>          1s
-</span></span><span style="display:flex;"><span>spark-000000031bdlkdo0q1k-driver   2/2     Running             <span style="color:#bd93f9">0</span>          12s
+</span></span><span style="display:flex;"><span>$ aws s3 cp s3://&lt;mybucket&gt;/&lt;cluster_id&gt;/jobs/&lt;job_id&gt;/containers/spark-000000032psj6spu6q7/spark-000000032psj6spu6q7-driver/stdout.gz .
+</span></span><span style="display:flex;"><span>$ gzcat stdout.gz
+</span></span><span style="display:flex;"><span>Pi is roughly 3.140920
 </span></span></code></pre></div><p>When I accessed Glue Data Catalog, I needed to add following settings.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>--configuration-overrides <span style="color:#f1fa8c">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;applicationConfiguration&#34;: [
@@ -683,6 +703,10 @@ If the driver fails with S3 AccessDenied, execution-role may be failed to be ass
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        }
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    ]
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">}&#39;</span>
+</span></span></code></pre></div><p>Information you need to assume the execution role is in environment variables AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE, but
+if &ldquo;software.amazon.awssdk&rdquo; % &ldquo;sts&rdquo; isn&rsquo;t included in dependency,<br>
+AWS SDK for Java outputs the following WARN logs and uses the instance profile&rsquo;s role with <a href="https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/auth/credentials/DefaultCredentialsProvider.html">lower order</a> instead.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>WARN WebIdentityCredentialsUtils: To use web identity tokens, the &#39;sts&#39; service module must be on the class path.
 </span></span></code></pre></div><h2 id="references">References</h2>
 <p><a href="https://qiita.com/watany/items/daf433338de5b6858ed6">EKS Cluster v1.22以降の作り方がCDKで変わった話 #AWS - Qiita</a></p>
 
