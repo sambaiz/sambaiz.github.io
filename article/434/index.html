@@ -641,7 +641,8 @@ Kubernetes の権限に加えて eks:DescribeCluster が必要になるので ma
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>    --role-name <span style="color:#8be9fd;font-style:italic">$EXECUTION_ROLE_NAME</span>
 </span></span><span style="display:flex;"><span>Successfully updated trust policy of role emr-on-eks-test-job-execution-role
 </span></span></code></pre></div><h2 id="spark-ジョブの実行">Spark ジョブの実行</h2>
-<p>start-job-run すると pod が立ち上がる。リソースが足りないと pending する。
+<p>start-job-run すると まず EMR の <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/emr-eks-job-submitter.html#emr-eks-job-submitter-ex-od">job-submitter</a> の pod が立ち上がり、その後 Spark の driver が起動する。
+リソースが足りないと pending する。
 driver が S3 の AccessDenied で失敗する場合は execution-role が assume できていない可能性があるので、trust policy や IAM OIDC プロバイダーが登録されているか確認する。</p>
 <p><a href="https://spark.apache.org/docs/latest/configuration.html#dynamic-allocation">dynamic resource allocation (DAR)</a>を有効にして executor が増減するようにしている。
 現状 Spark on Kubernetes が external shuffle service を<a href="https://aws.github.io/aws-emr-containers-best-practices/performance/docs/dra/">サポートしていない</a>ため、
@@ -691,7 +692,8 @@ driver が S3 の AccessDenied で失敗する場合は execution-role が assum
 </span></span><span style="display:flex;"><span>$ aws s3 cp s3://&lt;mybucket&gt;/&lt;cluster_id&gt;/jobs/&lt;job_id&gt;/containers/spark-000000032psj6spu6q7/spark-000000032psj6spu6q7-driver/stdout.gz .
 </span></span><span style="display:flex;"><span>$ gzcat stdout.gz
 </span></span><span style="display:flex;"><span>Pi is roughly 3.140920
-</span></span></code></pre></div><p>Glue Data Catalog を参照する場合は次の設定を追加する必要があった。</p>
+</span></span></code></pre></div><h2 id="トラブルシューティング">トラブルシューティング</h2>
+<p>Glue Data Catalog を参照する場合は次の設定を追加しないと TABLE_OR_VIEW_NOT_FOUND になる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>--configuration-overrides <span style="color:#f1fa8c">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    &#34;applicationConfiguration&#34;: [
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        {
@@ -703,12 +705,19 @@ driver が S3 の AccessDenied で失敗する場合は execution-role が assum
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        }
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    ]
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">}&#39;</span>
+</span></span></code></pre></div><p>ノードの増減などの際に job-submitter や driver の pod が止まってしまうと SparkContext was shut down などでジョブが失敗してしまうので
+<a href="https://spark.apache.org/docs/latest/running-on-kubernetes.html#configuration">spark.kubernetes.driver.annotation.<!-- raw HTML omitted --></a> で annotation を付けるなどして回避する。
+ただし job-submitter に関してはこの方法が現状取れないので nodeSelector で増減しないノードグループのノードを指定するか、何らかの方法で annotation を付ける必要がある。</p>
+<p><a href="https://www.sambaiz.net/article/455/">CDK で EKS クラスタに Karpenter をインストールし柔軟で高速なオートスケールを行う - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>&#34;spark.kubernetes.driver.annotation.karpenter.sh/do-not-disrupt&#34;: &#34;true&#34;
+</span></span><span style="display:flex;"><span>&#34;jobsubmitter.node.selector.&lt;label&gt;&#34;: &#34;&lt;value&gt;&#34;,
 </span></span></code></pre></div><p>execution role を assume するのに必要な情報は環境変数 AWS_ROLE_ARN や AWS_WEB_IDENTITY_TOKEN_FILE にあるが、
 AWS SDK for Java は &ldquo;software.amazon.awssdk&rdquo; % &ldquo;sts&rdquo; が依存にないと次の WARN ログを出力し
 <a href="https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/auth/credentials/DefaultCredentialsProvider.html">優先順位の低い</a> instance profile の Role を使ってしまう。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>WARN WebIdentityCredentialsUtils: To use web identity tokens, the &#39;sts&#39; service module must be on the class path.
 </span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://qiita.com/watany/items/daf433338de5b6858ed6">EKS Cluster v1.22以降の作り方がCDKで変わった話 #AWS - Qiita</a></p>
+<p><a href="https://medium.com/@oiuypp00/how-to-make-robust-emr-on-eks-pipelines-scheduling-by-airflow-e53b15c78ea9">How to Make Robust EMR on EKS pipelines + Airflow | by Jun Seokjun Han | Medium</a></p>
 
     </div>
   </article>

@@ -453,6 +453,9 @@
       <p><a href="https://karpenter.sh/">Karpenter</a> は AWS によって開発されている Kubernetes クラスタのノードを増減させる OSS。
 標準の <a href="https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/aws/README.md">Cluster Autoscaler</a> と比べて Auto Scaling Group を介さない柔軟で高速なプロビジョニングを行うことができる。
 現状は EKS にしか対応していないが、他のクラウドについても<a href="https://karpenter.sh/docs/faq/#what-cloud-providers-are-supported">対応できるようになっている</a>らしい。</p>
+<blockquote>
+<p>(追記: 2023-12-06) AKS にも<a href="https://azure.microsoft.com/ja-jp/updates/provider-for-running-karpenter-on-azure-kubernetes-service-aks/">対応した</a></p>
+</blockquote>
 <p>今回は CDK で EKS クラスタに Karpenter をインストールし replica 数を増減したときにクラスタがオートスケールすることを確認する。
 全体のコードは <a href="https://github.com/sambaiz/install-karpenter-with-cdk">GitHub</a> にある。</p>
 <h2 id="karpenter-が用いる-aws-リソースの作成">Karpenter が用いる AWS リソースの作成</h2>
@@ -513,11 +516,8 @@ ControllerRole の Principal が間違っていて AssumeRole できなかった
 </span></span><span style="display:flex;"><span>      }
 </span></span><span style="display:flex;"><span>    },
 </span></span><span style="display:flex;"><span>    settings<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      aws<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>        clusterName: <span style="color:#8be9fd">cluster.clusterName</span>,
-</span></span><span style="display:flex;"><span>        defaultInstanceProfile: <span style="color:#8be9fd">instanceProfileName</span>,
-</span></span><span style="display:flex;"><span>        interruptionQueueName: <span style="color:#8be9fd">interruptionQueueName</span>
-</span></span><span style="display:flex;"><span>      }
+</span></span><span style="display:flex;"><span>      clusterName: <span style="color:#8be9fd">cluster.clusterName</span>,
+</span></span><span style="display:flex;"><span>      interruptionQueue: <span style="color:#8be9fd">interruptionQueueName</span>
 </span></span><span style="display:flex;"><span>    },
 </span></span><span style="display:flex;"><span>    controller<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>      resources<span style="color:#ff79c6">:</span> {
@@ -534,58 +534,80 @@ ControllerRole の Principal が間違っていて AssumeRole できなかった
 </span></span><span style="display:flex;"><span>  },
 </span></span><span style="display:flex;"><span>  wait: <span style="color:#8be9fd">true</span>
 </span></span><span style="display:flex;"><span>})
-</span></span></code></pre></div><h2 id="provisionerhttpskarpentershdocsconceptsprovisioners-と-awsnodetemplatehttpskarpentershdocsconceptsnode-templates-の設定"><a href="https://karpenter.sh/docs/concepts/provisioners/">Provisioner</a> と <a href="https://karpenter.sh/docs/concepts/node-templates/">AWSNodeTemplate</a> の設定</h2>
-<p>プロビジョニングするインスタンスの設定。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>cluster.addManifest(<span style="color:#f1fa8c">&#39;DefaultProvisionerAndNodeTemplate&#39;</span>, {
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;apiVersion&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;karpenter.sh/v1alpha5&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;kind&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;Provisioner&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;metadata&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;name&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;spec&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;requirements&#34;</span><span style="color:#ff79c6">:</span> [{
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;key&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;karpenter.sh/capacity-type&#34;</span>,
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;operator&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;In&#34;</span>,
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;values&#34;</span><span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;spot&#34;</span>]
-</span></span><span style="display:flex;"><span>      }],
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;limits&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;resources&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;cpu&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#bd93f9">1000</span>
-</span></span><span style="display:flex;"><span>        },
-</span></span><span style="display:flex;"><span>      },
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;providerRef&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;name&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>
-</span></span><span style="display:flex;"><span>      },
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;consolidation&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;enabled&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">true</span>
-</span></span><span style="display:flex;"><span>      }
-</span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>  }, {
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;apiVersion&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;karpenter.k8s.aws/v1alpha1&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;kind&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;AWSNodeTemplate&#34;</span>,
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;metadata&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;name&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;spec&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;subnetSelector&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span></code></pre></div><h2 id="nodepoolshttpskarpentershdocsconceptsnodepools-と-ec2nodeclasseshttpskarpentershdocsconceptsnodeclasses-の設定"><a href="https://karpenter.sh/docs/concepts/nodepools/">NodePools</a> と <a href="https://karpenter.sh/docs/concepts/nodeclasses/">EC2NodeClasses</a> の設定</h2>
+<p>プロビジョニングするインスタンスの設定を行う。</p>
+<blockquote>
+<p>(追記: 2023-12-06) v0.32.0 で v1beta1 api が追加され、旧来の Provisioner や AWSNodeTemplate は<a href="https://aws.amazon.com/blogs/containers/karpenter-graduates-to-beta/">非推奨になった</a>。
+併せて各種 AWS リソースのタグも変更されたため Policy の condition も修正されている。</p>
+</blockquote>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>cluster.addManifest(<span style="color:#f1fa8c">&#39;DefaultProvisionerAndNodeTemplate&#39;</span>,  {
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;apiVersion&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;karpenter.k8s.aws/v1beta1&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;kind&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;EC2NodeClass&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;metadata&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;name&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;spec&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;amiFamily&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;AL2&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;role&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`KarpenterNodeRole-</span><span style="color:#f1fa8c">${</span>cluster.clusterName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">`</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;subnetSelectorTerms&#34;</span><span style="color:#ff79c6">:</span> [{
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;tags&#34;</span><span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;Name&#34;</span><span style="color:#ff79c6">:</span> cluster.vpc.publicSubnets.join(<span style="color:#f1fa8c">&#34;,&#34;</span>)
-</span></span><span style="display:flex;"><span>      },
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;securityGroupSelector&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;aws-ids&#34;</span><span style="color:#ff79c6">:</span> cluster.clusterSecurityGroup.securityGroupId
 </span></span><span style="display:flex;"><span>      }
+</span></span><span style="display:flex;"><span>    }],
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;securityGroupSelectorTerms&#34;</span><span style="color:#ff79c6">:</span> [{
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;id&#34;</span><span style="color:#ff79c6">:</span> cluster.clusterSecurityGroup.securityGroupId
+</span></span><span style="display:flex;"><span>    }],
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4">// optional
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>    <span style="color:#f1fa8c">&#34;blockDeviceMappings&#34;</span><span style="color:#ff79c6">:</span> [{
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;deviceName&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;/dev/xvda&#34;</span>,
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;ebs&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;volumeSize&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;100Gi&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;volumeType&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;gp3&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;deleteOnTermination&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">true</span>,
+</span></span><span style="display:flex;"><span>      }
+</span></span><span style="display:flex;"><span>    }]
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>}, {
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;apiVersion&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;karpenter.sh/v1beta1&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;kind&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;NodePool&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;metadata&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;name&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;spec&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;template&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;spec&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;nodeClassRef&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;name&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>
+</span></span><span style="display:flex;"><span>        },
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#34;requirements&#34;</span><span style="color:#ff79c6">:</span> [{
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;key&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;karpenter.sh/capacity-type&#34;</span>,
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;operator&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;In&#34;</span>,
+</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#34;values&#34;</span><span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;spot&#34;</span>]
+</span></span><span style="display:flex;"><span>        }],
+</span></span><span style="display:flex;"><span>      }
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;disruption&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;consolidationPolicy&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;WhenUnderutilized&#34;</span>
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;limits&#34;</span><span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;cpu&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;1000&#34;</span>
 </span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>  })
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div><h2 id="動作確認">動作確認</h2>
-<p>deployment の replica 数を増やすと Provisioner の requirements 通りスポットインスタンスが立ち上がり、削除するとシャットダウンした。</p>
+<p>deployment の replica 数を増やすと NodePool の requirements 通りスポットインスタンスが立ち上がり、削除するとシャットダウンした。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>$ kubectl scale deployment inflate <span style="color:#ff79c6">--</span>replicas <span style="color:#bd93f9">5</span>
 </span></span><span style="display:flex;"><span>$ kubectl logs <span style="color:#ff79c6">-</span>f <span style="color:#ff79c6">-</span>n karpenter <span style="color:#ff79c6">-</span>l app.kubernetes.io<span style="color:#ff79c6">/</span>name<span style="color:#ff79c6">=</span>karpenter <span style="color:#ff79c6">-</span>c controller
 </span></span><span style="display:flex;"><span>...
-</span></span><span style="display:flex;"><span><span style="color:#bd93f9">2023</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span>13T11:<span style="color:#8be9fd">23</span><span style="color:#ff79c6">:</span><span style="color:#bd93f9">54.724</span>Z        INFO    controller.machine.lifecycle    launched machine        {<span style="color:#f1fa8c">&#34;commit&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;322822a&#34;</span>, <span style="color:#f1fa8c">&#34;machine&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default-hbtqm&#34;</span>, <span style="color:#f1fa8c">&#34;provisioner&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>, <span style="color:#f1fa8c">&#34;provider-id&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;aws:///us-east-1a/i-04ae829209702f2cb&#34;</span>, <span style="color:#f1fa8c">&#34;instance-type&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;c6i.2xlarge&#34;</span>, <span style="color:#f1fa8c">&#34;zone&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;us-east-1a&#34;</span>, <span style="color:#f1fa8c">&#34;capacity-type&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;spot&#34;</span>, <span style="color:#f1fa8c">&#34;allocatable&#34;</span><span style="color:#ff79c6">:</span> {<span style="color:#f1fa8c">&#34;cpu&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;7910m&#34;</span>,<span style="color:#f1fa8c">&#34;ephemeral-storage&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;17Gi&#34;</span>,<span style="color:#f1fa8c">&#34;memory&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;14162Mi&#34;</span>,<span style="color:#f1fa8c">&#34;pods&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;58&#34;</span>}}
-</span></span><span style="display:flex;"><span><span style="color:#bd93f9">2023</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span>13T11:<span style="color:#8be9fd">24</span><span style="color:#ff79c6">:</span><span style="color:#bd93f9">15.299</span>Z        DEBUG   controller.machine.lifecycle    registered machine      {<span style="color:#f1fa8c">&#34;commit&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;322822a&#34;</span>, <span style="color:#f1fa8c">&#34;machine&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default-hbtqm&#34;</span>, <span style="color:#f1fa8c">&#34;provisioner&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>, <span style="color:#f1fa8c">&#34;provider-id&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;aws:///us-east-1a/i-04ae829209702f2cb&#34;</span>, <span style="color:#f1fa8c">&#34;node&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;ip-10-18-7-7.ec2.internal&#34;</span>}
-</span></span><span style="display:flex;"><span><span style="color:#bd93f9">2023</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span>13T11:<span style="color:#8be9fd">24</span><span style="color:#ff79c6">:</span><span style="color:#bd93f9">22.399</span>Z        DEBUG   controller.machine.lifecycle    initialized machine     {<span style="color:#f1fa8c">&#34;commit&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;322822a&#34;</span>, <span style="color:#f1fa8c">&#34;machine&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default-hbtqm&#34;</span>, <span style="color:#f1fa8c">&#34;provisioner&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>, <span style="color:#f1fa8c">&#34;provider-id&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;aws:///us-east-1a/i-04ae829209702f2cb&#34;</span>, <span style="color:#f1fa8c">&#34;node&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;ip-10-18-7-7.ec2.internal&#34;</span>}
-</span></span><span style="display:flex;"><span><span style="color:#bd93f9">2023</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span>13T11:<span style="color:#8be9fd">24</span><span style="color:#ff79c6">:</span><span style="color:#bd93f9">15.299</span>Z        DEBUG   controller.machine.lifecycle    registered machine      {<span style="color:#f1fa8c">&#34;commit&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;322822a&#34;</span>, <span style="color:#f1fa8c">&#34;machine&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default-hbtqm&#34;</span>, <span style="color:#f1fa8c">&#34;provisioner&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>, <span style="color:#f1fa8c">&#34;provider-id&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;aws:///us-east-1a/i-04ae829209702f2cb&#34;</span>, <span style="color:#f1fa8c">&#34;node&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;ip-10-18-7-7.ec2.internal&#34;</span>}
-</span></span><span style="display:flex;"><span><span style="color:#bd93f9">2023</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span>13T11:<span style="color:#8be9fd">24</span><span style="color:#ff79c6">:</span><span style="color:#bd93f9">22.399</span>Z        DEBUG   controller.machine.lifecycle    initialized machine     {<span style="color:#f1fa8c">&#34;commit&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;322822a&#34;</span>, <span style="color:#f1fa8c">&#34;machine&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default-hbtqm&#34;</span>, <span style="color:#f1fa8c">&#34;provisioner&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>, <span style="color:#f1fa8c">&#34;provider-id&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;aws:///us-east-1a/i-04ae829209702f2cb&#34;</span>, <span style="color:#f1fa8c">&#34;node&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;ip-10-18-7-7.ec2.internal&#34;</span>}
-</span></span><span style="display:flex;"><span><span style="color:#bd93f9">2023</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span>13T11:<span style="color:#8be9fd">27</span><span style="color:#ff79c6">:</span><span style="color:#bd93f9">22.101</span>Z        DEBUG   controller.awsnodetemplate      discovered subnets      {<span style="color:#f1fa8c">&#34;commit&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;322822a&#34;</span>, <span style="color:#f1fa8c">&#34;awsnodetemplate&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;default&#34;</span>, <span style="color:#f1fa8c">&#34;subnets&#34;</span><span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;subnet-0c890304d3ebc77a8 (us-east-1b)&#34;</span>, <span style="color:#f1fa8c">&#34;subnet-0e42f4251d016c74b (us-east-1a)&#34;</span>]}
+</span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;found provisionable pod(s)&#34;</span>,...
+</span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;computed new nodeclaim(s) to fit pod(s)&#34;</span>,...
+</span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;created nodeclaim&#34;</span>,...
+</span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;created launch template&#34;</span>,...
+</span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;launched nodeclaim&#34;</span>,...
+</span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;discovered subnets&#34;</span>,...
+</span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;registered nodeclaim&#34;</span>,...
+</span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;initialized nodeclaim&#34;</span>,...
 </span></span></code></pre></div><p>ノードには次のような Label が付けられ、<a href="https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector">nodeSelector</a> でこれらを指定することで条件に合うノードに Pod をスケジュールできる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>category<span style="color:#ff79c6">=</span>r
 </span></span><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>cpu<span style="color:#ff79c6">=</span><span style="color:#bd93f9">16</span>

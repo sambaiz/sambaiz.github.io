@@ -453,28 +453,28 @@
       <p>まもなくEIP以外の<a href="https://aws.amazon.com/jp/blogs/aws/new-aws-public-ipv4-address-charge-public-ip-insights/">パブリックIPv4アドレスにも課金</a>されるようになるためIPv6への移行を進めていきたい今日この頃、CDK で IPv6 環境を構築し、外部と通信する際に必要なリソースや挙動を確認してみた。</p>
 <h2 id="vpcの作成">VPCの作成</h2>
 <p>VPCに割り当てられるIPv6のブロックは <a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-cidr-blocks.html#vpc-sizing-ipv6">/56</a> 固定で、サブネットは <a href="https://docs.aws.amazon.com/vpc/latest/userguide/subnet-sizing.html#subnet-sizing-ipv6">/64</a> 固定となっている。パブリックIPv4アドレスは自動で割り当てられないように、IPv6アドレスは自動で割り当てられるようにした。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-jsx" data-lang="jsx"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> vpc <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.Vpc(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;VPC&#39;</span>, {
-</span></span><span style="display:flex;"><span>  ipAddresses<span style="color:#ff79c6">:</span> ec2.IpAddresses.cidr(<span style="color:#f1fa8c">&#39;10.0.0.0/22&#39;</span>),
-</span></span><span style="display:flex;"><span>  maxAzs<span style="color:#ff79c6">:</span> <span style="color:#bd93f9">2</span>,
-</span></span><span style="display:flex;"><span>  natGateways<span style="color:#ff79c6">:</span> <span style="color:#bd93f9">0</span>,
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> vpc <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.Vpc(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;VPC&#39;</span>, {
+</span></span><span style="display:flex;"><span>  ipAddresses: <span style="color:#8be9fd">ec2.IpAddresses.cidr</span>(<span style="color:#f1fa8c">&#39;10.0.0.0/22&#39;</span>),
+</span></span><span style="display:flex;"><span>  maxAzs: <span style="color:#8be9fd">2</span>,
+</span></span><span style="display:flex;"><span>  natGateways: <span style="color:#8be9fd">0</span>,
 </span></span><span style="display:flex;"><span>  subnetConfiguration<span style="color:#ff79c6">:</span> [
 </span></span><span style="display:flex;"><span>    {
-</span></span><span style="display:flex;"><span>      subnetType<span style="color:#ff79c6">:</span> ec2.SubnetType.PUBLIC,
+</span></span><span style="display:flex;"><span>      subnetType: <span style="color:#8be9fd">ec2.SubnetType.PUBLIC</span>,
 </span></span><span style="display:flex;"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Public&#39;</span>,
-</span></span><span style="display:flex;"><span>      cidrMask<span style="color:#ff79c6">:</span> <span style="color:#bd93f9">24</span>,
-</span></span><span style="display:flex;"><span>      mapPublicIpOnLaunch<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">false</span>  <span style="color:#6272a4">// settings for Auto-assign public IPv4 address (default: true)
+</span></span><span style="display:flex;"><span>      cidrMask: <span style="color:#8be9fd">24</span>,
+</span></span><span style="display:flex;"><span>      mapPublicIpOnLaunch: <span style="color:#8be9fd">false</span>  <span style="color:#6272a4">// settings for Auto-assign public IPv4 address (default: true)
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>    },
 </span></span><span style="display:flex;"><span>    {
-</span></span><span style="display:flex;"><span>      subnetType<span style="color:#ff79c6">:</span> ec2.SubnetType.PRIVATE_WITH_EGRESS,
+</span></span><span style="display:flex;"><span>      subnetType: <span style="color:#8be9fd">ec2.SubnetType.PRIVATE_WITH_EGRESS</span>,
 </span></span><span style="display:flex;"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Private&#39;</span>,
-</span></span><span style="display:flex;"><span>      cidrMask<span style="color:#ff79c6">:</span> <span style="color:#bd93f9">24</span>,
+</span></span><span style="display:flex;"><span>      cidrMask: <span style="color:#8be9fd">24</span>,
 </span></span><span style="display:flex;"><span>    }
 </span></span><span style="display:flex;"><span>  ],
 </span></span><span style="display:flex;"><span>});
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> cidrBlockIPV6 <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.CfnVPCCidrBlock(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;CidrBlockIPV6&#39;</span>, {
-</span></span><span style="display:flex;"><span>  vpcId<span style="color:#ff79c6">:</span> vpc.vpcId,
-</span></span><span style="display:flex;"><span>  amazonProvidedIpv6CidrBlock<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">true</span>,
+</span></span><span style="display:flex;"><span>  vpcId: <span style="color:#8be9fd">vpc.vpcId</span>,
+</span></span><span style="display:flex;"><span>  amazonProvidedIpv6CidrBlock: <span style="color:#8be9fd">true</span>,
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> vpcIpv6CidrBlock <span style="color:#ff79c6">=</span> cdk.Fn.select(<span style="color:#bd93f9">0</span>, vpc.vpcIpv6CidrBlocks);
@@ -483,9 +483,9 @@
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4">// e.g. 2406:da14:856:3200::/64, 2406:da14:856:3201::/64, ...
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">const</span> subnetIpv6CidrBlocks <span style="color:#ff79c6">=</span> cdk.Fn.cidr(vpcIpv6CidrBlock, <span style="color:#bd93f9">256</span>, <span style="color:#f1fa8c">&#34;64&#34;</span>);
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>[...vpc.publicSubnets, ...vpc.privateSubnets].forEach((subnet, i) =&gt; {
+</span></span><span style="display:flex;"><span>[...vpc.publicSubnets, ...vpc.privateSubnets].forEach((subnet, i) <span style="color:#ff79c6">=&gt;</span> {
 </span></span><span style="display:flex;"><span>  subnet.node.addDependency(cidrBlockIPV6);
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> cfnSubnet <span style="color:#ff79c6">=</span> subnet.node.defaultChild as ec2.CfnSubnet
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> cfnSubnet <span style="color:#ff79c6">=</span> subnet.node.defaultChild <span style="color:#ff79c6">as</span> ec2.CfnSubnet
 </span></span><span style="display:flex;"><span>  cfnSubnet.ipv6CidrBlock <span style="color:#ff79c6">=</span> cdk.Fn.select(i, subnetIpv6CidrBlocks);
 </span></span><span style="display:flex;"><span>  cfnSubnet.assignIpv6AddressOnCreation <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">true</span>
 </span></span><span style="display:flex;"><span>  cfnSubnet.enableDns64 <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">true</span>
@@ -497,52 +497,52 @@ SSM はじめ IPv6 に対応していないサービスの API を呼ぶ際に v
 <p>また、パブリックIPv4アドレスが割り当てられていないパブリックサブネットのインスタンスからも v4 で通信できるように DNS64 を有効にして <a href="https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-nat64-dns64.html">NAT64</a> のためのルートを追加している。
 DNS64 は IPv4 アドレスを <a href="https://datatracker.ietf.org/doc/html/rfc6052">RFC6052</a> の 64:ff9b:: prefix を付けることで IPv6 として返し、
 この prefix 付きのアドレスを NAT ゲートウェイが受け取ると IPv4 パケットへの変換が行われるのでパブリックIPv4アドレスなしで通信することができる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-jsx" data-lang="jsx"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> natGatewayEIP <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.CfnEIP(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;NatGatewayEIP&#39;</span>, {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> natGatewayEIP <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.CfnEIP(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;NatGatewayEIP&#39;</span>, {
 </span></span><span style="display:flex;"><span>  domain<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;vpc&#39;</span>,
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> natGateway <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.CfnNatGateway(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;NatGateway&#39;</span>, {
-</span></span><span style="display:flex;"><span>  allocationId<span style="color:#ff79c6">:</span> natGatewayEIP.attrAllocationId,
-</span></span><span style="display:flex;"><span>  subnetId<span style="color:#ff79c6">:</span> vpc.publicSubnets[<span style="color:#bd93f9">0</span>].subnetId,
+</span></span><span style="display:flex;"><span>  allocationId: <span style="color:#8be9fd">natGatewayEIP.attrAllocationId</span>,
+</span></span><span style="display:flex;"><span>  subnetId: <span style="color:#8be9fd">vpc.publicSubnets</span>[<span style="color:#bd93f9">0</span>].subnetId,
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>vpc.publicSubnets.forEach((subnet) =&gt; {
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> ec2Subnet <span style="color:#ff79c6">=</span> subnet as ec2.Subnet
+</span></span><span style="display:flex;"><span>vpc.publicSubnets.forEach((subnet) <span style="color:#ff79c6">=&gt;</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> ec2Subnet <span style="color:#ff79c6">=</span> subnet <span style="color:#ff79c6">as</span> ec2.Subnet
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>  ec2Subnet.addRoute(<span style="color:#f1fa8c">&#39;DefaultIPV6Route&#39;</span>, {
-</span></span><span style="display:flex;"><span>    routerType<span style="color:#ff79c6">:</span> ec2.RouterType.GATEWAY,
-</span></span><span style="display:flex;"><span>    routerId<span style="color:#ff79c6">:</span> vpc.internetGatewayId<span style="color:#ff79c6">!</span>,
+</span></span><span style="display:flex;"><span>    routerType: <span style="color:#8be9fd">ec2.RouterType.GATEWAY</span>,
+</span></span><span style="display:flex;"><span>    routerId: <span style="color:#8be9fd">vpc.internetGatewayId</span><span style="color:#ff79c6">!</span>,
 </span></span><span style="display:flex;"><span>    destinationIpv6CidrBlock<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;::/0&#34;</span>,
-</span></span><span style="display:flex;"><span>    enablesInternetConnectivity<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">true</span>,
+</span></span><span style="display:flex;"><span>    enablesInternetConnectivity: <span style="color:#8be9fd">true</span>,
 </span></span><span style="display:flex;"><span>  })
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>  ec2Subnet.addRoute(<span style="color:#f1fa8c">&#39;NAT64IPV6Route&#39;</span>, {
-</span></span><span style="display:flex;"><span>    routerType<span style="color:#ff79c6">:</span> ec2.RouterType.NAT_GATEWAY,
-</span></span><span style="display:flex;"><span>    routerId<span style="color:#ff79c6">:</span> natGateway.ref,
+</span></span><span style="display:flex;"><span>    routerType: <span style="color:#8be9fd">ec2.RouterType.NAT_GATEWAY</span>,
+</span></span><span style="display:flex;"><span>    routerId: <span style="color:#8be9fd">natGateway.ref</span>,
 </span></span><span style="display:flex;"><span>    destinationIpv6CidrBlock<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;64:ff9b::/96&#34;</span>,
-</span></span><span style="display:flex;"><span>    enablesInternetConnectivity<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">true</span>,
+</span></span><span style="display:flex;"><span>    enablesInternetConnectivity: <span style="color:#8be9fd">true</span>,
 </span></span><span style="display:flex;"><span>  })
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> egressOnlyIgw <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.CfnEgressOnlyInternetGateway(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#34;EgressOnlyIGW&#34;</span>, {
-</span></span><span style="display:flex;"><span>  vpcId<span style="color:#ff79c6">:</span> vpc.vpcId
+</span></span><span style="display:flex;"><span>  vpcId: <span style="color:#8be9fd">vpc.vpcId</span>
 </span></span><span style="display:flex;"><span>});
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>vpc.privateSubnets.forEach((subnet, i) =&gt; {
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> ec2Subnet <span style="color:#ff79c6">=</span> subnet as ec2.Subnet
+</span></span><span style="display:flex;"><span>vpc.privateSubnets.forEach((subnet, i) <span style="color:#ff79c6">=&gt;</span> {
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">const</span> ec2Subnet <span style="color:#ff79c6">=</span> subnet <span style="color:#ff79c6">as</span> ec2.Subnet
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>  ec2Subnet.addDefaultNatRoute(natGateway.ref)
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>  ec2Subnet.addRoute(<span style="color:#f1fa8c">&#39;DefaultIPV6Route&#39;</span>, {
-</span></span><span style="display:flex;"><span>    routerType<span style="color:#ff79c6">:</span> ec2.RouterType.EGRESS_ONLY_INTERNET_GATEWAY,
-</span></span><span style="display:flex;"><span>    routerId<span style="color:#ff79c6">:</span> egressOnlyIgw.ref,
+</span></span><span style="display:flex;"><span>    routerType: <span style="color:#8be9fd">ec2.RouterType.EGRESS_ONLY_INTERNET_GATEWAY</span>,
+</span></span><span style="display:flex;"><span>    routerId: <span style="color:#8be9fd">egressOnlyIgw.ref</span>,
 </span></span><span style="display:flex;"><span>    destinationIpv6CidrBlock<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;::/0&#34;</span>,
-</span></span><span style="display:flex;"><span>    enablesInternetConnectivity<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">true</span>,
+</span></span><span style="display:flex;"><span>    enablesInternetConnectivity: <span style="color:#8be9fd">true</span>,
 </span></span><span style="display:flex;"><span>  })
 </span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div><h2 id="挙動確認">挙動確認</h2>
 <p>パブリックとプライベートサブネットにインスタンスを立てた。IPv6 の Outbound を許可している。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-jsx" data-lang="jsx"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> role <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EC2Role&#39;</span>, {
-</span></span><span style="display:flex;"><span>  assumedBy<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> iam.ServicePrincipal(<span style="color:#f1fa8c">&#39;ec2.amazonaws.com&#39;</span>),
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> role <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EC2Role&#39;</span>, {
+</span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.ServicePrincipal(<span style="color:#f1fa8c">&#39;ec2.amazonaws.com&#39;</span>),
 </span></span><span style="display:flex;"><span>  managedPolicies<span style="color:#ff79c6">:</span> [
 </span></span><span style="display:flex;"><span>    iam.ManagedPolicy.fromAwsManagedPolicyName(<span style="color:#f1fa8c">&#39;AmazonSSMManagedInstanceCore&#39;</span>),
 </span></span><span style="display:flex;"><span>  ],
@@ -550,55 +550,54 @@ DNS64 は IPv4 アドレスを <a href="https://datatracker.ietf.org/doc/html/rf
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> securityGroup <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.SecurityGroup(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EC2SecurityGroup&#39;</span>, {
 </span></span><span style="display:flex;"><span>  vpc,
-</span></span><span style="display:flex;"><span>  allowAllOutbound<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">true</span>,
-</span></span><span style="display:flex;"><span>  allowAllIpv6Outbound<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">true</span>,
+</span></span><span style="display:flex;"><span>  allowAllOutbound: <span style="color:#8be9fd">true</span>,
+</span></span><span style="display:flex;"><span>  allowAllIpv6Outbound: <span style="color:#8be9fd">true</span>,
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> publicSubnetEC2Instance <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.Instance(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EC2PublicSubnet&#39;</span>, {
 </span></span><span style="display:flex;"><span>  vpc,
-</span></span><span style="display:flex;"><span>  instanceType<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> ec2.InstanceType(<span style="color:#f1fa8c">&#39;t2.micro&#39;</span>),
-</span></span><span style="display:flex;"><span>  machineImage<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> ec2.AmazonLinuxImage(),
-</span></span><span style="display:flex;"><span>  role<span style="color:#ff79c6">:</span> role,
-</span></span><span style="display:flex;"><span>  securityGroup<span style="color:#ff79c6">:</span> securityGroup,
+</span></span><span style="display:flex;"><span>  instanceType: <span style="color:#8be9fd">new</span> ec2.InstanceType(<span style="color:#f1fa8c">&#39;t2.micro&#39;</span>),
+</span></span><span style="display:flex;"><span>  machineImage: <span style="color:#8be9fd">new</span> ec2.AmazonLinuxImage(),
+</span></span><span style="display:flex;"><span>  role: <span style="color:#8be9fd">role</span>,
+</span></span><span style="display:flex;"><span>  securityGroup: <span style="color:#8be9fd">securityGroup</span>,
 </span></span><span style="display:flex;"><span>  vpcSubnets<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>    subnetType<span style="color:#ff79c6">:</span> ec2.SubnetType.PUBLIC,
+</span></span><span style="display:flex;"><span>    subnetType: <span style="color:#8be9fd">ec2.SubnetType.PUBLIC</span>,
 </span></span><span style="display:flex;"><span>  },
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> privateSubnetEC2Instance <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> ec2.Instance(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;EC2PrivateSubnet&#39;</span>, {
 </span></span><span style="display:flex;"><span>  vpc,
-</span></span><span style="display:flex;"><span>  instanceType<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> ec2.InstanceType(<span style="color:#f1fa8c">&#39;t2.micro&#39;</span>),
-</span></span><span style="display:flex;"><span>  machineImage<span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> ec2.AmazonLinuxImage(),
-</span></span><span style="display:flex;"><span>  role<span style="color:#ff79c6">:</span> role,
-</span></span><span style="display:flex;"><span>  securityGroup<span style="color:#ff79c6">:</span> securityGroup,
+</span></span><span style="display:flex;"><span>  instanceType: <span style="color:#8be9fd">new</span> ec2.InstanceType(<span style="color:#f1fa8c">&#39;t2.micro&#39;</span>),
+</span></span><span style="display:flex;"><span>  machineImage: <span style="color:#8be9fd">new</span> ec2.AmazonLinuxImage(),
+</span></span><span style="display:flex;"><span>  role: <span style="color:#8be9fd">role</span>,
+</span></span><span style="display:flex;"><span>  securityGroup: <span style="color:#8be9fd">securityGroup</span>,
 </span></span><span style="display:flex;"><span>  vpcSubnets<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>    subnetType<span style="color:#ff79c6">:</span> ec2.SubnetType.PRIVATE_WITH_EGRESS,
+</span></span><span style="display:flex;"><span>    subnetType: <span style="color:#8be9fd">ec2.SubnetType.PRIVATE_WITH_EGRESS</span>,
 </span></span><span style="display:flex;"><span>  },
 </span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div><p>インスタンスに入って AAAA レコードを返す ifconfig.io にリクエストするとインスタンスの IPv6 アドレスが返ってくることから IPv6 で通信できていることがわかる。
 また、本来 AAAA レコードが返らない httpbin.org で DNS64 によって 64:ff9b:: prefix の IPv6アドレスへの名前解決が行われることと、NATゲートウェイの IPv4 アドレスが返ることから NAT64 による変換が行われていることも確認できる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-jsx" data-lang="jsx"><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>$ curl ifconfig.io
-</span></span><span style="display:flex;"><span><span style="color:#bd93f9">2406</span><span style="color:#ff79c6">:</span>da14<span style="color:#ff79c6">:</span><span style="color:#bd93f9">45</span>a<span style="color:#ff79c6">:</span><span style="color:#bd93f9">3402</span><span style="color:#ff79c6">:</span><span style="color:#bd93f9">7815</span><span style="color:#ff79c6">:</span><span style="color:#bd93f9">32</span>a9<span style="color:#ff79c6">:</span><span style="color:#bd93f9">72</span>db<span style="color:#ff79c6">:</span>d9e4
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ curl ifconfig.io
+</span></span><span style="display:flex;"><span>2406:da14:45a:3402:7815:32a9:72db:d9e4
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>$ nslookup <span style="color:#ff79c6">-</span>q<span style="color:#ff79c6">=</span>AAAA httpbin.org
-</span></span><span style="display:flex;"><span>Server<span style="color:#ff79c6">:</span>         <span style="color:#bd93f9">10.0.0.2</span>
-</span></span><span style="display:flex;"><span>Address<span style="color:#ff79c6">:</span>        <span style="color:#bd93f9">10.0.0.2</span>#<span style="color:#bd93f9">53</span>
+</span></span><span style="display:flex;"><span>$ nslookup -q<span style="color:#ff79c6">=</span>AAAA httpbin.org
+</span></span><span style="display:flex;"><span>Server:         10.0.0.2
+</span></span><span style="display:flex;"><span>Address:        10.0.0.2#53
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>Non<span style="color:#ff79c6">-</span>authoritative answer<span style="color:#ff79c6">:</span>
-</span></span><span style="display:flex;"><span>    httpbin.org     has AAAA address <span style="color:#bd93f9">64</span><span style="color:#ff79c6">:</span>ff9b<span style="color:#ff79c6">::</span><span style="color:#bd93f9">3448</span><span style="color:#ff79c6">:</span>ee09
-</span></span><span style="display:flex;"><span>    httpbin.org     has AAAA address <span style="color:#bd93f9">64</span><span style="color:#ff79c6">:</span>ff9b<span style="color:#ff79c6">::</span><span style="color:#bd93f9">3</span>e4<span style="color:#ff79c6">:</span><span style="color:#bd93f9">853</span>a
+</span></span><span style="display:flex;"><span>Non-authoritative answer:
+</span></span><span style="display:flex;"><span>    httpbin.org     has AAAA address 64:ff9b::3448:ee09
+</span></span><span style="display:flex;"><span>    httpbin.org     has AAAA address 64:ff9b::3e4:853a
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>$ man curl
 </span></span><span style="display:flex;"><span>...
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">6</span>, <span style="color:#ff79c6">--</span>ipv6
-</span></span><span style="display:flex;"><span>This option tells curl to resolve names to IPv6 addresses only, and not <span style="color:#ff79c6">for</span> example <span style="color:#ff79c6">try</span> IPv4.
+</span></span><span style="display:flex;"><span>-6, --ipv6
+</span></span><span style="display:flex;"><span>This option tells curl to resolve names to IPv6 addresses only, and not <span style="color:#ff79c6">for</span> example try IPv4.
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>$ curl <span style="color:#ff79c6">--</span>ipv6 httpbin.org<span style="color:#ff79c6">/</span>ip
-</span></span><span style="display:flex;"><span># <span style="color:#ff79c6">public</span> subnet
-</span></span><span style="display:flex;"><span>{
-</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;origin&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;57.180.96.138&#34;</span>
-</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>$ curl --ipv6 httpbin.org/ip
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># public subnet</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;origin&#34;</span>: <span style="color:#f1fa8c">&#34;57.180.96.138&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
 </span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://www.turbogeek.co.uk/aws-cdk-ipv6-v/">How to Create an IPV6 VPC using AWS-CDK - TurboGeek</a></p>
 
