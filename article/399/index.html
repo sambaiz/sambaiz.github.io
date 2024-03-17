@@ -545,6 +545,30 @@ DashboardやAlertについては全てのユーザーが使える一方<a href="
 </span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">url</span>: http://localhost:24220/api/plugins.json?@type=forward
 </span></span></code></pre></div><p>次のようなNRQLで値を確認できる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">FROM</span> fluentd <span style="color:#ff79c6">SELECT</span> rate(average(buffer_total_queued_size), <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">minute</span>) FACET <span style="color:#ff79c6">`</span>config.<span style="color:#ff79c6">@</span>id<span style="color:#ff79c6">`</span> TIMESERIES 
+</span></span></code></pre></div><p>ちなみに <a href="https://github.com/newrelic/infrastructure-agent/blob/3a4fde9f4609843bfe001e24cfd6ff1b80eadbe6/pkg/config/config.go#L391">NRIA_IS_FORWARD_ONLY</a> を true にすると agent が integrations のデータのみを送るようになる。例えば Kubernetes において Pod 内の他のコンテナと通信しメトリクスを送る sidecar として動かす場合など、単体で利用したい場合に設定するとよい。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span>- <span style="color:#ff79c6">name</span>: newrelic-flex
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">image</span>: newrelic/infrastructure:latest
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">env</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">name</span>: NRIA_LICENSE_KEY
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">valueFrom</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">secretKeyRef</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">name</span>: newrelic-secret
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">key</span>: newrelic-license-key
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">name</span>: NRIA_IS_FORWARD_ONLY
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">value</span>: <span style="color:#f1fa8c">&#34;true&#34;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">resources</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">limits</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">memory</span>: 300M
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">requests</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">cpu</span>: 100m
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">memory</span>: 100M
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">volumeMounts</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">name</span>: nri-flex-config-volume
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">mountPath</span>: /etc/newrelic-infra/integrations.d
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">volumes</span>:
+</span></span><span style="display:flex;"><span>- <span style="color:#ff79c6">name</span>: nri-flex-config-volume
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">configMap</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">name</span>: nri-flex-config
 </span></span></code></pre></div><h3 id="ログの転送httpsdocsnewreliccomdocslogsforward-logsfluentd-plugin-log-forwarding"><a href="https://docs.newrelic.com/docs/logs/forward-logs/fluentd-plugin-log-forwarding/">ログの転送</a></h3>
 <p>Infrastructure agent によって<a href="https://docs.newrelic.com/docs/logs/forward-logs/forward-your-logs-using-infrastructure-agent/">インストールされる</a> Fluent Bit ほか自前の Fluentd や Logstash の<a href="https://github.com/newrelic/newrelic-fluentd-output">plugin</a>を用いてログを転送できる。</p>
 <p><a href="https://www.sambaiz.net/article/416/">EMRクラスタのEC2にFluent BitをインストールしログをNew Relicに送信する - sambaiz-net</a></p>
@@ -643,6 +667,7 @@ issue のステータスが変わったときに通知が飛ぶ。</p>
 不定期に送られる場合は最後にデータが送られてから Delay 時間待ってその Window を評価する <a href="https://docs.newrelic.com/docs/alerts-applied-intelligence/new-relic-alerts/advanced-alerts/understand-technical-concepts/streaming-alerts-key-terms-concepts/#event-timer">Event timer</a> にして必要なら Fill data gaps する。</p>
 <h2 id="参考">参考</h2>
 <p><a href="https://y-ohgi.blog/entry/2020/12/24/NewRelic_%E3%81%A7td-agent%28fluentd%29_%E3%81%AB%E3%83%A1%E3%83%88%E3%83%AA%E3%82%AF%E3%82%B9%E3%82%92%E7%9B%A3%E8%A6%96%E3%81%99%E3%82%8B">NewRelic でtd-agent(fluentd) にメトリクスを監視する - y-ohgi&rsquo;s blog</a></p>
+<p><a href="https://newrelic.com/jp/blog/how-to-relic/apply-nriflex-on-k8s-as-deployment">Kubernetesでnri-flexをDeploymentとして実行する | New Relic</a></p>
 
     </div>
   </article>
