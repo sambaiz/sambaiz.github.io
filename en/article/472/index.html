@@ -296,13 +296,13 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Try logrotate sidecar in Kubernetes - sambaiz-net</title>
-  <meta name="twitter:title" content="Try logrotate sidecar in Kubernetes - sambaiz-net">
-  <meta property='og:title' content="Try logrotate sidecar in Kubernetes - sambaiz-net">
+  <title>Run logrotate sidecar in Kubernetes - sambaiz-net</title>
+  <meta name="twitter:title" content="Run logrotate sidecar in Kubernetes - sambaiz-net">
+  <meta property='og:title' content="Run logrotate sidecar in Kubernetes - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="if it&#39;s needed to modify the application side or grant kubectl exec permissions, I think it&#39;s better to run it inside the application container instead of sidecar">
-  <meta name="twitter:description" content="if it&#39;s needed to modify the application side or grant kubectl exec permissions, I think it&#39;s better to run it inside the application container instead of sidecar">
+  <meta name="description" content="Setting shareProcessNamespace to true allows containers to see processes in other containers, and SYS_PTRACE capabilities allows them to send signals">
+  <meta name="twitter:description" content="Setting shareProcessNamespace to true allows containers to see processes in other containers, and SYS_PTRACE capabilities allows them to send signals">
   
   
 
@@ -331,7 +331,7 @@
       "@type":"WebPage",
       "@id": "https://www.sambaiz.net/"
     },
-    "headline": "Try logrotate sidecar in Kubernetes",
+    "headline": "Run logrotate sidecar in Kubernetes",
     "datePublished": "2024-03-07T01:05:00JST",
     "dateModified": "2024-03-07T01:05:00JST",
     "author": {
@@ -356,7 +356,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "if it's needed to modify the application side or grant kubectl exec permissions, I think it's better to run it inside the application container instead of sidecar"
+    "description": "Setting shareProcessNamespace to true allows containers to see processes in other containers, and SYS_PTRACE capabilities allows them to send signals"
   }
 </script>
 </head>
@@ -446,9 +446,9 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>Try logrotate sidecar in Kubernetes</h1>
+        <h1>Run logrotate sidecar in Kubernetes</h1>
         <time>2024-03-07</time>
-        <a class="tag" href='/en/tags/kubernetes/'>kubernetes</a>
+        <a class="tag" href='/en/tags/kubernetes/'>kubernetes</a><a class="tag" href='/en/tags/linux/'>linux</a>
       </div>
       <p>Develop an application outputting logs,</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
@@ -575,11 +575,84 @@
 </span></span><span style="display:flex;"><span>time=&#34;2024-03-06T15:27:11Z&#34; level=info msg=26150
 </span></span><span style="display:flex;"><span>time=&#34;2024-03-06T15:27:11Z&#34; level=info msg=26151
 </span></span><span style="display:flex;"><span>time=&#34;2024-03-06T15:27:11Z&#34; level=info msg=26152
-</span></span></code></pre></div><p>To remove copytruncate, it may be necessary to update the inode of the file to be written by somehow like sending SIGHUP to the application container process on postrotate.
-However, if it&rsquo;s needed to modify the application side or grant kubectl exec permissions, I think it&rsquo;s better to run it inside the application container instead of sidecar.
-Alternatively, you can rotate on the application side using something like lamberjack.</p>
-<p><a href="https://www.sambaiz.net/article/104/">Golangの高速なロガーzapとlumberjackでログを出力してrotateさせる - sambaiz-net</a></p>
-
+</span></span></code></pre></div><p>To avoid copytruncate, you need to update the inode of the file to be written by sending SIGHUP to the application container process etc.
+Setting <a href="https://kubernetes.io/docs/tasks/configure-pod-container/share-process-namespace/">shareProcessNamespace</a> to true allows containers to see processes in other containers, and SYS_PTRACE capabilities allows them to send signals.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: v1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: ConfigMap
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: logrotate-config
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">data</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">logrotate.conf</span>: |<span style="color:#f1fa8c">
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    /var/log/app/*.log {
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      ...
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      sharedscripts
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      postrotate
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        kill -HUP `cat /var/run/app/app.pid`
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      endscript
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    }</span>    
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>---
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: v1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: Pod
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: testapp
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">shareProcessNamespace</span>: <span style="color:#ff79c6">true</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">containers</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">name</span>: testapp
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">volumeMounts</span>:
+</span></span><span style="display:flex;"><span>    - <span style="color:#ff79c6">name</span>: run-volume
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">mountPath</span>: /var/run/app
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">name</span>: logrotate
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">volumeMounts</span>:
+</span></span><span style="display:flex;"><span>    - <span style="color:#ff79c6">name</span>: run-volume
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">mountPath</span>: /var/run/app
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">securityContext</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">capabilities</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">add</span>:
+</span></span><span style="display:flex;"><span>        - SYS_PTRACE
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">volumes</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">name</span>: run-volume
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">emptyDir</span>: {}
+</span></span><span style="display:flex;"><span>  ...
+</span></span></code></pre></div><p>Since the PID is no longer 1, save the PID somewhere and share it.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span><span style="color:#ff79c6">#!/bin/sh
+</span></span></span><span style="display:flex;"><span><span style="color:#ff79c6"></span>
+</span></span><span style="display:flex;"><span>/main &amp;
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">PID</span><span style="color:#ff79c6">=</span><span style="color:#8be9fd;font-style:italic">$!</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">echo</span> <span style="color:#8be9fd;font-style:italic">$PID</span> &gt; /var/run/app/app.pid
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>terminate<span style="color:#ff79c6">()</span> <span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">kill</span> -TERM <span style="color:#f1fa8c">&#34;</span><span style="color:#8be9fd;font-style:italic">$PID</span><span style="color:#f1fa8c">&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">exit</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">trap</span> terminate TERM
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">wait</span> <span style="color:#8be9fd;font-style:italic">$PID</span>
+</span></span></code></pre></div><p>All that&rsquo;s left to do is receive the signal on the application side and reopen the file.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span>sighupChan <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> os.Signal, <span style="color:#bd93f9">1</span>)
+</span></span><span style="display:flex;"><span>signal.<span style="color:#50fa7b">Notify</span>(sighupChan, syscall.SIGHUP)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">for</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">&lt;-</span>sighupChan
+</span></span><span style="display:flex;"><span>		newLogFile, err <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">OpenFile</span>(<span style="color:#f1fa8c">&#34;/var/log/app/test.log&#34;</span>, os.O_CREATE|os.O_WRONLY|os.O_APPEND, <span style="color:#bd93f9">0666</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#8be9fd;font-style:italic">panic</span>(fmt.<span style="color:#50fa7b">Sprintf</span>(<span style="color:#f1fa8c">&#34;failed to open file: %v&#34;</span>, err))
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		logrus.<span style="color:#50fa7b">SetOutput</span>(newLogFile)
+</span></span><span style="display:flex;"><span>		logFile.<span style="color:#50fa7b">Close</span>()
+</span></span><span style="display:flex;"><span>		logFile = newLogFile
+</span></span><span style="display:flex;"><span>		fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;Reopened log file&#34;</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}()
+</span></span></code></pre></div>
     </div>
   </article>
 </div>
