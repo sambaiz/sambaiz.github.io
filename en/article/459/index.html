@@ -296,13 +296,13 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Setting security groups for EKS cluster&#39;s nodes created with CDK - sambaiz-net</title>
-  <meta name="twitter:title" content="Setting security groups for EKS cluster&#39;s nodes created with CDK - sambaiz-net">
-  <meta property='og:title' content="Setting security groups for EKS cluster&#39;s nodes created with CDK - sambaiz-net">
+  <title>Setting security groups for node instances in an EKS cluster created with CDK - sambaiz-net</title>
+  <meta name="twitter:title" content="Setting security groups for node instances in an EKS cluster created with CDK - sambaiz-net">
+  <meta property='og:title' content="Setting security groups for node instances in an EKS cluster created with CDK - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="aws_eks.Cluster in CDK has a securityGroup field, but this is an SG associated with the ENI of the control plane, not the node">
-  <meta name="twitter:description" content="aws_eks.Cluster in CDK has a securityGroup field, but this is an SG associated with the ENI of the control plane, not the node">
+  <meta name="description" content="securityGroup passed to aws_eks.Cluster is not associated with the node instances but with the control plane&#39;s ENI">
+  <meta name="twitter:description" content="securityGroup passed to aws_eks.Cluster is not associated with the node instances but with the control plane&#39;s ENI">
   
   
 
@@ -331,7 +331,7 @@
       "@type":"WebPage",
       "@id": "https://www.sambaiz.net/"
     },
-    "headline": "Setting security groups for EKS cluster's nodes created with CDK",
+    "headline": "Setting security groups for node instances in an EKS cluster created with CDK",
     "datePublished": "2023-12-05T20:59:00JST",
     "dateModified": "2023-12-05T20:59:00JST",
     "author": {
@@ -356,7 +356,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "aws_eks.Cluster in CDK has a securityGroup field, but this is an SG associated with the ENI of the control plane, not the node"
+    "description": "securityGroup passed to aws_eks.Cluster is not associated with the node instances but with the control plane's ENI"
   }
 </script>
 </head>
@@ -446,21 +446,18 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>Setting security groups for EKS cluster&#39;s nodes created with CDK</h1>
+        <h1>Setting security groups for node instances in an EKS cluster created with CDK</h1>
         <time>2023-12-05</time>
         <a class="tag" href='/en/tags/aws/'>aws</a><a class="tag" href='/en/tags/kubernetes/'>kubernetes</a>
       </div>
-      <p>aws_eks.Cluster in CDK has a <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Cluster.html#securitygroup">securityGroup</a> field, but
-this is an SG associated with the ENI of the control plane, not the node. If it is not passed, it will be automatically created.</p>
-<p>Then, where is the SG settings for EKS cluster&rsquo;s nodes? It is in the node group&rsquo;s auto scaling group.</p>
-<p>When you create an EKS cluster with CDK and <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Cluster.html#defaultcapacitytype">DefaultCapacityType</a> is NODEGROUP, which is the default,
-<a href="https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html">manged node group</a> is created, which consists of defaultCapacity nodes and EKS performs drain etc.</p>
-<p>However, even if you access <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Cluster.html#defaultcapacity-1">defaultCapacity</a> field of the cluster to refer to the managed node group,
-nothing will happen because this field only has a value when DefaultCapacityType is EC2.
-In the case of NODEGROUP, you should use <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Cluster.html#defaultnodegroup">defaultNodegroup</a> instead, but
-unlike the former, which returns <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_autoscaling.AutoScalingGroup.html">AutoScalingGroup</a>,
-it returns <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Nodegroup.html">Nodegroup</a>, and it doesn&rsquo;t seem to have an interface like <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_autoscaling.AutoScalingGroup.html#addwbrsecuritywbrgroupsecuritygroup">addSecurityGroup()</a>.</p>
-<p>So, I set defaultCapacity to 0 to prevent the node group from being created by default, and added SG with <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Cluster.html#addwbrautowbrscalingwbrgroupwbrcapacityid-options">addAutoScalingGroupCapacity()</a> that returns AutoScalingGroup.</p>
+      <p><a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Cluster.html#securitygroup">securityGroup</a> that can be passed when creating an aws_eks.Cluster is not associated with the node instances but with the control plane&rsquo;s ENI.</p>
+<p>There&rsquo;s <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Cluster.html#defaultcapacity-1">defaultCapacity</a> field in Cluster, so I attempted to add a SG through it, but nothing happened.
+When an EKS cluster is created, if the DefaultCapacityType is NODEGROUP, which is the default, it creates a <a href="https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html">managed node group</a>, which consists of defaultCapacity nodes, where operations such as drains are managed by EKS.　As a matter of fact, defaultCapacity has value only when the DefaultCapacityType is EC2.</p>
+<p>In the case of NODEGROUP, you can refer to defaultNodegroup instead, but unlike the <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_autoscaling.AutoScalingGroup.html">AutoScalingGroup</a> defaultCapacity, this is <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_eks.Nodegroup.html">Nodegroup</a> and it doesn&rsquo;t have an interface like <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_autoscaling.AutoScalingGroup.html#addwbrsecuritywbrgroupsecuritygroup">addSecurityGroup()</a>.</p>
+<p>Despite the confusing name, <a href="https://docs.aws.amazon.com/eks/latest/userguide/sec-group-reqs.html">clusterSecurityGroup</a> is associated not only with the control plane but also with the ENIs of the nodes in the managed node groups, so you can configure the SG for nodes by editing this.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>cluster.clusterSecurityGroup.addIngressRule(ec2.Peer.ipv4(<span style="color:#f1fa8c">&#34;xxx.xxx.xxx.xxx/32&#34;</span>), ec2.Port.allTcp())
+</span></span></code></pre></div><p>Besides, there is a method to add an SG using your own AutoScalingGroup instead of a managed node group.
+You should be careful when adding an existing SG. If there are already settings that overlap with the <a href="https://github.com/aws/aws-cdk/blob/70f66c7da3db2529e4346cc2f250d892d83474c7/packages/aws-cdk-lib/aws-eks/lib/cluster.ts#L1119">automatically added</a> settings, they will be deleted all together when the resource is deleted. For this reason, it would be better to create a new SG rather than reusing an existing one.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> cluster <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> eks.Cluster(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Cluster&#39;</span>, {
 </span></span><span style="display:flex;"><span>  ...
 </span></span><span style="display:flex;"><span>  defaultCapacity: <span style="color:#8be9fd">0</span>,
@@ -476,11 +473,9 @@ it returns <a href="https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_
 </span></span><span style="display:flex;"><span>  minCapacity:  <span style="color:#8be9fd">2</span>,
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>defaultCapacityAsg.connections.addSecurityGroup(securityGroup)
-</span></span></code></pre></div><p>Be careful if you add an existing SG.
-If the SG has duplicate settings with the <a href="https://github.com/aws/aws-cdk/blob/70f66c7da3db2529e4346cc2f250d892d83474c7/packages/aws-cdk-lib/aws-eks/lib/cluster.ts#L1119">automatically added</a> ones,
-they will be deleted together when the resource is deleted.
-Therefore, I think it is better to create a new one instead of reusing it.</p>
+</span></span><span style="display:flex;"><span>defaultCapacityAsg.addSecurityGroup(securityGroup)
+</span></span></code></pre></div><p>However, in the case of your own ASG, you need to pass <a href="https://github.com/awslabs/amazon-eks-ami/blob/master/files/bootstrap.sh">boostrap.sh</a> parameters as needed in addition to drain, so managed node group is easier to use.</p>
+<p><a href="https://www.sambaiz.net/en/article/460/">IP address exhaustion with EKS cluster and migration to IPv6 - sambaiz-net</a></p>
 
     </div>
   </article>
