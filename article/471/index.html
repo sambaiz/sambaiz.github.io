@@ -451,104 +451,13 @@
         <a class="tag" href='/tags/kubernetes/'>kubernetes</a><a class="tag" href='/tags/aws/'>aws</a>
       </div>
       <p><a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.7/">AWS Load Balancer Controller</a> は Kubernetes のリソースに対応する ELB を作成し管理するコントローラー。
-必要な <a href="https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.0/docs/install/iam_policy.json">Policy</a> を ServiceAccount に与えて <a href="https://artifacthub.io/packages/helm/aws/aws-load-balancer-controller">Helm Chart</a> でインストールする。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-tsx" data-lang="tsx"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> role <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(scope, <span style="color:#f1fa8c">&#39;LoadBalancerServiceAccountRole&#39;</span>, {
-</span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.WebIdentityPrincipal(
-</span></span><span style="display:flex;"><span>    cluster.openIdConnectProvider.openIdConnectProviderArn,
-</span></span><span style="display:flex;"><span>    {
-</span></span><span style="display:flex;"><span>      StringEquals: <span style="color:#8be9fd">new</span> cdk.CfnJson(
-</span></span><span style="display:flex;"><span>        scope,
-</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;LoadBalancerServiceAccountRoleStringEquals&#39;</span>,
-</span></span><span style="display:flex;"><span>        {
-</span></span><span style="display:flex;"><span>          value<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>            [<span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>cluster.clusterOpenIdConnectIssuer<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:aud`</span>]<span style="color:#ff79c6">:</span>
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;sts.amazonaws.com&#39;</span>,
-</span></span><span style="display:flex;"><span>            [<span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>cluster.clusterOpenIdConnectIssuer<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:sub`</span>]<span style="color:#ff79c6">:</span>
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#39;system:serviceaccount:kube-system:aws-load-balancer-controller&#39;</span>,
-</span></span><span style="display:flex;"><span>          },
-</span></span><span style="display:flex;"><span>        }
-</span></span><span style="display:flex;"><span>      ),
-</span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>  ),
-</span></span><span style="display:flex;"><span>  inlinePolicies<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#39;loadbalancercontroller&#39;</span><span style="color:#ff79c6">:</span> iam.PolicyDocument.fromJson({
-</span></span><span style="display:flex;"><span>     <span style="color:#f1fa8c">&#34;Version&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;2012-10-17&#34;</span>,
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;Statement&#34;</span><span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>          {
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Effect&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;Allow&#34;</span>,
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Action&#34;</span><span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;iam:CreateServiceLinkedRole&#34;</span>
-</span></span><span style="display:flex;"><span>              ],
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Resource&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;*&#34;</span>,
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Condition&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;StringEquals&#34;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>                      <span style="color:#f1fa8c">&#34;iam:AWSServiceName&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;elasticloadbalancing.amazonaws.com&#34;</span>
-</span></span><span style="display:flex;"><span>                  }
-</span></span><span style="display:flex;"><span>              }
-</span></span><span style="display:flex;"><span>          },
-</span></span><span style="display:flex;"><span>          {
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Effect&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;Allow&#34;</span>,
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Action&#34;</span><span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeAccountAttributes&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeAddresses&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeAvailabilityZones&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeInternetGateways&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeVpcs&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeVpcPeeringConnections&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeSubnets&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeSecurityGroups&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeInstances&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeNetworkInterfaces&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeTags&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:GetCoipPoolUsage&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;ec2:DescribeCoipPools&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeLoadBalancers&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeLoadBalancerAttributes&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeListeners&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeListenerCertificates&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeSSLPolicies&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeRules&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeTargetGroups&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeTargetGroupAttributes&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeTargetHealth&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeTags&#34;</span>,
-</span></span><span style="display:flex;"><span>                  <span style="color:#f1fa8c">&#34;elasticloadbalancing:DescribeTrustStores&#34;</span>
-</span></span><span style="display:flex;"><span>              ],
-</span></span><span style="display:flex;"><span>              <span style="color:#f1fa8c">&#34;Resource&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;*&#34;</span>
-</span></span><span style="display:flex;"><span>          },
-</span></span><span style="display:flex;"><span>					...
-</span></span><span style="display:flex;"><span>          }),
-</span></span><span style="display:flex;"><span>        }
-</span></span><span style="display:flex;"><span>      })
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">const</span> serviceAccount <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> eks.ServiceAccount(scope, <span style="color:#f1fa8c">&#39;ServiceAccount&#39;</span>, {
-</span></span><span style="display:flex;"><span>        cluster,
-</span></span><span style="display:flex;"><span>        name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;aws-load-balancer-controller&#39;</span>,
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">namespace</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;kube-system&#39;</span>,
-</span></span><span style="display:flex;"><span>        annotations<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#39;eks.amazonaws.com/role-arn&#39;</span><span style="color:#ff79c6">:</span> role.roleArn,
-</span></span><span style="display:flex;"><span>        },
-</span></span><span style="display:flex;"><span>        labels<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#39;app.kubernetes.io/component&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;controller&#39;</span>,
-</span></span><span style="display:flex;"><span>          <span style="color:#f1fa8c">&#39;app.kubernetes.io/name&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;aws-load-balancer-controller&#39;</span>
-</span></span><span style="display:flex;"><span>        },
-</span></span><span style="display:flex;"><span>      })
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">new</span> eks.HelmChart(scope, <span style="color:#f1fa8c">&#39;LoadBalancerController&#39;</span>, {
-</span></span><span style="display:flex;"><span>        cluster,
-</span></span><span style="display:flex;"><span>        chart<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;aws-load-balancer-controller&#39;</span>,
-</span></span><span style="display:flex;"><span>        repository<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;https://aws.github.io/eks-charts&#39;</span>,
-</span></span><span style="display:flex;"><span>        version<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;1.7.1&#39;</span>,
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">namespace</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;kube-system&#39;</span>,
-</span></span><span style="display:flex;"><span>        values<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>          clusterName: <span style="color:#8be9fd">cluster.clusterName</span>,
-</span></span><span style="display:flex;"><span>          serviceAccount<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>            create: <span style="color:#8be9fd">false</span>,
-</span></span><span style="display:flex;"><span>            name: <span style="color:#8be9fd">serviceAccount.serviceAccountName</span>,
-</span></span><span style="display:flex;"><span>          },
-</span></span><span style="display:flex;"><span>        },
-</span></span><span style="display:flex;"><span>      })
-</span></span><span style="display:flex;"><span>    }
+必要な <a href="https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.0/docs/install/iam_policy.json">Policy</a> を ServiceAccount に与えて <a href="https://artifacthub.io/packages/helm/aws/aws-load-balancer-controller">Helm Chart</a> でインストールできるが、CDK でクラスタを作る場合は albController でバージョンを指定することでこれを<a href="https://github.com/aws/aws-cdk/blob/798ef6789c53fc1ba28ffefa480889d5b0c9b151/packages/aws-cdk-lib/aws-eks/lib/alb-controller.ts#L304">やってくれる</a>。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">new</span> eks.Cluster(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Cluster&#39;</span>, {
+</span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>  albController<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    version: <span style="color:#8be9fd">eks.AlbControllerVersion.V2_6_2</span>,
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div><p>次のような Ingress を作成すると ALB が作られる。
 subnet は <a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.2/guide/ingress/annotations/#subnets">alb.ingress.kubernetes.io/subnets</a> で指定することもできるが、
 subnet に次のタグが付いている場合 <a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.7/deploy/subnet_discovery/">auto discovery</a> される。</p>
