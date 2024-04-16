@@ -538,13 +538,13 @@ time.Local は UTC でも MySQLの time_zone の JST でもない US/Alaska (-08
 </span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">panic</span>(err)
 </span></span><span style="display:flex;"><span>    }
 </span></span><span style="display:flex;"><span>    i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>
-</span></span><span style="display:flex;"><span>    title <span style="color:#ff79c6">:=</span> []<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;NOW()&#34;</span>, <span style="color:#f1fa8c">&#34;time.Now()&#34;</span>}
+</span></span><span style="display:flex;"><span>    title <span style="color:#ff79c6">:=</span> []<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;Select NOW()&#34;</span>, <span style="color:#f1fa8c">&#34;Insert &amp; Select time.Now()&#34;</span>}
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> rows.<span style="color:#50fa7b">Next</span>() {
 </span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">var</span> datetime, timestamp time.Time
 </span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> rows.<span style="color:#50fa7b">Scan</span>(<span style="color:#ff79c6">&amp;</span>datetime, <span style="color:#ff79c6">&amp;</span>timestamp); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
 </span></span><span style="display:flex;"><span>            <span style="color:#8be9fd;font-style:italic">panic</span>(err)
 </span></span><span style="display:flex;"><span>        }
-</span></span><span style="display:flex;"><span>        fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;%15s: %s, %s -&gt; %v\n&#34;</span>,
+</span></span><span style="display:flex;"><span>        fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;%30s: %s, %s -&gt; %v\n&#34;</span>,
 </span></span><span style="display:flex;"><span>            title[i],
 </span></span><span style="display:flex;"><span>            datetime.<span style="color:#50fa7b">Format</span>(format),
 </span></span><span style="display:flex;"><span>            timestamp.<span style="color:#50fa7b">Format</span>(format),
@@ -554,32 +554,31 @@ time.Local は UTC でも MySQLの time_zone の JST でもない US/Alaska (-08
 </span></span><span style="display:flex;"><span>    }
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><h3 id="実行結果">実行結果</h3>
-<p>time.Now() は 2018-10-02 03:43:13 -0800。</p>
+<p>time.Now() は 2018-10-02 03:43:13 -0800 (= 11:43 Z, 20:43 +0900)。</p>
+<p>なお、DATETIME型 と TIMESTAMP型 については 全ての例において値が一致した。
+これはいずれの場合も格納時と取得時で time_zone を変えていないためで、既に格納されている行の TIMESTAMP カラムを time_stamp を渡さないで取得すると意図した値を返さないことがある。</p>
 <h3 id="何も指定しない場合">何も指定しない場合</h3>
 <ul>
-<li>NOW(): 2018-10-02 20:43:13 Z, 2018-10-02 20:43:13 Z -&gt; NG</li>
-<li>time.Now(): 2018-10-02 20:43:13 Z, 2018-10-02 20:43:13 Z -&gt; NG</li>
+<li>Select NOW(): 2018-10-02 20:43:13 Z -&gt; NG</li>
+<li>Insert &amp; Select time.Now(): 2018-10-02 20:43:13 Z -&gt; NG</li>
 </ul>
-<p>loc は time.Time の タイムゾーンで、付けないと UTC として扱われる。
-これは MySQL サーバーの time_zone (JST) には影響しないため MySQL の NOW() の値は JST での時間 20:43 となるが、
-これを取得時にも UTC の値として扱ってしまう。</p>
+<p>loc は time.Time 変数の タイムゾーンとなり付けないと UTC になる。
+これにより MySQL に格納されている time_zone (JST) の 20:43 をそのまま UTC として扱ってしまい 20:43 Z になっている。</p>
 <h3 id="loclocal-usalaska">loc=Local (=US/Alaska)</h3>
 <ul>
-<li>NOW(): 2018-10-02 20:43:13 -0800, 2018-10-02 20:43:13 -0800 -&gt; NG</li>
-<li>time.Now(): 2018-10-02 03:43:14 -0800, 2018-10-02 03:43:14  -&gt; OK</li>
+<li>Select NOW(): 2018-10-02 20:43:13 -0800 -&gt; NG</li>
+<li>Insert &amp; Select time.Now(): 2018-10-02 03:43:14 -0800 -&gt; OK</li>
 </ul>
-<p>loc を指定すると time.Now() の方は正しく格納され取得できるようになる。</p>
+<p>loc を指定すると time.Now() の方は正しい時間が取得できるようになった。</p>
 <h3 id="loclocal--time_zoneusalaska">loc=Local &amp; time_zone=US/Alaska</h3>
 <ul>
-<li>NOW(): 2018-10-02 03:43:13 -0800, 2018-10-02 03:43:13 -0800 -&gt; OK</li>
-<li>time.Now(): 2018-10-02 03:43:14 -0800, 2018-10-02 03:43:14 -0800 -&gt; OK</li>
+<li>Select NOW(): 2018-10-02 03:43:13 -0800 -&gt; OK</li>
+<li>Insert &amp; Select time.Now(): 2018-10-02 03:43:14 -0800 -&gt; OK</li>
 </ul>
-<p>time_zone を渡すと SET time_zone され MySQLの NOW() がそのタイムゾーンの値になる。</p>
-<p>DATETIME型 と TIMESTAMP型 については 全ての例において値が一致している。
-これは格納時と取得時で time_zone を変えていないためで、既に格納されている行の TIMESTAMP カラムを time_stamp を渡さないで取得すると意図した値を返さないことがある。</p>
+<p>time_zone を渡すと SET time_zone されて MySQLの NOW() がそのタイムゾーンの値になった。
+ただしこうすると格納される DATETIME 型の値もそのタイムゾーンの値になってしまう。</p>
 <h2 id="まとめ">まとめ</h2>
-<p>loc=Local は渡さないと格納時にも取得時にも問題が発生するので必須。
-NOW() や TIMESTAMP を 扱う際は time_zone も指定しないと意図した値が得られないことがある。
+<p>loc=Local は渡さないと正しい時間が取れず、MySQL の NOW() の値は time_zone に依存してずれる。
 time.Local と MySQL の time_zone が一致している場合はこの問題は起こらないが、それに処理が依存しているなら明示的に渡すべきだと考える。</p>
 
     </div>
