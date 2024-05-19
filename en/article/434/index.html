@@ -691,7 +691,56 @@ Spark on Kubernetes doesn&rsquo;t support external shuffle service for now, so y
 </span></span><span style="display:flex;"><span>$ aws s3 cp s3://&lt;mybucket&gt;/&lt;cluster_id&gt;/jobs/&lt;job_id&gt;/containers/spark-000000032psj6spu6q7/spark-000000032psj6spu6q7-driver/stdout.gz .
 </span></span><span style="display:flex;"><span>$ gzcat stdout.gz
 </span></span><span style="display:flex;"><span>Pi is roughly 3.140920
-</span></span></code></pre></div><p>You can pass <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/pod-templates.html">Pod template</a> like &ldquo;spark.kubernetes.(driver|executor).podTemplateFile=s3://bucket/template.yml&rdquo;, and <a href="https://github.com/aws-samples/emr-on-eks-for-transient-emr-clusters/blob/aac00b5223813056001fd610deed56ce0a2155d4/scripts/8-pod-templates.sh">spcify</a> priorityClassName etc.</p>
+</span></span></code></pre></div><p>If you <a href="https://aws.github.io/aws-emr-containers-best-practices/troubleshooting/docs/change-log-level/">pass log4j2 settings</a> to classification: spark-log4j, you can patch /etc/spark/conf/log4j2.properties.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;classification&#34;</span>: <span style="color:#f1fa8c">&#34;spark-log4j&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&#34;properties&#34;</span>: {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;rootLogger.level&#34;</span>: <span style="color:#f1fa8c">&#34;warn&#34;</span>,
+</span></span><span style="display:flex;"><span>        
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;appender.myapp.type&#34;</span>: <span style="color:#f1fa8c">&#34;RollingFile&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;appender.myapp.name&#34;</span>: <span style="color:#f1fa8c">&#34;MyAppLogFile&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;appender.myapp.filePattern&#34;</span>: <span style="color:#f1fa8c">&#34;/var/log/spark/user/myapp/myapp-%d{MM-dd-yy-HH-mm-ss}-%i.log.gz&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;appender.myapp.policies.type&#34;</span>: <span style="color:#f1fa8c">&#34;Policies&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;appender.myapp.policies.time.type&#34;</span>: <span style="color:#f1fa8c">&#34;TimeBasedTriggeringPolicy&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;appender.myapp.policies.time.interval&#34;</span>: <span style="color:#f1fa8c">&#34;1&#34;</span>,
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;logger.myapp.name&#34;</span>: <span style="color:#f1fa8c">&#34;net.sambaiz&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;logger.myapp&#34;</span>: <span style="color:#f1fa8c">&#34;debug, MyAppLogFile&#34;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">&#34;logger.myapp.additivity&#34;</span>: <span style="color:#f1fa8c">&#34;false&#34;</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The rootLogger has an appender of stderr, and it is output to spark.yarn.app.container.log.dir in log4j2.properties, and sent to the destination set in monitoringConfiguration by fluentd sidecar.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ ls /var/log/spark/user/spark-******-driver/
+</span></span><span style="display:flex;"><span>stderr	stderr-s3-container-log-in-tail.pos  stdout  stdout-s3-container-log-in-tail.pos
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ cat /etc/fluent/fluent.conf
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>&lt;source&gt;
+</span></span><span style="display:flex;"><span>  @type tail
+</span></span><span style="display:flex;"><span>  path <span style="color:#f1fa8c">&#34;#{ENV[&#39;K8S_SPARK_LOG_URL_STDERR&#39;]}&#34;</span>
+</span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>&lt;/source&gt;
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>&lt;match chicago-spark-s3-container-stdout-logs&gt;
+</span></span><span style="display:flex;"><span>  @type s3
+</span></span><span style="display:flex;"><span>  s3_bucket &lt;mybucket&gt;
+</span></span><span style="display:flex;"><span>  s3_region &lt;region&gt;
+</span></span><span style="display:flex;"><span>  path <span style="color:#f1fa8c">&#34;emr-logs/****/containers/#{ENV[&#39;SPARK_APPLICATION_ID&#39;]}/#{ENV[&#39;SPARK_CONTAINER_ID&#39;]}&#34;</span>
+</span></span><span style="display:flex;"><span>  s3_object_key_format %<span style="color:#ff79c6">{</span>path<span style="color:#ff79c6">}</span>/stdout.gz
+</span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>&lt;/match&gt;
+</span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><p>Therefore, if you output logs using a logger that doesn&rsquo;t have appenders of stdout/stderr and additivity is false, it won&rsquo;t be sent.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-scala" data-lang="scala"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> net.sambaiz.myapp
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> org.apache.log4j.Logger
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">object</span> <span style="color:#50fa7b">MyApp</span> <span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> main<span style="color:#ff79c6">(</span>input<span style="color:#ff79c6">:</span> <span style="color:#8be9fd">Array</span><span style="color:#ff79c6">[</span><span style="color:#8be9fd">String</span><span style="color:#ff79c6">])</span> <span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">val</span> logger <span style="color:#ff79c6">=</span> <span style="color:#50fa7b">Logger</span><span style="color:#ff79c6">.</span>getLogger<span style="color:#ff79c6">(</span>getClass<span style="color:#ff79c6">().</span>getName<span style="color:#ff79c6">())</span>
+</span></span><span style="display:flex;"><span>    logger<span style="color:#ff79c6">.</span>warn<span style="color:#ff79c6">(</span><span style="color:#f1fa8c">&#34;test&#34;</span><span style="color:#ff79c6">)</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span></code></pre></div><p>You can pass a <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/pod-templates.html">pod template</a> with &ldquo;spark.kubernetes.(driver|executor).podTemplateFile=s3://bucket/template.yml&rdquo; to <a href="https://aws.amazon.com/blogs/big-data/stream-amazon-emr-on-eks-logs-to-third-party-providers-like-splunk-amazon-opensearch-service-or-other-log-aggregators/">add</a> a fluentbit sidecar for your own logs, or <a href="https://github.com/aws-samples/emr-on-eks-for-transient-emr-clusters/blob/aac00b5223813056001fd610deed56ce0a2155d4/scripts/8-pod-templates.sh">spcify</a> priorityClassName etc.</p>
 <p><a href="https://www.sambaiz.net/en/article/481/">Priority of K8s pods and preemption - sambaiz-net</a></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: v1
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: Pod
