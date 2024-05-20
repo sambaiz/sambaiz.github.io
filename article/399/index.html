@@ -458,11 +458,18 @@
 DashboardやAlertについては全てのユーザーが使える一方<a href="https://docs.newrelic.com/docs/accounts/accounts-billing/new-relic-one-user-management/user-type/#user-type-comparison-table">APMの画面が見られるのはFull platform userのみ</a>だったりするのが悩ましい。
 転送量については<a href="https://docs.newrelic.com/docs/data-apis/manage-data/drop-data-using-nerdgraph/">Drop data</a>することで減らすことができるが現状画面からは設定できずNerdGraphを用いる必要がある。次はTerraformで設定を行う例。</p>
 <p><a href="https://www.sambaiz.net/article/400/">New RelicのGraphQL API、NerdGraphでリソースを取得する - sambaiz-net</a></p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>resource &#34;newrelic_nrql_drop_rule&#34; &#34;heavy_path&#34; {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>resource &#34;newrelic_nrql_drop_rule&#34; &#34;heavy_path_transaction&#34; {
 </span></span><span style="display:flex;"><span>  account_id  = *****
 </span></span><span style="display:flex;"><span>  description = &#34;Drop transactions data&#34;
 </span></span><span style="display:flex;"><span>  action      = &#34;drop_data&#34;
 </span></span><span style="display:flex;"><span>  nrql        = &#34;SELECT * FROM Transaction WHERE `request.uri` = &#39;/heavy_path&#39;&#34;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>resource &#34;newrelic_nrql_drop_rule&#34; &#34;heavy_path_span&#34; {
+</span></span><span style="display:flex;"><span>  account_id  = *****
+</span></span><span style="display:flex;"><span>  description = &#34;Drop spans data&#34;
+</span></span><span style="display:flex;"><span>  action      = &#34;drop_data&#34;
+</span></span><span style="display:flex;"><span>  nrql        = &#34;SELECT * FROM Span WHERE `request.uri` = &#39;/heavy_path&#39;&#34;
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>トラブルシューティングは比較的難しく感じていて、なぜかメトリクスが送られないといったことがあったり、古いドキュメントを参照してしまったりしたがライブラリやドキュメントはOSSになっており、いざとなれば実装を読んだり修正のPRを出せば良いのかなと考えている。ただドキュメントに明示されていないことがあったり、されていても見つけられないことがあったりするので、特に初めて使う場合はユーザー単価が上がってしまうがサポートが付くPro以上のプランにすると安心かもしれない。去年<a href="https://newrelic.com/jp/press-release/20211111">買収した</a>CodeStreamを含め、新機能の開発は活発に行われている印象があるので、トラブルシューティングについても改善されると良いなと思っている。</p>
 <p><a href="https://www.sambaiz.net/article/403/">NewRelic CodeStreamでコードの質問やデバッグを効率的に行えるようにする - sambaiz-net</a></p>
@@ -649,7 +656,7 @@ C, Go, Java, .NET, Node.js, PHP, Python, Rubyのライブラリが提供され�
 </a></div>
 
 
-<p>NRQLでは次のように<code>newrelic.timeslice.value</code>を<a href="https://docs.newrelic.com/docs/data-apis/understand-data/metric-data/query-apm-metric-timeslice-data-nrql/#wildcard">参照する</a>。</p>
+<p>NRQLでは次のように<code>newrelic.timeslice.value</code>を<a href="https://docs.newrelic.com/docs/data-apis/understand-data/metric-data/query-apm-metric-timeslice-data-nrql/#wildcard">参照する</a>。なお、この timeslice データは drop_rule を適用できないので、代わりに <a href="https://docs.newrelic.com/docs/new-relic-solutions/new-relic-one/ui-data/metric-normalization-rules/">Metric normalization</a> を用いる必要がある。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">FROM</span> Metric <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">count</span>(newrelic.timeslice.value) 
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WHERE</span> appName <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;MY APP&#39;</span> 
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WITH</span> METRIC_FORMAT <span style="color:#f1fa8c">&#39;Custom/{name}&#39;</span> 
