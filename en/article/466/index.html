@@ -603,7 +603,86 @@ Proceeding with Guided install, the parameters to pass are generated, so I copie
 
 
 <p><a href="https://www.sambaiz.net/en/article/478/">Get communication in Kubernetes cluster with Pixie&rsquo;s PxL script - sambaiz-net</a></p>
-<h2 id="references">References</h2>
+<p><a href="https://github.com/newrelic/newrelic-prometheus-configurator">newrelic-prometheus-agent</a> is a component that runs Prometheus with <a href="https://prometheus.io/blog/2021/11/16/agent/">Agent mode</a> to do <a href="https://prometheus.io/docs/prometheus/2.52/configuration/configuration/#remote_write">remote_write</a> metrics collected from <a href="https://prometheus.io/docs/instrumenting/exporters/">Exporter</a> to New Relic. Queries can&rsquo;t be executable.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ kubectl -n prometheus port-forward svc/prometheus-server 9090:80
+</span></span><span style="display:flex;"><span>Forwarding from 127.0.0.1:9090 -&gt; <span style="color:#bd93f9">9090</span>
+</span></span><span style="display:flex;"><span>Forwarding from <span style="color:#ff79c6">[</span>::1<span style="color:#ff79c6">]</span>:9090 -&gt; <span style="color:#bd93f9">9090</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ curl -G <span style="color:#f1fa8c">&#39;http://localhost:9090/api/v1/query&#39;</span> --data-urlencode <span style="color:#f1fa8c">&#39;query=up&#39;</span> | jq
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;status&#34;</span>: <span style="color:#f1fa8c">&#34;error&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;errorType&#34;</span>: <span style="color:#f1fa8c">&#34;execution&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;error&#34;</span>: <span style="color:#f1fa8c">&#34;unavailable with Prometheus Agent&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span></code></pre></div><p>Service discovery for Exporters is performed with calling Kubernetes API to get resources corresponding to <a href="https://prometheus.io/docs/prometheus/2.52/configuration/configuration/#kubernetes_sd_config">kubernetes_sd_configs</a> in scrape_configs.
+Compare separator joined source_labels string with regex, and if action is keep, those that do not match are dropped, and if action is replace, set the replacement value to target_label. In other words, if you add newrelic.io/scrape: true annotation to a Pod, Prometheus metrics returned by /metrics will be sent.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#6272a4"># /etc/prometheus/config/config.yaml</span>
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">scrape_configs</span>:
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>- <span style="color:#ff79c6">job_name</span>: newrelic-pod
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">honor_timestamps</span>: <span style="color:#ff79c6">true</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">scrape_interval</span>: 30s
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">scrape_timeout</span>: 10s
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">metrics_path</span>: /metrics
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">scheme</span>: http
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">follow_redirects</span>: <span style="color:#ff79c6">true</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">enable_http2</span>: <span style="color:#ff79c6">true</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">relabel_configs</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">source_labels</span>: [__meta_kubernetes_pod_annotation_newrelic_io_scrape]
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">separator</span>: ;
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">regex</span>: <span style="color:#f1fa8c">&#34;true&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">replacement</span>: $1
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">action</span>: keep
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">source_labels</span>: [__meta_kubernetes_pod_phase]
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">separator</span>: ;
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">regex</span>: Pending|Succeeded|Failed|Completed
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">replacement</span>: $1
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">action</span>: drop
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">source_labels</span>: [__meta_kubernetes_pod_annotation_prometheus_io_scheme]
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">separator</span>: ;
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">regex</span>: (https?)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">target_label</span>: __scheme__
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">replacement</span>: $1
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">action</span>: replace
+</span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">kubernetes_sd_configs</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">role</span>: pod
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">kubeconfig_file</span>: <span style="color:#f1fa8c">&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">follow_redirects</span>: <span style="color:#ff79c6">true</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">enable_http2</span>: <span style="color:#ff79c6">true</span>
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">remote_write</span>:
+</span></span><span style="display:flex;"><span>- <span style="color:#ff79c6">url</span>: https://metric-api.newrelic.com/prometheus/v1/write?collector_name=prometheus-agent&amp;collector_version=1.11.0&amp;prometheus_server=newrelic-bundle-newrelic-prometheus-agent-0
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">remote_timeout</span>: 30s
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">write_relabel_configs</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">source_labels</span>: [__name__]
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">separator</span>: ;
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">regex</span>: kube_.+|container_.+|machine_.+|cadvisor_.+
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">replacement</span>: $1
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">action</span>: drop
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">source_labels</span>: [__name__]
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">separator</span>: ;
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">regex</span>: timeseries_write_(.*)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">target_label</span>: newrelic_metric_type
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">replacement</span>: counter
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">action</span>: replace
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">source_labels</span>: [__name__]
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">separator</span>: ;
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">regex</span>: sql_byte(.*)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">target_label</span>: newrelic_metric_type
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">replacement</span>: counter
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">action</span>: replace
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: newrelic_rw
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">authorization</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">type</span>: Bearer
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">credentials</span>: &lt;secret&gt;
+</span></span><span style="display:flex;"><span>...
+</span></span></code></pre></div><p>The sent metrics can be referred as the same name fields in FROM Metric.
+However, Prometheus&rsquo; <a href="https://prometheus.io/docs/concepts/metric_types/#counter">Counter</a> returns a cumulative sum, whereas New Relic&rsquo;s Count is a delta value, so it is <a href="https://docs.newrelic.com/docs/infrastructure/prometheus-integrations/view-query-data/translate-promql-queries-nrql/#compare">converted</a>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#6272a4">/* container_memory_usage_bytes{id=&#34;/&#34;} */</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">FROM</span> Metric <span style="color:#ff79c6">SELECT</span> latest(container_memory_usage_bytes) <span style="color:#ff79c6">WHERE</span> id <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;/&#39;</span> TIMESERIES
+</span></span></code></pre></div><h2 id="references">References</h2>
 <p><a href="https://newrelic.com/jp/blog/best-practices/what-is-ebpf">eBPFとは何か、なぜそれがオブザーバビリティに関係するのか？</a></p>
 
     </div>
