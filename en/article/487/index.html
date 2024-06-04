@@ -452,101 +452,73 @@
       </div>
       <p>Prometheus&rsquo; <a href="https://prometheus.io/docs/prometheus/2.52/configuration/recording_rules/">recording rules</a> is a feature that allows you to create new metrics from existing metrics in PromQL. This can save the amount of data sent to New Relic by sending aggregated data compared to sending raw data, but Prometheus in newrelic-prometheus-configurator included in newrelic-bundle is in Agent mode, so it <a href="https://github.com/prometheus/prometheus/blob/v2.52.0/config/config.go#L124">doesn’t support</a> Recording rules.</p>
 <p><a href="https://www.sambaiz.net/en/article/466/">Install newrelic-bundle to EKS cluster with CDK and monitor it - sambaiz-net</a></p>
-<p>So I install my own Prometheus using <a href="https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus">Helm</a> and do remote write. The <a href="https://prometheus.io/docs/practices/rules/#naming">name of recording rules metrics</a> should be in the format level:metric:operations.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-tsx" data-lang="tsx"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> extraScrapeConfigs <span style="color:#ff79c6">=</span> 
+<p>So I install my own Prometheus using <a href="https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus">Helm</a> and do remote write.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>cluster.addHelmChart(<span style="color:#f1fa8c">&#39;PrometheusOperatorChart&#39;</span>, {
+</span></span><span style="display:flex;"><span>  release<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;kube-prometheus-stack&#39;</span>,
+</span></span><span style="display:flex;"><span>  chart<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;kube-prometheus-stack&#39;</span>,
+</span></span><span style="display:flex;"><span>  repository<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;https://prometheus-community.github.io/helm-charts&#39;</span>,
+</span></span><span style="display:flex;"><span>  version<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;59.1.0&#39;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;prometheus&#39;</span>,
+</span></span><span style="display:flex;"><span>  createNamespace: <span style="color:#8be9fd">true</span>,
+</span></span><span style="display:flex;"><span>  values<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    defaultRules<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      create: <span style="color:#8be9fd">false</span>,
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    prometheus<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      enabled: <span style="color:#8be9fd">true</span>,
+</span></span><span style="display:flex;"><span>      prometheusSpec<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        storageSpec<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>          volumeClaimTemplate<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>            spec<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>              resources<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>                requests<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>                  storage<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;30Gi&#39;</span>,
+</span></span><span style="display:flex;"><span>                },
+</span></span><span style="display:flex;"><span>              },
+</span></span><span style="display:flex;"><span>            },
+</span></span><span style="display:flex;"><span>          },
+</span></span><span style="display:flex;"><span>        },
+</span></span><span style="display:flex;"><span>        retention<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;7d&#39;</span>,
+</span></span><span style="display:flex;"><span>        retentionSize<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;30GB&#39;</span>,
+</span></span><span style="display:flex;"><span>        remoteWrite<span style="color:#ff79c6">:</span> [{
+</span></span><span style="display:flex;"><span>          url<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;https://metric-api.newrelic.com/prometheus/v1/write?prometheus_server=prometheus&#39;</span>,
+</span></span><span style="display:flex;"><span>          authorization<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">type</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;Bearer&#39;</span>,
+</span></span><span style="display:flex;"><span>            credentials<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>              key: <span style="color:#8be9fd">secretKey</span>,
+</span></span><span style="display:flex;"><span>              name: <span style="color:#8be9fd">secretName</span>,
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>          },
+</span></span><span style="display:flex;"><span>          writeRelabelConfigs<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>            {
+</span></span><span style="display:flex;"><span>              sourceLabels<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;aaaa&#39;</span>],
+</span></span><span style="display:flex;"><span>              separator<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;;&#39;</span>,
+</span></span><span style="display:flex;"><span>              regex<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;bbbb&#39;</span>,
+</span></span><span style="display:flex;"><span>              action<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;keep&#39;</span>,
+</span></span><span style="display:flex;"><span>            },
+</span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>        }],
+</span></span><span style="display:flex;"><span>      },
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    nodeExporter<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      enabled: <span style="color:#8be9fd">false</span>,
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    alertmanager<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      enabled: <span style="color:#8be9fd">false</span>,
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    grafana<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      enabled: <span style="color:#8be9fd">false</span>,
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>})
+</span></span></code></pre></div><p>When you install this, a Prometheus server will be started via <a href="https://github.com/prometheus-operator/prometheus-operator?tab=readme-ov-file#customresourcedefinitions">CRD</a> such as Prometheus. There is also a <a href="https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus">chart</a> that doesn&rsquo;t use operators, but since extraScrapeConfigs is a string, if the indent is incorrect it will cause an error so it is difficult to set up. Additionally, by providing various CRDs, it is easy to start a Prometheus server and set up scraping as needed on the application side.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> extraScrapeConfigs <span style="color:#ff79c6">=</span> 
 </span></span><span style="display:flex;"><span><span style="color:#f1fa8c">`- job_name: newrelic-pods
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  honor_timestamps: true
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  scrape_interval: 30s
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  scrape_timeout: 10s
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  scheme: http
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  follow_redirects: true
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  enable_http2: true
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  metrics_path: /metrics
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  kubernetes_sd_configs:
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  - role: pod
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  relabel_configs:
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  - source_labels: [__meta_kubernetes_pod_annotation_newrelic_io_scrape]
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    separator: ;
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    regex: &#39;true&#39;
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    replacement: $1
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    action: keep
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  - source_labels: [__meta_kubernetes_pod_phase]
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    separator: ;
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    regex: &#39;Pending|Succeeded|Failed|Completed&#39;
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    replacement: $1
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    action: drop`</span>
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> recordingRules <span style="color:#ff79c6">=</span> {
-</span></span><span style="display:flex;"><span>  groups<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>    {
-</span></span><span style="display:flex;"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;example&#39;</span>,
-</span></span><span style="display:flex;"><span>      interval<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;5m&#39;</span>,
-</span></span><span style="display:flex;"><span>      rules<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>        {
-</span></span><span style="display:flex;"><span>          record<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;code:prometheus_http_requests_total:sum&#39;</span>,
-</span></span><span style="display:flex;"><span>          expr<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;sum by (code) (prometheus_http_requests_total)&#39;</span>,
-</span></span><span style="display:flex;"><span>          labels<span style="color:#ff79c6">:</span> { aaaa<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;bbbb&#39;</span> },
-</span></span><span style="display:flex;"><span>        },
-</span></span><span style="display:flex;"><span>      ],
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>  ],
-</span></span><span style="display:flex;"><span>}
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> remoteWrite <span style="color:#ff79c6">=</span> [
-</span></span><span style="display:flex;"><span>  {
-</span></span><span style="display:flex;"><span>    url<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;https://metric-api.newrelic.com/prometheus/v1/write?prometheus_server=prometheus&#39;</span>,
-</span></span><span style="display:flex;"><span>    authorization<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      credentials_file<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;/etc/newrelic-secrets/license-key&#39;</span>,
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    write_relabel_configs<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>      {
-</span></span><span style="display:flex;"><span>        source_labels<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;aaaa&#39;</span>],
-</span></span><span style="display:flex;"><span>        separator<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;;&#39;</span>,
-</span></span><span style="display:flex;"><span>        regex<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;bbbb&#39;</span>,
-</span></span><span style="display:flex;"><span>        action<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;keep&#39;</span>,
-</span></span><span style="display:flex;"><span>      },
-</span></span><span style="display:flex;"><span>    ]
-</span></span><span style="display:flex;"><span>  }
-</span></span><span style="display:flex;"><span>]
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> prometheus <span style="color:#ff79c6">=</span> cluster.addHelmChart(<span style="color:#f1fa8c">&#39;PrometheusChart&#39;</span>, {
-</span></span><span style="display:flex;"><span>  release<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;prometheus&#39;</span>,
-</span></span><span style="display:flex;"><span>  chart<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;prometheus&#39;</span>,
-</span></span><span style="display:flex;"><span>  repository<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;https://prometheus-community.github.io/helm-charts&#39;</span>,
-</span></span><span style="display:flex;"><span>  version<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;25.21.0&#39;</span>,
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;prometheus&#39;</span>,
-</span></span><span style="display:flex;"><span>  createNamespace: <span style="color:#8be9fd">true</span>,
-</span></span><span style="display:flex;"><span>  values<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>    alertmanager<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      enabled: <span style="color:#8be9fd">false</span>,
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;kube-state-metrics&#39;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      enabled: <span style="color:#8be9fd">false</span>,
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;prometheus-node-exporter&#39;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      enabled: <span style="color:#8be9fd">false</span>,
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;prometheus-pushgateway&#39;</span><span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      enabled: <span style="color:#8be9fd">false</span>,
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    extraScrapeConfigs,
-</span></span><span style="display:flex;"><span>    serverFiles<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#39;recording_rules.yml&#39;</span><span style="color:#ff79c6">:</span> recordingRules,
-</span></span><span style="display:flex;"><span>    },
-</span></span><span style="display:flex;"><span>    server<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      remoteWrite,
-</span></span><span style="display:flex;"><span>      extraSecretMounts<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>        {
-</span></span><span style="display:flex;"><span>          name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;newrelic-secret&#39;</span>,
-</span></span><span style="display:flex;"><span>          secretName,
-</span></span><span style="display:flex;"><span>          mountPath<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;/etc/newrelic-secrets&#39;</span>,
-</span></span><span style="display:flex;"><span>          readOnly: <span style="color:#8be9fd">true</span>,
-</span></span><span style="display:flex;"><span>        },
-</span></span><span style="display:flex;"><span>      ],
-</span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>  },
-</span></span><span style="display:flex;"><span>})
-</span></span></code></pre></div><p>This chart also includes Alertmanager, Pushgateway, etc. in addition to Prometheus server, but since I don’t use them this time, I disabled them.</p>
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  ...`</span>
+</span></span></code></pre></div><p>Alertmanager etc. are also started by default, but since I don’t use them this time, I disabled them.</p>
 
 
 
@@ -556,7 +528,46 @@
 </a></div>
 
 
-<p>Port forward to Prometheus server and try fetching the metrics of Recording rules with PromQL.</p>
+<p>You can add targets to scrape with Service|PodMonitor, and can set recording rules with PrometheusRule. <a href="https://prometheus.io/docs/practices/rules/#naming">Metric names</a> should be in the format of level:metric:operations.</p>
+<p>If podMonitorSelectorNilUsesHelmValues ​​is the default true,
+<a href="https://github.com/prometheus-community/helm-charts/blob/db15dcf70d06da9c71454f7d9757b47b04d2c5ae/charts/kube-prometheus-stack/templates/prometheus/prometheus.yaml#L175">service|podMonitorSelector</a> will be matchLabels: release:, so if you don&rsquo;t add this label, it won&rsquo;t be loaded into configuration. If it is loaded into configuration but doesn&rsquo;t appear in targets, check that the values ​​of selector, etc. are correct. port in <a href="https://github.com/prometheus-operator/prometheus-operator/blob/v0.74.0/Documentation/api.md#podmetricsendpoint">podMetricsEndpoints</a> can be received only port name, and the number can be passed as the targetPort corresponding to <a href="https://github.com/prometheus-operator/prometheus-operator/blob/77e92ecd4e89c6e647f2d57eca51d1c0d56c9aa5/pkg/prometheus/promcfg.go#L985C45-L985C88">__meta_kubernetes_pod_container_port_number</a>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: monitoring.coreos.com/v1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: PodMonitor
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: testapp-monitor
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span>: prometheus
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">labels</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">release</span>: kube-prometheus-stack
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">selector</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">matchLabels</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">app</span>: testapp
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespaceSelector</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">matchNames</span>:
+</span></span><span style="display:flex;"><span>    - testapp
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">podMetricsEndpoints</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">port</span>: monitor
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">path</span>: /metrics
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">interval</span>: 5m
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">scrapeTimeout</span>: 10s
+</span></span><span style="display:flex;"><span>---
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: monitoring.coreos.com/v1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: PrometheusRule
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: example
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">namespace</span>: prometheus
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">labels</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">release</span>: kube-prometheus-stack
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">groups</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#ff79c6">name</span>: example
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">interval</span>: 5m
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">rules</span>:
+</span></span><span style="display:flex;"><span>    - <span style="color:#ff79c6">record</span>: code:prometheus_http_requests_total:sum
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">expr</span>: sum by (code) (prometheus_http_requests_total)
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">labels</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">aaaa</span>: bbbb
+</span></span></code></pre></div><p>Port forward to Prometheus server and try fetching the metrics of Recording rules with PromQL.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ kubectl -n prometheus port-forward svc/prometheus-server 9090:80
 </span></span><span style="display:flex;"><span>Forwarding from 127.0.0.1:9090 -&gt; <span style="color:#bd93f9">9090</span>
 </span></span><span style="display:flex;"><span>Forwarding from <span style="color:#ff79c6">[</span>::1<span style="color:#ff79c6">]</span>:9090 -&gt; <span style="color:#bd93f9">9090</span>
