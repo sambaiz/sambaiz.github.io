@@ -482,10 +482,14 @@
 </span></span><span style="display:flex;"><span>  createNamespace: <span style="color:#8be9fd">false</span>,
 </span></span><span style="display:flex;"><span>  wait: <span style="color:#8be9fd">true</span>
 </span></span><span style="display:flex;"><span>})
-</span></span></code></pre></div><p>Utilization はコンテナの合計使用量と request または limit リソース量で計算され、replicas は次の式によって決定される。例えば averageUtilization: 70 に対して CPU 使用率が 140% のとき、replicas は現在の倍に設定される。</p>
+</span></span></code></pre></div><p>Utilization はコンテナの合計使用量と request または limit リソース量で計算され、replicas は次の式によって決定される。例えば averageUtilization: 70 に対して平均 CPU 使用率が 140% のとき、replicas は現在の倍に設定される。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>desiredReplicas = ceil[currentReplicas * ( currentMetricValue / desiredMetricValue )]
-</span></span></code></pre></div><p>複数の metrics がある場合は最大の replicas となり、エラーなどで取れないものがある場合は縮退しないようになっている。</p>
-<p>判定間隔は <a href="https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/">kube-controller-manager</a> の &ndash;horizontal-pod-autoscaler-sync-period で設定でき、デフォルトは 15 秒になっている。スケールを早めるためにはなるべく短くしたいところだがコントロールプレーンを触れない EKS では現状変更できない。</p>
+</span></span></code></pre></div><p>Pod ごとの CPU の使用率にばらつきがあったりすると、平均ではうまくスケールしないことがある。その場合 KEDA などが提供する external metrics を参照することもできる。</p>
+<p><a href="https://www.sambaiz.net/article/490/">KEDA (Kubernetes Event-driven Autoscaling) で Prometheus のメトリクスや時間ベースのスケーリングを行う - sambaiz-net</a></p>
+<p>複数の metrics がある場合は最大の replicas となり、エラーなどで取れないものがある場合は縮退しないようになっている。</p>
+<p>判定間隔は <a href="https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/">kube-controller-manager</a> の &ndash;horizontal-pod-autoscaler-sync-period で設定でき、デフォルトは 15 秒になっている。スケールを早めるためにはなるべく短くしたいところだがコントロールプレーンを触れない EKS では現状変更できない。いずれにせよリソースが足りないと Pod は起動しないので併せて PriorityClass などでリソースを確保しやすくしたりノードのスケールの高速化に取り組む必要がある。</p>
+<p><a href="https://www.sambaiz.net/article/481/">K8s の Pod の Prirority とそれによる Preemption - sambaiz-net</a></p>
+<p><a href="https://www.sambaiz.net/article/455/">CDK で EKS クラスタに Karpenter をインストールし柔軟で高速なオートスケールを行う - sambaiz-net</a></p>
 <p>behavior で増減上限を設定することができ<a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#default-behavior">デフォルト</a>は次のような設定になっている。Percent の periodSeconds: 15 と value: 100 は 15秒間に最大で現在の pod 数の 100% 分増減することを意味する。複数の policy がある場合 selectPolicy によってどの値が適用されるかが選択され、デフォルトは Max となっている。<a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#stabilization-window">stabilizationWindowSeconds</a> は頻繁なメトリクスの更新によって pod 数が安定しない flapping を避けるための値で、この期間中の最大の値が採用される。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">behavior</span>:
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">scaleDown</span>:
