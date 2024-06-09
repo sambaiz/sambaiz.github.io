@@ -503,6 +503,8 @@ Deregistration delay を短くした上で、それ以上の時間待つ必要�
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: app
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">labels</span>:
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">elbv2.k8s.aws/pod-readiness-gate-inject</span>: enabled
+</span></span></code></pre></div><p>特定の Pod に負荷が集中し ALB でのヘルスチェックがこけると、その Pod にルーティングされなくなることで平均 CPU 使用率が下がって縮退してしまい、減った残りの Pod に負荷が集中することで全滅してしまう悪循環が起きてしまうことがある。そのため先に Readinss probe で検知されるようにして Target から外れるようにしたほうがよいと考えているが、デフォルトのラウンドロビンではなく処理中のリクエストが最も少ない Target にルーティングする <a href="https://aws.amazon.com/about-aws/whats-new/2019/11/application-load-balancer-now-supports-least-outstanding-requests-algorithm-for-load-balancing-requests/">Least Outstanding Requests</a> にすることで集中自体を解消できる可能性がある。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">alb.ingress.kubernetes.io/target-group-attributes</span>: load_balancing.algorithm.type=least_outstanding_requests
 </span></span></code></pre></div><p>AccessDenied などで ALB が作られない場合は Policy が最新で ServiceAccount の annotations に誤りがないかを確認するとよい。</p>
 <p>alb.ingress.kubernetes.io/security-groups で独自のセキュリティグループを<a href="https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.7/deploy/security_groups/">設定できる</a>が、そうする場合併せて alb.ingress.kubernetes.io/manage-backend-security-group-rules を true にしないとインスタンスの SG の inbound で許可されている Backend SG が ALB に追加されずアクセスできない。</p>
 <h2 id="参考">参考</h2>
