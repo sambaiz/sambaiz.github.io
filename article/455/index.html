@@ -615,9 +615,21 @@ ControllerRole の Principal が間違っていて AssumeRole できなかった
 </span></span><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>family<span style="color:#ff79c6">=</span>r6gd
 </span></span><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>generation<span style="color:#ff79c6">=</span><span style="color:#bd93f9">6</span>
 </span></span><span style="display:flex;"><span>...
-</span></span></code></pre></div><p><a href="https://karpenter.sh/preview/concepts/disruption/#pod-level-controls">karpenter.sh/do-not-disrupt: &ldquo;true&rdquo;</a> annotation を付けることで、
-実行中の Pod が <a href="https://karpenter.sh/preview/concepts/disruption/#consolidation">Consolidation</a> などによって evict されて他のノードに移動することを防ぐことができる。
-Consolidation や Evict は kubectl get event で確認できる。</p>
+</span></span></code></pre></div><h2 id="pod-の-disruption">Pod の Disruption</h2>
+<p><a href="https://karpenter.sh/preview/concepts/disruption/#pod-level-controls">karpenter.sh/do-not-disrupt: &ldquo;true&rdquo;</a> annotation を付けることで、
+実行中の Pod が <a href="https://karpenter.sh/preview/concepts/disruption/#consolidation">Consolidation</a> によって Disrupt されて他のノードに移動されることを防ぐことができる。Consolidation は Karpenter のログや kubectl get event で確認できる。</p>
+<p>ただし、この設定を行うことでインスタンスの寿命が伸びてスポットインスタンスの中断に遭遇する機会が増える可能性があり、その際の Evict は避けられず時間制限もある。もしキャパシティに不安があるなら do-not-disrupt よりは <a href="https://kubernetes.io/docs/tasks/run-application/configure-pdb/">PodDisruptionBudget</a> で minAvailable/maxUnavailable を設定することで Disruption 時にも最低限必要なリソースが担保されるようにするべきだと考える。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: policy/v1
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: PodDisruptionBudget
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: testapp-pdb
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">minAvailable</span>: <span style="color:#bd93f9">90</span>%
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">unhealthyPodEvictionPolicy</span>: AlwaysAllow
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">selector</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">matchLabels</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">app</span>: testapp
+</span></span></code></pre></div><p><a href="https://kubernetes.io/docs/tasks/run-application/configure-pdb/#unhealthy-pod-eviction-policy">unhealthyPodEvictionPolicy</a> のデフォルトは IfHealthyBudget で、Healthy でない Pod は PDB の desiredHealthy を満たしている場合のみ Evict される。これを AlwaysAllow にすると無条件に Evict され得るようになり、半永久的に Healthy にならない Pod を無視して Drain することができるようになる。</p>
 
     </div>
   </article>
