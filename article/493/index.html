@@ -567,6 +567,98 @@ AWS が <a href="https://docs.aws.amazon.com/eks/latest/userguide/cost-monitorin
 </span></span><span style="display:flex;"><span>    / 1024 / 1024 / 1024
 </span></span><span style="display:flex;"><span>  ) by (pod)
 </span></span><span style="display:flex;"><span>) by (label_k8s_app)
+</span></span></code></pre></div><p>デフォルトでインスタンスコストはオンデマンドの料金で計算される。スポットの料金を反映させるには Cost and Usage Report を連携する<a href="https://docs.kubecost.com/install-and-configure/install/cloud-integration">方法</a>もあるが更新されるのに最大で48時間程度かかる。
+ほかの方法として <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-data-feeds.html">Spot instance data feed</a> を読む<a href="https://docs.kubecost.com/install-and-configure/install/cloud-integration/aws-cloud-integrations/aws-spot-instances">方法</a>もあって、
+createSpotDatafeedSubscription で指定した Bucket に各スポットインスタンスの料金が保存される。
+その際 s3:*Acl がないと The specified bucket does not exist or does not have enough permissions エラーになったので追加した。</p>
+<p><a href="https://www.sambaiz.net/article/468/">CDKのAwsCustomResourceでAWSのAPIを呼ぶ - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> spotDataFeedBucket <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> s3.Bucket(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;KubecostSpotDatafeedBucket&#39;</span>, {
+</span></span><span style="display:flex;"><span>  bucketName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>cluster.clusterName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">-kubecost-spot-datafeed`</span>,
+</span></span><span style="display:flex;"><span>  removalPolicy: <span style="color:#8be9fd">cdk.RemovalPolicy.DESTROY</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#6272a4">// https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-data-feeds.html#using-spot-instances-dfs3
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>  accessControl: <span style="color:#8be9fd">s3.BucketAccessControl.BUCKET_OWNER_FULL_CONTROL</span>,
+</span></span><span style="display:flex;"><span>  objectOwnership: <span style="color:#8be9fd">s3.ObjectOwnership.OBJECT_WRITER</span>,
+</span></span><span style="display:flex;"><span>})
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">// https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateSpotDatafeedSubscription.html
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">new</span> cdk.custom_resources.AwsCustomResource(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;CreateSpotDatafeedSubscription&#39;</span>, {
+</span></span><span style="display:flex;"><span>  onCreate<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    service<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;ec2&#39;</span>,
+</span></span><span style="display:flex;"><span>    action<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;createSpotDatafeedSubscription&#39;</span>,
+</span></span><span style="display:flex;"><span>    parameters<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      Bucket: <span style="color:#8be9fd">spotDataFeedBucket.bucketName</span>,
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    physicalResourceId: <span style="color:#8be9fd">cdk.custom_resources.PhysicalResourceId.of</span>(spotDataFeedBucket.bucketName),
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>  onDelete<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    service<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;ec2&#39;</span>,
+</span></span><span style="display:flex;"><span>    action<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;deleteSpotDatafeedSubscription&#39;</span>,
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>  policy: <span style="color:#8be9fd">cdk.custom_resources.AwsCustomResourcePolicy.fromStatements</span>([
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>      actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;ec2:CreateSpotDatafeedSubscription&#39;</span>, <span style="color:#f1fa8c">&#39;ec2:DeleteSpotDatafeedSubscription&#39;</span>],
+</span></span><span style="display:flex;"><span>      resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;*&#39;</span>],
+</span></span><span style="display:flex;"><span>    }),
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>      actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;s3:*Acl&#39;</span>],
+</span></span><span style="display:flex;"><span>      resources<span style="color:#ff79c6">:</span> [spotDataFeedBucket.bucketArn],
+</span></span><span style="display:flex;"><span>    }),
+</span></span><span style="display:flex;"><span>  ])
+</span></span><span style="display:flex;"><span>}).node.addDependency(spotDataFeedBucket)
+</span></span></code></pre></div><p>kubecostProductConfigs でこの Bucket を指定し、読む権限を ServiceAccount に与えるとスポットの料金が反映される。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> role <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> cdk.aws_iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;KubecostRole&#39;</span>, {
+</span></span><span style="display:flex;"><span>  roleName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>cluster.clusterName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">-kubecost`</span>,
+</span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.WebIdentityPrincipal(
+</span></span><span style="display:flex;"><span>    cluster.openIdConnectProvider.openIdConnectProviderArn,
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>      StringEquals: <span style="color:#8be9fd">new</span> cdk.CfnJson(
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">this</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;KubecostRoleStringEquals&#39;</span>,
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>          value<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>            [<span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>cluster.clusterOpenIdConnectIssuer<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:aud`</span>]<span style="color:#ff79c6">:</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#39;sts.amazonaws.com&#39;</span>,
+</span></span><span style="display:flex;"><span>            [<span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>cluster.clusterOpenIdConnectIssuer<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:sub`</span>]<span style="color:#ff79c6">:</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#39;system:serviceaccount:kubecost:kubecost-cost-analyzer&#39;</span>,
+</span></span><span style="display:flex;"><span>          },
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>      ),
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>  ),
+</span></span><span style="display:flex;"><span>  inlinePolicies<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;SpotDataFeed&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">new</span> cdk.aws_iam.PolicyDocument({
+</span></span><span style="display:flex;"><span>      statements<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> cdk.aws_iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;s3:ListAllMyBuckets&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;s3:ListBucket&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;s3:List*&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;s3:Get*&#39;</span>,
+</span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [spotDataFeedBucket.bucketArn, <span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>spotDataFeedBucket.bucketArn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">/*`</span>],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>    }),
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>})
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>cluster.addHelmChart(<span style="color:#f1fa8c">&#39;KubecostHelmChart&#39;</span>, {
+</span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>  values<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    ...
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4">// https://docs.kubecost.com/install-and-configure/install/cloud-integration/aws-cloud-integrations/aws-spot-instances#configuring-the-spot-data-feed-in-kubecost
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>    kubecostProductConfigs<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      projectID: <span style="color:#8be9fd">cdk.Stack.of</span>(<span style="color:#ff79c6">this</span>).account,
+</span></span><span style="display:flex;"><span>      awsSpotDataRegion: <span style="color:#8be9fd">cdk.Stack.of</span>(<span style="color:#ff79c6">this</span>).region,
+</span></span><span style="display:flex;"><span>      awsSpotDataBucket: <span style="color:#8be9fd">spotDataFeedBucket.bucketName</span>,
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>    serviceAccount<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      annotations<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;eks.amazonaws.com/role-arn&#39;</span><span style="color:#ff79c6">:</span> role.roleArn,
+</span></span><span style="display:flex;"><span>      },
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div>
     </div>
   </article>
