@@ -450,7 +450,7 @@
         <time>2024-09-23</time>
         <a class="tag" href='/en/tags/golang/'>golang</a>
       </div>
-      <p><a href="https://pkg.go.dev/sync/atomic">sync/atomic</a> is a low-level package for atomically reading and writing memory in Go. In the case of arm64, CPU instructions such as <a href="https://developer.arm.com/documentation/ddi0602/2024-06/Base-Instructions/LDADD--LDADDA--LDADDAL--LDADDL--Atomic-add-on-word-or-doubleword-in-memory-">LDADDALD</a> that manipulate memory atomically are <a href="https://github.com/golang/go/blob/go1.23.1/src/internal/runtime/atomic/atomic_arm64.s#L269">executed</a>. When reading and writing values from multiple goroutines, the usual method is to communicate via a channel or lock with sync.Mutex, so I have not had the opportunity to call the functions of this package, which require careful handling. However, it is called by libraries such as <a href="https://github.com/prometheus/client_golang/blob/v1.20.4/prometheus/counter.go#L152">Prometheus Go client</a>, and I was curious to see how much it affects performance, so I ran a benchmark.</p>
+      <p><a href="https://pkg.go.dev/sync/atomic">sync/atomic</a> is a low-level package for atomically reading and writing memory in Go. In the case of arm64, CPU instructions such as <a href="https://developer.arm.com/documentation/ddi0602/2024-06/Base-Instructions/LDADD--LDADDA--LDADDAL--LDADDL--Atomic-add-on-word-or-doubleword-in-memory-">LDADDALD</a> that manipulate memory atomically are <a href="https://github.com/golang/go/blob/go1.23.1/src/internal/runtime/atomic/atomic_arm64.s#L269">executed</a>. When reading and writing values from multiple goroutines, the usual method is to communicate via a channel or lock with sync.Mutex, so I have not had the opportunity to call the functions of this package, which require careful handling. However, it is called by libraries such as <a href="https://github.com/prometheus/client_golang/blob/v1.20.4/prometheus/counter.go#L152">Prometheus Go client</a>, and I was curious to see how different it is, so I ran some benchmarks.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ go version
 </span></span><span style="display:flex;"><span>go version go1.23.0 darwin/arm64
 </span></span><span style="display:flex;"><span>
@@ -545,7 +545,8 @@
 </span></span><span style="display:flex;"><span>		})
 </span></span><span style="display:flex;"><span>	}
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>atomic.LoadInt64 is several dozen times faster than the others, and while the others become slower as the number of parallel operations is increased, atomic has some overhead, but the overall execution time is still short.</p>
+</span></span></code></pre></div><p>atomic.LoadInt64 is dozens of times faster than the others and scales with CPU clock cycles (3.49GHz -&gt; 0.29ns).
+Also, while increasing the number of parallel processes makes the others slower, atomic has some overhead, but the overall execution time is still short.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span># go test -bench=. -cpu=8
 </span></span><span style="display:flex;"><span>BenchmarkAtomicLoad/goroutines-1-8              1000000000               0.5997 ns/op
 </span></span><span style="display:flex;"><span>BenchmarkAtomicLoad/goroutines-2-8              1000000000               0.3114 ns/op
