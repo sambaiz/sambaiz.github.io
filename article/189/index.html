@@ -432,23 +432,38 @@
         <time>2018-10-02</time>
         <a class="tag" href='/tags/database/'>database</a><a class="tag" href='/tags/mysql/'>mysql</a><a class="tag" href='/tags/golang/'>golang</a>
       </div>
-      <p>go-sql-driver/mysql で MySQL に接続するときに適切なパラメータを渡さないと日時が意図しない値になる問題について。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">version</span>();
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">+</span><span style="color:#6272a4">-----------+
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">|</span> <span style="color:#ff79c6">version</span>() <span style="color:#ff79c6">|</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">+</span><span style="color:#6272a4">-----------+
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>    <span style="color:#ff79c6">|</span> <span style="color:#bd93f9">5</span>.<span style="color:#bd93f9">7</span>.<span style="color:#bd93f9">21</span>    <span style="color:#ff79c6">|</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">+</span><span style="color:#6272a4">-----------+
-</span></span></span></code></pre></div><h2 id="前提">前提</h2>
-<p>タイムゾーンがDBにロードされていない場合はロードする。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">count</span>(<span style="color:#ff79c6">*</span>) <span style="color:#ff79c6">from</span> mysql.time_zone \\<span style="color:#ff79c6">G</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">***************************</span> <span style="color:#bd93f9">1</span>. <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">***************************</span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">count</span>(<span style="color:#ff79c6">*</span>): <span style="color:#bd93f9">0</span>
+      <p>go-sql-driver/mysql で MySQL に接続するときに適切なパラメータを渡さないと日時が意図しない値になる問題について確認する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ cat docker<span style="color:#ff79c6">-</span>compose.yml 
+</span></span><span style="display:flex;"><span>services:
+</span></span><span style="display:flex;"><span>  db:
+</span></span><span style="display:flex;"><span>    image: mysql:<span style="color:#bd93f9">8</span>.<span style="color:#bd93f9">0</span>
+</span></span><span style="display:flex;"><span>    container_name: testdb
+</span></span><span style="display:flex;"><span>    platform: linux<span style="color:#ff79c6">/</span>arm64
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">restart</span>: always
+</span></span><span style="display:flex;"><span>    environment:
+</span></span><span style="display:flex;"><span>      MYSQL_ROOT_PASSWORD: test
+</span></span><span style="display:flex;"><span>      MYSQL_DATABASE: testdb
+</span></span><span style="display:flex;"><span>      TZ: Asia<span style="color:#ff79c6">/</span>Tokyo
+</span></span><span style="display:flex;"><span>    ports:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">-</span> <span style="color:#f1fa8c">&#34;3306:3306&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ docker<span style="color:#ff79c6">-</span>compose up <span style="color:#ff79c6">-</span>d
+</span></span><span style="display:flex;"><span>$ docker <span style="color:#ff79c6">exec</span> <span style="color:#ff79c6">-</span>it testdb mysql <span style="color:#ff79c6">-</span>h127.<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">1</span> <span style="color:#ff79c6">-</span>P3306 <span style="color:#ff79c6">-</span>uroot <span style="color:#ff79c6">-</span>ptest
+</span></span><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">version</span>();
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">-----------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> <span style="color:#ff79c6">version</span>() <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">-----------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> <span style="color:#bd93f9">8</span>.<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">39</span>    <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">-----------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#bd93f9">1</span> <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">in</span> <span style="color:#ff79c6">set</span> (<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">00</span> sec)
+</span></span></code></pre></div><h2 id="前提">前提</h2>
+<p>もしタイムゾーンがDBにロードされていない場合はロードする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">count</span>(<span style="color:#ff79c6">*</span>) <span style="color:#ff79c6">from</span> mysql.time_zone;
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>$ mysql_tzinfo_to_sql <span style="color:#ff79c6">/</span>usr<span style="color:#ff79c6">/</span><span style="color:#ff79c6">share</span><span style="color:#ff79c6">/</span>zoneinfo<span style="color:#ff79c6">/</span> <span style="color:#ff79c6">|</span> mysql <span style="color:#ff79c6">-</span>u root mysql
-</span></span></code></pre></div><p>time_zone はデフォルト値の SYSTEM。つまり JST で、これは my.cnf の default-time-zone で変更できる。
+</span></span></code></pre></div><p>time_zone はデフォルト値の SYSTEM (=JST)。これは my.cnf の default-time-zone と対応している。
 関数 NOW() も JST の時間を返している。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">show</span> variables <span style="color:#ff79c6">like</span> <span style="color:#f1fa8c">&#39;%time_zone%&#39;</span>;
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">show</span> variables <span style="color:#ff79c6">like</span> <span style="color:#f1fa8c">&#39;%time_zone%&#39;</span>;
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">------------------+--------+
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> Variable_name    <span style="color:#ff79c6">|</span> Value  <span style="color:#ff79c6">|</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">------------------+--------+
@@ -456,130 +471,204 @@
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">|</span> time_zone        <span style="color:#ff79c6">|</span> <span style="color:#ff79c6">SYSTEM</span> <span style="color:#ff79c6">|</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">------------------+--------+
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">SELECT</span> NOW();
-</span></span><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">SELECT</span> NOW() \<span style="color:#ff79c6">G</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">***************************</span> <span style="color:#bd93f9">1</span>. <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">***************************</span>
-</span></span><span style="display:flex;"><span>NOW(): <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">20</span>:<span style="color:#bd93f9">26</span>:<span style="color:#bd93f9">29</span>
-</span></span></code></pre></div><p>DATETIME 型は格納したデータがそのまま返されるのに対して、TIMESTAMP 型は UTC として保持され返すときに time_zone の値に<a href="https://dev.mysql.com/doc/refman/5.7/en/time-zone-support.html">変換される</a>違いがある。
-したがって後から time_zone を変更すると DATETIME のカラムの値は変わらないが TIMESTAMP は変わる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">TABLE</span> t (
+</span></span><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">SELECT</span> NOW();
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> NOW()               <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">20</span>:<span style="color:#bd93f9">26</span>:<span style="color:#bd93f9">29</span> <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#bd93f9">1</span> <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">in</span> <span style="color:#ff79c6">set</span> (<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">00</span> sec)
+</span></span></code></pre></div><p>DATETIME 型は格納した日時がそのまま返されるのに対して、TIMESTAMP 型は UTC として保持されて返すときに time_zone での値に<a href="https://dev.mysql.com/doc/refman/5.7/en/time-zone-support.html">変換される</a>違いがある。
+これにより後から time_zone を変更すると DATETIME のカラムの値は変わらないが TIMESTAMP のカラムの値は変わることになる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">TABLE</span> t (
 </span></span><span style="display:flex;"><span>    dt DATETIME,
 </span></span><span style="display:flex;"><span>    ts <span style="color:#ff79c6">TIMESTAMP</span>
 </span></span><span style="display:flex;"><span>);
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">INSERT</span> <span style="color:#ff79c6">INTO</span> t <span style="color:#ff79c6">VALUES</span> (NOW(), NOW());
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">from</span> t \<span style="color:#ff79c6">G</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">***************************</span> <span style="color:#bd93f9">1</span>. <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">***************************</span>
-</span></span><span style="display:flex;"><span>dt: <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">20</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">13</span>
-</span></span><span style="display:flex;"><span>ts: <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">20</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">13</span>
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">SET</span> <span style="color:#ff79c6">SESSION</span> time_zone <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;UTC&#34;</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> NOW() \<span style="color:#ff79c6">G</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">***************************</span> <span style="color:#bd93f9">1</span>. <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">***************************</span>
-</span></span><span style="display:flex;"><span>NOW(): <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">11</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">56</span>
+</span></span><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">INSERT</span> <span style="color:#ff79c6">INTO</span> t <span style="color:#ff79c6">VALUES</span> (NOW(), NOW());
+</span></span><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">from</span> t;
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> dt                  <span style="color:#ff79c6">|</span> ts                  <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">20</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">13</span> <span style="color:#ff79c6">|</span> <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">20</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">13</span> <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#bd93f9">1</span> <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">in</span> <span style="color:#ff79c6">set</span> (<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">00</span> sec)
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">from</span> t \<span style="color:#ff79c6">G</span>;
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">***************************</span> <span style="color:#bd93f9">1</span>. <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">***************************</span>
-</span></span><span style="display:flex;"><span>dt: <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">20</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">13</span>
-</span></span><span style="display:flex;"><span>ts: <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">11</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">13</span>
-</span></span></code></pre></div><h2 id="各パラメータの関係">各パラメータの関係</h2>
+</span></span><span style="display:flex;"><span>MySQL<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">SET</span> <span style="color:#ff79c6">SESSION</span> time_zone <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;UTC&#34;</span>;
+</span></span><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> NOW();
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> NOW()               <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">11</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">56</span> <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#bd93f9">1</span> <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">in</span> <span style="color:#ff79c6">set</span> (<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">00</span> sec)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">from</span> t;
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> dt                  <span style="color:#ff79c6">|</span> ts                  <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">|</span> <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">20</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">13</span> <span style="color:#ff79c6">|</span> <span style="color:#bd93f9">2018</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">10</span><span style="color:#ff79c6">-</span><span style="color:#bd93f9">02</span> <span style="color:#bd93f9">11</span>:<span style="color:#bd93f9">27</span>:<span style="color:#bd93f9">13</span> <span style="color:#ff79c6">|</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">---------------------+---------------------+
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#bd93f9">1</span> <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">in</span> <span style="color:#ff79c6">set</span> (<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">00</span> sec)
+</span></span></code></pre></div><h2 id="実験">実験</h2>
 <p><a href="https://github.com/go-sql-driver/mysql">go-sql-driver/mysql</a>で
 <a href="https://github.com/go-sql-driver/mysql#loc">loc</a> と time_zone を付けてDBに接続し、
-MySQLの NOW() の値と Go の time.Now() の値を DATETIME と TIMESTAMP のカラムに格納して出力してみる。
-time.Local は UTC でも MySQLの time_zone の JST でもない US/Alaska (-0800) にしている。</p>
+MySQL の NOW() の値と Go の time.Now() の値を DATETIME と TIMESTAMP のカラムに格納して値を確認する。なお、time.Now() のタイムゾーンである time.Local は UTC でも MySQLの time_zone の JST でもない US/Alaska (-0800) にしている。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;database/sql&#34;</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;fmt&#34;</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;math&#34;</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;time&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;database/sql&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;math&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;time&#34;</span>
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>    _ <span style="color:#f1fa8c">&#34;github.com/go-sql-driver/mysql&#34;</span>
+</span></span><span style="display:flex;"><span>	_ <span style="color:#f1fa8c">&#34;github.com/go-sql-driver/mysql&#34;</span>
 </span></span><span style="display:flex;"><span>)
-</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">const</span> format = <span style="color:#f1fa8c">&#34;2006-01-02 15:04:05 Z0700&#34;</span>
-</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
-</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">var</span> err <span style="color:#8be9fd">error</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> time.Local, err = time.<span style="color:#50fa7b">LoadLocation</span>(<span style="color:#f1fa8c">&#34;US/Alaska&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">panic</span>(err)
-</span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>    now <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>()
-</span></span><span style="display:flex;"><span>    fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;%15s: %s\n&#34;</span>, <span style="color:#f1fa8c">&#34;time.Now()&#34;</span>, now.<span style="color:#50fa7b">Format</span>(format))
-</span></span><span style="display:flex;"><span>    fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;* none&#34;</span>)
-</span></span><span style="display:flex;"><span>    <span style="color:#50fa7b">run</span>(now, <span style="color:#f1fa8c">&#34;root:@/hoge?parseTime=true&#34;</span>)
-</span></span><span style="display:flex;"><span>    fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;* loc&#34;</span>)
-</span></span><span style="display:flex;"><span>    <span style="color:#50fa7b">run</span>(now, <span style="color:#f1fa8c">&#34;root:@/hoge?parseTime=true&amp;loc=Local&#34;</span>)
-</span></span><span style="display:flex;"><span>    fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;* loc &amp; time_zone&#34;</span>)
-</span></span><span style="display:flex;"><span>    <span style="color:#50fa7b">run</span>(now, <span style="color:#f1fa8c">&#34;root:@/hoge?parseTime=true&amp;loc=Local&amp;time_zone=%27US%2FAlaska%27&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#8be9fd;font-style:italic">var</span> err <span style="color:#8be9fd">error</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> time.Local, err = time.<span style="color:#50fa7b">LoadLocation</span>(<span style="color:#f1fa8c">&#34;US/Alaska&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	now <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">Now</span>()
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;%s: %s\n&#34;</span>, <span style="color:#f1fa8c">&#34;time.Now()&#34;</span>, now.<span style="color:#50fa7b">Format</span>(format))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;default insert, get&#34;</span>)
+</span></span><span style="display:flex;"><span>	defaultSrc <span style="color:#ff79c6">:=</span> <span style="color:#f1fa8c">&#34;root:test@tcp(127.0.0.1:3306)/testdb?parseTime=true&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">insert</span>(now, defaultSrc)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">get</span>(now, defaultSrc)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;insert(loc=Local), get(loc=Local)&#34;</span>)
+</span></span><span style="display:flex;"><span>	locSrc <span style="color:#ff79c6">:=</span> <span style="color:#f1fa8c">&#34;root:test@tcp(127.0.0.1:3306)/testdb?parseTime=true&amp;loc=Local&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">insert</span>(now, locSrc)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">get</span>(now, locSrc)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;insert(), get(loc=Local)&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">insert</span>(now, defaultSrc)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">get</span>(now, locSrc)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;insert(loc=Local&amp;time_zone=US/Alaska), get(loc=Local&amp;time_zone=US/Alaska)&#34;</span>)
+</span></span><span style="display:flex;"><span>	locTimeZoneSrc <span style="color:#ff79c6">:=</span> <span style="color:#f1fa8c">&#34;root:test@tcp(127.0.0.1:3306)/testdb?parseTime=true&amp;loc=Local&amp;time_zone=%27US%2FAlaska%27&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">insert</span>(now, locTimeZoneSrc)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">get</span>(now, locTimeZoneSrc)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;insert(loc=Local&amp;time_zone=US/Alaska), get(loc=Local)&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">insert</span>(now, locTimeZoneSrc)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">get</span>(now, locSrc)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Println</span>(<span style="color:#f1fa8c">&#34;insert(loc=Local), get(loc=Local&amp;time_zone=US/Alaska)&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">insert</span>(now, locSrc)
+</span></span><span style="display:flex;"><span>	<span style="color:#50fa7b">get</span>(now, locTimeZoneSrc)
 </span></span><span style="display:flex;"><span>}
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">run</span>(now time.Time, src <span style="color:#8be9fd">string</span>) {
-</span></span><span style="display:flex;"><span>    db, err <span style="color:#ff79c6">:=</span> sql.<span style="color:#50fa7b">Open</span>(<span style="color:#f1fa8c">&#34;database&#34;</span>, <span style="color:#f1fa8c">&#34;mysql&#34;</span>, src)
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">panic</span>(err)
-</span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">defer</span> db.<span style="color:#50fa7b">Close</span>()
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">insert</span>(now time.Time, src <span style="color:#8be9fd">string</span>) {
+</span></span><span style="display:flex;"><span>	db, err <span style="color:#ff79c6">:=</span> sql.<span style="color:#50fa7b">Open</span>(<span style="color:#f1fa8c">&#34;mysql&#34;</span>, src)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">defer</span> db.<span style="color:#50fa7b">Close</span>()
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Exec</span>(<span style="color:#f1fa8c">&#34;DELETE FROM t&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">panic</span>(err)
-</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Exec</span>(<span style="color:#f1fa8c">&#34;DELETE FROM t&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Exec</span>(<span style="color:#f1fa8c">&#34;INSERT INTO t VALUES (NOW(), NOW())&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">panic</span>(err)
-</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Exec</span>(<span style="color:#f1fa8c">&#34;INSERT INTO t VALUES (NOW(), NOW())&#34;</span>); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Exec</span>(<span style="color:#f1fa8c">&#34;INSERT INTO t VALUES (?, ?)&#34;</span>, now, now); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">panic</span>(err)
-</span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>    rows, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Query</span>(<span style="color:#f1fa8c">&#34;SELECT dt, ts FROM t&#34;</span>)
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">panic</span>(err)
-</span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>    i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>
-</span></span><span style="display:flex;"><span>    title <span style="color:#ff79c6">:=</span> []<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;Select NOW()&#34;</span>, <span style="color:#f1fa8c">&#34;Insert &amp; Select time.Now()&#34;</span>}
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> rows.<span style="color:#50fa7b">Next</span>() {
-</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">var</span> datetime, timestamp time.Time
-</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> rows.<span style="color:#50fa7b">Scan</span>(<span style="color:#ff79c6">&amp;</span>datetime, <span style="color:#ff79c6">&amp;</span>timestamp); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
-</span></span><span style="display:flex;"><span>            <span style="color:#8be9fd;font-style:italic">panic</span>(err)
-</span></span><span style="display:flex;"><span>        }
-</span></span><span style="display:flex;"><span>        fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;%30s: %s, %s -&gt; %v\n&#34;</span>,
-</span></span><span style="display:flex;"><span>            title[i],
-</span></span><span style="display:flex;"><span>            datetime.<span style="color:#50fa7b">Format</span>(format),
-</span></span><span style="display:flex;"><span>            timestamp.<span style="color:#50fa7b">Format</span>(format),
-</span></span><span style="display:flex;"><span>            math.<span style="color:#50fa7b">Abs</span>(<span style="color:#8be9fd;font-style:italic">float64</span>(datetime.<span style="color:#50fa7b">Unix</span>()<span style="color:#ff79c6">-</span>now.<span style="color:#50fa7b">Unix</span>())) &lt; <span style="color:#bd93f9">10</span>,
-</span></span><span style="display:flex;"><span>        )
-</span></span><span style="display:flex;"><span>        i<span style="color:#ff79c6">++</span>
-</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> _, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Exec</span>(<span style="color:#f1fa8c">&#34;INSERT INTO t VALUES (?, ?)&#34;</span>, now, now); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><h3 id="実行結果">実行結果</h3>
-<p>time.Now() は 2018-10-02 03:43:13 -0800 (= 11:43 Z, 20:43 +0900)。</p>
-<p>なお、DATETIME型 と TIMESTAMP型 については 全ての例において値が一致した。
-これはいずれの場合も格納時と取得時で time_zone を変えていないためで、既に格納されている行の TIMESTAMP カラムを time_stamp を渡さないで取得すると意図した値を返さないことがある。</p>
-<h3 id="何も指定しない場合">何も指定しない場合</h3>
-<ul>
-<li>Select NOW(): 2018-10-02 20:43:13 Z -&gt; NG</li>
-<li>Insert &amp; Select time.Now(): 2018-10-02 20:43:13 Z -&gt; NG</li>
-</ul>
-<p>loc は time.Time 変数の タイムゾーンとなり付けないと UTC になる。
-これにより MySQL に格納されている time_zone (JST) の 20:43 をそのまま UTC として扱ってしまい 20:43 Z になっている。</p>
-<h3 id="loclocal-usalaska">loc=Local (=US/Alaska)</h3>
-<ul>
-<li>Select NOW(): 2018-10-02 20:43:13 -0800 -&gt; NG</li>
-<li>Insert &amp; Select time.Now(): 2018-10-02 03:43:14 -0800 -&gt; OK</li>
-</ul>
-<p>loc を指定すると time.Now() の方は正しい時間が取得できるようになった。</p>
-<h3 id="loclocal--time_zoneusalaska">loc=Local &amp; time_zone=US/Alaska</h3>
-<ul>
-<li>Select NOW(): 2018-10-02 03:43:13 -0800 -&gt; OK</li>
-<li>Insert &amp; Select time.Now(): 2018-10-02 03:43:14 -0800 -&gt; OK</li>
-</ul>
-<p>time_zone を渡すと SET time_zone されて MySQLの NOW() がそのタイムゾーンの値になった。
-ただしこうすると格納される DATETIME 型の値もそのタイムゾーンの値になってしまう。</p>
-<h2 id="まとめ">まとめ</h2>
-<p>loc=Local は渡さないと正しい時間が取れず、MySQL の NOW() の値は time_zone に依存してずれる。
-time.Local と MySQL の time_zone が一致している場合はこの問題は起こらないが、それに処理が依存しているなら明示的に渡すべきだと考える。</p>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">get</span>(now time.Time, src <span style="color:#8be9fd">string</span>) {
+</span></span><span style="display:flex;"><span>	db, err <span style="color:#ff79c6">:=</span> sql.<span style="color:#50fa7b">Open</span>(<span style="color:#f1fa8c">&#34;mysql&#34;</span>, src)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">defer</span> db.<span style="color:#50fa7b">Close</span>()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	rows, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">Query</span>(<span style="color:#f1fa8c">&#34;SELECT dt, ts FROM t&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>
+</span></span><span style="display:flex;"><span>	title <span style="color:#ff79c6">:=</span> []<span style="color:#8be9fd">string</span>{<span style="color:#f1fa8c">&#34;MySQL NOW() → Go&#34;</span>, <span style="color:#f1fa8c">&#34;Go time.Now() → MySQL → Go&#34;</span>}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">for</span> rows.<span style="color:#50fa7b">Next</span>() {
+</span></span><span style="display:flex;"><span>		<span style="color:#8be9fd;font-style:italic">var</span> datetime, timestamp time.Time
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> rows.<span style="color:#50fa7b">Scan</span>(<span style="color:#ff79c6">&amp;</span>datetime, <span style="color:#ff79c6">&amp;</span>timestamp); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#8be9fd;font-style:italic">panic</span>(err)
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;\t%s:\n&#34;</span>, title[i])
+</span></span><span style="display:flex;"><span>		fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;\t\tdatetime: %s → OK: %v\n&#34;</span>,
+</span></span><span style="display:flex;"><span>			datetime.<span style="color:#50fa7b">Format</span>(format),
+</span></span><span style="display:flex;"><span>			math.<span style="color:#50fa7b">Abs</span>(<span style="color:#8be9fd;font-style:italic">float64</span>(datetime.<span style="color:#50fa7b">Unix</span>()<span style="color:#ff79c6">-</span>now.<span style="color:#50fa7b">Unix</span>())) &lt; <span style="color:#bd93f9">10</span>,
+</span></span><span style="display:flex;"><span>		)
+</span></span><span style="display:flex;"><span>		fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;\t\ttimestamp: %s → OK: %v\n&#34;</span>,
+</span></span><span style="display:flex;"><span>			timestamp.<span style="color:#50fa7b">Format</span>(format),
+</span></span><span style="display:flex;"><span>			math.<span style="color:#50fa7b">Abs</span>(<span style="color:#8be9fd;font-style:italic">float64</span>(timestamp.<span style="color:#50fa7b">Unix</span>()<span style="color:#ff79c6">-</span>now.<span style="color:#50fa7b">Unix</span>())) &lt; <span style="color:#bd93f9">10</span>,
+</span></span><span style="display:flex;"><span>		)
+</span></span><span style="display:flex;"><span>		i<span style="color:#ff79c6">++</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><h3 id="結果">結果</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>time.Now(): 2018-10-02 03:43:13 -0800
+</span></span></code></pre></div><p>loc は time.Time の タイムゾーンで、渡さないと UTC になる。
+time_zone を渡さずに実行するとMySQL の NOW() の値が JST のものになるが、
+これをそのまま loc のタイムゾーンのものとして扱ってしまうため次のように誤った値が返る。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>default insert, get
+</span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 20:43:13 Z → OK: false
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 20:43:13 Z → OK: false
+</span></span><span style="display:flex;"><span>        Go time.Now() → MySQL → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 11:43:13 Z → OK: true
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 11:43:13 Z → OK: true
+</span></span></code></pre></div><p>loc を渡すと time.Time の タイムゾーンが変わることが確認できる。
+また、取得時のみ loc を渡すと上の例と同じ時刻でタイムゾーンのみを変えた誤った値が返る。
+これにより DB には insert 時の loc での時刻が格納されていることが分かる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local), get(loc=Local)
+</span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 20:43:13 -0800 → OK: false
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 20:43:13 -0800 → OK: false
+</span></span><span style="display:flex;"><span>        Go time.Now() → MySQL → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>insert(), get(loc=Local)
+</span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 20:43:13 -0800 → OK: false
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 20:43:13 -0800 → OK: false
+</span></span><span style="display:flex;"><span>        Go time.Now() → MySQL → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 11:43:13 -0800 → OK: false
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 11:43:13 -0800 → OK: false
+</span></span></code></pre></div><p>time_zone を渡すと NOW() の値も正しくなる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local&amp;time_zone=US/Alaska), get(loc=Local&amp;time_zone=US/Alaska)
+</span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>        Go time.Now() → MySQL → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span></code></pre></div><p>格納時と取得時の time_zone が異なる場合はややこしい。
+まず NOW() について、DATETIME 型の場合は格納時の time_stamp で値が決まるが、TIMESTAMP 型の場合は UTC に変換して格納されるため、逆に取得時の time_stamp が loc と一致していることが重要になる。
+time.Now() については DATETIME 型には影響がないが、TIMESTAMP 型の値が変換される際におかしくなる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local&amp;time_zone=US/Alaska), get(loc=Local)
+</span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 20:43:13 -0800 → OK: false
+</span></span><span style="display:flex;"><span>        Go time.Now() → MySQL → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 20:43:13 -0800 → OK: false
+</span></span><span style="display:flex;"><span>insert(loc=Local), get(loc=Local&amp;time_zone=US/Alaska)
+</span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 20:43:13 -0800 → OK: false
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>        Go time.Now() → MySQL → Go:
+</span></span><span style="display:flex;"><span>                datetime: 2018-10-02 03:43:13 -0800 → OK: true
+</span></span><span style="display:flex;"><span>                timestamp: 2018-10-01 10:43:13 -0800 → OK: false
+</span></span></code></pre></div><h2 id="まとめ">まとめ</h2>
+<p>アプリケーションのタイムゾーンと、DBのタイムゾーンが同じ場合、loc=Loc だけ渡せば問題は起きない。同じである保証がない場合は time_zone も指定しないと NOW() や TIMESTAMP 型のカラムの値がおかしくなることがある。</p>
 
     </div>
   </article>
