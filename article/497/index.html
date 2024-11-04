@@ -439,11 +439,11 @@
           <a class="tag" href="/tags/spark/">
             spark</a>
           
-          <a class="tag" href="/tags/fluentd/">
-            fluentd</a>
-          
           <a class="tag" href="/tags/gcp/">
             gcp</a>
+          
+          <a class="tag" href="/tags/fluentd/">
+            fluentd</a>
           
           <a class="tag others" href="/tags/">...</a>
         </div>
@@ -456,7 +456,7 @@
       <div class="single-header">
         <h1>カーディナリティを確率的に推定する HyperLogLog&#43;&#43; で膨大なデータに対する count-distinct での OOM を回避する</h1>
         <time>2024-09-02</time>
-        <a class="tag" href='/tags/spark/'>spark</a><a class="tag" href='/tags/paper/'>paper</a>
+        <a class="tag" href='/tags/spark/'>spark</a><a class="tag" href='/tags/paper/'>paper</a><a class="tag" href='/tags/gcp/'>gcp</a>
       </div>
       <p>アクセスログのユーザー数などユニークな要素数を数える際 count(distinct column_name) のようなクエリを実行することがある。データが膨大な場合、通常の count() はデータを分割して合算することでスケールさせることができるが、distinct する場合はその方法が取れずメモリ不足によって極端に処理が遅くなったり、最悪 OOM で失敗してしまいどうしようもなくなってしまうことがある。</p>
 <p>この問題は  <a href="https://en.wikipedia.org/wiki/Count-distinct_problem">Count-distinct problem (cardinality estimation problem)</a> と呼ばれていて、全ての要素を保持することなくカーディナリティ(ユニーク数)を推定するアルゴリズムがいくつか提案されている。その一つが HyperLogLog で、その改良版である HyperLogLog++ は Spark の <a href="https://github.com/apache/spark/blob/c58148da5496245403b55c3fc423d35f3a669c79/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/analysis/FunctionRegistry.scala#L469">approx_count_distinct()</a> や、Presto の <a href="https://github.com/prestodb/presto/blob/2bceaa02b982f2b10d4d577fac9b3c8944c36ace/presto-main/src/main/java/com/facebook/presto/operator/aggregation/ApproximateCountDistinctAggregation.java#L40">approx_distinct()</a> として実装されている。</p>
@@ -469,7 +469,17 @@
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  select approx_count_distinct(id)
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  from test_data
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">&#34;&#34;&#34;</span><span style="color:#ff79c6">).</span>show<span style="color:#ff79c6">()</span> <span style="color:#6272a4">// 100,598
-</span></span></span></code></pre></div><p><a href="http://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf">HyperLogLog</a> は各データをハッシュ関数に通し、その先頭 \(b\) bitsに対応する \(m = 2^b\) 個のレジスタに振り分け、レジスタごとに残りbitsの先頭から続く0の長さの最大を求めたものを \(M[i]\ (1 \leqq i \leqq m)\) とし、次の計算を行ってカーディナリティ \(E\) を算出する。\(\alpha\)は\(m\)に依存する補正係数。</p>
+</span></span></span></code></pre></div><p><a href="http://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf">HyperLogLog</a> は各データをハッシュ関数に通し、その先頭 \(b\) bitsに対応する \(m = 2^b\) 個のレジスタに振り分け、レジスタごとに残りbitsの先頭から続く0の長さの最大 \(M[i]\ (1 \leqq i \leqq m)\) を求める。</p>
+
+
+
+
+<div class="img_container"><a href="/article/497/images/hyperloglog.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/497/images/hyperloglog_hu4990809559516263606.png" width="600" height="360" alt="HyperLogLogの処理">
+</a></div>
+
+
+<p>これに対して次の計算を行うことでカーディナリティ \(E\) を推定する。\(\alpha\)は\(m\)のみに依存する補正係数。</p>
 
 
 
@@ -479,9 +489,28 @@
 </a></div>
 
 
-<p>\(b=2\ (m = 4)\) のとき各レジスタの先頭0の数の最大値を [1, 2, 3, 2] とすると、Eの分母部分は \((\frac{1}{2} + \frac{1}{4} + \frac{1}{8} + \frac{1}{4})\) となり、これに m を掛けたものは \(2^{M[j]}\) の調和平均となる。要素数が多くなるほど 0 が長くなることでこの値が大きくなるため \(E\) の値も大きくなることになる。</p>
+<p>\(b=2\ (m = 4)\) のとき各レジスタの先頭0の数の最大値を [1, 2, 3, 2] とすると、Eの分母部分は \((\frac{1}{2} + \frac{1}{4} + \frac{1}{8} + \frac{1}{4})\) となり、これに m を掛けたものは \(2^{M[j]}\) の調和平均となる。要素数が多くなるほど 0 が確率的に長くなることでこの値が大きくなるため \(E\) の値も大きくなることになる。</p>
 <p>\(m\) を増やすと精度は上がりメモリの使用量も増えるといったトレードオフがあるが、なんと \(m = 2048\) 程度でもカーディナリティに依存せず標準誤差 2.3% 程度に収まってしまう。ただしレジスタの数に対してカーディナリティが低すぎると精度が下がる問題があり、HyperLogLog++ ではそのような場合に sparse representation を用いるようになっている。</p>
-
+<p>便利な性質としてレジスタを merge すると和集合での結果を得られることがあり、これが並列実行の容易さにもつながっている。
+BigQuery には <a href="https://cloud.google.com/bigquery/docs/reference/standard-sql/approximate_aggregate_functions#approx-count-distinct">APPROX_COUNT_DISTINCT()</a> のほかに <a href="https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_functions#hll_countinit">HLL_COUNT</a>.INIT()/MERGE() 関数があり、集計時にレジスタを保存しておくことで、後から group by してカーディナリティを出すことができる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">SELECT</span> HLL_COUNT.MERGE(hll_sketch) <span style="color:#ff79c6">AS</span> distinct_customers_with_open_invoice　<span style="color:#6272a4">-- =&gt; 3
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">FROM</span>
+</span></span><span style="display:flex;"><span>(
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">SELECT</span>
+</span></span><span style="display:flex;"><span>    country,
+</span></span><span style="display:flex;"><span>    HLL_COUNT.INIT(customer_id) <span style="color:#ff79c6">AS</span> hll_sketch
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">UNNEST</span>(
+</span></span><span style="display:flex;"><span>      <span style="color:#8be9fd;font-style:italic">ARRAY</span><span style="color:#ff79c6">&lt;</span>STRUCT<span style="color:#ff79c6">&lt;</span>country STRING, customer_id STRING, invoice_id STRING<span style="color:#ff79c6">&gt;&gt;</span>[
+</span></span><span style="display:flex;"><span>        (<span style="color:#f1fa8c">&#39;UA&#39;</span>, <span style="color:#f1fa8c">&#39;customer_id_1&#39;</span>, <span style="color:#f1fa8c">&#39;invoice_id_11&#39;</span>),
+</span></span><span style="display:flex;"><span>        (<span style="color:#f1fa8c">&#39;BR&#39;</span>, <span style="color:#f1fa8c">&#39;customer_id_3&#39;</span>, <span style="color:#f1fa8c">&#39;invoice_id_31&#39;</span>),
+</span></span><span style="display:flex;"><span>        (<span style="color:#f1fa8c">&#39;CZ&#39;</span>, <span style="color:#f1fa8c">&#39;customer_id_2&#39;</span>, <span style="color:#f1fa8c">&#39;invoice_id_22&#39;</span>),
+</span></span><span style="display:flex;"><span>        (<span style="color:#f1fa8c">&#39;CZ&#39;</span>, <span style="color:#f1fa8c">&#39;customer_id_2&#39;</span>, <span style="color:#f1fa8c">&#39;invoice_id_23&#39;</span>),
+</span></span><span style="display:flex;"><span>        (<span style="color:#f1fa8c">&#39;BR&#39;</span>, <span style="color:#f1fa8c">&#39;customer_id_3&#39;</span>, <span style="color:#f1fa8c">&#39;invoice_id_31&#39;</span>),
+</span></span><span style="display:flex;"><span>        (<span style="color:#f1fa8c">&#39;UA&#39;</span>, <span style="color:#f1fa8c">&#39;customer_id_2&#39;</span>, <span style="color:#f1fa8c">&#39;invoice_id_24&#39;</span>)])
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">GROUP</span> <span style="color:#ff79c6">BY</span> country
+</span></span><span style="display:flex;"><span>);
+</span></span></code></pre></div>
     </div>
   </article>
 </div>
