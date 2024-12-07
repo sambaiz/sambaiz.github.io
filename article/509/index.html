@@ -566,7 +566,7 @@
 </span></span></code></pre></div><p>なお materialized=incremental だと追加で入る。<a href="https://docs.getdbt.com/reference/resource-configs/bigquery-configs#merge-behavior-incremental-models">incremental_strategy</a> のデフォルトは <a href="https://docs.getdbt.com/reference/resource-configs/bigquery-configs#the-merge-strategy">merge</a> で、unique_key に合致する場合は update し、そうでない場合は insert するため、テーブルのサイズが大きいとコストが高い。insert_overwrite では対象のパーティションのデータを一度 delete して insert する。<a href="https://docs.getdbt.com/reference/resource-configs/bigquery-configs#copying-partitions">copy_partitions</a>: true にすると merge 句ではなく <a href="https://cloud.google.com/bigquery/docs/managing-tables#copy-table">copy table API</a> を呼ぶため挿入のコストがかからない。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>{{ config(
 </span></span><span style="display:flex;"><span>    materialized<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;incremental&#34;</span>,
-</span></span><span style="display:flex;"><span>    [incremental_strategy](https:<span style="color:#ff79c6">//</span>docs.getdbt.com<span style="color:#ff79c6">/</span>reference<span style="color:#ff79c6">/</span>resource<span style="color:#ff79c6">-</span>configs<span style="color:#ff79c6">/</span>bigquery<span style="color:#ff79c6">-</span>configs<span style="color:#ff79c6">#</span>merge<span style="color:#ff79c6">-</span>behavior<span style="color:#ff79c6">-</span>incremental<span style="color:#ff79c6">-</span>models)<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;insert_overwrite&#34;</span>,
+</span></span><span style="display:flex;"><span>    incremental_strategy<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;insert_overwrite&#34;</span>,
 </span></span><span style="display:flex;"><span>    partition_by<span style="color:#ff79c6">=</span>{
 </span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;field&#34;</span>: <span style="color:#f1fa8c">&#34;created_date&#34;</span>,
 </span></span><span style="display:flex;"><span>      <span style="color:#f1fa8c">&#34;data_type&#34;</span>: <span style="color:#f1fa8c">&#34;timestamp&#34;</span>,
@@ -592,6 +592,43 @@
 </span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> <span style="color:#ff79c6">else</span> <span style="color:#ff79c6">%</span>}
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">null</span> <span style="color:#ff79c6">as</span> id
 </span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> endif <span style="color:#ff79c6">%</span>}
+</span></span></code></pre></div><p>seeds ディレクトリに csv をおいて <a href="https://docs.getdbt.com/reference/commands/seed">dbt seed</a> するとその静的データを持つテーブルが作られる。また、macros ディレクトリに 独自の macro を 定義すると model から参照したり、data_tests を実行することができる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ cat seeds<span style="color:#ff79c6">/</span>test_data.csv 
+</span></span><span style="display:flex;"><span>id
+</span></span><span style="display:flex;"><span><span style="color:#bd93f9">100</span>
+</span></span><span style="display:flex;"><span><span style="color:#bd93f9">200</span>
+</span></span><span style="display:flex;"><span><span style="color:#bd93f9">300</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ dbt seed
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>$ cat macros<span style="color:#ff79c6">/</span>test.<span style="color:#ff79c6">sql</span> 
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> macro offset_id(id) <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>    {<span style="color:#ff79c6">%</span> <span style="color:#ff79c6">if</span> target.name <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#39;prd&#39;</span> <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>        {{ id }} <span style="color:#ff79c6">+</span> <span style="color:#bd93f9">1000</span>
+</span></span><span style="display:flex;"><span>    {<span style="color:#ff79c6">%</span> <span style="color:#ff79c6">else</span> <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>        {{ id }}
+</span></span><span style="display:flex;"><span>    {<span style="color:#ff79c6">%</span> endif <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> endmacro <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">/*
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">select {{ offset_id(1) }} as id
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">from {{ ref(&#39;test_data&#39;) }}
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">*/</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> test positive_value(model, <span style="color:#ff79c6">column_name</span>) <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">*</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">from</span> {{ model }}
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">where</span> {{ <span style="color:#ff79c6">column_name</span> }} <span style="color:#ff79c6">&lt;</span> <span style="color:#bd93f9">0</span>
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> endtest <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4">/*
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">models:
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">  - name: my_first_dbt_model
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">    columns:
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">      - name: id
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">        data_tests:
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">          - positive_value
+</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">*/</span>
 </span></span></code></pre></div><p>Best practice guides では <a href="https://sqlfluff.com/">sqlfluff</a> で lint をかけることが<a href="https://docs.getdbt.com/best-practices/how-we-style/2-how-we-style-our-sql">推奨されている</a>。</p>
 <p><a href="https://www.sambaiz.net/article/512/">dbt の Best practice guides におけるモデルのレイヤー分け - sambaiz-net</a></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ pip install sqlfluff
