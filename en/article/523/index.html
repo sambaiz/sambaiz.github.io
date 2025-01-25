@@ -296,9 +296,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>Walk through Iceberg metadata contents by creating tables, modify schema and write mode, and write data in Spark - sambaiz-net</title>
-  <meta name="twitter:title" content="Walk through Iceberg metadata contents by creating tables, modify schema and write mode, and write data in Spark - sambaiz-net">
-  <meta property='og:title' content="Walk through Iceberg metadata contents by creating tables, modify schema and write mode, and write data in Spark - sambaiz-net">
+  <title>Walk through Iceberg metadata contents by creating tables, modifying schema and write mode, and writing data in Spark - sambaiz-net</title>
+  <meta name="twitter:title" content="Walk through Iceberg metadata contents by creating tables, modifying schema and write mode, and writing data in Spark - sambaiz-net">
+  <meta property='og:title' content="Walk through Iceberg metadata contents by creating tables, modifying schema and write mode, and writing data in Spark - sambaiz-net">
   <meta property="og:type" content="article">
   
   <meta name="description" content="Apache Iceberg is a table format that enables efficient processing of large-scale data. It provides features such as Schema Evolution which allows changing table schemas without modifying source data, time travel, and directory-independent pruning through Hidden Partitioning, and can be referenced from various systems including Spark, Trino, and Snowflake">
@@ -331,7 +331,7 @@
       "@type":"WebPage",
       "@id": "https://www.sambaiz.net/"
     },
-    "headline": "Walk through Iceberg metadata contents by creating tables, modify schema and write mode, and write data in Spark",
+    "headline": "Walk through Iceberg metadata contents by creating tables, modifying schema and write mode, and writing data in Spark",
     "datePublished": "2025-01-25T23:18:00JST",
     "dateModified": "2025-01-25T23:18:00JST",
     "author": {
@@ -446,7 +446,7 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>Walk through Iceberg metadata contents by creating tables, modify schema and write mode, and write data in Spark</h1>
+        <h1>Walk through Iceberg metadata contents by creating tables, modifying schema and write mode, and writing data in Spark</h1>
         <time>2025-01-25</time>
         <a class="tag" href='/en/tags/iceberg/'>iceberg</a><a class="tag" href='/en/tags/spark/'>spark</a><a class="tag" href='/en/tags/snowflake/'>snowflake</a>
       </div>
@@ -839,7 +839,7 @@
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>fare                   DOUBLE    Z _ R     <span style="color:#bd93f9">1239939</span>   0.80 B     <span style="color:#bd93f9">0</span>       <span style="color:#f1fa8c">&#34;-415.0&#34;</span> / <span style="color:#f1fa8c">&#34;700.0&#34;</span>
 </span></span><span style="display:flex;"><span>...
-</span></span></code></pre></div><p>This behavior depends on the table&rsquo;s <a href="https://iceberg.apache.org/docs/latest/configuration/#write-properties">write.(update|delete|merge).mode</a>, which defaults to copy-on-write for all operations. Let&rsquo;s change this to merge-on-read and try an INSERT.</p>
+</span></span></code></pre></div><p>This behavior depends on the table&rsquo;s <a href="https://iceberg.apache.org/docs/latest/configuration/#write-properties">write.(update|delete|merge).mode</a>, and the default for both is copy-on-write, which copies the original data and writes the data. Change this to merge-on-read and try INSERT.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;ALTER TABLE nyc.taxis SET TBLPROPERTIES (&#39;write.update.mode&#39; = &#39;merge-on-read&#39;)&#34;</span>)
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;&#34;&#34;
@@ -850,7 +850,7 @@
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"> 1.0, 0.9, 1.0, &#39;N&#39;, 75, 236, 2, 
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"> 5.0, 3.0, 0.5, 0.0, 0.0, 0.3, 8.8, 2.5, 0.0)
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>)
-</span></span></code></pre></div><p>The differential data is written as a separate file. While this improves write performance, it decreases read performance.</p>
+</span></span></code></pre></div><p>The differential data is written as a separate file, which will improve write performance but will slow down read performance due to the increased number of files.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ mc tree --files myminio                                                                  
 </span></span><span style="display:flex;"><span>myminio
 </span></span><span style="display:flex;"><span>└─ warehouse
@@ -879,7 +879,7 @@
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>Row group 0:  count: <span style="color:#bd93f9">1</span>  766.00 B records  start: <span style="color:#bd93f9">4</span>  total<span style="color:#ff79c6">(</span>compressed<span style="color:#ff79c6">)</span>: <span style="color:#bd93f9">766</span> B total<span style="color:#ff79c6">(</span>uncompressed<span style="color:#ff79c6">)</span>:595 B
 </span></span><span style="display:flex;"><span>...
-</span></span></code></pre></div><p>Since this will continue to deteriorate, it&rsquo;s recommended to call the <a href="https://iceberg.apache.org/docs/latest/spark-procedures/#rewrite_data_files">rewrite_data_files</a> procedure to <a href="https://iceberg.apache.org/docs/latest/maintenance/#compact-data-files">compact</a> the files. Additionally, for metadata, you can enable <a href="https://iceberg.apache.org/docs/latest/configuration/#write-properties">write.metadata.delete-after-commit.enabled</a> to remove old files.</p>
+</span></span></code></pre></div><p>Since this will continue to deteriorate, you can <a href="https://iceberg.apache.org/docs/latest/maintenance/#compact-data-files">compact</a> the files by calling the <a href="https://iceberg.apache.org/docs/latest/spark-procedures/#rewrite_data_files">rewrite_data_files</a> procedure. Additionally, for metadata, you can enable <a href="https://iceberg.apache.org/docs/latest/configuration/#write-properties">write.metadata.delete-after-commit.enabled</a> to remove old files.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;&#34;&#34;
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">CALL system.rewrite_data_files(
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  table =&gt; &#39;nyc.taxis&#39;
@@ -900,7 +900,7 @@
 </span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT count(fare_amount) FROM nyc.taxis TIMESTAMP AS OF &#39;2025-01-25 06:00:00&#39; LIMIT 5&#34;</span>)<span style="color:#ff79c6">.</span>show() <span style="color:#6272a4"># 2171187</span>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;SELECT count(fare) FROM nyc.taxis TIMESTAMP AS OF &#39;2025-01-25 08:00:00&#39; LIMIT 5&#34;</span>)<span style="color:#ff79c6">.</span>show() <span style="color:#6272a4"># 1239939</span>
-</span></span></code></pre></div><h2 id="参考">参考</h2>
+</span></span></code></pre></div><h2 id="reference">Reference</h2>
 <p><a href="https://soonraah.github.io/posts/maintain-iceberg-table-updated-in-near-real-time">near real time で更新される Apache Iceberg の table のメンテナンス</a></p>
 
     </div>
