@@ -462,7 +462,7 @@
 </a></div>
 
 
-<p>Iceberg のデータベースやテーブルを編集すると、</p>
+<p>Iceberg のデータベースやテーブルを作成・更新すると、</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;CREATE DATABASE iceberg_test LOCATION &#39;s3://*****/iceberg_test&#39;&#34;</span>)
 </span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;CREATE TABLE iceberg_test.test_table (id bigint, data string) USING iceberg&#34;</span>)
 </span></span></code></pre></div><p>Glue Data Catalog にも反映される。glue と S3 の権限が必要。</p>
@@ -475,7 +475,19 @@
 </a></div>
 
 
-<p>データを入れて、</p>
+<p>ちなみに TBLPROPERTIES に write.spark.accept-any-schema = true を設定して .option(&ldquo;mergeSchema&rdquo;,&ldquo;true&rdquo;) で書き込むと
+<a href="https://iceberg.apache.org/docs/1.5.0/spark-writes/#schema-merge">Schema Merge</a> が行われ、データに合わせてカラムが追加されるが、
+この場合も Catalog に反映される。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">CREATE TABLE iceberg_test.test_table
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">USING ICEBERG
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">TBLPROPERTIES (&#39;write.spark.accept-any-schema&#39;=&#39;true&#39;);
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>df<span style="color:#ff79c6">.</span>writeTo(<span style="color:#f1fa8c">&#34;iceberg_test.test_table&#34;</span>) \
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">.</span>option(<span style="color:#f1fa8c">&#34;mergeSchema&#34;</span>, <span style="color:#f1fa8c">&#34;true&#34;</span>) \
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">.</span>append()
+</span></span></code></pre></div><p>データを入れて、</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>createDataFrame([
 </span></span><span style="display:flex;"><span>    (<span style="color:#bd93f9">1</span>, <span style="color:#f1fa8c">&#34;aaaa&#34;</span>),
 </span></span><span style="display:flex;"><span>    (<span style="color:#bd93f9">2</span>, <span style="color:#f1fa8c">&#34;bbbb&#34;</span>),
@@ -503,7 +515,6 @@
 </span></span><span style="display:flex;"><span>            STORAGE_PROVIDER <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;S3&#39;</span>
 </span></span><span style="display:flex;"><span>            STORAGE_BASE_URL <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;s3://*****/iceberg_test/&#39;</span>
 </span></span><span style="display:flex;"><span>            STORAGE_AWS_ROLE_ARN <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;arn:aws:iam::*****:role/*****&#39;</span>
-</span></span><span style="display:flex;"><span>            STORAGE_AWS_EXTERNAL_ID <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;*****&#39;</span>
 </span></span><span style="display:flex;"><span>         )
 </span></span><span style="display:flex;"><span>      );
 </span></span><span style="display:flex;"><span>  
