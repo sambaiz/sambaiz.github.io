@@ -558,7 +558,20 @@
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">SYSTEM</span>$AUTO_REFRESH_STATUS(<span style="color:#f1fa8c">&#39;test_table&#39;</span>);
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">ALTER</span> <span style="color:#ff79c6">SESSION</span> <span style="color:#ff79c6">SET</span> USE_CACHED_RESULT<span style="color:#ff79c6">=</span><span style="color:#ff79c6">FALSE</span>;
-</span></span></code></pre></div>
+</span></span></code></pre></div><p>By the way, converting tables to reference Snowflake&rsquo;s catalog instead of external catalogs like Glue can lead to performance improvements. In fact, there were cases where I achieved equivalent performance even after reducing the WAREHOUSE size by one level. Additionally, it can be used as a source for DYNAMIC ICEBERG TABLE which updates data through periodic query execution.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">ALTER</span> ICEBERG <span style="color:#ff79c6">TABLE</span> test_table <span style="color:#ff79c6">CONVERT</span> <span style="color:#ff79c6">TO</span> MANAGED
+</span></span><span style="display:flex;"><span>  BASE_LOCATION <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;snowflake/test_table&#39;</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">DYNAMIC</span> ICEBERG <span style="color:#ff79c6">TABLE</span> test_table_id (id <span style="color:#8be9fd;font-style:italic">bigint</span>)
+</span></span><span style="display:flex;"><span>  TARGET_LAG <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;20 minutes&#39;</span>
+</span></span><span style="display:flex;"><span>  WAREHOUSE <span style="color:#ff79c6">=</span> test
+</span></span><span style="display:flex;"><span>  EXTERNAL_VOLUME <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;iceberg_external_volume&#39;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">CATALOG</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;SNOWFLAKE&#39;</span>
+</span></span><span style="display:flex;"><span>  BASE_LOCATION <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;snowflake/test_table_id&#39;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">AS</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">SELECT</span> id <span style="color:#ff79c6">FROM</span> test_table;
+</span></span></code></pre></div><p>After conversion, the table is written to the external volume&rsquo;s (STORAGE_BASE_URL)/BASE_LOCATION and Snowflake will perform maintenance operations like compaction. This means it becomes a different table thereafter, so to keep up with the Glue table, you need to periodically REPLACE and CONVERT the table.</p>
+
     </div>
   </article>
 </div>
