@@ -451,7 +451,7 @@
         <a class="tag" href='/tags/newrelic/'>newrelic</a><a class="tag" href='/tags/aws/'>aws</a>
       </div>
       <p><a href="https://docs.newrelic.com/docs/serverless-function-monitoring/aws-lambda-monitoring/get-started/monitoring-aws-lambda-serverless-monitoring">New RelicにLambdaのログを転送する</a>には、CloudWatch Logsに出力したものをサブスクライブして送るLambda function <a href="https://github.com/newrelic/aws-log-ingestion">aws-log-ingestion</a>を用いる従来の方法のほかに、Lambda layer <a href="https://github.com/newrelic/newrelic-lambda-extension">newrelic-lambda-extension</a>を用いる方法があって、トレースログなどをCloudWatc Logsに出力することなく送れるのでコストを最小限に抑えられる。</p>
-<h2 id="インストールhttpsgithubcomnewrelicnewrelic-lambda-extensioninstallation"><a href="https://github.com/newrelic/newrelic-lambda-extension#installation">インストール</a></h2>
+<h2 id="インストール"><a href="https://github.com/newrelic/newrelic-lambda-extension#installation">インストール</a></h2>
 <p><code>newrelic-lambda integrations install</code> するとLayerが参照するAPI KeyのSecretのStackなどがデプロイされる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ pip3 install newrelic-lambda-cli
 </span></span><span style="display:flex;"><span>$ newrelic-lambda integrations install <span style="color:#f1fa8c">\
@@ -559,11 +559,11 @@
 
 <h2 id="仕組み">仕組み</h2>
 <p>newrelic-lambda-extensionは関数ログとテレメトリ情報を異なる方法で取って送っている。</p>
-<h3 id="sendfunctionlogshttpsgithubcomnewrelicnewrelic-lambda-extensionblob0e22618208c9e5f8a8dc2a147693453d5abe86b4telemetryclientgol182"><a href="https://github.com/newrelic/newrelic-lambda-extension/blob/0e22618208c9e5f8a8dc2a147693453d5abe86b4/telemetry/client.go#L182">SendFunctionLogs()</a></h3>
+<h3 id="sendfunctionlogs"><a href="https://github.com/newrelic/newrelic-lambda-extension/blob/0e22618208c9e5f8a8dc2a147693453d5abe86b4/telemetry/client.go#L182">SendFunctionLogs()</a></h3>
 <p>環境変数 NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS が<a href="https://github.com/newrelic/newrelic-lambda-extension/blob/d20d9cc9cf755f105fd62d5b20cd3523d6cccd43/config/config.go#L45">trueのとき</a>関数ログを送る。
 newrelic-lambda-extensionはlog serverを<a href="https://github.com/newrelic/newrelic-lambda-extension/blob/d20d9cc9cf755f105fd62d5b20cd3523d6cccd43/lambda/logserver/logserver.go#L196">起動し</a>、Lambdaの拡張機能の<a href="https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/runtimes-logs-api.html">ランタイムログAPI</a>によって<a href="https://github.com/newrelic/newrelic-lambda-extension/blob/d20d9cc9cf755f105fd62d5b20cd3523d6cccd43/config/config.go#L14">sandbox.localdomain</a>に送られるログを<a href="https://github.com/newrelic/newrelic-lambda-extension/blob/d7c20a36f36a5f498d8e50a46ca14545389b7f51/lambda/logserver/logserver.go#L104">ハンドリングして</a>関数ログは送り、起動などのプラットフォームログはテレメトリ情報に<a href="https://github.com/newrelic/newrelic-lambda-extension/blob/d7c20a36f36a5f498d8e50a46ca14545389b7f51/main.go#L297">付加する</a>。</p>
 <p>ランタイムログAPIのエンドポイントは環境変数<a href="https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/runtimes-logs-api.html#runtimes-logs-api-ref">AWS_LAMBDA_RUNTIME_API</a>で取得できて、PUT /logs を呼ぶと<a href="https://github.com/newrelic/newrelic-lambda-extension/blob/8aba5246fa941f721a53f7ce5cda70f007ed5fa6/lambda/extension/client/client.go#L147">サブスクライブ</a>できる。</p>
-<h3 id="sendtelemetryhttpsgithubcomnewrelicnewrelic-lambda-extensionblob0e22618208c9e5f8a8dc2a147693453d5abe86b4telemetryclientgol81"><a href="https://github.com/newrelic/newrelic-lambda-extension/blob/0e22618208c9e5f8a8dc2a147693453d5abe86b4/telemetry/client.go#L81">SendTelemetry()</a></h3>
+<h3 id="sendtelemetry"><a href="https://github.com/newrelic/newrelic-lambda-extension/blob/0e22618208c9e5f8a8dc2a147693453d5abe86b4/telemetry/client.go#L81">SendTelemetry()</a></h3>
 <p>トレースデータを含むテレメトリ情報を送る。こちらは mkfifo() システムコールで<a href="https://github.com/newrelic/newrelic-lambda-extension/blob/0e22618208c9e5f8a8dc2a147693453d5abe86b4/telemetry/ipc.go#L17">作成したpipe</a>で待ち受け、agentはこのpipeがある場合stdoutの代わりに<a href="https://github.com/newrelic/go-agent/blob/06c801d5571056abac8ac9dfa07cf12ca869e920/v3/integrations/nrlambda/handler.go#L81">pipeに書き込む</a>ようになっている。</p>
 <p><a href="https://www.sambaiz.net/article/87/">Unixのパイプをmkfifo()で作ってdup2()で標準出力にコピーして書き込む - sambaiz-net</a></p>
 

@@ -436,7 +436,7 @@
 もともとEnvoy自体は単体で、コネクションを張りっぱなしのgRPC(HTTP/2)をK8sのServiceのL4ロードバランサーでは分散できない問題の解決方法の一つとして
 各PodのIPの一覧を返す<a href="https://kubernetes.io/docs/concepts/services-networking/service/#headless-services">Headless Service</a>と使われていたが、各Manifestに入れたりConfigMapを編集したりする必要があり少し面倒だった。
 Istioにするとそれらが省けて、さらに賢いRoutingやモニタリングの仕組みまで付いてくるのでとても便利だ。</p>
-<h2 id="インストールhttpsistioiodocssetupkuberneteshelm-install"><a href="https://istio.io/docs/setup/kubernetes/helm-install/">インストール</a></h2>
+<h2 id="インストール"><a href="https://istio.io/docs/setup/kubernetes/helm-install/">インストール</a></h2>
 <p>IstioをダウンロードしてきてHelmでインストールする。Istioには様々なコンポーネントが含まれているが、<a href="https://github.com/istio/istio/blob/b17b4989699a6d9dc98245c511dc7d544d88e945/install/kubernetes/helm/istio/README.md#configuration">パラメータ</a>でインストールするものを選択することができる。</p>
 <p><a href="https://www.sambaiz.net/article/122/">KubernetesのパッケージマネージャーHelmを使う - sambaiz-net</a></p>
 <p>今回はデフォルトではfalseになっているGrafana/Jaeger/Kialiをtrueにしてほぼ全て入るようにしている。</p>
@@ -472,7 +472,7 @@ Istioにするとそれらが省けて、さらに賢いRoutingやモニタリ�
 </span></span><span style="display:flex;"><span>$ kubectl label namespace default istio-injection=enabled
 </span></span></code></pre></div><p>併せて<a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">Init Containers</a>としてInjectionされるistio-initのiptablesで<a href="https://github.com/istio/istio/blob/1.0.1/tools/deb/istio-iptables.sh#L292">Envoy以外</a>のトラフィックが<a href="https://github.com/istio/istio/blob/1.0.1/tools/deb/istio-iptables.sh#L202">Envoyのポートに向く</a>のでサービスのコードでは向き先を変える必要がない。</p>
 <h2 id="routing">Routing</h2>
-<h3 id="pilothttpsistioiodocsconceptstraffic-managementpilot-and-envoy"><a href="https://istio.io/docs/concepts/traffic-management/#pilot-and-envoy">Pilot</a></h3>
+<h3 id="pilot"><a href="https://istio.io/docs/concepts/traffic-management/#pilot-and-envoy">Pilot</a></h3>
 <p>全Envoyを管理するPilotにEnvoy間のトラフィックのルーティングや、リトライやサーキットブレーカーのルールを設定できる。
 EnvoyはPilotからサービスディスカバリして他Envoyについて知り、定期的にロードバランシングプールに含まれるインスタンスのヘルスチェックをして失敗数がしきい値を超えたら成功数がしきい値を超えるまでプールから追い出し、ルールに従いトラフィックを制御する。</p>
 <h3 id="リソース">リソース</h3>
@@ -486,7 +486,7 @@ EnvoyはPilotからサービスディスカバリして他Envoyについて知�
 <li><a href="https://istio.io/docs/reference/config/istio.networking.v1alpha3/#VirtualService">VirtualService</a>: ルーティングのルール。</li>
 <li><a href="https://istio.io/docs/reference/config/istio.networking.v1alpha3/#DestinationRule">DestinationRule</a>: ロードバランシングのルール。</li>
 </ul>
-<h3 id="例httpsistioiodocsexamplesbookinfo"><a href="https://istio.io/docs/examples/bookinfo/">例</a></h3>
+<h3 id="例"><a href="https://istio.io/docs/examples/bookinfo/">例</a></h3>
 <p>サンプルアプリケーションBookInfoを動かす。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ kubectl apply -f samples/bookinfo/platform/kube/bookinfo.yaml
 </span></span><span style="display:flex;"><span>$ kubectl get pod
@@ -742,7 +742,7 @@ EnvoyはPilotからサービスディスカバリして他Envoyについて知�
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>$ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
 </span></span></code></pre></div><h2 id="telemetry">Telemetry</h2>
-<h3 id="mixerhttpsistioiodocsconceptspolicies-and-telemetry"><a href="https://istio.io/docs/concepts/policies-and-telemetry/">Mixer</a></h3>
+<h3 id="mixer"><a href="https://istio.io/docs/concepts/policies-and-telemetry/">Mixer</a></h3>
 <p>MixerはポリシーコントロールとTelemetryを行うコンポーネント。
 <a href="https://istio.io/docs/reference/config/policy-and-telemetry/adapters/">Adapter</a>によってStackdriverやCloudWatchなど様々なバックエンドに対応している。</p>
 <p>Envoyは前提条件を確認するためリクエストの前と、Telemetryするためリクエストの後にMixerを呼び出す。ただしキャッシュとバッファを持っていて毎回呼び出しはしない。また、Mixerもキャッシュやバッファを持ちバックエンドの呼び出し回数を減らしている。
@@ -753,7 +753,7 @@ MixerがSPOFとなり可用性が下がるのではと思われるが、バッ�
 <li><a href="https://istio.io/docs/concepts/policies-and-telemetry/#instances">Instance</a>: EnvoyからMixerに送られてきたAttributeをAdapterの入力へマッピングする。</li>
 <li><a href="https://istio.io/docs/concepts/policies-and-telemetry/#rules">Rule</a>: Handlerが特定のInstancesで呼び出されるルール。</li>
 </ul>
-<h3 id="例httpsistioiodocstaskstelemetrymetrics-logs"><a href="https://istio.io/docs/tasks/telemetry/metrics-logs/">例</a></h3>
+<h3 id="例-1"><a href="https://istio.io/docs/tasks/telemetry/metrics-logs/">例</a></h3>
 <p>リクエストの2倍の数を値とするmetric instance。<a href="https://istio.io/docs/reference/config/policy-and-telemetry/expression-language/">configuration expression language(CEXL)</a>が使われている。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span>$ cat new_telemetry.yaml 
 </span></span><span style="display:flex;"><span><span style="color:#6272a4"># Configuration for metric instances</span>
