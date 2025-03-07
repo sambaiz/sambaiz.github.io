@@ -462,6 +462,15 @@
 </a></div>
 
 
+<p><a href="https://iceberg.apache.org/docs/latest/spark-configuration/#sql-extensions">IcebergSparkSessionExtensions</a> は SQL から<a href="https://iceberg.apache.org/docs/1.5.1/spark-procedures/">プロシージャ</a>の CALL などを行えるようにするモジュール。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;&#34;&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  CALL system.rewrite_data_files(
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    table =&gt; &#39;test_iceberg.test_table2&#39;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    strategy =&gt; &#39;binpack&#39;
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">  )
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">&#34;&#34;&#34;</span>)
+</span></span></code></pre></div><p>ちなみに <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/tutorial-iceberg.html">EMR on EKS で動かした</a>ところ Iceberg を<a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/Iceberg-release-history.html">サポートしている</a>バージョン emr-7.0.0 でも ClassNotFoundException: org.apache.iceberg.spark.SparkCatalog になったりしたが、最新まで上げると動くことが確認できた。</p>
+<p><a href="https://www.sambaiz.net/article/434/">CDK で EKS クラスタを立ち上げ EMR on EKS に登録し Spark のジョブを動かす - sambaiz-net</a></p>
 <p>Iceberg のデータベースやテーブルを作成・更新すると、</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;CREATE DATABASE iceberg_test LOCATION &#39;s3://*****/iceberg_test&#39;&#34;</span>)
 </span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;CREATE TABLE iceberg_test.test_table (id bigint, data string) USING iceberg&#34;</span>)
@@ -487,6 +496,10 @@
 </span></span><span style="display:flex;"><span>df<span style="color:#ff79c6">.</span>writeTo(<span style="color:#f1fa8c">&#34;iceberg_test.test_table&#34;</span>) \
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">.</span>option(<span style="color:#f1fa8c">&#34;mergeSchema&#34;</span>, <span style="color:#f1fa8c">&#34;true&#34;</span>) \
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">.</span>append()
+</span></span></code></pre></div><p>これによりスキーマを渡さずに CREATE TABLE することもできるが、カラムがないので PARTITION BY などは後で行う必要がある。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;ALTER TABLE iceberg_test.test_table2 ADD PARTITION FIELD aaa&#34;</span>)
+</span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;ALTER TABLE iceberg_test.test_table2 ADD PARTITION FIELD bbb&#34;</span>)
+</span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;DESCRIBE TABLE iceberg_test.test_table2&#34;</span>)
 </span></span></code></pre></div><p>データを入れて、</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>createDataFrame([
 </span></span><span style="display:flex;"><span>    (<span style="color:#bd93f9">1</span>, <span style="color:#f1fa8c">&#34;aaaa&#34;</span>),
