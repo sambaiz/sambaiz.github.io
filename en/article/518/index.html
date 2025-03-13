@@ -544,52 +544,7 @@
 </a></div>
 
 
-<p>To allow other users without OWNERSHIP <a href="https://docs.snowflake.com/ja/user-guide/security-access-control-privileges#all-privileges-alphabetical">privileges</a> to query, you must grant some privileges using a <a href="https://docs.snowflake.com/en/user-guide/security-access-control-overview">role</a>.
-Roles can be granted to other roles, and granting to an account role allows users to <a href="https://docs.snowflake.com/en/sql-reference/sql/use-role">USE ROLE</a> to query.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-terraform" data-lang="terraform"><span style="display:flex;"><span><span style="color:#6272a4"># CREATE ROLE ...
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;snowflake_account_role&#34;</span> <span style="color:#f1fa8c">&#34;test&#34;</span> {
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">name</span> = <span style="color:#f1fa8c">&#34;test&#34;</span>
-</span></span><span style="display:flex;"><span>}<span style="color:#6272a4">
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"># GRANT ROLE ... TO USER ...
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;snowflake_grant_account_role&#34;</span> <span style="color:#f1fa8c">&#34;test&#34;</span> {
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">role_name</span> = snowflake_account_role.test.name
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">user_name</span> = <span style="color:#f1fa8c">&#34;*****&#34;</span>
-</span></span><span style="display:flex;"><span>}<span style="color:#6272a4">
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"># GRANT USAGE ON SCHEMA ... TO ROLE ...
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;snowflake_grant_privileges_to_account_role&#34;</span> <span style="color:#f1fa8c">&#34;grant_testschema_role&#34;</span> {
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">privileges</span>        = [<span style="color:#f1fa8c">&#34;USAGE&#34;</span>, <span style="color:#f1fa8c">&#34;MONITOR&#34;</span>]
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">account_role_name</span> = snowflake_account_role.test.name
-</span></span><span style="display:flex;"><span>  on_schema {
-</span></span><span style="display:flex;"><span>    <span style="color:#50fa7b">schema_name</span> = snowflake_schema.test.fully_qualified_name
-</span></span><span style="display:flex;"><span>  }
-</span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>For ease of management, there are also <a href="https://docs.snowflake.com/en/user-guide/security-access-control-considerations#managing-database-object-access-using-database-roles">database roles</a> that are associated with databases. There is no difference from normal roles except that they can be granted only to database roles that must be in the same database.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-terraform" data-lang="terraform"><span style="display:flex;"><span><span style="color:#6272a4"># CREATE DATABASE ROLE ...
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;snowflake_database_role&#34;</span> <span style="color:#f1fa8c">&#34;testdb&#34;</span> {
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">database</span> = snowflake_database.test.name
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">name</span>     = <span style="color:#f1fa8c">&#34;TESTDB_ROLE&#34;</span>
-</span></span><span style="display:flex;"><span>}<span style="color:#6272a4">
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4">
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"># GRANT DATABASE ROLE ... TO ROLE ...
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;snowflake_grant_database_role&#34;</span> <span style="color:#f1fa8c">&#34;grant_testdb_role&#34;</span> {
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">database_role_name</span> = snowflake_database_role.testdb.fully_qualified_name
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">parent_role_name</span>   = snowflake_account_role.test.name
-</span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><p>SCHEMA privileges alone do not allow access to tables, and table privileges must be granted individually. With <a href="https://docs.snowflake.com/en/user-guide/security-access-control-considerations#simplifying-grant-management-using-future-grants">FUTURE</a>, privileges can be automatically granted for objects that will be created in the future.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-terraform" data-lang="terraform"><span style="display:flex;"><span><span style="color:#6272a4"># GRANT SELECT ON FUTURE TABLES IN DATABASE ... TO DATABASE ROLE ...
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;snowflake_grant_privileges_to_database_role&#34;</span> <span style="color:#f1fa8c">&#34;grant_select_testdb_future_tables&#34;</span> {
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">privileges</span>         = [<span style="color:#f1fa8c">&#34;SELECT&#34;</span>]
-</span></span><span style="display:flex;"><span>  <span style="color:#50fa7b">database_role_name</span> = snowflake_database_role.testdb.fully_qualified_name
-</span></span><span style="display:flex;"><span>  on_schema_object {
-</span></span><span style="display:flex;"><span>    future {
-</span></span><span style="display:flex;"><span>      <span style="color:#50fa7b">object_type_plural</span> = <span style="color:#f1fa8c">&#34;TABLES&#34;</span>
-</span></span><span style="display:flex;"><span>      <span style="color:#50fa7b">in_database</span>        = snowflake_database_role.testdb.<span style="color:#8be9fd;font-style:italic">data</span>base
-</span></span><span style="display:flex;"><span>    }
-</span></span><span style="display:flex;"><span>  }
-</span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div><h2 id="reference">Reference</h2>
+<h2 id="reference">Reference</h2>
 <p><a href="https://zenn.dev/rshimajiri/articles/89393861f106a0">Snowflakeの論文「The Snowflake Elastic Data Warehouse」を読んでみた_Part1</a></p>
 
     </div>
