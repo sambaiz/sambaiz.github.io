@@ -454,8 +454,32 @@
 <p><a href="https://www.sambaiz.net/article/386/">カラムナフォーマットParquetの構造とReadの最適化 - sambaiz-net</a></p>
 <p>Hadoop クラスタなどのインフラストラクチャの面倒を見る必要がないこと以外にも、BigQuery のような<a href="https://docs.snowflake.com/en/user-guide/data-time-travel">タイムトラベル</a>や、アカウント間で容易に<a href="https://docs.snowflake.com/en/user-guide/data-sharing-intro">データを共有</a>できる特長がある。</p>
 <p><a href="https://www.sambaiz.net/article/511/">BigQueryのタイムトラベルやスナップショットでデータを復元する - sambaiz-net</a></p>
-<p><a href="https://docs.snowflake.com/en/user-guide/cost-understanding-overall">料金</a>はコンピューティングリソースとストレージ、<a href="https://docs.snowflake.com/en/user-guide/cost-understanding-data-transfer">別のリージョンやクラウドへのデータエグレス</a>に対してかかる。イングレスでは Snowflake の料金はかからないがクラウド側のエゲレスのコストは発生する場合がある。そのため、なるべくデータが集まっているクラウド上で動かした方がコストを抑えられる。</p>
-<p>まず権限を持つ <a href="https://docs.snowflake.com/en/user-guide/security-access-control-overview#roles">ROLE</a> とリソースをプロビジョニングした <a href="https://docs.snowflake.com/en/user-guide/warehouses-overview">WAREHOUSE</a> を選択する。</p>
+<p><a href="https://docs.snowflake.com/en/user-guide/cost-understanding-overall">料金</a>はプランによって単価が異なるコンピューティングの<a href="https://www.snowflake.com/en/pricing-options/">クレジット</a>とストレージ、<a href="https://docs.snowflake.com/en/user-guide/cost-understanding-data-transfer">別のリージョンやクラウドへのデータエグレス</a>に対してかかる。イングレスでは Snowflake の料金はかからないがクラウド側のエゲレスのコストは発生する場合がある。そのため、なるべくデータが集まっているクラウドのリージョン上で動かした方がコストを抑えられるが、GCP に関しては現状<a href="https://docs.snowflake.com/en/user-guide/intro-regions">対応リージョン</a>が少ない。多くの場合でクレジットが料金の大半を占めることになり、画面上や次のようなクエリで消費量を確認することができる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">WITH</span> wh_bill <span style="color:#ff79c6">AS</span> (
+</span></span><span style="display:flex;"><span>   <span style="color:#ff79c6">SELECT</span> <span style="color:#8be9fd;font-style:italic">DATE</span>(start_time) <span style="color:#ff79c6">as</span> <span style="color:#ff79c6">day</span>, warehouse_name, <span style="color:#ff79c6">SUM</span>(credits_used_compute) <span style="color:#ff79c6">AS</span> compute_credits
+</span></span><span style="display:flex;"><span>     <span style="color:#ff79c6">FROM</span> SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+</span></span><span style="display:flex;"><span>     <span style="color:#ff79c6">WHERE</span> start_time <span style="color:#ff79c6">&gt;=</span> DATEADD(<span style="color:#ff79c6">day</span>, <span style="color:#ff79c6">-</span><span style="color:#bd93f9">30</span>, <span style="color:#ff79c6">CURRENT_TIMESTAMP</span>())
+</span></span><span style="display:flex;"><span>   <span style="color:#ff79c6">GROUP</span> <span style="color:#ff79c6">BY</span> <span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>
+</span></span><span style="display:flex;"><span>),
+</span></span><span style="display:flex;"><span>user_credits <span style="color:#ff79c6">AS</span> (
+</span></span><span style="display:flex;"><span>   <span style="color:#ff79c6">SELECT</span> <span style="color:#8be9fd;font-style:italic">DATE</span>(start_time) <span style="color:#ff79c6">as</span> <span style="color:#ff79c6">day</span>, user_name, warehouse_name, <span style="color:#ff79c6">SUM</span>(credits_attributed_compute) <span style="color:#ff79c6">AS</span> credits
+</span></span><span style="display:flex;"><span>     <span style="color:#ff79c6">FROM</span> SNOWFLAKE.ACCOUNT_USAGE.QUERY_ATTRIBUTION_HISTORY
+</span></span><span style="display:flex;"><span>     <span style="color:#ff79c6">WHERE</span> start_time <span style="color:#ff79c6">&gt;=</span> DATEADD(<span style="color:#ff79c6">day</span>, <span style="color:#ff79c6">-</span><span style="color:#bd93f9">30</span>, <span style="color:#ff79c6">CURRENT_TIMESTAMP</span>())
+</span></span><span style="display:flex;"><span>     <span style="color:#ff79c6">GROUP</span> <span style="color:#ff79c6">BY</span> <span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>, <span style="color:#bd93f9">3</span>
+</span></span><span style="display:flex;"><span>),
+</span></span><span style="display:flex;"><span>total_credit <span style="color:#ff79c6">AS</span> (
+</span></span><span style="display:flex;"><span>   <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">day</span>, warehouse_name, <span style="color:#ff79c6">SUM</span>(credits) <span style="color:#ff79c6">AS</span> sum_all_credits
+</span></span><span style="display:flex;"><span>     <span style="color:#ff79c6">FROM</span> user_credits
+</span></span><span style="display:flex;"><span>   <span style="color:#ff79c6">GROUP</span> <span style="color:#ff79c6">BY</span> <span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">day</span>,
+</span></span><span style="display:flex;"><span>       u.user_name,
+</span></span><span style="display:flex;"><span>       u.warehouse_name,
+</span></span><span style="display:flex;"><span>       u.credits <span style="color:#ff79c6">/</span> t.sum_all_credits <span style="color:#ff79c6">*</span> w.compute_credits <span style="color:#ff79c6">AS</span> attributed_credits
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span> user_credits u
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">JOIN</span> total_credit t <span style="color:#ff79c6">USING</span> (<span style="color:#ff79c6">day</span>, warehouse_name) 
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">JOIN</span> wh_bill w <span style="color:#ff79c6">USING</span> (<span style="color:#ff79c6">day</span>, warehouse_name)
+</span></span></code></pre></div><p>まず権限を持つ <a href="https://docs.snowflake.com/en/user-guide/security-access-control-overview#roles">ROLE</a> とリソースをプロビジョニングした <a href="https://docs.snowflake.com/en/user-guide/warehouses-overview">WAREHOUSE</a> を選択する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>USE <span style="color:#ff79c6">ROLE</span> ACCOUNTADMIN;
 </span></span><span style="display:flex;"><span>USE WAREHOUSE COMPUTE_WH;
 </span></span></code></pre></div><p>WAREHOUSE を立ち上げている間サイズに応じたクレジットを消費する。自動で再開/停止することもできる。</p>
