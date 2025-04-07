@@ -783,6 +783,48 @@ Since it is a static site, so you <a href="https://docs.getdbt.com/docs/build/do
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4">        data_tests:
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4">          - positive_value
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4">*/</span>
+</span></span></code></pre></div><p>Macros can also cause side effects, and by calling from <a href="https://docs.getdbt.com/reference/resource-configs/pre-hook-post-hook">pre/post_hook</a> or materialized=ephemeral that don&rsquo;t create tables, you can perform any processing within the dbt workflow. The <a href="https://docs.getdbt.com/reference/dbt-jinja-functions/execute">execute</a> variable is false during DAG generation when queries don&rsquo;t run, and <a href="https://docs.getdbt.com/reference/dbt-jinja-functions/run_query">run_query</a> is a macro that executes queries. You can call this using jinja&rsquo;s <a href="https://jinja.palletsprojects.com/en/stable/templates/#expression-statement">do</a> without output. Besides, you can run it with <a href="https://docs.getdbt.com/reference/commands/run-operation">dbt run-operation</a>, and codegen is also implemented as macro.</p>
+<p><a href="https://www.sambaiz.net/en/article/513/">Automatically generate sources.yml, staging models, and schema.yml using dbt codegen - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> macro export_to_gcs(
+</span></span><span style="display:flex;"><span>    source_model,
+</span></span><span style="display:flex;"><span>    gcs_bucket,
+</span></span><span style="display:flex;"><span>    export_format<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;CSV&#39;</span>
+</span></span><span style="display:flex;"><span>) <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> <span style="color:#ff79c6">if</span> execute <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>  {<span style="color:#ff79c6">%</span> <span style="color:#8be9fd;font-style:italic">set</span> gcs_path <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;exports/&#39;</span> <span style="color:#ff79c6">~</span> model<span style="color:#ff79c6">.</span>name <span style="color:#ff79c6">~</span> <span style="color:#f1fa8c">&#39;.csv&#39;</span> <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>  {<span style="color:#ff79c6">%</span> <span style="color:#8be9fd;font-style:italic">set</span> gcs_uri <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;gs://&#39;</span> <span style="color:#ff79c6">~</span> gcs_bucket <span style="color:#ff79c6">~</span> <span style="color:#f1fa8c">&#39;/&#39;</span> <span style="color:#ff79c6">~</span> gcs_path <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>  
+</span></span><span style="display:flex;"><span>  {<span style="color:#ff79c6">%</span> <span style="color:#8be9fd;font-style:italic">set</span> export_query <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>  EXPORT DATA
+</span></span><span style="display:flex;"><span>  OPTIONS(
+</span></span><span style="display:flex;"><span>    uri<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{{ gcs_uri }}&#39;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">format</span><span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;{{ export_format }}&#39;</span>
+</span></span><span style="display:flex;"><span>    {<span style="color:#ff79c6">%</span> <span style="color:#ff79c6">if</span> export_format <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#39;CSV&#39;</span> <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>    , header<span style="color:#ff79c6">=</span>true,
+</span></span><span style="display:flex;"><span>    field_delimiter<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;,&#39;</span>
+</span></span><span style="display:flex;"><span>    {<span style="color:#ff79c6">%</span> endif <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>  )
+</span></span><span style="display:flex;"><span>  AS (
+</span></span><span style="display:flex;"><span>    {{ source_model }}
+</span></span><span style="display:flex;"><span>  )
+</span></span><span style="display:flex;"><span>  {<span style="color:#ff79c6">%</span> endset <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>  
+</span></span><span style="display:flex;"><span>  {<span style="color:#ff79c6">%</span> do run_query(export_query) <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> endif <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%</span> endmacro <span style="color:#ff79c6">%</span>}
+</span></span></code></pre></div><p>Such macros can be called from ephemeral models like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>{{ config(materialized<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;ephemeral&#39;</span>) }}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%-</span> <span style="color:#ff79c6">set</span> query <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">select</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">from</span> {{ <span style="color:#ff79c6">ref</span>(<span style="color:#f1fa8c">&#39;my_model&#39;</span>) }}
+</span></span><span style="display:flex;"><span>{<span style="color:#ff79c6">%-</span> endset <span style="color:#ff79c6">%</span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>{{ export_to_gcs(
+</span></span><span style="display:flex;"><span>    source_model<span style="color:#ff79c6">=</span>query,
+</span></span><span style="display:flex;"><span>    gcs_bucket<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;my-bucket&#39;</span>
+</span></span><span style="display:flex;"><span>) }}
 </span></span></code></pre></div><p>You can also override the behavior of adding the default_schema prefix when you specify a schema in the config by defining <a href="https://docs.getdbt.com/docs/build/custom-schemas#how-does-dbt-generate-a-models-schema-name">generate_schema_name</a>, which is used to generate the schema name.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-jinja" data-lang="jinja"><span style="display:flex;"><span><span style="color:#ff79c6">{%</span> <span style="color:#ff79c6">macro</span> <span style="color:#8be9fd;font-style:italic">generate_schema_name</span><span style="color:#ff79c6">(</span><span style="color:#8be9fd;font-style:italic">custom_schema_name</span><span style="color:#ff79c6">,</span> <span style="color:#8be9fd;font-style:italic">node</span><span style="color:#ff79c6">)</span> -<span style="color:#ff79c6">%}</span>
 </span></span><span style="display:flex;"><span>
