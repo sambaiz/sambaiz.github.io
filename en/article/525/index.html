@@ -491,6 +491,23 @@
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;ALTER TABLE iceberg_test.test_table2 ADD PARTITION FIELD aaa&#34;</span>)
 </span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;ALTER TABLE iceberg_test.test_table2 ADD PARTITION FIELD bbb&#34;</span>)
 </span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;DESCRIBE TABLE iceberg_test.test_table2&#34;</span>)
+</span></span></code></pre></div><p>When trying to add new columns in the middle, you&rsquo;ll get an error indicating that the columns are not in order. You can bypass this <a href="https://github.com/apache/iceberg/blob/apache-iceberg-1.7.2/api/src/main/java/org/apache/iceberg/types/CheckCompatibility.java#L141">check</a> by setting spark.sql.iceberg.check-ordering = false. This check is designed to prevent writing data to incorrect positions when the input data and table definition orders differ. However, in the <a href="https://github.com/apache/iceberg/pull/745">PR</a> that added this setting, it was also modified to take field positions from the input data schema rather than the table, so I think it is no problem to set it to false and actually I did it.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>Exception in thread &#34;main&#34; java.lang.IllegalArgumentException: Cannot write incompatible dataset to table with schema:
+</span></span><span style="display:flex;"><span>table {
+</span></span><span style="display:flex;"><span>  1: id: optional string
+</span></span><span style="display:flex;"><span>  2: age: optional int
+</span></span><span style="display:flex;"><span>  3: name: optional string
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>Provided schema:
+</span></span><span style="display:flex;"><span>table {
+</span></span><span style="display:flex;"><span>  1: id: optional string
+</span></span><span style="display:flex;"><span>  3: name: optional string
+</span></span><span style="display:flex;"><span>  2: age: optional int
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>Problems:
+</span></span><span style="display:flex;"><span>* name is out of order, before age
+</span></span><span style="display:flex;"><span>	at org.apache.iceberg.types.TypeUtil.checkSchemaCompatibility(TypeUtil.java:489)
+</span></span><span style="display:flex;"><span>...
 </span></span></code></pre></div><p>Inserting the data,</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>df <span style="color:#ff79c6">=</span> spark<span style="color:#ff79c6">.</span>createDataFrame([
 </span></span><span style="display:flex;"><span>    (<span style="color:#bd93f9">1</span>, <span style="color:#f1fa8c">&#34;aaaa&#34;</span>),
@@ -559,7 +576,7 @@
 </a></div>
 
 
-<p>If you can&rsquo;t get the latest data, check whether AUTO_REFRESH is disabled or whether <a href="https://docs.snowflake.com/en/user-guide/querying-persisted-results">caching</a> is enabled.</p>
+<p>If you can&rsquo;t get the latest data, check whether AUTO_REFRESH is disabled or failed, or whether <a href="https://docs.snowflake.com/en/user-guide/querying-persisted-results">caching</a> is enabled.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">SYSTEM</span>$AUTO_REFRESH_STATUS(TEST_TABLE);
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">ALTER</span> <span style="color:#ff79c6">SESSION</span> <span style="color:#ff79c6">SET</span> USE_CACHED_RESULT<span style="color:#ff79c6">=</span><span style="color:#ff79c6">FALSE</span>;
