@@ -443,10 +443,10 @@
 今回は新しいsessionを作ってAccuracyを返しているが、hookでやった方がrestoreする必要がないので良さそうだ。</p>
 <p><a href="https://www.sambaiz.net/article/179/">Destributed TensorFlowの流れとSavedModelの出力 - sambaiz-net</a></p>
 <p>全体のコードは<a href="https://gist.github.com/sambaiz/72888520379cff778d6261cd417a3773">ここ</a>。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train</span>(self, learning_rate, variable_default_stddev, bias_default, last_step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">800</span>):
-</span></span><span style="display:flex;"><span>  test_images <span style="color:#ff79c6">=</span> self<span style="color:#ff79c6">.</span>images[:<span style="color:#bd93f9">500</span>]
-</span></span><span style="display:flex;"><span>  test_labels <span style="color:#ff79c6">=</span> self<span style="color:#ff79c6">.</span>labels[:<span style="color:#bd93f9">500</span>]
-</span></span><span style="display:flex;"><span>  train_batch <span style="color:#ff79c6">=</span> Batch(self<span style="color:#ff79c6">.</span>images[<span style="color:#bd93f9">500</span>:], self<span style="color:#ff79c6">.</span>labels[<span style="color:#bd93f9">500</span>:])
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">train</span>(<span style="font-style:italic">self</span>, learning_rate, variable_default_stddev, bias_default, last_step<span style="color:#ff79c6">=</span><span style="color:#bd93f9">800</span>):
+</span></span><span style="display:flex;"><span>  test_images <span style="color:#ff79c6">=</span> <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>images[:<span style="color:#bd93f9">500</span>]
+</span></span><span style="display:flex;"><span>  test_labels <span style="color:#ff79c6">=</span> <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>labels[:<span style="color:#bd93f9">500</span>]
+</span></span><span style="display:flex;"><span>  train_batch <span style="color:#ff79c6">=</span> Batch(<span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>images[<span style="color:#bd93f9">500</span>:], <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>labels[<span style="color:#bd93f9">500</span>:])
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>Graph()<span style="color:#ff79c6">.</span>as_default():
 </span></span><span style="display:flex;"><span>    global_step<span style="color:#ff79c6">=</span>tf<span style="color:#ff79c6">.</span>train<span style="color:#ff79c6">.</span>get_or_create_global_step()
@@ -470,7 +470,7 @@
 </span></span><span style="display:flex;"><span>          g[<span style="color:#f1fa8c">&#34;placeholder&#34;</span>][<span style="color:#f1fa8c">&#34;y&#34;</span>]: <span style="color:#8be9fd;font-style:italic">list</span>(labels),
 </span></span><span style="display:flex;"><span>        })
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">with</span> tf<span style="color:#ff79c6">.</span>Session() <span style="color:#ff79c6">as</span> sess:
-</span></span><span style="display:flex;"><span>      self<span style="color:#ff79c6">.</span>_restore(sess, saver, savedir)
+</span></span><span style="display:flex;"><span>      <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>_restore(sess, saver, savedir)
 </span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">return</span> sess<span style="color:#ff79c6">.</span>run(g[<span style="color:#f1fa8c">&#34;op&#34;</span>][<span style="color:#f1fa8c">&#34;accuracy&#34;</span>], feed_dict<span style="color:#ff79c6">=</span>{
 </span></span><span style="display:flex;"><span>        g[<span style="color:#f1fa8c">&#34;placeholder&#34;</span>][<span style="color:#f1fa8c">&#34;x&#34;</span>]: <span style="color:#8be9fd;font-style:italic">list</span>(test_images), 
 </span></span><span style="display:flex;"><span>        g[<span style="color:#f1fa8c">&#34;placeholder&#34;</span>][<span style="color:#f1fa8c">&#34;y&#34;</span>]: <span style="color:#8be9fd;font-style:italic">list</span>(test_labels)
@@ -479,27 +479,27 @@
 <code>before_run()</code>で返すSessionRunArgsのfeed_dictはrunで渡すfeed_dictとmergeされ、
 fetchesはrunするたびに毎回評価される。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">MySessionRunHook</span>:
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> __init__(self, feed_dict):
-</span></span><span style="display:flex;"><span>    self<span style="color:#ff79c6">.</span>feed_dict <span style="color:#ff79c6">=</span> feed_dict
-</span></span><span style="display:flex;"><span>    self<span style="color:#ff79c6">.</span>a <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;a&#34;</span>)
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">__init__</span>(<span style="font-style:italic">self</span>, feed_dict):
+</span></span><span style="display:flex;"><span>    <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>feed_dict <span style="color:#ff79c6">=</span> feed_dict
+</span></span><span style="display:flex;"><span>    <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>a <span style="color:#ff79c6">=</span> tf<span style="color:#ff79c6">.</span>placeholder(tf<span style="color:#ff79c6">.</span>float32, name<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#34;a&#34;</span>)
 </span></span><span style="display:flex;"><span>      
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">begin</span>(self):
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">begin</span>(<span style="font-style:italic">self</span>):
 </span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;&#34;&#34;Called once before using the session.&#34;&#34;&#34;</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#34;begin&#34;</span>)
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">after_create_session</span>(self, session, coord):
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">after_create_session</span>(<span style="font-style:italic">self</span>, session, coord):
 </span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;&#34;&#34;Called when new TensorFlow session is created.&#34;&#34;&#34;</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#34;after_create_session&#34;</span>)
 </span></span><span style="display:flex;"><span>      
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">before_run</span>(self, run_context):
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">before_run</span>(<span style="font-style:italic">self</span>, run_context):
 </span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;&#34;&#34;Called before each call to run().&#34;&#34;&#34;</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> SessionRunArgs(fetches<span style="color:#ff79c6">=</span>{<span style="color:#f1fa8c">&#34;a&#34;</span>: self<span style="color:#ff79c6">.</span>a}, feed_dict<span style="color:#ff79c6">=</span>self<span style="color:#ff79c6">.</span>feed_dict)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> SessionRunArgs(fetches<span style="color:#ff79c6">=</span>{<span style="color:#f1fa8c">&#34;a&#34;</span>: <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>a}, feed_dict<span style="color:#ff79c6">=</span><span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>feed_dict)
 </span></span><span style="display:flex;"><span>  
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">after_run</span>(self, run_context, run_values):
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">after_run</span>(<span style="font-style:italic">self</span>, run_context, run_values):
 </span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;&#34;&#34;Called after each call to run().&#34;&#34;&#34;</span>
-</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#34;after_run </span><span style="color:#f1fa8c">{}</span><span style="color:#f1fa8c"> </span><span style="color:#f1fa8c">{}</span><span style="color:#f1fa8c">&#34;</span><span style="color:#ff79c6">.</span>format(run_values<span style="color:#ff79c6">.</span>results[<span style="color:#f1fa8c">&#34;a&#34;</span>], run_context<span style="color:#ff79c6">.</span>session<span style="color:#ff79c6">.</span>run(self<span style="color:#ff79c6">.</span>a, feed_dict<span style="color:#ff79c6">=</span>{self<span style="color:#ff79c6">.</span>a: <span style="color:#bd93f9">10</span>})))
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#34;after_run </span><span style="color:#f1fa8c">{}</span><span style="color:#f1fa8c"> </span><span style="color:#f1fa8c">{}</span><span style="color:#f1fa8c">&#34;</span><span style="color:#ff79c6">.</span>format(run_values<span style="color:#ff79c6">.</span>results[<span style="color:#f1fa8c">&#34;a&#34;</span>], run_context<span style="color:#ff79c6">.</span>session<span style="color:#ff79c6">.</span>run(<span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>a, feed_dict<span style="color:#ff79c6">=</span>{<span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>a: <span style="color:#bd93f9">10</span>})))
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">end</span>(self, session):
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">end</span>(<span style="font-style:italic">self</span>, session):
 </span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;&#34;&#34;Called at the end of session.&#34;&#34;&#34;</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">print</span>(<span style="color:#f1fa8c">&#34;end&#34;</span>)
 </span></span></code></pre></div><p>したがって、hooks内のfetchesにfeedする必要があるものが含まれる場合、
