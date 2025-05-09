@@ -464,10 +464,39 @@
 
 <p>By the way, when I <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/tutorial-iceberg.html">ran it on EMR on EKS</a>, I got ClassNotFoundException: org.apache.iceberg.spark.SparkCatalog even though Iceberg is <a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/Iceberg-release-history.html">available</a> with the version, emr-7.0.0, I could confirm that it works with the latest version.</p>
 <p><a href="https://www.sambaiz.net/en/article/434/">Launch an EKS cluster and register it to EMR on EKS with CDK to run Spark jobs - sambaiz-net</a></p>
-<p>When you create or update Iceberg databases and tables,</p>
+<p>Creating or updating databases and Iceberg tables from Spark, it is reflected in the Glue Data Catalog as well. You need glue and S3 policies.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;CREATE DATABASE iceberg_test LOCATION &#39;s3://*****/iceberg_test&#39;&#34;</span>)
 </span></span><span style="display:flex;"><span>spark<span style="color:#ff79c6">.</span>sql(<span style="color:#f1fa8c">&#34;CREATE TABLE iceberg_test.test_table (id bigint, data string) USING iceberg&#34;</span>)
-</span></span></code></pre></div><p>it is reflected in the Glue Data Catalog as well. You need glue and S3 policies. metadata_location written and updated as the a table property is referred for optimistic locking, which detects concurrent updates to the table and <a href="https://github.com/apache/iceberg/blob/980212e7000f7a62439e8876cc555a5066147df6/aws/src/main/java/org/apache/iceberg/aws/glue/GlueTableOperations.java#L271">fails</a> the commits. Previously, DynamoLockManager <a href="https://iceberg.apache.org/docs/latest/aws/#optimistic-locking">was used</a>.</p>
+</span></span></code></pre></div><p>Besides, you can also register Iceberg tables in the Glue Data Catalog in CDK (CloudFormation) by creating an EXTERNAL_TABLE with openTableFormatInput.icebergInput, but there are issues where it is <a href="https://github.com/aws-cloudformation/cloudformation-coverage-roadmap/issues/1919">broken</a> as an Iceberg table when you update the schema, and it also <a href="https://github.com/aws-cloudformation/cloudformation-coverage-roadmap/issues/1866">doesn&rsquo;t support</a> partitioning, so it&rsquo;s not very practical at the moment.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> database <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> glue.CfnDatabase(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#34;Database&#34;</span>, {
+</span></span><span style="display:flex;"><span>  catalogId: <span style="color:#8be9fd">this.account</span>,
+</span></span><span style="display:flex;"><span>  databaseInput<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    name: <span style="color:#8be9fd">databaseName</span>,
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>})
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">new</span> glue.CfnTable(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#34;Table&#34;</span>, {
+</span></span><span style="display:flex;"><span>  databaseName: <span style="color:#8be9fd">databaseName</span>,
+</span></span><span style="display:flex;"><span>  catalogId: <span style="color:#8be9fd">this.account</span>,
+</span></span><span style="display:flex;"><span>  tableInput<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;test_table&#34;</span>,
+</span></span><span style="display:flex;"><span>      storageDescriptor<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>          columns<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>            { name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;id&#34;</span>, <span style="color:#ff79c6">type</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;int&#34;</span> },
+</span></span><span style="display:flex;"><span>            { name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;data&#34;</span>, <span style="color:#ff79c6">type</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;string&#34;</span> },
+</span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>          location<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`s3://*****/iceberg_test`</span>,
+</span></span><span style="display:flex;"><span>      },
+</span></span><span style="display:flex;"><span>      tableType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;EXTERNAL_TABLE&#39;</span>,
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>  openTableFormatInput<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      icebergInput<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>          metadataOperation<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;CREATE&#34;</span>,
+</span></span><span style="display:flex;"><span>          version<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;2&#34;</span>,
+</span></span><span style="display:flex;"><span>      }
+</span></span><span style="display:flex;"><span>  }
+</span></span><span style="display:flex;"><span>})
+</span></span></code></pre></div><p>metadata_location written and updated as the a table property is referred for optimistic locking, which detects concurrent updates to the table and <a href="https://github.com/apache/iceberg/blob/980212e7000f7a62439e8876cc555a5066147df6/aws/src/main/java/org/apache/iceberg/aws/glue/GlueTableOperations.java#L271">fails</a> the commits. Previously, DynamoLockManager <a href="https://iceberg.apache.org/docs/latest/aws/#optimistic-locking">was used</a>.</p>
 
 
 
