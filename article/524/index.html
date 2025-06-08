@@ -296,9 +296,9 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title>キーペア認証で Snowflake CLI や Terraform を実行する - sambaiz-net</title>
-  <meta name="twitter:title" content="キーペア認証で Snowflake CLI や Terraform を実行する - sambaiz-net">
-  <meta property='og:title' content="キーペア認証で Snowflake CLI や Terraform を実行する - sambaiz-net">
+  <title>キーペア認証で Terraform を実行したり Snowflake CLI や gosnowflake でクエリを実行する - sambaiz-net</title>
+  <meta name="twitter:title" content="キーペア認証で Terraform を実行したり Snowflake CLI や gosnowflake でクエリを実行する - sambaiz-net">
+  <meta property='og:title' content="キーペア認証で Terraform を実行したり Snowflake CLI や gosnowflake でクエリを実行する - sambaiz-net">
   <meta property="og:type" content="article">
   
   <meta name="description" content="Snowflake CLI はじめ各種クライアントライブラリは user_name / password による認証に加えてキーペアでの認証にも対応している">
@@ -331,7 +331,7 @@
       "@type":"WebPage",
       "@id": "https://www.sambaiz.net/"
     },
-    "headline": "キーペア認証で Snowflake CLI や Terraform を実行する",
+    "headline": "キーペア認証で Terraform を実行したり Snowflake CLI や gosnowflake でクエリを実行する",
     "datePublished": "2025-01-28T01:40:00JST",
     "dateModified": "2025-01-28T01:40:00JST",
     "author": {
@@ -446,18 +446,12 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1>キーペア認証で Snowflake CLI や Terraform を実行する</h1>
+        <h1>キーペア認証で Terraform を実行したり Snowflake CLI や gosnowflake でクエリを実行する</h1>
         <time>2025-01-28</time>
         <a class="tag" href='/tags/snowflake/'>snowflake</a><a class="tag" href='/tags/terraform/'>terraform</a>
       </div>
       <p>Snowflake CLI はじめ各種クライアントライブラリは <a href="https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-connections">user_name / password</a> による認証に加えてキーペアでの認証にも<a href="https://docs.snowflake.com/en/user-guide/key-pair-auth#supported-snowflake-clients">対応している</a>。</p>
-<p>Snowflake CLI を<a href="https://docs.snowflake.com/en/developer-guide/snowflake-cli/installation/installation#label-snowcli-install-macos-installer">インストール</a>する。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ brew tap snowflakedb/snowflake-cli
-</span></span><span style="display:flex;"><span>$ brew update
-</span></span><span style="display:flex;"><span>$ brew install snowflake-cli
-</span></span><span style="display:flex;"><span>$ snow --version
-</span></span><span style="display:flex;"><span>Snowflake CLI version: 3.3.0
-</span></span></code></pre></div><p>ユーザーに紐づける鍵は 2048 bits 以上の RSA 鍵である<a href="https://docs.snowflake.com/ja/user-guide/key-pair-auth#overview">必要があり</a> ed25519 には現状対応していない。</p>
+<p>ユーザーに紐づける鍵は 2048 bits 以上の RSA 鍵である<a href="https://docs.snowflake.com/ja/user-guide/key-pair-auth#overview">必要があり</a> ed25519 には現状対応していない。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ openssl genrsa <span style="color:#bd93f9">2048</span> | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
 </span></span><span style="display:flex;"><span>$ openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
 </span></span><span style="display:flex;"><span>$ mkdir -p ~/.snowflake
@@ -465,44 +459,7 @@
 </span></span></code></pre></div><p>1 ユーザーに 2 つまで公開鍵を登録できる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#ff79c6">ALTER</span> <span style="color:#ff79c6">USER</span> <span style="color:#ff79c6">*****</span> <span style="color:#ff79c6">SET</span> RSA_PUBLIC_KEY<span style="color:#ff79c6">=</span><span style="color:#f1fa8c">&#39;-----BEGIN PUBLIC KEY-----
 </span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">MIIBI...&#39;</span>
-</span></span></code></pre></div><p>設定ファイル ~/.snowflake/config.toml に接続情報を<a href="https://docs.snowflake.com/en/developer-guide/snowflake-cli/command-reference/connection-commands/add-connection">追加する</a>。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ snow connection add <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --connection-name <span style="color:#8be9fd;font-style:italic">test</span> <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --account ***** <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --user ***** <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --role ***** <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --warehouse ***** <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --database ***** <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --schema ***** <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --authenticator SNOWFLAKE_JWT <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --private-key-file ~/.snowflake/rsa_key.p8 <span style="color:#f1fa8c">\
-</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --no-interactive
-</span></span><span style="display:flex;"><span>  
-</span></span><span style="display:flex;"><span>$ cat /Users/*****/.snowflake/config.toml
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">[</span>cli.logs<span style="color:#ff79c6">]</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">save_logs</span> <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">true</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">path</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;/Users/*****/.snowflake/logs&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">level</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;info&#34;</span>
-</span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">[</span>connections.test<span style="color:#ff79c6">]</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">account</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">user</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">database</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">warehouse</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">role</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">authenticator</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;SNOWFLAKE_JWT&#34;</span>
-</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">private_key_file</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;/Users/*****/.snowflake/rsa_key.p8&#34;</span>
-</span></span></code></pre></div><p>これでクエリが実行できる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ snow sql --connection <span style="color:#8be9fd;font-style:italic">test</span> -q <span style="color:#f1fa8c">&#34;SELECT * FROM test_table&#34;</span>
-</span></span><span style="display:flex;"><span>SELECT * FROM test_table
-</span></span><span style="display:flex;"><span>+-----------+
-</span></span><span style="display:flex;"><span>| ID | DATA |
-</span></span><span style="display:flex;"><span>|----+------|
-</span></span><span style="display:flex;"><span>| <span style="color:#bd93f9">1</span>  | aaaa |
-</span></span><span style="display:flex;"><span>| <span style="color:#bd93f9">2</span>  | bbbb |
-</span></span><span style="display:flex;"><span>| <span style="color:#bd93f9">3</span>  | cccc |
-</span></span><span style="display:flex;"><span>+-----------+
-</span></span></code></pre></div><p>続いて Terrafom を実行する。</p>
+</span></span></code></pre></div><p>Terrafom を実行する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-terraform" data-lang="terraform"><span style="display:flex;"><span>terraform {
 </span></span><span style="display:flex;"><span>  required_providers {
 </span></span><span style="display:flex;"><span>    snowflake <span style="color:#ff79c6">=</span> {
@@ -547,6 +504,126 @@
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">resource</span> <span style="color:#f1fa8c">&#34;snowflake_role&#34;</span> <span style="color:#f1fa8c">&#34;role&#34;</span> {
 </span></span><span style="display:flex;"><span>  provider <span style="color:#ff79c6">=</span> snowflake.accountadmin
 </span></span><span style="display:flex;"><span>  ...
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Snowflake CLI を<a href="https://docs.snowflake.com/en/developer-guide/snowflake-cli/installation/installation#label-snowcli-install-macos-installer">インストール</a>する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ brew tap snowflakedb/snowflake-cli
+</span></span><span style="display:flex;"><span>$ brew update
+</span></span><span style="display:flex;"><span>$ brew install snowflake-cli
+</span></span><span style="display:flex;"><span>$ snow --version
+</span></span><span style="display:flex;"><span>Snowflake CLI version: 3.3.0
+</span></span></code></pre></div><p>設定ファイル ~/.snowflake/config.toml に接続情報を<a href="https://docs.snowflake.com/en/developer-guide/snowflake-cli/command-reference/connection-commands/add-connection">追加する</a>。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ snow connection add <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --connection-name <span style="color:#8be9fd;font-style:italic">test</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --account ***** <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --user ***** <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --role ***** <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --warehouse ***** <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --database ***** <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --schema ***** <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --authenticator SNOWFLAKE_JWT <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --private-key-file ~/.snowflake/rsa_key.p8 <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c"></span>  --no-interactive
+</span></span><span style="display:flex;"><span>  
+</span></span><span style="display:flex;"><span>$ cat /Users/*****/.snowflake/config.toml
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">[</span>cli.logs<span style="color:#ff79c6">]</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">save_logs</span> <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">true</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">path</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;/Users/*****/.snowflake/logs&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">level</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;info&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">[</span>connections.test<span style="color:#ff79c6">]</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">account</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">user</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">database</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">warehouse</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">role</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;*****&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">authenticator</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;SNOWFLAKE_JWT&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">private_key_file</span> <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#34;/Users/*****/.snowflake/rsa_key.p8&#34;</span>
+</span></span></code></pre></div><p>これでクエリが実行できる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ snow sql --connection <span style="color:#8be9fd;font-style:italic">test</span> -q <span style="color:#f1fa8c">&#34;SELECT * FROM test_table&#34;</span>
+</span></span><span style="display:flex;"><span>SELECT * FROM test_table
+</span></span><span style="display:flex;"><span>+-----------+
+</span></span><span style="display:flex;"><span>| ID | DATA |
+</span></span><span style="display:flex;"><span>|----+------|
+</span></span><span style="display:flex;"><span>| <span style="color:#bd93f9">1</span>  | aaaa |
+</span></span><span style="display:flex;"><span>| <span style="color:#bd93f9">2</span>  | bbbb |
+</span></span><span style="display:flex;"><span>| <span style="color:#bd93f9">3</span>  | cccc |
+</span></span><span style="display:flex;"><span>+-----------+
+</span></span></code></pre></div><p>Go の Snowflake ドライバー <a href="https://github.com/snowflakedb/gosnowflake">gosnowflake</a> からもクエリする。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;context&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;crypto/rsa&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;crypto/x509&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;database/sql&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;encoding/pem&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;os&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;github.com/snowflakedb/gosnowflake&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {
+</span></span><span style="display:flex;"><span>	account <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;SNOWFLAKE_ACCOUNT&#34;</span>) <span style="color:#6272a4">// https://docs.snowflake.com/en/user-guide/admin-account-identifier</span>
+</span></span><span style="display:flex;"><span>	user <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;SNOWFLAKE_USER&#34;</span>)
+</span></span><span style="display:flex;"><span>	warehouse <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;SNOWFLAKE_WAREHOUSE&#34;</span>)
+</span></span><span style="display:flex;"><span>	keyPath <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">Getenv</span>(<span style="color:#f1fa8c">&#34;PRIVATE_KEY_PATH&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	ctx <span style="color:#ff79c6">:=</span> context.<span style="color:#50fa7b">Background</span>()
+</span></span><span style="display:flex;"><span>	db, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">initSnowflakeLocal</span>(ctx, account, user, warehouse, keyPath)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;failed to init snowflake: %v\n&#34;</span>, err)
+</span></span><span style="display:flex;"><span>		os.<span style="color:#50fa7b">Exit</span>(<span style="color:#bd93f9">1</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">defer</span> db.<span style="color:#50fa7b">Close</span>()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#8be9fd;font-style:italic">var</span> version <span style="color:#8be9fd">string</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">QueryRowContext</span>(ctx, <span style="color:#f1fa8c">&#34;SELECT current_version()&#34;</span>).<span style="color:#50fa7b">Scan</span>(<span style="color:#ff79c6">&amp;</span>version); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;query error: %v\n&#34;</span>, err)
+</span></span><span style="display:flex;"><span>		os.<span style="color:#50fa7b">Exit</span>(<span style="color:#bd93f9">1</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	fmt.<span style="color:#50fa7b">Printf</span>(<span style="color:#f1fa8c">&#34;Snowflake version: %s\n&#34;</span>, version)
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">initSnowflakeLocal</span>(ctx context.Context, account, user, warehouse, keyPath <span style="color:#8be9fd">string</span>) (<span style="color:#ff79c6">*</span>sql.DB, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>	pemBytes, err <span style="color:#ff79c6">:=</span> os.<span style="color:#50fa7b">ReadFile</span>(keyPath)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;read key file: %w&#34;</span>, err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	block, _ <span style="color:#ff79c6">:=</span> pem.<span style="color:#50fa7b">Decode</span>(pemBytes)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> block <span style="color:#ff79c6">==</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;failed to decode PEM block&#34;</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	pkRaw, err <span style="color:#ff79c6">:=</span> x509.<span style="color:#50fa7b">ParsePKCS8PrivateKey</span>(block.Bytes)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;parse PKCS#8 private key: %w&#34;</span>, err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	rsaPk, ok <span style="color:#ff79c6">:=</span> pkRaw.(<span style="color:#ff79c6">*</span>rsa.PrivateKey)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> !ok {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;not an RSA private key: %T&#34;</span>, pkRaw)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	dsn, err <span style="color:#ff79c6">:=</span> gosnowflake.<span style="color:#50fa7b">DSN</span>(<span style="color:#ff79c6">&amp;</span>gosnowflake.Config{
+</span></span><span style="display:flex;"><span>		Account:       account,
+</span></span><span style="display:flex;"><span>		User:          user,
+</span></span><span style="display:flex;"><span>		Warehouse:     warehouse,
+</span></span><span style="display:flex;"><span>		Authenticator: gosnowflake.AuthTypeJwt,
+</span></span><span style="display:flex;"><span>		PrivateKey:    rsaPk,
+</span></span><span style="display:flex;"><span>	})
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;build DSN: %w&#34;</span>, err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	db, err <span style="color:#ff79c6">:=</span> sql.<span style="color:#50fa7b">Open</span>(<span style="color:#f1fa8c">&#34;snowflake&#34;</span>, dsn)
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;open DB: %w&#34;</span>, err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">PingContext</span>(ctx); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>		db.<span style="color:#50fa7b">Close</span>()
+</span></span><span style="display:flex;"><span>		<span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;ping DB: %w&#34;</span>, err)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#ff79c6">return</span> db, <span style="color:#ff79c6">nil</span>
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><h2 id="参考">参考</h2>
 <p><a href="https://dev.classmethod.jp/articles/snowflake-cli-install-and-connect-with-keypair/">Snowflake CLIをインストールしてキーペア認証でSnowflakeへ接続してみた | DevelopersIO</a></p>
