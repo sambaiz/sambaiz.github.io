@@ -498,15 +498,15 @@ GitHub Actions の ubuntu-latest でビルドして Layer を作成し、現状 
 jstring や jint は　${JAVA_HOME}/include/jni.h で定義されている<a href="https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html">Javaの型に対応する型</a>。
 Java から null が渡されたときに GetStringUTFChars() するとエラーになってしまうのでチェックする必要がある。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// calljnifunc.h
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;jni.h&#34;</span><span style="color:#ff79c6">
-</span></span></span><span style="display:flex;"><span><span style="color:#ff79c6"></span>
+</span></span></span><span style="display:flex;"><span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;jni.h&#34;</span><span style="color:#ff79c6">
+</span></span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span><span style="color:#ff79c6">*</span> <span style="color:#50fa7b">CallJNIGetStringUTFChars</span>(JNIEnv<span style="color:#ff79c6">*</span> env, jstring str, jboolean<span style="color:#ff79c6">*</span> isCopy);
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd">void</span> <span style="color:#50fa7b">CallJNIReleaseStringUTFChars</span>(JNIEnv<span style="color:#ff79c6">*</span> env, jstring str, <span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span><span style="color:#ff79c6">*</span> utf);
 </span></span><span style="display:flex;"><span>jstring <span style="color:#50fa7b">CallJNINewStringUTF</span>(JNIEnv <span style="color:#ff79c6">*</span>env, <span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span> <span style="color:#ff79c6">*</span>bytes); 
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#6272a4">// calljnifunc.c
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;calljnifunc.h&#34;</span><span style="color:#ff79c6">
-</span></span></span><span style="display:flex;"><span><span style="color:#ff79c6"></span>
+</span></span></span><span style="display:flex;"><span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;calljnifunc.h&#34;</span><span style="color:#ff79c6">
+</span></span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span><span style="color:#ff79c6">*</span> <span style="color:#50fa7b">CallJNIGetStringUTFChars</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jstring str, jboolean <span style="color:#ff79c6">*</span>isCopy) {
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">if</span> (str <span style="color:#ff79c6">==</span> <span style="color:#8be9fd;font-style:italic">NULL</span>) {
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> <span style="color:#8be9fd;font-style:italic">NULL</span>;
@@ -527,7 +527,7 @@ Java から null が渡されたときに GetStringUTFChars() するとエラー
 </span></span></code></pre></div><p>ちなみにプリミティブ型でない配列は jobjectArray で受け取り、GetObjectArrayElement() で取得する。
 配列のポインタは <a href="https://pkg.go.dev/unsafe#Slice">unsafe.Slice()</a> で Go の Slice に変換できる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// C
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span><span style="color:#8be9fd">int</span> <span style="color:#50fa7b">GetJStringsFromObjectArray</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jobjectArray stringArray, jstring<span style="color:#ff79c6">**</span> retStrings) {
+</span></span></span><span style="display:flex;"><span><span style="color:#8be9fd">int</span> <span style="color:#50fa7b">GetJStringsFromObjectArray</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jobjectArray stringArray, jstring<span style="color:#ff79c6">**</span> retStrings) {
 </span></span><span style="display:flex;"><span>  <span style="color:#8be9fd">int</span> len <span style="color:#ff79c6">=</span> (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">GetArrayLength</span>(env, stringArray);
 </span></span><span style="display:flex;"><span>  jstring<span style="color:#ff79c6">*</span> jStrs <span style="color:#ff79c6">=</span> <span style="color:#50fa7b">malloc</span>(<span style="color:#ff79c6">sizeof</span>(jstring) <span style="color:#ff79c6">*</span> len);
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">for</span> (<span style="color:#8be9fd">int</span> i <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">0</span>; i <span style="color:#ff79c6">&lt;</span> len; i<span style="color:#ff79c6">++</span>) {
@@ -538,7 +538,7 @@ Java から null が渡されたときに GetStringUTFChars() するとエラー
 </span></span><span style="display:flex;"><span>}
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#6272a4">// Go
-</span></span></span><span style="display:flex;"><span><span style="color:#6272a4"></span>var jStrsPointer <span style="color:#ff79c6">*</span>C.jstring
+</span></span></span><span style="display:flex;"><span>var jStrsPointer <span style="color:#ff79c6">*</span>C.jstring
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">size</span> :<span style="color:#ff79c6">=</span> C.<span style="color:#50fa7b">GetJStringsFromObjectArray</span>(env, stringArray, <span style="color:#ff79c6">&amp;</span>jStrsPointer)
 </span></span><span style="display:flex;"><span>defer C.<span style="color:#50fa7b">free</span>(unsafe.<span style="color:#50fa7b">Pointer</span>(jStrsPointer))
 </span></span><span style="display:flex;"><span>
