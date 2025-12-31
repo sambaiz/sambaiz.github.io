@@ -519,8 +519,29 @@ pip install git+(リポジトリ) すると git clone して #subdirectory= で�
 </span></span><span style="display:flex;"><span>  Getting requirements to build wheel ... <span style="color:#ff79c6">done</span>
 </span></span><span style="display:flex;"><span>  Preparing metadata <span style="color:#ff79c6">(</span>pyproject.toml<span style="color:#ff79c6">)</span> ... <span style="color:#ff79c6">done</span>
 </span></span><span style="display:flex;"><span>Requirement already satisfied: numpy&gt;<span style="color:#ff79c6">=</span>1.24.0 in ./venv/lib/python3.14/site-packages <span style="color:#ff79c6">(</span>from stats-lib<span style="color:#ff79c6">==</span>0.1.0-&gt;-r requirements.txt <span style="color:#ff79c6">(</span>line 1<span style="color:#ff79c6">))</span> <span style="color:#ff79c6">(</span>2.4.0<span style="color:#ff79c6">)</span>
-</span></span></code></pre></div><p>同じリポジトリであっても clone が必要で CI/CD で行う場合そのための権限を与える必要があるが、別のリポジトリに移動してもそのまま動くという点で汎用的だと思う。</p>
-
+</span></span></code></pre></div><p>同じリポジトリであっても clone が必要で CI/CD で行う場合そのための権限を与える必要があるが、別のリポジトリに移動してもそのまま動く。そうする予定があるなら <a href="https://aws.amazon.com/codeartifact">CodeArtifact</a>などの外部リポジトリに上げる選択肢もある。</p>
+<p>あるいは Lambda Layer にしてもよい。sam local invoke もそのまま動く。ただ、開発時やテストの際には pip install するので他の方法とそれほど違いはないかもしれない。これなら相対パスでも問題なさそうだが、そうすると共有コードのバージョンを固定するのが難しくなってしまう。そういう点では相対パスではなくリリースバージョンを指定したいところ。その上で各プロジェクトを共有コード込みでデプロイするか Lambda Layer を共有するかというのは、容量が大きくなければどちらでもいいのではないか。</p>
+<p><a href="https://www.sambaiz.net/article/232/">Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">Resources</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">MyLibLayer</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Type</span>: AWS::Serverless::LayerVersion
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Properties</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">LayerName</span>: mylib-layer
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">ContentUri</span>: ../mylib/
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">CompatibleRuntimes</span>:
+</span></span><span style="display:flex;"><span>        - python3.11
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Metadata</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">BuildMethod</span>: makefile
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">TestFunction</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Type</span>: AWS::Serverless::Function
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Properties</span>:
+</span></span><span style="display:flex;"><span>      ...
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Layers</span>:
+</span></span><span style="display:flex;"><span>        - !Ref MyLibLayer
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Metadata</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">BuildMethod</span>: makefile
+</span></span></code></pre></div>
     </div>
   </article>
 </div>

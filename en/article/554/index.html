@@ -519,8 +519,29 @@ Using pip install git+(repository) clones the repository and installs the librar
 </span></span><span style="display:flex;"><span>  Getting requirements to build wheel ... <span style="color:#ff79c6">done</span>
 </span></span><span style="display:flex;"><span>  Preparing metadata <span style="color:#ff79c6">(</span>pyproject.toml<span style="color:#ff79c6">)</span> ... <span style="color:#ff79c6">done</span>
 </span></span><span style="display:flex;"><span>Requirement already satisfied: numpy&gt;<span style="color:#ff79c6">=</span>1.24.0 in ./venv/lib/python3.14/site-packages <span style="color:#ff79c6">(</span>from stats-lib<span style="color:#ff79c6">==</span>0.1.0-&gt;-r requirements.txt <span style="color:#ff79c6">(</span>line 1<span style="color:#ff79c6">))</span> <span style="color:#ff79c6">(</span>2.4.0<span style="color:#ff79c6">)</span>
-</span></span></code></pre></div><p>Even for the same repository, cloning is required, and when using this in CI/CD, you need to grant appropriate permissions, but this approach is more versatile as it still works even if moved to a different repository.</p>
-
+</span></span></code></pre></div><p>Even for the same repository, cloning is required, and when using this in CI/CD, you need to grant appropriate permissions, but this approach still works even if moved to a different repository. If you plan to do so, using an external repository like <a href="https://aws.amazon.com/codeartifact">CodeArtifact</a> is also an option.</p>
+<p>Alternatively, you could use a Lambda Layer. sam local invoke works as-is. However, since you still need to pip install during development and testing, it may not be much different from other approaches. While using relative paths works, it makes it difficult to fix the version of shared code. Ideally, you&rsquo;d be better to specify release versions rather than relative paths. From there, whether to deploy each project with the shared code included or share a Lambda Layer is a choice that doesn&rsquo;t matter much unless the size becomes large.</p>
+<p><a href="https://www.sambaiz.net/article/232/">Lambda Layerでバイナリやライブラリを切り出す - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">Resources</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">MyLibLayer</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Type</span>: AWS::Serverless::LayerVersion
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Properties</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">LayerName</span>: mylib-layer
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">ContentUri</span>: ../mylib/
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">CompatibleRuntimes</span>:
+</span></span><span style="display:flex;"><span>        - python3.11
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Metadata</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">BuildMethod</span>: makefile
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">TestFunction</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Type</span>: AWS::Serverless::Function
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Properties</span>:
+</span></span><span style="display:flex;"><span>      ...
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">Layers</span>:
+</span></span><span style="display:flex;"><span>        - !Ref MyLibLayer
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">Metadata</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">BuildMethod</span>: makefile
+</span></span></code></pre></div>
     </div>
   </article>
 </div>
