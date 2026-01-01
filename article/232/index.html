@@ -432,7 +432,7 @@
         <time>2019-07-22</time>
         <a class="tag" href='/tags/golang/'>golang</a><a class="tag" href='/tags/aws/'>aws</a>
       </div>
-      <p>Lambdaで実行したい外部コマンドがある場合、通常バイナリをパッケージに含めることになりデプロイに時間がかかってしまう。</p>
+      <p>Lambda で実行したい外部コマンドがある場合バイナリをパッケージに含めるとデプロイに時間がかかってしまう。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
@@ -462,19 +462,13 @@
 </span></span><span style="display:flex;"><span>	lambda.<span style="color:#50fa7b">Start</span>(handler)
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>exec: &#34;git&#34;: executable file not found in $PATH
-</span></span></code></pre></div><p><a href="https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/configuration-layers.html">Lambda Layer</a>を使うと
-ライブラリやバイナリを切り出すことができ、複数Functionで共有することもできる。
-ディレクトリをzipにしてLayerに指定すると中身が<code>/opt</code>に展開され、<code>/opt/bin</code>にはPATHが、<code>/opt/lib</code>にはLD_LIBRARY_PATHが通るほか、
-言語ごとのパッケージ置き場がある。</p>
+</span></span></code></pre></div><p><a href="https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/configuration-layers.html">Lambda Layer</a>を使うとライブラリやバイナリを切り出すことができ、複数Functionで共有することもできる。
+ディレクトリを zip に固めて Layer に指定すると中身が /opt に展開され、/opt/bin には PATH が、/opt/lib はLD_LIBRARY_PATHが通るほか言語ごとのパッケージ置き場にもなる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ tree layer/
 </span></span><span style="display:flex;"><span>layer/
 </span></span><span style="display:flex;"><span>└── bin
 </span></span><span style="display:flex;"><span>    └── some-command
-</span></span></code></pre></div><p>zipはS3に上げておくこともできるが、
-SAMでは<a href="https://docs.aws.amazon.com/ja_jp/serverless-application-model/latest/developerguide/serverless-sam-template.html#serverless-sam-template-layerversion">AWS::Lambda::LayerVersion</a>のContentUriでローカルのパスを指定することもでき、
-<code>sam local</code> でも適用される。
-そうする場合packageするのにAWS CLIのバージョンが1.16.67以降である
-<a href="https://github.com/awslabs/aws-sam-cli/issues/831#issuecomment-444513671">必要がある</a>。</p>
+</span></span></code></pre></div><p>zip は S3 に上げておくこともできるが、SAMでは <a href="https://docs.aws.amazon.com/ja_jp/serverless-application-model/latest/developerguide/serverless-sam-template.html#serverless-sam-template-layerversion">AWS::Lambda::LayerVersion</a> の ContentUri でローカルのパスを指定することもでき、sam local でも適用される。そうする場合 package するのにAWS CLIのバージョンが1.16.67以降である<a href="https://github.com/awslabs/aws-sam-cli/issues/831#issuecomment-444513671">必要がある</a>。</p>
 <p><a href="https://www.sambaiz.net/article/207/">AWS SAMでLambdaの関数をデプロイしServerless Application Repositoryに公開する - sambaiz-net</a></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span>$ cat template.yaml 
 </span></span><span style="display:flex;"><span>...
@@ -502,8 +496,7 @@ SAMでは<a href="https://docs.aws.amazon.com/ja_jp/serverless-application-model
 </span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">CompatibleRuntimes</span>:
 </span></span><span style="display:flex;"><span>        - go1.x
 </span></span><span style="display:flex;"><span>      <span style="color:#ff79c6">RetentionPolicy</span>: Delete
-</span></span></code></pre></div><p>というこどで<a href="https://github.com/lambci/git-lambda-layer">lambci/git-lambda-layer</a>を入れてgitを使えるようにしようと思ったが、
-調べているうちに<a href="https://github.com/src-d/go-git">src-d/go-git</a>を見つけたのでこちらを使うことにした。</p>
+</span></span></code></pre></div><p>ということで <a href="https://github.com/lambci/git-lambda-layer">lambci/git-lambda-layer</a>を入れて git を使えるようにしようと思ったが、調べているうちに <a href="https://github.com/src-d/go-git">src-d/go-git</a> を見つけたのでこちらを使うことにした。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span>_, err <span style="color:#ff79c6">:=</span> git.<span style="color:#50fa7b">PlainClone</span>(<span style="color:#f1fa8c">&#34;/tmp/repo&#34;</span>, <span style="color:#ff79c6">false</span>, <span style="color:#ff79c6">&amp;</span>git.CloneOptions{
 </span></span><span style="display:flex;"><span>	URL:      <span style="color:#f1fa8c">&#34;https://github.com/sambaiz/foobar.git&#34;</span>,
 </span></span><span style="display:flex;"><span>	Progress: os.Stdout,
