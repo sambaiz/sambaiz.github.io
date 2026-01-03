@@ -301,8 +301,8 @@
   <meta property='og:title' content="CDK で Glue Data Catalog 上のテーブルに Lake Formation による行やカラムレベルでのアクセス制限をかける - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="DataCellsFilter を通して SELECT するための PrincipalPermissions を作成しようとしたところ、DataCellsFilter が stabilize しておらずスタックの更新が失敗してしまった。CustomResource でリトライをかけるとうまくいった。">
-  <meta name="twitter:description" content="DataCellsFilter を通して SELECT するための PrincipalPermissions を作成しようとしたところ、DataCellsFilter が stabilize しておらずスタックの更新が失敗してしまった。CustomResource でリトライをかけるとうまくいった。">
+  <meta name="description" content="DataCellsFilter を通して SELECT するための PrincipalPermissions を作成しようとしたところ、DataCellsFilter が stabilize しておらずスタックの更新に失敗してしまった。CustomResource でリトライをかけるとうまくいった。">
+  <meta name="twitter:description" content="DataCellsFilter を通して SELECT するための PrincipalPermissions を作成しようとしたところ、DataCellsFilter が stabilize しておらずスタックの更新に失敗してしまった。CustomResource でリトライをかけるとうまくいった。">
   
   
 
@@ -356,7 +356,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "DataCellsFilter を通して SELECT するための PrincipalPermissions を作成しようとしたところ、DataCellsFilter が stabilize しておらずスタックの更新が失敗してしまった。CustomResource でリトライをかけるとうまくいった。"
+    "description": "DataCellsFilter を通して SELECT するための PrincipalPermissions を作成しようとしたところ、DataCellsFilter が stabilize しておらずスタックの更新に失敗してしまった。CustomResource でリトライをかけるとうまくいった。"
   }
 </script>
 </head>
@@ -450,7 +450,7 @@
         <time>2026-01-02</time>
         <a class="tag" href='/tags/database/'>database</a><a class="tag" href='/tags/aws/'>aws</a>
       </div>
-      <p><a href="https://aws.amazon.com/lake-formation/">Lake Formation</a> は Glue Data Catalog 上のテーブルへのアクセス権限を、行やカラムレベルで制御できるサービス。</p>
+      <p><a href="https://docs.aws.amazon.com/lake-formation/latest/dg/what-is-lake-formation.html">Lake Formation</a> は Glue Data Catalog のメタデータと S3 上のデータに対して、RDBMS のような権限モデルでアクセス制御を提供するサービス。メタデータをエンジンに返す際の透過的な権限の確認と、S3 にアクセスする一時的なクレデンシャルの発行を<a href="https://docs.aws.amazon.com/lake-formation/latest/dg/how-it-works.html">担う</a>。オブジェクト自体は取得できてしまうため行やカラムレベルでのフィルタは<a href="https://docs.aws.amazon.com/lake-formation/latest/dg/limitations.html">エンジン側の責務</a>となる。EMR のような AWS 管理外の環境で参照する場合は注意が必要。</p>
 <p>Lake Formation で制御するデータレイクのロケーションを設定し、サービス用のロールを作成する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">new</span> lakeformation.CfnResource(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;DataLakeLocation&#39;</span>, {
 </span></span><span style="display:flex;"><span>  resourceArn<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`arn:aws:s3:::</span><span style="color:#f1fa8c">${</span>dataBucket.bucketName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">/employee_db/`</span>,
@@ -465,7 +465,7 @@
 </span></span><span style="display:flex;"><span>});
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>dataBucket.grantReadWrite(lakeFormationServiceRole);
-</span></span></code></pre></div><p>このロールを Lake Formation の Admin にする。なお IAM の AdministratorAccess であっても Lake Formation の権限を持っていなければ DESCRIBE 含めて何もできない。次の設定を行うと、これから作るテーブルに関してはデフォルトで何の PrincipalPermissions もつかないが、それ以前に作られていたデータベースのテーブルに関しては、IAM Policy を持つ全てのユーザーやロールを含む IAMAllowedPrincipals グループに Super 権限が<a href="https://docs.aws.amazon.com/lake-formation/latest/dg/lf-permissions-reference.html">付与</a>されるので、Use only IAM access control ~ のチェックを外して Revoke しないと実質 Lake Formation によるアクセス制御が効かない。</p>
+</span></span></code></pre></div><p>このロールを Lake Formation の Admin にする。なお IAM の AdministratorAccess であっても Lake Formation の権限を持っていなければ DESCRIBE 含めて何もできない。次の設定を行うと、これから作るテーブルに関してはデフォルトで何の PrincipalPermissions もつかないため IAM 権限でアクセスできなくなるが、それ以前に作られていたデータベースのテーブルに関しては、IAM Policy を持つ全てのユーザーやロールを含む IAMAllowedPrincipals グループに Super 権限が<a href="https://docs.aws.amazon.com/lake-formation/latest/dg/lf-permissions-reference.html">付与</a>されるので、Use only IAM access control ~ のチェックを外して Revoke しないと実質 Lake Formation によるアクセス制御が効かない。</p>
 
 
 
@@ -502,7 +502,7 @@
 </span></span><span style="display:flex;"><span>});
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>salesFilter.addDependency(table);
-</span></span></code></pre></div><p>この DataCellsFilter を通して SELECT するための PrincipalPermissions を作成しようとしたところ、DataCellsFilter が stabilize しておらずスタックの更新が失敗してしまった。CustomResource でリトライをかけるとうまくいった。</p>
+</span></span></code></pre></div><p>この DataCellsFilter を通して SELECT するための PrincipalPermissions を作成しようとしたところ、DataCellsFilter が stabilize しておらずスタックの更新に失敗してしまった。CustomResource でリトライをかけるとうまくいった。</p>
 <p><a href="https://www.sambaiz.net/article/468/">CDKのAwsCustomResourceでAWSのAPIを呼ぶ - sambaiz-net</a></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#6272a4">// ../lambda/grant-lf-permissions/index.ts
 </span></span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> { LakeFormation } <span style="color:#ff79c6">from</span> <span style="color:#f1fa8c">&#39;@aws-sdk/client-lakeformation&#39;</span>;
@@ -597,7 +597,7 @@
 </span></span><span style="display:flex;"><span>});
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>salesPermissions.node.addDependency(salesFilter);
-</span></span></code></pre></div><p>DataCellsFilter を経由しないデータベースやテーブルへの直接の権限付与は CfnPrincipalPermissions で行える。</p>
+</span></span></code></pre></div><p>DataCellsFilter を経由しない直接のデータベースやテーブルへの権限付与は CfnPrincipalPermissions で行うことができた。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">new</span> lakeformation.CfnPrincipalPermissions(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;SalesDatabasePermissions&#39;</span>, {
 </span></span><span style="display:flex;"><span>  principal<span style="color:#ff79c6">:</span> {
 </span></span><span style="display:flex;"><span>    dataLakePrincipalIdentifier: <span style="color:#8be9fd">salesRole.roleArn</span>,
