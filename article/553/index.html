@@ -448,7 +448,7 @@
       <div class="single-header">
         <h1>Apache Superset で SQL を実行しデータを可視化する</h1>
         <time>2025-12-21</time>
-        <a class="tag" href='/tags/database/'>database</a>
+        <a class="tag" href='/tags/database/'>database</a><a class="tag" href='/tags/python/'>python</a>
       </div>
       <p><a href="https://github.com/apache/superset">Apache Superset</a> は <a href="https://medium.com/airbnb-engineering/supercharging-apache-superset-b1a2393278bd">Airbnb で作られた</a> OSS の BI ツール。</p>
 <p><a href="https://github.com/apache/superset/blob/5.0.0/docker-compose-image-tag.yml">Docker Compose</a> で動かすと Superset 本体と共に Redis と PostgreSQL が立ち上がり、
@@ -507,10 +507,62 @@ SQL をベースとした自由度の高さとポータビリティ、チュー�
 </a></div>
 
 
-<p>Superset は <a href="https://github.com/dpgaspar/Flask-AppBuilder">Flask-AppBuilder (FAB)</a> で作られており RBAC によって権限を管理できる。
-例えば all datasource access on all_datasource_access パーミッションが紐づいていない Gamma ロールのユーザーはデフォルトで何もアクセスできない。パーミッションを付与すると Dataset とダッシュボードが表示される。
-また、OAuth や LDAP による認証を<a href="https://superset.apache.org/docs/configuration/configuring-superset/#custom-oauth2-configuration">サポートしている</a>。
-外部プロバイダーのグループとロールとのマッピングは <a href="https://superset.apache.org/docs/configuration/configuring-superset/#mapping-ldap-or-oauth-groups-to-superset-roles">AUTH_ROLES_MAPPING</a> で行う。</p>
+<p>Superset は <a href="https://github.com/dpgaspar/Flask-AppBuilder">Flask-AppBuilder (FAB)</a> で作られており OAuth や LDAP による認証を<a href="https://superset.apache.org/docs/configuration/configuring-superset/#custom-oauth2-configuration">サポートしている</a>。
+SupersetSecurityManager の oauth_user_info を override し、</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> jwt
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> superset.security <span style="color:#ff79c6">import</span> SupersetSecurityManager
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">class</span> <span style="color:#50fa7b">CustomSsoSecurityManager</span>(SupersetSecurityManager):
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">def</span> <span style="color:#50fa7b">oauth_user_info</span>(<span style="font-style:italic">self</span>, provider, response<span style="color:#ff79c6">=</span><span style="color:#ff79c6">None</span>):
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">if</span> provider <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#39;cognito&#39;</span>:
+</span></span><span style="display:flex;"><span>            me <span style="color:#ff79c6">=</span> <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>appbuilder<span style="color:#ff79c6">.</span>sm<span style="color:#ff79c6">.</span>oauth_remotes[provider]<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;oauth2/userInfo&#39;</span>)<span style="color:#ff79c6">.</span>json()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>            id_token_decoded <span style="color:#ff79c6">=</span> jwt<span style="color:#ff79c6">.</span>decode(
+</span></span><span style="display:flex;"><span>                response[<span style="color:#f1fa8c">&#39;id_token&#39;</span>],
+</span></span><span style="display:flex;"><span>                options<span style="color:#ff79c6">=</span>{<span style="color:#f1fa8c">&#34;verify_signature&#34;</span>: <span style="color:#ff79c6">False</span>}
+</span></span><span style="display:flex;"><span>            )
+</span></span><span style="display:flex;"><span>            role_keys <span style="color:#ff79c6">=</span> id_token_decoded<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;cognito:groups&#39;</span>, [])
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">return</span> {
+</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#39;username&#39;</span>: data<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;email&#39;</span>, data<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;sub&#39;</span>)),
+</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#39;email&#39;</span>: data<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;email&#39;</span>),
+</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#39;first_name&#39;</span>: data<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;given_name&#39;</span>, <span style="color:#f1fa8c">&#39;&#39;</span>),
+</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#39;last_name&#39;</span>: data<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;family_name&#39;</span>, <span style="color:#f1fa8c">&#39;&#39;</span>),
+</span></span><span style="display:flex;"><span>                <span style="color:#f1fa8c">&#39;role_keys&#39;</span>: role_keys,
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> {}
+</span></span></code></pre></div><p>superset_config.py で CUSTOM_SECURITY_MANAGER に指定すると、Login with {provider} ボタンでログインできる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span><span style="color:#ff79c6">from</span> flask_appbuilder.security.manager <span style="color:#ff79c6">import</span> AUTH_OAUTH
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>CUSTOM_SECURITY_MANAGER <span style="color:#ff79c6">=</span> CustomSsoSecurityManager
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>AUTH_TYPE <span style="color:#ff79c6">=</span> AUTH_OAUTH
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>OAUTH_PROVIDERS <span style="color:#ff79c6">=</span> [
+</span></span><span style="display:flex;"><span>    {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;name&#39;</span>: <span style="color:#f1fa8c">&#39;cognito&#39;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;icon&#39;</span>: <span style="color:#f1fa8c">&#39;fa-amazon&#39;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;token_key&#39;</span>: <span style="color:#f1fa8c">&#39;access_token&#39;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;remote_app&#39;</span>: {
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;client_id&#39;</span>: os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;COGNITO_CLIENT_ID&#39;</span>),
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;client_secret&#39;</span>: os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;COGNITO_CLIENT_SECRET&#39;</span>),
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;api_base_url&#39;</span>: <span style="color:#f1fa8c">f</span><span style="color:#f1fa8c">&#39;https://</span><span style="color:#f1fa8c">{</span>COGNITO_DOMAIN<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">.auth.</span><span style="color:#f1fa8c">{</span>AWS_REGION<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">.amazoncognito.com/&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;access_token_url&#39;</span>: <span style="color:#f1fa8c">f</span><span style="color:#f1fa8c">&#39;https://</span><span style="color:#f1fa8c">{</span>COGNITO_DOMAIN<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">.auth.</span><span style="color:#f1fa8c">{</span>AWS_REGION<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">.amazoncognito.com/oauth2/token&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;authorize_url&#39;</span>: <span style="color:#f1fa8c">f</span><span style="color:#f1fa8c">&#39;https://</span><span style="color:#f1fa8c">{</span>COGNITO_DOMAIN<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">.auth.</span><span style="color:#f1fa8c">{</span>AWS_REGION<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">.amazoncognito.com/oauth2/authorize&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;client_kwargs&#39;</span>: {<span style="color:#f1fa8c">&#39;scope&#39;</span>: <span style="color:#f1fa8c">&#39;openid email profile&#39;</span>},
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>]
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># Allow user self registration, allowing to create Flask users from Authorized User</span>
+</span></span><span style="display:flex;"><span>AUTH_USER_REGISTRATION <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">True</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># The default user self registration role</span>
+</span></span><span style="display:flex;"><span>AUTH_USER_REGISTRATION_ROLE <span style="color:#ff79c6">=</span> <span style="color:#f1fa8c">&#39;Gamma&#39;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># Sync the user&#39;s roles each time they log in</span>
+</span></span><span style="display:flex;"><span>AUTH_ROLES_SYNC_AT_LOGIN <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">True</span>
+</span></span></code></pre></div><p>また、RBAC によって権限を管理できる。例えば all datasource access on all_datasource_access パーミッションが紐づいていない Gamma ロールのユーザーはデフォルトで SQL Lab は開けず何のデータにもアクセスできない。Dataset のパーミッションを付与すると対応するダッシュボードも表示される。role_keys と Superset のロールとのマッピングは AUTH_ROLES_MAPPING で行う。</p>
 
 
 
@@ -520,7 +572,42 @@ SQL をベースとした自由度の高さとポータビリティ、チュー�
 </a></div>
 
 
-
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span>AUTH_ROLES_MAPPING <span style="color:#ff79c6">=</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;superset-admins&#39;</span>: [<span style="color:#f1fa8c">&#39;Admin&#39;</span>],
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;superset-alpha&#39;</span>: [<span style="color:#f1fa8c">&#39;Alpha&#39;</span>],
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>SQL Lab に関してはデフォルトで Row Level Security が<a href="https://github.com/apache/superset/blob/6.0.0/superset/config.py#L553">無効になっている</a>。クエリの書き換えが必要で、有効してもバイパスされる可能性があるようだ。実行時にデータベースへの接続 URL を書き換える <a href="https://github.com/apache/superset/blob/6.0.0/superset/config.py#L1458">DB_CONNECTION_MUTATOR</a> を用いればユーザーやロールごとにクレデンシャルを書き換えることでデータベース側で制御することができる。テーブルのアクセス権限もそちらでまとめて管理した方が他のクライアントとの一貫性が保てて良さそうだ。Cognito で認証している場合、ID トークンを Session に書いておけば ID Pool でクレデンシャルを取得するといったこともできる。</p>
+<p><a href="https://www.sambaiz.net/article/557/">Cognito Identity Pool のタスク/ルールベースマッピングで User Pool のグループに対応するロールの一時クレデンシャルを発行する - sambaiz-net</a></p>
+<p><a href="https://www.sambaiz.net/article/556/">CDK で Glue Data Catalog 上のテーブルに Lake Formation による行やカラムレベルでのアクセス制限をかける - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-py" data-lang="py"><span style="display:flex;"><span><span style="color:#ff79c6">from</span> flask <span style="color:#ff79c6">import</span> session
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> sqlalchemy.engine.url <span style="color:#ff79c6">import</span> URL
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> sqlalchemy.pool <span style="color:#ff79c6">import</span> NullPool
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">cognito_athena_connection_mutator</span>(uri, params, username, security_manager, source):
+</span></span><span style="display:flex;"><span>    logger <span style="color:#ff79c6">=</span> logging<span style="color:#ff79c6">.</span>getLogger(<span style="color:#8be9fd;font-style:italic">__name__</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> uri<span style="color:#ff79c6">.</span>drivername <span style="color:#ff79c6">!=</span> <span style="color:#f1fa8c">&#39;awsathena+rest&#39;</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> uri, params
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    credentials <span style="color:#ff79c6">=</span> <span style="color:#6272a4"># implement get_credentials(session.get(&#39;cognito_id_token&#39;))</span>
+</span></span><span style="display:flex;"><span>    new_query <span style="color:#ff79c6">=</span> <span style="color:#8be9fd;font-style:italic">dict</span>(uri<span style="color:#ff79c6">.</span>query) <span style="color:#ff79c6">if</span> uri<span style="color:#ff79c6">.</span>query <span style="color:#ff79c6">else</span> {}
+</span></span><span style="display:flex;"><span>    new_query[<span style="color:#f1fa8c">&#39;aws_session_token&#39;</span>] <span style="color:#ff79c6">=</span> credentials[<span style="color:#f1fa8c">&#39;aws_session_token&#39;</span>]
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    new_uri <span style="color:#ff79c6">=</span> URL<span style="color:#ff79c6">.</span>create(
+</span></span><span style="display:flex;"><span>        drivername<span style="color:#ff79c6">=</span>uri<span style="color:#ff79c6">.</span>drivername,
+</span></span><span style="display:flex;"><span>        username<span style="color:#ff79c6">=</span>credentials[<span style="color:#f1fa8c">&#39;aws_access_key_id&#39;</span>],
+</span></span><span style="display:flex;"><span>        password<span style="color:#ff79c6">=</span>credentials[<span style="color:#f1fa8c">&#39;aws_secret_access_key&#39;</span>],
+</span></span><span style="display:flex;"><span>        host<span style="color:#ff79c6">=</span>uri<span style="color:#ff79c6">.</span>host,
+</span></span><span style="display:flex;"><span>        port<span style="color:#ff79c6">=</span>uri<span style="color:#ff79c6">.</span>port,
+</span></span><span style="display:flex;"><span>        database<span style="color:#ff79c6">=</span>uri<span style="color:#ff79c6">.</span>database,
+</span></span><span style="display:flex;"><span>        query<span style="color:#ff79c6">=</span>new_query
+</span></span><span style="display:flex;"><span>    )
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> new_uri, params
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># superset_config.py</span>
+</span></span><span style="display:flex;"><span>DB_CONNECTION_MUTATOR <span style="color:#ff79c6">=</span> cognito_athena_connection_mutator
+</span></span></code></pre></div>
     </div>
   </article>
 </div>
