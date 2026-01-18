@@ -311,8 +311,6 @@
 
   
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
 <style>
   #map {
     width: 100%;
@@ -455,7 +453,6 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 <script>
   const map = L.map('map').setView([35.6812, 139.7671], 5);
 
@@ -463,14 +460,10 @@
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
 
-  const markerCluster = L.markerClusterGroup({
-    maxClusterRadius: 50,
-    spiderfyOnMaxZoom: true,
-    showCoverageOnHover: false
-  });
+  const markersLayer = L.layerGroup().addTo(map);
 
   let sortedPhotos = [];
-  let photoMarkers = [];
+  let visibleMarkers = {};
   let currentIndex = 0;
 
   function createPopupContent(photo, index) {
@@ -499,7 +492,6 @@
   function preloadTiles(lat, lon, zoom) {
     const tile = latLonToTile(lat, lon, zoom);
     const servers = ['a', 'b', 'c'];
-    
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         const img = new Image();
@@ -522,28 +514,14 @@
     });
   }
 
-  function navigatePhoto(index) {
-    if (index < 0 || index >= sortedPhotos.length) return;
-    currentIndex = index;
-    const marker = photoMarkers[index];
-    const latlng = marker.getLatLng();
-    map.setView(latlng, map.getZoom(), { animate: true });
-    setTimeout(function() {
-      markerCluster.zoomToShowLayer(marker, function() {
-        marker.openPopup();
-      });
-    }, 300);
-  }
+  function updateVisibleMarkers() {
+    const bounds = map.getBounds();
+    markersLayer.clearLayers();
+    visibleMarkers = {};
 
-  fetch('/data/photos.json')
-    .then(response => response.json())
-    .then(photos => {
-      
-      sortedPhotos = photos.sort((a, b) => (b.date_taken || '').localeCompare(a.date_taken || ''));
-
-      sortedPhotos.forEach((photo, index) => {
+    sortedPhotos.forEach((photo, index) => {
+      if (bounds.contains([photo.lat, photo.lon])) {
         const marker = L.marker([photo.lat, photo.lon]);
-
         const popup = L.popup({ maxWidth: 470 }).setContent(createPopupContent(photo, index));
         marker.bindPopup(popup);
 
@@ -558,18 +536,46 @@
           }
         });
 
-        markerCluster.addLayer(marker);
-        photoMarkers.push(marker);
-      });
+        markersLayer.addLayer(marker);
+        visibleMarkers[index] = marker;
+      }
+    });
+  }
 
-      map.addLayer(markerCluster);
+  function navigatePhoto(index) {
+    if (index < 0 || index >= sortedPhotos.length) return;
+    currentIndex = index;
+    const photo = sortedPhotos[index];
+    map.setView([photo.lat, photo.lon], map.getZoom(), { animate: true });
+
+    setTimeout(function() {
+      updateVisibleMarkers();
+      if (visibleMarkers[index]) {
+        visibleMarkers[index].openPopup();
+      }
+    }, 300);
+  }
+
+  fetch('/data/photos.json')
+    .then(response => response.json())
+    .then(photos => {
+      sortedPhotos = photos.sort((a, b) => (b.date_taken || '').localeCompare(a.date_taken || ''));
 
       
-      if (photoMarkers.length > 0) {
-        markerCluster.zoomToShowLayer(photoMarkers[0], function() {
-          photoMarkers[0].openPopup();
-        });
+      if (sortedPhotos.length > 0) {
+        const newest = sortedPhotos[0];
+        map.setView([newest.lat, newest.lon], 14);
       }
+
+      map.on('moveend', updateVisibleMarkers);
+      updateVisibleMarkers();
+
+      
+      setTimeout(function() {
+        if (visibleMarkers[0]) {
+          visibleMarkers[0].openPopup();
+        }
+      }, 100);
     });
 </script>
 
