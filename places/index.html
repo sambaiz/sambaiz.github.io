@@ -490,12 +490,34 @@
     `;
   }
 
+  function latLonToTile(lat, lon, zoom) {
+    const x = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+    const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+    return { x, y };
+  }
+
+  function preloadTiles(lat, lon, zoom) {
+    const tile = latLonToTile(lat, lon, zoom);
+    const servers = ['a', 'b', 'c'];
+    
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const img = new Image();
+        const s = servers[(tile.x + tile.y + dx + dy) % 3];
+        img.src = `https://${s}.tile.openstreetmap.org/${zoom}/${tile.x + dx}/${tile.y + dy}.png`;
+      }
+    }
+  }
+
   function preloadAdjacentImages(index) {
+    const zoom = map.getZoom();
     [-1, 1].forEach(offset => {
       const adjIndex = index + offset;
       if (adjIndex >= 0 && adjIndex < sortedPhotos.length) {
+        const photo = sortedPhotos[adjIndex];
         const img = new Image();
-        img.src = sortedPhotos[adjIndex].url_m;
+        img.src = photo.url_m;
+        preloadTiles(photo.lat, photo.lon, zoom);
       }
     });
   }
