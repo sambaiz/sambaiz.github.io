@@ -331,6 +331,31 @@
   .photo-popup a {
     display: block;
   }
+  .photo-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    gap: 10px;
+  }
+  .photo-nav button {
+    padding: 4px 12px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background: #fff;
+    border-radius: 4px;
+  }
+  .photo-nav button:hover {
+    background: #f0f0f0;
+  }
+  .photo-nav button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .photo-nav .photo-date {
+    font-size: 12px;
+    color: #666;
+  }
   .leaflet-popup-content {
     margin: 8px;
   }
@@ -429,35 +454,56 @@
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
 
-  const markers = L.markerClusterGroup({
+  const markerCluster = L.markerClusterGroup({
     maxClusterRadius: 50,
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false
   });
 
+  let sortedPhotos = [];
+  let photoMarkers = [];
+  let currentIndex = 0;
+
+  function createPopupContent(photo, index) {
+    const isFirst = index === 0;
+    const isLast = index === sortedPhotos.length - 1;
+    return `
+      <div class="photo-popup">
+        <a href="${photo.link}" target="_blank">
+          <img src="${photo.url_m}" alt="${photo.title}" />
+        </a>
+        <div class="photo-nav">
+          <button onclick="navigatePhoto(${index + 1})" ${isLast ? 'disabled' : ''}>Prev</button>
+          <span class="photo-date">${photo.date_taken || ''}</span>
+          <button onclick="navigatePhoto(${index - 1})" ${isFirst ? 'disabled' : ''}>Next</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function navigatePhoto(index) {
+    if (index < 0 || index >= sortedPhotos.length) return;
+    currentIndex = index;
+    const marker = photoMarkers[index];
+    markerCluster.zoomToShowLayer(marker, function() {
+      marker.openPopup();
+    });
+  }
+
   fetch('/data/photos.json')
     .then(response => response.json())
     .then(photos => {
       
-      photos.sort((a, b) => (b.date_taken || '').localeCompare(a.date_taken || ''));
+      sortedPhotos = photos.sort((a, b) => (b.date_taken || '').localeCompare(a.date_taken || ''));
 
-      let latestMarker = null;
-
-      photos.forEach((photo, index) => {
+      sortedPhotos.forEach((photo, index) => {
         const marker = L.marker([photo.lat, photo.lon]);
 
-        const popupContent = `
-          <div class="photo-popup">
-            <a href="${photo.link}" target="_blank">
-              <img src="${photo.url_m}" alt="${photo.title}" />
-            </a>
-          </div>
-        `;
-
-        const popup = L.popup({ maxWidth: 470 }).setContent(popupContent);
+        const popup = L.popup({ maxWidth: 470 }).setContent(createPopupContent(photo, index));
         marker.bindPopup(popup);
 
         marker.on('popupopen', function() {
+          currentIndex = index;
           const img = popup.getElement().querySelector('img');
           if (img && !img.complete) {
             img.onload = function() {
@@ -466,18 +512,16 @@
           }
         });
 
-        markers.addLayer(marker);
-
-        if (index === 0) {
-          latestMarker = marker;
-        }
+        markerCluster.addLayer(marker);
+        photoMarkers.push(marker);
       });
 
-      map.addLayer(markers);
+      map.addLayer(markerCluster);
 
-      if (latestMarker) {
-        markers.zoomToShowLayer(latestMarker, function() {
-          latestMarker.openPopup();
+      
+      if (photoMarkers.length > 0) {
+        markerCluster.zoomToShowLayer(photoMarkers[0], function() {
+          photoMarkers[0].openPopup();
         });
       }
     });
