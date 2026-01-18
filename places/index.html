@@ -370,6 +370,10 @@
     border: none !important;
     background: none !important;
   }
+  .custom-marker {
+    border: none !important;
+    background: none !important;
+  }
 </style>
 </head>
 <body>
@@ -470,6 +474,51 @@
   let visibleMarkers = {};
   let currentIndex = 0;
   let isNavigating = false;
+  let isPopupOpen = false;
+  let dateBounds = { min: null, max: null };
+
+  function getDateBounds(photos) {
+    let min = null, max = null;
+    photos.forEach(photo => {
+      if (photo.date_taken) {
+        if (!min || photo.date_taken < min) min = photo.date_taken;
+        if (!max || photo.date_taken > max) max = photo.date_taken;
+      }
+    });
+    return { min, max };
+  }
+
+  function getMarkerColor(dateTaken) {
+    if (!dateTaken || !dateBounds.min || !dateBounds.max || dateBounds.min === dateBounds.max) {
+      return '#1a73e8'; 
+    }
+    const minTime = new Date(dateBounds.min).getTime();
+    const maxTime = new Date(dateBounds.max).getTime();
+    const photoTime = new Date(dateTaken).getTime();
+    
+    const ratio = (photoTime - minTime) / (maxTime - minTime);
+    
+    const grayR = 153, grayG = 153, grayB = 153;
+    const blueR = 26, blueG = 115, blueB = 232;
+    const r = Math.round(grayR + (blueR - grayR) * ratio);
+    const g = Math.round(grayG + (blueG - grayG) * ratio);
+    const b = Math.round(grayB + (blueB - grayB) * ratio);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function createMarkerIcon(color) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+      <path fill="${color}" stroke="#fff" stroke-width="2" d="M12.5 1C6.1 1 1 6.1 1 12.5c0 2.8 1 5.4 2.6 7.4L12.5 40l8.9-20.1c1.6-2 2.6-4.6 2.6-7.4C24 6.1 18.9 1 12.5 1z"/>
+      <circle fill="#fff" cx="12.5" cy="12.5" r="5"/>
+    </svg>`;
+    return L.divIcon({
+      html: svg,
+      className: 'custom-marker',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [0, -41]
+    });
+  }
 
   function createPopupContent(photo, index) {
     const isFirst = index === 0;
@@ -520,18 +569,20 @@
   }
 
   function updateVisibleMarkers() {
-    if (isNavigating) return;
+    if (isNavigating || isPopupOpen) return;
     const bounds = map.getBounds();
     markersLayer.clearLayers();
     visibleMarkers = {};
 
     sortedPhotos.forEach((photo, index) => {
       if (bounds.contains([photo.lat, photo.lon])) {
-        const marker = L.marker([photo.lat, photo.lon]);
+        const color = getMarkerColor(photo.date_taken);
+        const marker = L.marker([photo.lat, photo.lon], { icon: createMarkerIcon(color) });
         const popup = L.popup({ maxWidth: 470 }).setContent(createPopupContent(photo, index));
         marker.bindPopup(popup);
 
         marker.on('popupopen', function() {
+          isPopupOpen = true;
           currentIndex = index;
           preloadAdjacentImages(index);
           const img = popup.getElement().querySelector('img');
@@ -540,6 +591,10 @@
               popup.update();
             };
           }
+        });
+
+        marker.on('popupclose', function() {
+          isPopupOpen = false;
         });
 
         markersLayer.addLayer(marker);
@@ -557,6 +612,7 @@
 
     setTimeout(function() {
       isNavigating = false;
+      isPopupOpen = false;
       updateVisibleMarkers();
       if (visibleMarkers[index]) {
         visibleMarkers[index].openPopup();
@@ -568,6 +624,7 @@
     .then(response => response.json())
     .then(photos => {
       sortedPhotos = photos.sort((a, b) => (b.date_taken || '').localeCompare(a.date_taken || ''));
+      dateBounds = getDateBounds(sortedPhotos);
 
       
       if (sortedPhotos.length > 0) {
