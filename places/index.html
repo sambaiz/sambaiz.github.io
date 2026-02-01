@@ -585,22 +585,23 @@
   function updateVisibleMarkers() {
     if (isNavigating) return;
     const bounds = map.getBounds();
+    const newVisibleMarkers = {};
 
     
-    const currentPopupMarker = isPopupOpen ? visibleMarkers[currentIndex] : null;
-
-    markersLayer.clearLayers();
-    visibleMarkers = {};
+    Object.keys(visibleMarkers).forEach(index => {
+      const idx = parseInt(index);
+      const photo = sortedPhotos[idx];
+      if (!bounds.contains([photo.lat, photo.lon]) && !(isPopupOpen && idx === currentIndex)) {
+        markersLayer.removeLayer(visibleMarkers[idx]);
+      } else {
+        newVisibleMarkers[idx] = visibleMarkers[idx];
+      }
+    });
 
     
-    if (currentPopupMarker) {
-      markersLayer.addLayer(currentPopupMarker);
-      visibleMarkers[currentIndex] = currentPopupMarker;
-    }
-
     sortedPhotos.forEach((photo, index) => {
       
-      if (isPopupOpen && index === currentIndex) return;
+      if (newVisibleMarkers[index]) return;
 
       if (bounds.contains([photo.lat, photo.lon])) {
         const marker = L.marker([photo.lat, photo.lon], { icon: getMarkerIcon(photo.date_taken) });
@@ -624,9 +625,11 @@
         });
 
         markersLayer.addLayer(marker);
-        visibleMarkers[index] = marker;
+        newVisibleMarkers[index] = marker;
       }
     });
+
+    visibleMarkers = newVisibleMarkers;
   }
 
   function navigatePhoto(index) {
