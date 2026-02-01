@@ -451,11 +451,11 @@
         <a class="tag" href='/tags/linux/'>linux</a><a class="tag" href='/tags/network/'>network</a><a class="tag" href='/tags/kubernetes/'>kubernetes</a>
       </div>
       <p><a href="https://man7.org/linux/man-pages/man8/tc.8.html">tc</a> はカーネルがパケットをネットワークインタフェースに送る前にキューイングしてトラフィックを制御する qdisc (queueing discipline) を設定するコマンドあるいはサブシステム。Kubernetes CNI の <a href="https://github.com/containernetworking/cni.dev/blob/main/content/plugins/current/meta/bandwidth.md">bandwidth plugin</a> も tc によって実現されており次の <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/#support-traffic-shaping">annotatiton</a> によって Pod の帯域を制限できる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>annotations:
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>annotations:
 </span></span><span style="display:flex;"><span>  kubernetes.io/ingress-bandwidth: 1M
 </span></span><span style="display:flex;"><span>  kubernetes.io/egress-bandwidth: 1M
 </span></span></code></pre></div><p>Amazon Linux 2023 の t2.micro EC2 インスタンスで実行してみる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ ip link
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ ip link
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>2: enX0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu <span style="color:#bd93f9">9001</span> qdisc fq_codel state UP mode DEFAULT group default qlen <span style="color:#bd93f9">1000</span>
 </span></span><span style="display:flex;"><span>
@@ -481,7 +481,7 @@
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">]</span>
 </span></span></code></pre></div><p><a href="https://www.bufferbloat.net/projects/codel/wiki/">fq_codel</a> は systemd を使う OS やルーターのファームウェアなどで広く使われているアルゴリズムで、トラフィックがバーストしたとしてもキューの最小遅延時間が <a href="https://man7.org/linux/man-pages/man8/tc-fq_codel.8.html">options</a> の target になるように制御する。limit はパケットの上限、memory_limit はバイト数の上限となっており、これらを超過すると以後のパケットは捨てられる。handle は parent を指定するときに使われる qdisc の識別子。</p>
 <p>netem (Network Emulator) で遅延を発生させ、tbf (Token Bucket Filter) で帯域を制限してみる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ sudo tc qdisc add dev enX0 root handle 1: netem delay 100ms
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ sudo tc qdisc add dev enX0 root handle 1: netem delay 100ms
 </span></span><span style="display:flex;"><span>$ sudo tc qdisc add dev enX0 parent 1: tbf rate 50mbit burst 512kbit latency 400ms
 </span></span><span style="display:flex;"><span>$ tc -json qdisc show dev enX0 | jq
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">[</span>
@@ -513,7 +513,7 @@
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">}</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">]</span>
 </span></span></code></pre></div><p>他のインスタンスと iperf や ping で通信することで帯域制限と遅延がはたらいていることが確認できる。tbf の burst が少ないと途中で Transfer が 0 になってしまったので増やした。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#6272a4"># iperf3 -s # another instance</span>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#6272a4"># iperf3 -s # another instance</span>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>$ sudo yum install -y iperf3
 </span></span><span style="display:flex;"><span>$ iperf3 -c 172.31.25.78
@@ -541,7 +541,7 @@
 </span></span><span style="display:flex;"><span><span style="color:#bd93f9">64</span> bytes from 172.31.25.78: <span style="color:#8be9fd;font-style:italic">icmp_seq</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">2</span> <span style="color:#8be9fd;font-style:italic">ttl</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">127</span> <span style="color:#8be9fd;font-style:italic">time</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">100</span> ms
 </span></span><span style="display:flex;"><span><span style="color:#bd93f9">64</span> bytes from 172.31.25.78: <span style="color:#8be9fd;font-style:italic">icmp_seq</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">3</span> <span style="color:#8be9fd;font-style:italic">ttl</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">127</span> <span style="color:#8be9fd;font-style:italic">time</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">100</span> ms
 </span></span></code></pre></div><p>qdisc を削除すると元に戻る。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ sudo tc qdisc del dev enX0 root
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ sudo tc qdisc del dev enX0 root
 </span></span><span style="display:flex;"><span>$ ping 172.31.25.78
 </span></span><span style="display:flex;"><span>PING 172.31.25.78 <span style="color:#ff79c6">(</span>172.31.25.78<span style="color:#ff79c6">)</span> 56<span style="color:#ff79c6">(</span>84<span style="color:#ff79c6">)</span> bytes of data.
 </span></span><span style="display:flex;"><span><span style="color:#bd93f9">64</span> bytes from 172.31.25.78: <span style="color:#8be9fd;font-style:italic">icmp_seq</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span> <span style="color:#8be9fd;font-style:italic">ttl</span><span style="color:#ff79c6">=</span><span style="color:#bd93f9">127</span> <span style="color:#8be9fd;font-style:italic">time</span><span style="color:#ff79c6">=</span>0.461 ms

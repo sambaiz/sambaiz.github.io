@@ -435,13 +435,13 @@
       <p><a href="https://www.sambaiz.net/article/61/">Goのnet/httpとKeep-Alive - sambaiz.net</a>でやったように、
 あるエンドポイントに連続してGoroutineでリクエストを投げると、リクエスト数を増やしたときにタイムアウトが頻発するようになった。</p>
 <p>まず、2000リクエストを投げてみた結果。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[RESULT] request: 2000, ok: 2000, ng: 0, time(ms) 138
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[RESULT] request: 2000, ok: 2000, ng: 0, time(ms) 138
 </span></span></code></pre></div><p>一応全部捌けてはいるが、おおよそ同時にリクエストを送っているのにタイムアウト(100ms)時間を超えてしまっている。これをさらに3000に増やしてみる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[RESULT] request: 3000, ok: 13, ng: 2987, time(ms) 372
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[RESULT] request: 3000, ok: 13, ng: 2987, time(ms) 372
 </span></span></code></pre></div><p>ほぼ全滅してしまった&hellip;。タイムアウト時間を大きく過ぎておりGoroutineの処理に遅延が発生しているようだ。
 そこで、都度Goroutineを生成してリクエストを投げるのではなく、
 一定数のWorkerに処理させることで、同時に作られるGoroutineの数を抑制する。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Req <span style="color:#8be9fd;font-style:italic">struct</span> {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Req <span style="color:#8be9fd;font-style:italic">struct</span> {
 </span></span><span style="display:flex;"><span>	Okch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">int</span>
 </span></span><span style="display:flex;"><span>	Ngch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd">int</span>
 </span></span><span style="display:flex;"><span>}
@@ -476,14 +476,14 @@
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">...</span>
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>結果、すべてのリクエストをタイムアウトせずに送れるようになった。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 157
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 157
 </span></span><span style="display:flex;"><span>[RESULT] request: 5000, ok: 5000, ng: 0, time(ms) 239
 </span></span></code></pre></div><p>上のコードではWorkerを作るにあたって単純にWorkerの数分goroutineを生成して共通のチャネルに入ってきたものを読んで処理させているが、
 以下の記事のようにDispatcherを用意してWorkerPool(chan chan Job)からWorkerのjobChannel(chan Job)を取り出して送る方法も紹介されていたので
 これとも比較してみた。今回は入力するチャネルだけ分けて終了方法はStartで渡したcontextに一任しているので上の方法とさほど変わらず、むしろ冗長に見えるが、
 実際はWorkerそれぞれがquitするチャネルなどを持っていて、独立して終了させることができるため、Workerの数を動的にコントロールしやすいのが特長だと考えている。</p>
 <p><a href="http://marcio.io/2015/07/handling-1-million-requests-per-minute-with-golang/">Handling 1 Million Requests per Minute with Go  · marcio.io</a></p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Dispatcher <span style="color:#8be9fd;font-style:italic">struct</span>{
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">type</span> Dispatcher <span style="color:#8be9fd;font-style:italic">struct</span>{
 </span></span><span style="display:flex;"><span>	Requestch <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req
 </span></span><span style="display:flex;"><span>	workerPool <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#8be9fd;font-style:italic">chan</span> <span style="color:#ff79c6">*</span>Req
 </span></span><span style="display:flex;"><span>	workerNum <span style="color:#8be9fd">int</span>
@@ -557,7 +557,7 @@
 </span></span><span style="display:flex;"><span>    dispatcher.requestch <span style="color:#ff79c6">&lt;-</span> req
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>ほとんど変わらず。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 169
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[RESULT] request: 3000, ok: 3000, ng: 0, time(ms) 169
 </span></span><span style="display:flex;"><span>[RESULT] request: 5000, ok: 5000, ng: 0, time(ms) 246
 </span></span></code></pre></div><p><a href="https://www.sambaiz.net/article/329/">x/sync/semaphoreでgoroutineの数を制御する - sambaiz-net</a></p>
 

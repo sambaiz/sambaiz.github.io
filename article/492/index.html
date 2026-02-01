@@ -452,13 +452,13 @@
       </div>
       <p>Kubernetes の Service は <code>my-svc.my-namespace.svc.cluster-domain.example</code> のような FQDN を<a href="https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#a-aaaa-records">持ち</a>、これにリクエストすると selector が指す Pod に届く。これがどのように実現されているかを追う。EKS で立てた Kubernetes 1.28 クラスタで確認する。</p>
 <p>まず Service の FQDN から ClusterIP への名前解決は、各 Pod の /etc/resolv.conf の nameserver 設定に従い kube-dns (coredns) へ問い合わせることで行われる。なお、この IP アドレス自体も kube-dns Service の ClusterIP なので以後は同様にルーティングされることになる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ cat /etc/resolv.conf
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ cat /etc/resolv.conf
 </span></span><span style="display:flex;"><span>search testapp.svc.cluster.local svc.cluster.local cluster.local ap-northeast-1.compute.internal
 </span></span><span style="display:flex;"><span>nameserver 172.20.0.10
 </span></span><span style="display:flex;"><span>options ndots:5
 </span></span></code></pre></div><p>Service はロードバランシングの機能を提供するが、これは iptables によって実現されている。この iptabels の設定を更新するのが Daemonset として動いている kube-proxy。その名前からプロキシサーバーのようなものをイメージしてしまうが、実際はトラフィックを受けるわけではないので cpu: 100m ととても少ないリソースで動く。kube-proxy には iptabels 以外の mode も存在しているが今回は触れない。</p>
 <p>iptables は パケットフィルタや NAT を行う Netfilter の設定ツール。ホストで次のコマンドを実行すると nat table の設定を確認できる。KUBE-SERVICES Chain に各 Service の ClusterIP を destination とする KUBE-SVC と、KUBE-NODEPORTS が含まれ、KUBE-NODEPORTS も KUBE-EXT を介して KUBE-SVC に繋がっている。KUBE-SVC には各 Pod の IP アドレスに DNAT する KUBE-SEP が含まれ、これが確率で選ばれることでロードバランシングされる。kube-proxy は Kubernetes API を監視し Healthy/Unhealthy な Pod のルールを追加/削除する。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ sudo iptables -t nat -L -n
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ sudo iptables -t nat -L -n
 </span></span><span style="display:flex;"><span>Chain PREROUTING <span style="color:#ff79c6">(</span>policy ACCEPT<span style="color:#ff79c6">)</span>
 </span></span><span style="display:flex;"><span>target     prot opt <span style="color:#8be9fd;font-style:italic">source</span>               destination
 </span></span><span style="display:flex;"><span>KUBE-SERVICES  all  --  0.0.0.0/0            0.0.0.0/0            /* kubernetes service portals */

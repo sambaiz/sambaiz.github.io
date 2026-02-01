@@ -459,7 +459,7 @@ So, I tried comparing the speed with actually calling a simple shared library wi
 <p><a href="https://pkg.go.dev/cmd/cgo">cgo</a> is a mechanism to call C codes from Go.
 Once import &ldquo;C&rdquo; and #include necessary libraries with comments just above it, you can refer to C functions like C.strcpy(), and convert types with like C.GoString() and C.CString().
 C.CString() calls malloc(), so you need to call free() after that.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#6272a4">/*
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4">#include &lt;stdlib.h&gt;
@@ -483,7 +483,7 @@ C.CString() calls malloc(), so you need to call free() after that.</p>
 </span></span><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">main</span>() {}
 </span></span></code></pre></div><p>Write &ldquo;export function_name&rdquo; comments to functions to be exported and build them with <a href="https://pkg.go.dev/cmd/go#hdr-Build_modes">&ndash;buildmode=c-shared</a>, and then a shared library in C and a header file are outputted.
 By the way, when cross-compiling, cgo is disabled by default, so you need to explicitly set CGO_ENABLED=1.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go build -o libtestjna.so --buildmode=c-shared testjna.go
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ go build -o libtestjna.so --buildmode=c-shared testjna.go
 </span></span><span style="display:flex;"><span>$ cat libtestjna.h
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>extern char* repeat(char* str, int n);
@@ -491,12 +491,12 @@ By the way, when cross-compiling, cgo is disabled by default, so you need to exp
 <p>Once shared libraries are placed in <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">/lib</a> of Lambda Layer, they are added to LD_LIBRARY_PATH, so
 I built them in ubuntu-latest of GitHub Actions and created the layer, and then tried to call them from Lambda running on <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">Amazon Linux 2</a>, but the error occurred due to glibc version difference.
 When I built them in the same environment, they succeeded to be called.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>GENERIC_USER_ERROR: <span style="color:#8be9fd">Encountered</span> an exception[java.lang.UnsatisfiedLinkError] <span style="color:#ff79c6">from</span> your LambdaFunction[test<span style="color:#ff79c6">-</span><span style="color:#8be9fd;font-style:italic">function</span>] executed <span style="color:#ff79c6">in</span> context[ping] <span style="color:#8be9fd;font-style:italic">with</span> message[<span style="color:#8be9fd;font-style:italic">Error</span> loading <span style="color:#ff79c6">class</span> net.sambaiz.TestHandler<span style="color:#ff79c6">:</span> /opt/lib/libtest.so: /lib64/libc.so.6: version `GLIBC_2.32&#39; not found (required by /opt/lib/libtest.so)]
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>GENERIC_USER_ERROR: <span style="color:#8be9fd">Encountered</span> an exception[java.lang.UnsatisfiedLinkError] <span style="color:#ff79c6">from</span> your LambdaFunction[test<span style="color:#ff79c6">-</span><span style="color:#8be9fd;font-style:italic">function</span>] executed <span style="color:#ff79c6">in</span> context[ping] <span style="color:#8be9fd;font-style:italic">with</span> message[<span style="color:#8be9fd;font-style:italic">Error</span> loading <span style="color:#ff79c6">class</span> net.sambaiz.TestHandler<span style="color:#ff79c6">:</span> /opt/lib/libtest.so: /lib64/libc.so.6: version `GLIBC_2.32&#39; not found (required by /opt/lib/libtest.so)]
 </span></span></code></pre></div><h2 id="call-with-jni">Call with JNI</h2>
 <p>First, in order to get the arguments and construct objects, implement the process of calling the JNI function pointers of JNIEnv in C, which cannot be implemented in cgo.
 jstring and jinit defined in ${JAVA_HOME}/include/jni.h is <a href="https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/types.html">types that correspond to Java types</a>.
 If null is passed from Java, GetStringUTFChars() occurs an error, so you need to check it.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// calljnifunc.h
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// calljnifunc.h
 </span></span></span><span style="display:flex;"><span><span style="color:#ff79c6">#include</span> <span style="color:#ff79c6">&#34;jni.h&#34;</span><span style="color:#ff79c6">
 </span></span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span><span style="color:#ff79c6">*</span> <span style="color:#50fa7b">CallJNIGetStringUTFChars</span>(JNIEnv<span style="color:#ff79c6">*</span> env, jstring str, jboolean<span style="color:#ff79c6">*</span> isCopy);
@@ -525,7 +525,7 @@ If null is passed from Java, GetStringUTFChars() occurs an error, so you need to
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>Besides, non-primitive type arrays can be received as a jobjectArray and obtained by GetObjectArrayElement().
 An array pointer can be converted to a Go Slice with <a href="https://pkg.go.dev/unsafe#Slice">unsafe.Slice()</a>.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// C
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#6272a4">// C
 </span></span></span><span style="display:flex;"><span><span style="color:#8be9fd">int</span> <span style="color:#50fa7b">GetJStringsFromObjectArray</span>(JNIEnv <span style="color:#ff79c6">*</span>env, jobjectArray stringArray, jstring<span style="color:#ff79c6">**</span> retStrings) {
 </span></span><span style="display:flex;"><span>  <span style="color:#8be9fd">int</span> len <span style="color:#ff79c6">=</span> (<span style="color:#ff79c6">*</span>env)<span style="color:#ff79c6">-&gt;</span><span style="color:#50fa7b">GetArrayLength</span>(env, stringArray);
 </span></span><span style="display:flex;"><span>  jstring<span style="color:#ff79c6">*</span> jStrs <span style="color:#ff79c6">=</span> <span style="color:#50fa7b">malloc</span>(<span style="color:#ff79c6">sizeof</span>(jstring) <span style="color:#ff79c6">*</span> len);
@@ -549,11 +549,11 @@ An array pointer can be converted to a Go Slice with <a href="https://pkg.go.dev
 </span></span><span style="display:flex;"><span>  ...
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>Build the shared library.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ gcc -shared -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux calljnifunc.c -o libcalljnifunc.so
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ gcc -shared -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux calljnifunc.c -o libcalljnifunc.so
 </span></span></code></pre></div><p>Call it from Go.
 The name of functions to be exported have to be the format of <a href="https://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html">Java_package_class_function</a>,
 and it takes *JNIEnv and jclass as the first and second argument.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#6272a4">/*
 </span></span></span><span style="display:flex;"><span><span style="color:#6272a4">#cgo CFLAGS: -I&lt;%= ENV[&#39;JAVA_HOME&#39;] %&gt;/include/
@@ -583,7 +583,7 @@ and it takes *JNIEnv and jclass as the first and second argument.</p>
 </span></span></code></pre></div><p>Build it and load it with System.loadLibrary(), and then you can call it through the native function.
 The argument of loadLibrary() is a string excluding the lib prefix of the file name and the extension (.dll/.dylib/.so) depending on the OS.
 The path can be passed with -Djava.library.path, and you can also use LD_LIBRARY_PATH on linux.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> net.sambaiz;
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> net.sambaiz;
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> com.sun.jna.Native;
 </span></span><span style="display:flex;"><span>
@@ -599,10 +599,10 @@ The path can be passed with -Djava.library.path, and you can also use LD_LIBRARY
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>Types of the three languages including Go are needed to be handled and C codes are needed to get arguments, but anyway, troubleshooting was hard.
 JVM crashed many times due to mistakes such as forgetting LDFLAGS, and UnsatisfiedLinkError occurred due to typo the function name.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[ERROR] org.apache.maven.surefire.booter.SurefireBooterForkException: The forked VM terminated without properly saying goodbye. VM crash or System.exit called?
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>[ERROR] org.apache.maven.surefire.booter.SurefireBooterForkException: The forked VM terminated without properly saying goodbye. VM crash or System.exit called?
 </span></span></code></pre></div><h2 id="call-with-jna">Call with JNA</h2>
 <p>Add the library to dependencies.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span><span style="color:#6272a4">&lt;!-- pom.xml --&gt;</span>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-xml" data-lang="xml"><span style="display:flex;"><span><span style="color:#6272a4">&lt;!-- pom.xml --&gt;</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">&lt;dependency&gt;</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&lt;groupId&gt;</span>net.java.dev.jna<span style="color:#ff79c6">&lt;/groupId&gt;</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">&lt;artifactId&gt;</span>jna<span style="color:#ff79c6">&lt;/artifactId&gt;</span>
@@ -612,13 +612,13 @@ JVM crashed many times due to mistakes such as forgetting LDFLAGS, and Unsatisfi
 There are two mapping ways, <a href="https://github.com/java-native-access/jna/blob/5.13.0/www/FunctionalDescription.md#interface-mapping">Interface mapping</a> and <a href="https://github.com/java-native-access/jna/blob/master/www/DirectMapping.md">Direct mapping</a>.</p>
 <p>In interface mapping, if you pass a class that extends Library to Native.load(), an instance will be returned.
 Once the methods are called, native functions are called with converted types through generic <a href="https://github.com/java-native-access/jna/blob/5.12.1/src/com/sun/jna/Function.java#L411">invoke</a> functions.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">public</span> <span style="color:#8be9fd;font-style:italic">interface</span> <span style="color:#50fa7b">TestLibJNAInterfaceMapping</span> <span style="color:#8be9fd;font-style:italic">extends</span> Library {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">public</span> <span style="color:#8be9fd;font-style:italic">interface</span> <span style="color:#50fa7b">TestLibJNAInterfaceMapping</span> <span style="color:#8be9fd;font-style:italic">extends</span> Library {
 </span></span><span style="display:flex;"><span>    TestLibJNAInterfaceMapping INSTANCE <span style="color:#ff79c6">=</span> Native.<span style="color:#50fa7b">load</span>(<span style="color:#f1fa8c">&#34;testjna&#34;</span>, TestLibJNAInterfaceMapping.<span style="color:#50fa7b">class</span>);
 </span></span><span style="display:flex;"><span>    
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd">void</span> <span style="color:#50fa7b">repeat</span>(<span style="color:#8be9fd">byte</span><span style="color:#ff79c6">[]</span> buf, <span style="color:#8be9fd">int</span> n);
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>On the other hand, Direct Mapping is faster because it calls directly without going through the proxy, but there are unsupported types such as array of Strings.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">public</span> <span style="color:#8be9fd;font-style:italic">class</span> <span style="color:#50fa7b">TestLibJNADirectMapping</span> {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">public</span> <span style="color:#8be9fd;font-style:italic">class</span> <span style="color:#50fa7b">TestLibJNADirectMapping</span> {
 </span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">static</span> {
 </span></span><span style="display:flex;"><span>        Native.<span style="color:#50fa7b">register</span>(<span style="color:#f1fa8c">&#34;testjna&#34;</span>);
 </span></span><span style="display:flex;"><span>    }
@@ -629,12 +629,12 @@ Once the methods are called, native functions are called with converted types th
 <p>When you build a shared library in Go, the primitive Go types are defined as typedef of C types, so I thought it could work without referring to C types directly.
 However, string corresponds to the following struct instead of char*, so when multiple arguments such as (string, int) are taken, the second argument couldn&rsquo;t be passed correctly and crashed.
 Therefore, I am using C types to define functions to be exported.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#ff79c6">typedef</span> <span style="color:#8be9fd">int</span> GoInt32;
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#ff79c6">typedef</span> <span style="color:#8be9fd">int</span> GoInt32;
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">typedef</span> <span style="color:#ff79c6">struct</span> { <span style="color:#ff79c6">const</span> <span style="color:#8be9fd">char</span> <span style="color:#ff79c6">*</span>p; <span style="color:#8be9fd">ptrdiff_t</span> n; } _GoString_;
 </span></span></code></pre></div><h2 id="compare-the-speed">Compare the speed</h2>
 <p>Run benchmarks with <a href="https://github.com/openjdk/jmh">JMH</a>.</p>
 <p><a href="https://www.sambaiz.net/en/article/435/">Benchmark Java codes with JMH - sambaiz-net</a></p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> net.sambaiz;
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-java" data-lang="java"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> net.sambaiz;
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> com.sun.jna.Native;
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> org.openjdk.jmh.annotations.*;
@@ -678,7 +678,7 @@ Therefore, I am using C types to define functions to be exported.</p>
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>The results are as follows.
 In this case, DirectMapping takes about the same time as JNI, and Interface Mapping takes about twice as long as JNI.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>Benchmark                                 Mode  Cnt     Score    Error  Units
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>Benchmark                                 Mode  Cnt     Score    Error  Units
 </span></span><span style="display:flex;"><span>Benchmarks.repeatWithJNADirectMapping     avgt   25  1690.029 ± 19.361  ns/op
 </span></span><span style="display:flex;"><span>Benchmarks.repeatWithJNAInterfaceMapping  avgt   25  3178.877 ± 29.591  ns/op
 </span></span><span style="display:flex;"><span>Benchmarks.repeatWithJNI                  avgt   25  1718.787 ±  9.206  ns/op 

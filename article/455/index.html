@@ -462,7 +462,7 @@
 <p>Karpenter が用いる Role や、スポットインスタンスの中断といった Event を受け取る SQS などのリソースを作成する
 CFn の<a href="https://raw.githubusercontent.com/aws/karpenter/v0.31.0/website/content/en/preview/getting-started/getting-started-with-karpenter/cloudformation.yaml">テンプレート</a>が
 提供されているので、これを NestedStack として含める。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">class</span> KapenterResourcesStack <span style="color:#ff79c6">extends</span> cdk.NestedStack {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">class</span> KapenterResourcesStack <span style="color:#ff79c6">extends</span> cdk.NestedStack {
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">constructor</span>(scope: <span style="color:#8be9fd">Construct</span>, id: <span style="color:#8be9fd">string</span>, props?: <span style="color:#8be9fd">cdk.StackProps</span> <span style="color:#ff79c6">&amp;</span> {karpenterVersion: <span style="color:#8be9fd">string</span>, clusterName: <span style="color:#8be9fd">string</span>}) {
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">super</span>(scope, id, props);
 </span></span><span style="display:flex;"><span>
@@ -476,18 +476,18 @@ CFn の<a href="https://raw.githubusercontent.com/aws/karpenter/v0.31.0/website/
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><h2 id="noderole-の紐付け">NodeRole の紐付け</h2>
 <p>上のテンプレートで作られた NodeRole をノードに紐づけるため ConfigMap aws-auth を更新する。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>awsAuth.addRoleMapping(nodeRole, {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>awsAuth.addRoleMapping(nodeRole, {
 </span></span><span style="display:flex;"><span>  groups<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#34;system:bootstrappers&#34;</span>, <span style="color:#f1fa8c">&#34;system:nodes&#34;</span>],
 </span></span><span style="display:flex;"><span>  username<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;system:node:{{EC2PrivateDNSName}}&#34;</span>
 </span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div><p>ちなみに同じ Role に対して複数の mapping を作成すると上書きされてしまうようなので注意が必要。
 これによって権限が足りなくなることで kubernetes.io/kubelet-serving の <a href="https://kubernetes.io/docs/reference/access-authn-authz/certificate-signing-requests/">CertificateSigningRequest</a> が Pending になり Kubelet が機能しなくなるといった問題が起きうる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ journalctl -u kubelet
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ journalctl -u kubelet
 </span></span><span style="display:flex;"><span>handshake error from x.x.x.x:x no serving certificate available <span style="color:#ff79c6">for</span> the kubelet
 </span></span></code></pre></div><h2 id="controllerrole-の作成">ControllerRole の作成</h2>
 <p>この後 Helm Chart の方で作られる ServiceAccount karpenter が OIDC による認証で Assume できる IAM Role を作成する。
 eksctl create cluster で渡される <a href="https://karpenter.sh/docs/getting-started/getting-started-with-karpenter/#3-create-a-cluster">ClusterConfig</a> の iam の部分に相当する。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> controllerRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;KarpenterControllerRole&#39;</span>, {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> controllerRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;KarpenterControllerRole&#39;</span>, {
 </span></span><span style="display:flex;"><span>  roleName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>cluster.clusterName<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">-karpenter`</span>,
 </span></span><span style="display:flex;"><span>  path<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;/&#34;</span>,
 </span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.WebIdentityPrincipal(
@@ -506,7 +506,7 @@ eksctl create cluster で渡される <a href="https://karpenter.sh/docs/getting
 <p>Helm Chart で Karpenter をインストールする。
 ControllerRole の Principal が間違っていて AssumeRole できなかったりすると更新に失敗してロールバックしてしまうので、
 最初は wait: false で様子を見てみると良い。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>cluster.addHelmChart(<span style="color:#f1fa8c">&#39;karpenter&#39;</span>, {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>cluster.addHelmChart(<span style="color:#f1fa8c">&#39;karpenter&#39;</span>, {
 </span></span><span style="display:flex;"><span>  chart<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;karpenter&#39;</span>,
 </span></span><span style="display:flex;"><span>  repository<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;oci://public.ecr.aws/karpenter/karpenter&#39;</span>,
 </span></span><span style="display:flex;"><span>  version: <span style="color:#8be9fd">karpenterVersion</span>,
@@ -544,7 +544,7 @@ ControllerRole の Principal が間違っていて AssumeRole できなかった
 <p>(追記: 2023-12-06) v0.32.0 で v1beta1 api が追加され、旧来の Provisioner や AWSNodeTemplate は<a href="https://aws.amazon.com/blogs/containers/karpenter-graduates-to-beta/">非推奨になった</a>。
 併せて各種 AWS リソースのタグも変更されたため Policy の condition も修正されている。</p>
 </blockquote>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>cluster.addManifest(<span style="color:#f1fa8c">&#39;DefaultProvisionerAndNodeTemplate&#39;</span>,  {
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>cluster.addManifest(<span style="color:#f1fa8c">&#39;DefaultProvisionerAndNodeTemplate&#39;</span>,  {
 </span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;apiVersion&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;karpenter.k8s.aws/v1beta1&#34;</span>,
 </span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;kind&#34;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#34;EC2NodeClass&#34;</span>,
 </span></span><span style="display:flex;"><span>  <span style="color:#f1fa8c">&#34;metadata&#34;</span><span style="color:#ff79c6">:</span> {
@@ -601,7 +601,7 @@ ControllerRole の Principal が間違っていて AssumeRole できなかった
 </span></span><span style="display:flex;"><span>})
 </span></span></code></pre></div><h2 id="動作確認">動作確認</h2>
 <p>deployment の replica 数を増やすと NodePool の requirements 通りスポットインスタンスが立ち上がり、削除するとシャットダウンした。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>$ kubectl scale deployment inflate <span style="color:#ff79c6">--</span>replicas <span style="color:#bd93f9">5</span>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>$ kubectl scale deployment inflate <span style="color:#ff79c6">--</span>replicas <span style="color:#bd93f9">5</span>
 </span></span><span style="display:flex;"><span>$ kubectl logs <span style="color:#ff79c6">-</span>f <span style="color:#ff79c6">-</span>n karpenter <span style="color:#ff79c6">-</span>l app.kubernetes.io<span style="color:#ff79c6">/</span>name<span style="color:#ff79c6">=</span>karpenter <span style="color:#ff79c6">-</span>c controller
 </span></span><span style="display:flex;"><span>...
 </span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;found provisionable pod(s)&#34;</span>,...
@@ -613,7 +613,7 @@ ControllerRole の Principal が間違っていて AssumeRole できなかった
 </span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;registered nodeclaim&#34;</span>,...
 </span></span><span style="display:flex;"><span>...,<span style="color:#f1fa8c">&#34;message&#34;</span><span style="color:#ff79c6">:</span><span style="color:#f1fa8c">&#34;initialized nodeclaim&#34;</span>,...
 </span></span></code></pre></div><p>ノードには次のような Label が付けられ、<a href="https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector">nodeSelector</a> でこれらを指定することで条件に合う<a href="https://github.com/kubernetes-sigs/karpenter/blob/v0.34.0/pkg/cloudprovider/types.go#L93">最も安い</a>ノードに Pod をスケジュールできる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>category<span style="color:#ff79c6">=</span>r
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>category<span style="color:#ff79c6">=</span>r
 </span></span><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>cpu<span style="color:#ff79c6">=</span><span style="color:#bd93f9">16</span>
 </span></span><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>encryption<span style="color:#ff79c6">-</span><span style="color:#ff79c6">in</span><span style="color:#ff79c6">-</span>transit<span style="color:#ff79c6">-</span>supported<span style="color:#ff79c6">=</span><span style="color:#ff79c6">false</span>
 </span></span><span style="display:flex;"><span>karpenter.k8s.aws<span style="color:#ff79c6">/</span>instance<span style="color:#ff79c6">-</span>family<span style="color:#ff79c6">=</span>r6gd
@@ -623,7 +623,7 @@ ControllerRole の Principal が間違っていて AssumeRole できなかった
 <p><a href="https://karpenter.sh/preview/concepts/disruption/#pod-level-controls">karpenter.sh/do-not-disrupt: &ldquo;true&rdquo;</a> annotation を付けることで、
 実行中の Pod が <a href="https://karpenter.sh/preview/concepts/disruption/#consolidation">Consolidation</a> によって Disrupt されて他のノードに移動されることを防ぐことができる。Consolidation は Karpenter のログや kubectl get event で確認できる。</p>
 <p>ただし、この設定を行うことでインスタンスの寿命が伸びてスポットインスタンスの中断に遭遇する機会が増える可能性がある。2 分前の<a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-instance-termination-notices.html">中断通知</a> は Reconcile 時に interruptionQueue から <a href="https://github.com/aws/karpenter-provider-aws/blob/v0.37.0/pkg/controllers/interruption/controller.go#L89">取得され</a>て<a href="https://github.com/aws/karpenter-provider-aws/blob/v0.37.0/pkg/controllers/interruption/controller.go#L145">ハンドリングされる</a>わけだが、その際の Disruption は避けられず時間制限もある。もしキャパシティに不安があるなら do-not-disrupt よりは <a href="https://kubernetes.io/docs/tasks/run-application/configure-pdb/">PodDisruptionBudget</a> で minAvailable/maxUnavailable を設定することで Disruption 時にも最低限必要なリソースが担保されるようにするべきだと考える。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: policy/v1
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#ff79c6">apiVersion</span>: policy/v1
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">kind</span>: PodDisruptionBudget
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">metadata</span>:
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">name</span>: testapp-pdb

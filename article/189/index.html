@@ -433,7 +433,7 @@
         <a class="tag" href='/tags/database/'>database</a><a class="tag" href='/tags/mysql/'>mysql</a><a class="tag" href='/tags/golang/'>golang</a>
       </div>
       <p>go-sql-driver/mysql で MySQL に接続するときに適切なパラメータを渡さないと日時が意図しない値になる問題について確認する。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ cat docker<span style="color:#ff79c6">-</span>compose.yml 
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ cat docker<span style="color:#ff79c6">-</span>compose.yml 
 </span></span><span style="display:flex;"><span>services:
 </span></span><span style="display:flex;"><span>  db:
 </span></span><span style="display:flex;"><span>    image: mysql:<span style="color:#bd93f9">8</span>.<span style="color:#bd93f9">0</span>
@@ -458,12 +458,12 @@
 </span></span></span><span style="display:flex;"><span><span style="color:#bd93f9">1</span> <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">in</span> <span style="color:#ff79c6">set</span> (<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">00</span> sec)
 </span></span></code></pre></div><h2 id="前提">前提</h2>
 <p>もしタイムゾーンがDBにロードされていない場合はロードする。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">count</span>(<span style="color:#ff79c6">*</span>) <span style="color:#ff79c6">from</span> mysql.time_zone;
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">select</span> <span style="color:#ff79c6">count</span>(<span style="color:#ff79c6">*</span>) <span style="color:#ff79c6">from</span> mysql.time_zone;
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>$ mysql_tzinfo_to_sql <span style="color:#ff79c6">/</span>usr<span style="color:#ff79c6">/</span><span style="color:#ff79c6">share</span><span style="color:#ff79c6">/</span>zoneinfo<span style="color:#ff79c6">/</span> <span style="color:#ff79c6">|</span> mysql <span style="color:#ff79c6">-</span>u root mysql
 </span></span></code></pre></div><p>time_zone はデフォルト値の SYSTEM (=JST)。これは my.cnf の default-time-zone と対応している。
 関数 NOW() も JST の時間を返している。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">show</span> variables <span style="color:#ff79c6">like</span> <span style="color:#f1fa8c">&#39;%time_zone%&#39;</span>;
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">show</span> variables <span style="color:#ff79c6">like</span> <span style="color:#f1fa8c">&#39;%time_zone%&#39;</span>;
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">------------------+--------+
 </span></span></span><span style="display:flex;"><span><span style="color:#ff79c6">|</span> Variable_name    <span style="color:#ff79c6">|</span> Value  <span style="color:#ff79c6">|</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">+</span><span style="color:#6272a4">------------------+--------+
@@ -480,7 +480,7 @@
 </span></span></span><span style="display:flex;"><span><span style="color:#bd93f9">1</span> <span style="color:#ff79c6">row</span> <span style="color:#ff79c6">in</span> <span style="color:#ff79c6">set</span> (<span style="color:#bd93f9">0</span>.<span style="color:#bd93f9">00</span> sec)
 </span></span></code></pre></div><p>DATETIME 型は格納した日時がそのまま返されるのに対して、TIMESTAMP 型は UTC として保持されて返すときに time_zone での値に<a href="https://dev.mysql.com/doc/refman/5.7/en/time-zone-support.html">変換される</a>違いがある。
 これにより後から time_zone を変更すると DATETIME のカラムの値は変わらないが TIMESTAMP のカラムの値は変わることになる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">TABLE</span> t (
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>mysql<span style="color:#ff79c6">&gt;</span> <span style="color:#ff79c6">CREATE</span> <span style="color:#ff79c6">TABLE</span> t (
 </span></span><span style="display:flex;"><span>    dt DATETIME,
 </span></span><span style="display:flex;"><span>    ts <span style="color:#ff79c6">TIMESTAMP</span>
 </span></span><span style="display:flex;"><span>);
@@ -514,7 +514,7 @@
 <p><a href="https://github.com/go-sql-driver/mysql">go-sql-driver/mysql</a>で
 <a href="https://github.com/go-sql-driver/mysql#loc">loc</a> と time_zone を付けてDBに接続し、
 MySQL の NOW() の値と Go の time.Now() の値を DATETIME と TIMESTAMP のカラムに格納して値を確認する。なお、time.Now() のタイムゾーンである time.Local は UTC でも MySQLの time_zone の JST でもない US/Alaska (-0800) にしている。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#ff79c6">package</span> main
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> (
 </span></span><span style="display:flex;"><span>	<span style="color:#f1fa8c">&#34;database/sql&#34;</span>
@@ -614,11 +614,11 @@ MySQL の NOW() の値と Go の time.Now() の値を DATETIME と TIMESTAMP の
 </span></span><span style="display:flex;"><span>	}
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><h3 id="結果">結果</h3>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>time.Now(): 2018-10-02 03:43:13 -0800
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>time.Now(): 2018-10-02 03:43:13 -0800
 </span></span></code></pre></div><p>loc は time.Time の タイムゾーンで、渡さないと UTC になる。
 time_zone を渡さずに実行するとMySQL の NOW() の値が JST のものになるが、
 これをそのまま loc のタイムゾーンのものとして扱ってしまうため次のように誤った値が返る。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>default insert, get
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>default insert, get
 </span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
 </span></span><span style="display:flex;"><span>                datetime: 2018-10-02 20:43:13 Z → OK: false
 </span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 20:43:13 Z → OK: false
@@ -628,7 +628,7 @@ time_zone を渡さずに実行するとMySQL の NOW() の値が JST のもの�
 </span></span></code></pre></div><p>loc を渡すと time.Time の タイムゾーンが変わることが確認できる。
 また、取得時のみ loc を渡すと上の例と同じ時刻でタイムゾーンのみを変えた誤った値が返る。
 これにより DB には insert 時の loc での時刻が格納されていることが分かる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local), get(loc=Local)
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local), get(loc=Local)
 </span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
 </span></span><span style="display:flex;"><span>                datetime: 2018-10-02 20:43:13 -0800 → OK: false
 </span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 20:43:13 -0800 → OK: false
@@ -643,7 +643,7 @@ time_zone を渡さずに実行するとMySQL の NOW() の値が JST のもの�
 </span></span><span style="display:flex;"><span>                datetime: 2018-10-02 11:43:13 -0800 → OK: false
 </span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 11:43:13 -0800 → OK: false
 </span></span></code></pre></div><p>time_zone を渡すと NOW() の値も正しくなる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local&amp;time_zone=US/Alaska), get(loc=Local&amp;time_zone=US/Alaska)
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local&amp;time_zone=US/Alaska), get(loc=Local&amp;time_zone=US/Alaska)
 </span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
 </span></span><span style="display:flex;"><span>                datetime: 2018-10-02 03:43:13 -0800 → OK: true
 </span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 03:43:13 -0800 → OK: true
@@ -653,7 +653,7 @@ time_zone を渡さずに実行するとMySQL の NOW() の値が JST のもの�
 </span></span></code></pre></div><p>格納時と取得時の time_zone が異なる場合はややこしい。
 まず NOW() について、DATETIME 型の場合は格納時の time_stamp で値が決まるが、TIMESTAMP 型の場合は UTC に変換して格納されるため、逆に取得時の time_stamp が loc と一致していることが重要になる。
 time.Now() については DATETIME 型には影響がないが、TIMESTAMP 型の値が変換される際におかしくなる。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local&amp;time_zone=US/Alaska), get(loc=Local)
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>insert(loc=Local&amp;time_zone=US/Alaska), get(loc=Local)
 </span></span><span style="display:flex;"><span>        MySQL NOW() → Go:
 </span></span><span style="display:flex;"><span>                datetime: 2018-10-02 03:43:13 -0800 → OK: true
 </span></span><span style="display:flex;"><span>                timestamp: 2018-10-02 20:43:13 -0800 → OK: false
