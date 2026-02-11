@@ -450,9 +450,9 @@
         <time>2026-02-09</time>
         <a class="tag" href='/tags/python/'>python</a><a class="tag" href='/tags/prometheus/'>prometheus</a>
       </div>
-      <p><a href="https://github.com/celery/celery">Celery</a> は Python の分散タスクキュー。Worker が Redis などの Broker からタスクを取り出して実行する。<a href="https://github.com/danihodovic/celery-exporter">celery-exporter</a> を使うと Celery の<a href="https://docs.celeryproject.org/en/latest/userguide/monitoring.html#real-time-processing">イベント</a>からタスクの実行状況を集計して Prometheus 形式で取得できる。</p>
+      <p><a href="https://github.com/celery/celery">Celery</a> は Python の分散タスクキュー。Worker が Redis などの Broker からタスクを取り出して実行する。リトライやスケジューリング、ワークフローといった機能も備える。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> os
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> celery <span style="color:#ff79c6">import</span> Celery
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> celery <span style="color:#ff79c6">import</span> Celery, chain, group
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>app <span style="color:#ff79c6">=</span> Celery(<span style="color:#f1fa8c">&#39;tasks&#39;</span>, broker<span style="color:#ff79c6">=</span>os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#39;CELERY_BROKER_URL&#39;</span>, <span style="color:#f1fa8c">&#39;redis://localhost:6379/0&#39;</span>))
 </span></span><span style="display:flex;"><span>
@@ -464,6 +464,37 @@
 </span></span><span style="display:flex;"><span>@app.task
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">add</span>(x, y):
 </span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> x <span style="color:#ff79c6">+</span> y
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># Retry</span>
+</span></span><span style="display:flex;"><span>@app.task(bind<span style="color:#ff79c6">=</span><span style="color:#ff79c6">True</span>, max_retries<span style="color:#ff79c6">=</span><span style="color:#bd93f9">3</span>, default_retry_delay<span style="color:#ff79c6">=</span><span style="color:#bd93f9">60</span>)
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">fetch_url</span>(<span style="font-style:italic">self</span>, url):
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">try</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> requests<span style="color:#ff79c6">.</span>get(url)<span style="color:#ff79c6">.</span>text
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">except</span> Exception <span style="color:#ff79c6">as</span> e:
+</span></span><span style="display:flex;"><span>        <span style="font-style:italic">self</span><span style="color:#ff79c6">.</span>retry(exc<span style="color:#ff79c6">=</span>e)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># Workflow: sequential execution</span>
+</span></span><span style="display:flex;"><span>chain(add<span style="color:#ff79c6">.</span>s(<span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>), add<span style="color:#ff79c6">.</span>s(<span style="color:#bd93f9">3</span>))()  <span style="color:#6272a4"># (1+2) + 3 = 6</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># Workflow: parallel execution</span>
+</span></span><span style="display:flex;"><span>group(add<span style="color:#ff79c6">.</span>s(<span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>), add<span style="color:#ff79c6">.</span>s(<span style="color:#bd93f9">3</span>, <span style="color:#bd93f9">4</span>))()  <span style="color:#6272a4"># [3, 7]</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#6272a4"># Scheduling</span>
+</span></span><span style="display:flex;"><span>app<span style="color:#ff79c6">.</span>conf<span style="color:#ff79c6">.</span>beat_schedule <span style="color:#ff79c6">=</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#39;add-every-minute&#39;</span>: {
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;task&#39;</span>: <span style="color:#f1fa8c">&#39;tasks.add&#39;</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;schedule&#39;</span>: <span style="color:#bd93f9">60.0</span>,
+</span></span><span style="display:flex;"><span>        <span style="color:#f1fa8c">&#39;args&#39;</span>: (<span style="color:#bd93f9">1</span>, <span style="color:#bd93f9">2</span>),
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>デフォルトでは Worker が受信時に ACK したタイミングでタスクをキューから削除するため、Worker クラッシュ時には処理中のタスクが失われる。<a href="https://docs.celeryq.dev/en/v5.6.2/userguide/configuration.html#task-acks-late">task_acks_late</a>=True にすると完了後に ACK するため、クラッシュしてもタスクは再配信される。ただし同じタスクが再実行される可能性がある。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>app<span style="color:#ff79c6">.</span>conf<span style="color:#ff79c6">.</span>update(
+</span></span><span style="display:flex;"><span>    task_acks_late<span style="color:#ff79c6">=</span><span style="color:#ff79c6">True</span>,  <span style="color:#6272a4"># default: False</span>
+</span></span><span style="display:flex;"><span>)
+</span></span></code></pre></div><p>効率化のためにタスクは prefetch されるが長時間のタスクがある場合は <a href="https://docs.celeryq.dev/en/v5.6.2/userguide/configuration.html#worker-prefetch-multiplier">worker_prefetch_multiplier</a> を減らすことで分散処理されやすくなる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>app<span style="color:#ff79c6">.</span>conf<span style="color:#ff79c6">.</span>update(
+</span></span><span style="display:flex;"><span>    worker_prefetch_multiplier<span style="color:#ff79c6">=</span><span style="color:#bd93f9">1</span>,  <span style="color:#6272a4"># default: 4</span>
+</span></span><span style="display:flex;"><span>)
 </span></span></code></pre></div><p>Redis、Celery Worker、celery-exporter を起動する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#6272a4"># docker-compose.yml</span>
 </span></span><span style="display:flex;"><span><span style="color:#ff79c6">services</span>:
@@ -494,7 +525,7 @@
 </span></span></code></pre></div><p>起動してタスクを実行する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ docker compose up -d --build
 </span></span><span style="display:flex;"><span>$ docker compose <span style="color:#8be9fd;font-style:italic">exec</span> worker python -c <span style="color:#f1fa8c">&#34;from tasks import add; add.delay(4, 6)&#34;</span>
-</span></span></code></pre></div><p>タスクの送信、受信、開始、成功、失敗の回数や実行時間、キューの長さといったメトリクスが取れる。</p>
+</span></span></code></pre></div><p><a href="https://github.com/danihodovic/celery-exporter">celery-exporter</a> を使うと Celery の<a href="https://docs.celeryproject.org/en/latest/userguide/monitoring.html#real-time-processing">イベント</a>からタスクの実行状況を集計して Prometheus 形式で取得できる。タスクの送信、受信、開始、成功、失敗の回数や実行時間、キューの長さといったメトリクスが取れる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ curl localhost:9808/metrics
 </span></span><span style="display:flex;"><span><span style="color:#6272a4"># HELP celery_task_sent_total Sent when a task message is published.</span>
 </span></span><span style="display:flex;"><span><span style="color:#6272a4"># TYPE celery_task_sent_total counter</span>
