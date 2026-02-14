@@ -452,14 +452,14 @@
       </div>
       <p>DuckDB で Hive パーティションを読み込む際、WHERE 条件に基づいて不要なファイルをスキップするプルーニングが行われる。この仕組みをソースコードから理解する。</p>
 <p><a href="https://www.sambaiz.net/article/508/">DuckDB の Go クライアントで Google Sheets のデータを SQL で取得する - sambaiz-net</a></p>
-<h2 id="プルーニングを確認する">プルーニングを確認する</h2>
-<p>Hive パーティション形式のデータを用意する。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ duckdb --version
 </span></span><span style="display:flex;"><span>v1.4.4 (Andium) 6ddac802ff
-</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ duckdb
+</span></span></code></pre></div><h2 id="プルーニングの例">プルーニングの例</h2>
+<p>Hive パーティション形式のデータを用意する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ duckdb
 </span></span><span style="display:flex;"><span>D <span style="color:#ff79c6">COPY</span> (<span style="color:#ff79c6">SELECT</span> i, i <span style="color:#ff79c6">%</span> <span style="color:#bd93f9">12</span> <span style="color:#ff79c6">+</span> <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">AS</span> <span style="color:#ff79c6">month</span> <span style="color:#ff79c6">FROM</span> range(<span style="color:#bd93f9">1000000</span>) t(i))
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">TO</span> <span style="color:#f1fa8c">&#39;data&#39;</span> (FORMAT PARQUET, PARTITION_BY (<span style="color:#ff79c6">month</span>));
-</span></span></code></pre></div><p><code>hive_partitioning=true</code> を指定して読み込む。<code>EXPLAIN ANALYZE</code> で実行計画を確認できる。</p>
+</span></span></code></pre></div><p><code>hive_partitioning=true</code> を指定して読み込む。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">EXPLAIN</span> <span style="color:#ff79c6">ANALYZE</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>)
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WHERE</span> <span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
@@ -486,7 +486,7 @@
 <p>DuckDB のクエリ実行は Parser → Binder → Optimizer → Executor の順に進む。プルーニングは Optimizer と Executor の両方で行われる。</p>
 <h2 id="optimizer-でのプルーニング">Optimizer でのプルーニング</h2>
 <p>Binder でファイルパスから Hive パーティション情報を抽出する。<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L95-L122">HivePartitioning::Parse()</a> がパス文字列から <code>key=value</code> のペアを解析し、<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/multi_file/multi_file_reader.cpp#L220-L284">MultiFileReader::BindOptions()</a> が <code>bind_data.hive_partitioning_indexes</code> に登録する。</p>
-<p><code>read_parquet</code> は FROM 句でテーブルのように使える<a href="https://duckdb.org/docs/sql/functions/table_functions">テーブル関数</a>で、<code>pushdown_complex_filter</code> というコールバックを実装できる。Optimizer の <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/pushdown/pushdown_get.cpp#L10-L86">FilterPushdown::PushdownGet()</a> がこれを呼び出し、フィルタ式を渡す。</p>
+<p><code>read_parquet</code> のような<a href="https://duckdb.org/docs/sql/functions/table_functions">テーブル関数</a>は <code>pushdown_complex_filter</code> というコールバックを実装できる。Optimizer の <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/pushdown/pushdown_get.cpp#L10-L86">FilterPushdown::PushdownGet()</a> がこれを呼び出し、フィルタ式を渡す。</p>
 <p><a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L152-L209">HivePartitioning::ApplyFiltersToFileList()</a> はファイルごとに以下を行う:</p>
 <ol>
 <li>ファイルパスからパーティション値を取得（例: <code>data/month=2/...</code> → <code>month=2</code>）</li>
@@ -495,13 +495,13 @@
 <li>false ならファイルを除外</li>
 </ol>
 <p>これによりファイルリスト自体が絞り込まれる。</p>
-<p>JOIN を含むクエリでは、JOIN 条件にパーティションカラムが含まれていれば両テーブルにプルーニングが効く。</p>
+<p>JOIN を含むクエリでは、JOIN 条件にパーティションカラムが含まれていれば片方のテーブルのカラムのみでフィルタした場合でも両テーブルにプルーニングが効く。
+これは <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/filter_combiner.cpp">FilterCombiner</a> が値の等しいカラムをグルーピングして同様に扱うため。<code>ON t1.month = t2.month</code> と <code>WHERE t1.month = 1</code> から、両テーブルに <code>month = 1</code> が適用される。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data1/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t1
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">JOIN</span> read_parquet(<span style="color:#f1fa8c">&#39;data2/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t2 <span style="color:#ff79c6">ON</span> t1.<span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> t2.<span style="color:#ff79c6">month</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WHERE</span> t1.<span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
-</span></span></code></pre></div><p>これは <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/filter_combiner.cpp">FilterCombiner</a> が等しいカラムを追跡するため。<code>ON t1.month = t2.month</code> と <code>WHERE t1.month = 1</code> から、両テーブルに <code>month = 1</code> が適用される。</p>
-<h2 id="executor-でのプルーニング">Executor でのプルーニング</h2>
+</span></span></code></pre></div><h2 id="executor-でのプルーニング">Executor でのプルーニング</h2>
 <p>サブクエリは HASH_JOIN に変換され、その結果の min/max 外のファイルをスキップする <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/join_filter_pushdown_optimizer.cpp">Join Filter Pushdown</a> が適用される。なお BigQuery では、サブクエリのような動的な式ではプルーニングが<a href="https://cloud.google.com/bigquery/docs/querying-partitioned-tables">効かない</a>。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t1

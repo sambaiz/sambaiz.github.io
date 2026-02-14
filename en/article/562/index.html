@@ -452,14 +452,14 @@
       </div>
       <p>When reading Hive partitions in DuckDB, pruning is performed to skip unnecessary files based on WHERE conditions. This article explains the mechanism from the source code.</p>
 <p><a href="https://www.sambaiz.net/en/article/508/">Retrieve Google Sheets data using SQL with DuckDB&rsquo;s Go client - sambaiz-net</a></p>
-<h2 id="confirming-pruning">Confirming Pruning</h2>
-<p>Prepare data in Hive partition format.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ duckdb --version
 </span></span><span style="display:flex;"><span>v1.4.4 (Andium) 6ddac802ff
-</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ duckdb
+</span></span></code></pre></div><h2 id="example-of-pruning">Example of Pruning</h2>
+<p>Prepare data in Hive partition format.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ duckdb
 </span></span><span style="display:flex;"><span>D <span style="color:#ff79c6">COPY</span> (<span style="color:#ff79c6">SELECT</span> i, i <span style="color:#ff79c6">%</span> <span style="color:#bd93f9">12</span> <span style="color:#ff79c6">+</span> <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">AS</span> <span style="color:#ff79c6">month</span> <span style="color:#ff79c6">FROM</span> range(<span style="color:#bd93f9">1000000</span>) t(i))
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">TO</span> <span style="color:#f1fa8c">&#39;data&#39;</span> (FORMAT PARQUET, PARTITION_BY (<span style="color:#ff79c6">month</span>));
-</span></span></code></pre></div><p>Read with <code>hive_partitioning=true</code>. You can check the execution plan with <code>EXPLAIN ANALYZE</code>.</p>
+</span></span></code></pre></div><p>Read with <code>hive_partitioning=true</code>.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">EXPLAIN</span> <span style="color:#ff79c6">ANALYZE</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>)
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WHERE</span> <span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
@@ -486,7 +486,7 @@
 <p>DuckDB query execution proceeds in the order Parser → Binder → Optimizer → Executor. Pruning is performed in both the Optimizer and Executor.</p>
 <h2 id="pruning-in-optimizer">Pruning in Optimizer</h2>
 <p>The Binder extracts Hive partition information from file paths. <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L95-L122">HivePartitioning::Parse()</a> parses <code>key=value</code> pairs from path strings, and <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/multi_file/multi_file_reader.cpp#L220-L284">MultiFileReader::BindOptions()</a> registers them in <code>bind_data.hive_partitioning_indexes</code>.</p>
-<p><code>read_parquet</code> is a <a href="https://duckdb.org/docs/sql/functions/table_functions">table function</a> that can be used like a table in the FROM clause, and can implement a callback called <code>pushdown_complex_filter</code>. The Optimizer&rsquo;s <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/pushdown/pushdown_get.cpp#L10-L86">FilterPushdown::PushdownGet()</a> calls this and passes filter expressions.</p>
+<p><a href="https://duckdb.org/docs/sql/functions/table_functions">Table functions</a> like <code>read_parquet</code> can implement a callback called <code>pushdown_complex_filter</code>. The Optimizer&rsquo;s <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/pushdown/pushdown_get.cpp#L10-L86">FilterPushdown::PushdownGet()</a> calls this and passes filter expressions.</p>
 <p><a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L152-L209">HivePartitioning::ApplyFiltersToFileList()</a> performs the following for each file:</p>
 <ol>
 <li>Extract partition value from file path (e.g., <code>data/month=2/...</code> → <code>month=2</code>)</li>
@@ -495,13 +495,13 @@
 <li>Exclude file if false</li>
 </ol>
 <p>This narrows down the file list itself.</p>
-<p>In queries with JOIN, pruning works on both tables if the JOIN condition includes the partition column.</p>
+<p>In queries with JOIN, if the JOIN condition includes the partition column, pruning works on both tables even when filtering by only one table&rsquo;s column.
+This is because <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/filter_combiner.cpp">FilterCombiner</a> groups columns with equal values and treats them the same. From <code>ON t1.month = t2.month</code> and <code>WHERE t1.month = 1</code>, <code>month = 1</code> is applied to both tables.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data1/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t1
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">JOIN</span> read_parquet(<span style="color:#f1fa8c">&#39;data2/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t2 <span style="color:#ff79c6">ON</span> t1.<span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> t2.<span style="color:#ff79c6">month</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WHERE</span> t1.<span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
-</span></span></code></pre></div><p>This is because <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/filter_combiner.cpp">FilterCombiner</a> tracks equal columns. From <code>ON t1.month = t2.month</code> and <code>WHERE t1.month = 1</code>, <code>month = 1</code> is applied to both tables.</p>
-<h2 id="pruning-in-executor">Pruning in Executor</h2>
+</span></span></code></pre></div><h2 id="pruning-in-executor">Pruning in Executor</h2>
 <p>Subqueries are converted to HASH_JOIN, and <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/join_filter_pushdown_optimizer.cpp">Join Filter Pushdown</a> is applied to skip files outside the min/max of the result. Note that in BigQuery, pruning does <a href="https://cloud.google.com/bigquery/docs/querying-partitioned-tables">not work</a> with dynamic expressions like subqueries.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t1
