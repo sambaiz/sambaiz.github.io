@@ -492,12 +492,12 @@
 <p>DuckDB のクエリ実行は Parser → Binder → Optimizer → Executor の順に進む。プルーニングは Optimizer と Executor の両方で行われる。</p>
 <h2 id="optimizer-でのプルーニング">Optimizer でのプルーニング</h2>
 <p>Binder でファイルパスから Hive パーティション情報を抽出する。<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L95-L122">HivePartitioning::Parse()</a> がパス文字列から <code>key=value</code> のペアを解析し、<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/multi_file/multi_file_reader.cpp#L220-L284">MultiFileReader::BindOptions()</a> が <code>bind_data.hive_partitioning_indexes</code> に登録する。</p>
-<p><code>read_parquet</code> のような<a href="https://duckdb.org/docs/sql/functions/table_functions">テーブル関数</a>はフィルタ処理を行う <code>pushdown_complex_filter</code> というコールバックを実装していて、<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/pushdown/pushdown_get.cpp#L10-L86">FilterPushdown::PushdownGet()</a> がこれにフィルタ式を渡す。</p>
+<p>read_parquet() のような<a href="https://duckdb.org/docs/sql/functions/table_functions">テーブル関数</a>はフィルタ処理を行う <code>pushdown_complex_filter</code> というコールバックを実装していて、<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/pushdown/pushdown_get.cpp#L10-L86">FilterPushdown::PushdownGet()</a> がこれにフィルタ式を渡す。</p>
 <p><a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L152-L209">HivePartitioning::ApplyFiltersToFileList()</a> はファイルごとに次の処理を行って読むファイルを絞り込む。</p>
 <ol>
 <li>ファイルパスからパーティション値を取得: <code>data/month=2/...</code> → <code>month=2</code></li>
-<li><a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L51-L80">ConvertKnownColRefToConstants()</a> でフィルタ式内のカラム参照を定数に置換（<code>month</code> → <code>2</code>）</li>
-<li>式を評価（<code>WHERE month = 1</code> → <code>2 = 1</code> → false）</li>
+<li><a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L51-L80">ConvertKnownColRefToConstants()</a> でフィルタ式内のカラム参照を定数に置換: <code>month</code> → <code>2</code></li>
+<li>式を評価: <code>WHERE month = 1</code> → <code>2 = 1</code> → false</li>
 <li>false ならファイルを除外</li>
 </ol>
 <p>JOIN を含むクエリでは、JOIN 条件にパーティションカラムが含まれていれば片方のテーブルのカラムのみでフィルタした場合でも両テーブルにプルーニングが効く。
