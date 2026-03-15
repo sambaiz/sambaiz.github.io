@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DuckDB Index Benchmark</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    pre { background: #f0f0f0; padding: 10px; overflow-x: auto; }
+    button { margin: 5px; padding: 10px 20px; }
+  </style>
+</head>
+<body>
+  <h1>DuckDB Index Benchmark</h1>
+  <div>
+    <button onclick="setup()">1. Setup (100k rows)</button>
+    <button onclick="runExplain()">2. EXPLAIN</button>
+    <button onclick="runBenchmark()">3. Run Benchmark (IN clause)</button>
+    <button onclick="runBenchmarkLoop()">4. Run Benchmark (1000 individual queries)</button>
+    <button onclick="setupIDB()">5. Setup IndexedDB (100k rows)</button>
+    <button onclick="runIDBBenchmark()">6. Run IndexedDB Benchmark</button>
+  </div>
+  <pre id="output">Click Setup first...</pre>
+
+  <script type="module">
+    import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/+esm';
+
+    let db, conn;
+    const log = (msg) => {
+      document.getElementById('output').textContent += msg + '\n';
+      console.log(msg);
+    };
+    const clear = () => {
+      document.getElementById('output').textContent = '';
+    };
+
+    async function initDB() {
+      if (db) return;
+      const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+      const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+      const worker_url = URL.createObjectURL(
+        new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+      );
+      const worker = new Worker(worker_url);
+      const logger = new duckdb.ConsoleLogger();
+      db = new duckdb.AsyncDuckDB(logger, worker);
+      await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+      await db.open({
+        path: 'opfs://benchmark.db',
+        accessMode: duckdb.DuckDBAccessMode.READ_WRITE
+      });
+      conn = await db.connect();
+    }
+
+    window.setup = async function() {
+      clear();
+      log('Initializing DuckDB...');
+      await initDB();
+
+      log('Dropping existing tables...');
+      await conn.query('DROP TABLE IF EXISTS users_pk');
+      await conn.query('DROP TABLE IF EXISTS users_no_pk');
+      await conn.query('DROP TABLE IF EXISTS users_explicit_idx');
+
+      log('Creating tables...');
+      // Table with PRIMARY KEY (auto ART index)
+      await conn.query(`
+        CREATE TABLE users_pk (
+          id BIGINT PRIMARY KEY,
+          name VARCHAR,
+          value INTEGER
+        )
+      `);
+
+      // Table without PRIMARY KEY
+      await conn.query(`
+        CREATE TABLE users_no_pk (
+          id BIGINT,
+          name VARCHAR,
+          value INTEGER
+        )
+      `);
+
+      // Table with explicit index
+      await conn.query(`
+        CREATE TABLE users_explicit_idx (
+          id BIGINT,
+          name VARCHAR,
+          value INTEGER
+        )
+      `);
+      await conn.query('CREATE INDEX idx_users_id ON users_explicit_idx(id)');
+
+      log('Inserting 100k rows...');
+      const batchSize = 10000;
+      const totalRows = 100000;
+
+      for (let batch = 0; batch < totalRows / batchSize; batch++) {
+        const values = [];
+        for (let i = 0; i < batchSize; i++) {
+          const id = batch * batchSize + i;
+          values.push(`(${id}, 'User${id}', ${Math.floor(Math.random() * 1000)})`);
+        }
+        const sql = `INSERT INTO users_pk (id, name, value) VALUES ${values.join(',')}`;
+        await conn.query(sql);
+        await conn.query(`INSERT INTO users_no_pk (id, name, value) VALUES ${values.join(',')}`);
+        await conn.query(`INSERT INTO users_explicit_idx (id, name, value) VALUES ${values.join(',')}`);
+        log(`  Batch ${batch + 1}/${totalRows / batchSize} done`);
+      }
+
+      await conn.query('CHECKPOINT');
+      log('Setup complete!');
+    };
+
+    window.runExplain = async function() {
+      clear();
+      await initDB();
+
+      log('=== EXPLAIN for PRIMARY KEY table ===');
+      const explain1 = await conn.query('EXPLAIN SELECT * FROM users_pk WHERE id = 50000');
+      log(explain1.toArray().map(r => r.toJSON()['explain_value']).join('\n'));
+
+      log('\n=== EXPLAIN for NO PRIMARY KEY table ===');
+      const explain2 = await conn.query('EXPLAIN SELECT * FROM users_no_pk WHERE id = 50000');
+      log(explain2.toArray().map(r => r.toJSON()['explain_value']).join('\n'));
+
+      log('\n=== EXPLAIN for EXPLICIT INDEX table ===');
+      const explain3 = await conn.query('EXPLAIN SELECT * FROM users_explicit_idx WHERE id = 50000');
+      log(explain3.toArray().map(r => r.toJSON()['explain_value']).join('\n'));
+
+      log('\n=== EXPLAIN for IN query (1000 IDs) ===');
+      const ids = Array.from({length: 1000}, (_, i) => i * 100);
+      const explain4 = await conn.query(`EXPLAIN SELECT * FROM users_pk WHERE id IN (${ids.join(',')})`);
+      log(explain4.toArray().map(r => r.toJSON()['explain_value']).join('\n'));
+    };
+
+    window.runBenchmark = async function() {
+      clear();
+      await initDB();
+
+      const ids = Array.from({length: 1000}, (_, i) => i * 100);
+      const iterations = 5;
+
+      log(`Reading 1000 rows by ID (${iterations} iterations each)\n`);
+
+      // PRIMARY KEY table
+      let times = [];
+      for (let i = 0; i < iterations; i++) {
+        const start = performance.now();
+        await conn.query(`SELECT * FROM users_pk WHERE id IN (${ids.join(',')})`);
+        times.push(performance.now() - start);
+      }
+      log(`users_pk (PRIMARY KEY):     avg ${(times.reduce((a,b)=>a+b)/times.length).toFixed(1)}ms  [${times.map(t=>t.toFixed(0)).join(', ')}]`);
+
+      // No PRIMARY KEY table
+      times = [];
+      for (let i = 0; i < iterations; i++) {
+        const start = performance.now();
+        await conn.query(`SELECT * FROM users_no_pk WHERE id IN (${ids.join(',')})`);
+        times.push(performance.now() - start);
+      }
+      log(`users_no_pk (no index):     avg ${(times.reduce((a,b)=>a+b)/times.length).toFixed(1)}ms  [${times.map(t=>t.toFixed(0)).join(', ')}]`);
+
+      // Explicit index table
+      times = [];
+      for (let i = 0; i < iterations; i++) {
+        const start = performance.now();
+        await conn.query(`SELECT * FROM users_explicit_idx WHERE id IN (${ids.join(',')})`);
+        times.push(performance.now() - start);
+      }
+      log(`users_explicit_idx (INDEX): avg ${(times.reduce((a,b)=>a+b)/times.length).toFixed(1)}ms  [${times.map(t=>t.toFixed(0)).join(', ')}]`);
+
+      log('\nDone!');
+    };
+
+    window.runBenchmarkLoop = async function() {
+      clear();
+      await initDB();
+
+      const ids = Array.from({length: 1000}, (_, i) => i * 100);
+
+      log(`Reading 1000 rows by ID (individual queries)\n`);
+
+      // PRIMARY KEY table - individual queries
+      let start = performance.now();
+      for (const id of ids) {
+        await conn.query(`SELECT * FROM users_pk WHERE id = ${id}`);
+      }
+      const pkTime = performance.now() - start;
+      log(`users_pk (PRIMARY KEY):     ${pkTime.toFixed(1)}ms`);
+
+      // No PRIMARY KEY table - individual queries
+      start = performance.now();
+      for (const id of ids) {
+        await conn.query(`SELECT * FROM users_no_pk WHERE id = ${id}`);
+      }
+      const noPkTime = performance.now() - start;
+      log(`users_no_pk (no index):     ${noPkTime.toFixed(1)}ms`);
+
+      // Explicit index table - individual queries
+      start = performance.now();
+      for (const id of ids) {
+        await conn.query(`SELECT * FROM users_explicit_idx WHERE id = ${id}`);
+      }
+      const idxTime = performance.now() - start;
+      log(`users_explicit_idx (INDEX): ${idxTime.toFixed(1)}ms`);
+
+      log('\nDone!');
+    };
+
+    // === IndexedDB ===
+    let idb;
+
+    function openIDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open('benchmark', 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains('users')) {
+            db.createObjectStore('users', { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    window.setupIDB = async function() {
+      clear();
+      log('Opening IndexedDB...');
+      idb = await openIDB();
+
+      log('Clearing existing data...');
+      await new Promise((resolve, reject) => {
+        const tx = idb.transaction('users', 'readwrite');
+        tx.objectStore('users').clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+
+      log('Inserting 100k rows...');
+      const batchSize = 10000;
+      const totalRows = 100000;
+
+      for (let batch = 0; batch < totalRows / batchSize; batch++) {
+        await new Promise((resolve, reject) => {
+          const tx = idb.transaction('users', 'readwrite');
+          const store = tx.objectStore('users');
+          for (let i = 0; i < batchSize; i++) {
+            const id = batch * batchSize + i;
+            store.put({ id, name: `User${id}`, value: Math.floor(Math.random() * 1000) });
+          }
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+        log(`  Batch ${batch + 1}/${totalRows / batchSize} done`);
+      }
+
+      log('Setup complete!');
+    };
+
+    window.runIDBBenchmark = async function() {
+      clear();
+      if (!idb) idb = await openIDB();
+
+      const ids = Array.from({length: 1000}, (_, i) => i * 100);
+
+      log('IndexedDB: Reading 1000 rows by ID\n');
+
+      // Single transaction, multiple get() calls (like the article)
+      let start = performance.now();
+      await new Promise((resolve, reject) => {
+        const tx = idb.transaction('users', 'readonly');
+        const store = tx.objectStore('users');
+        const results = [];
+        for (const id of ids) {
+          const req = store.get(id);
+          req.onsuccess = () => results.push(req.result);
+        }
+        tx.oncomplete = () => resolve(results);
+        tx.onerror = () => reject(tx.error);
+      });
+      const singleTxTime = performance.now() - start;
+      log(`Single transaction, 1000 get():  ${singleTxTime.toFixed(1)}ms`);
+
+      // 1000 separate transactions (like DuckDB individual queries)
+      start = performance.now();
+      for (const id of ids) {
+        await new Promise((resolve, reject) => {
+          const tx = idb.transaction('users', 'readonly');
+          const store = tx.objectStore('users');
+          const req = store.get(id);
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+      const multiTxTime = performance.now() - start;
+      log(`1000 separate transactions:      ${multiTxTime.toFixed(1)}ms`);
+
+      log('\nDone!');
+    };
+  </script>
+</body>
+</html>
