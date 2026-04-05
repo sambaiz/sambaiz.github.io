@@ -307,8 +307,8 @@
   <meta property='og:title' content="DuckDB の Hive パーティションプルーニングの仕組みをソースコードから理解する - sambaiz-net">
   <meta property="og:type" content="article">
   
-  <meta name="description" content="DuckDB で Hive パーティションを読み込む際、WHERE 条件に基づいて不要なファイルをスキップするプルーニングが行われる。この仕組みをソースコードから理解する。">
-  <meta name="twitter:description" content="DuckDB で Hive パーティションを読み込む際、WHERE 条件に基づいて不要なファイルをスキップするプルーニングが行われる。この仕組みをソースコードから理解する。">
+  <meta name="description" content="DuckDB で Hive フォーマットのパーティション付きテーブルを読み込む際にどのようにプルーニングが行われるか確認する。">
+  <meta name="twitter:description" content="DuckDB で Hive フォーマットのパーティション付きテーブルを読み込む際にどのようにプルーニングが行われるか確認する。">
   
   
 
@@ -362,7 +362,7 @@
       "height": 138,
       "width": 138
     },
-    "description": "DuckDB で Hive パーティションを読み込む際、WHERE 条件に基づいて不要なファイルをスキップするプルーニングが行われる。この仕組みをソースコードから理解する。"
+    "description": "DuckDB で Hive フォーマットのパーティション付きテーブルを読み込む際にどのようにプルーニングが行われるか確認する。"
   }
 </script>
 </head>
@@ -456,17 +456,15 @@
         <time>2026-02-15</time>
         <a class="tag" href='/tags/database/'>database</a>
       </div>
-      <p>DuckDB で Hive パーティションを読み込む際、WHERE 条件に基づいて不要なファイルをスキップするプルーニングが行われる。この仕組みをソースコードから理解する。</p>
+      <p>DuckDB で Hive フォーマットのパーティション付きテーブルを読み込む際にどのようにプルーニングが行われるか確認する。</p>
 <p><a href="https://www.sambaiz.net/article/508/">DuckDB の Go クライアントで Google Sheets のデータを SQL で取得する - sambaiz-net</a></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-fallback" data-lang="fallback"><span style="display:flex;"><span>$ duckdb --version
 </span></span><span style="display:flex;"><span>v1.4.4 (Andium) 6ddac802ff
-</span></span></code></pre></div><h2 id="プルーニングの例">プルーニングの例</h2>
-<p>Hive パーティション形式のデータを用意する。</p>
+</span></span></code></pre></div><p>hive_partitioning=true を指定すると指定したパーティションのファイルのみが読まれる。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>$ duckdb
 </span></span><span style="display:flex;"><span>D <span style="color:#ff79c6">COPY</span> (<span style="color:#ff79c6">SELECT</span> i, i <span style="color:#ff79c6">%</span> <span style="color:#bd93f9">12</span> <span style="color:#ff79c6">+</span> <span style="color:#bd93f9">1</span> <span style="color:#ff79c6">AS</span> <span style="color:#ff79c6">month</span> <span style="color:#ff79c6">FROM</span> range(<span style="color:#bd93f9">1000000</span>) t(i))
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">TO</span> <span style="color:#f1fa8c">&#39;data&#39;</span> (FORMAT PARQUET, PARTITION_BY (<span style="color:#ff79c6">month</span>));
-</span></span></code></pre></div><p><code>hive_partitioning=true</code> を指定して読み込む。</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">EXPLAIN</span> <span style="color:#ff79c6">ANALYZE</span>
+</span></span><span style="display:flex;"><span>D <span style="color:#ff79c6">EXPLAIN</span> <span style="color:#ff79c6">ANALYZE</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span> <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>)
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WHERE</span> <span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
 </span></span><span style="display:flex;"><span>
@@ -488,26 +486,15 @@
 </span></span><span style="display:flex;"><span>│    Scanning Files: <span style="color:#bd93f9">1</span><span style="color:#ff79c6">/</span><span style="color:#bd93f9">12</span>   │
 </span></span><span style="display:flex;"><span>│    Total Files <span style="color:#ff79c6">Read</span>: <span style="color:#bd93f9">1</span>    │
 </span></span><span style="display:flex;"><span>└───────────────────────────┘
-</span></span></code></pre></div><p>12 ファイル中 1 ファイルのみスキャンしている。</p>
-<p>DuckDB のクエリ実行は Parser → Binder → Optimizer → Executor の順に進む。プルーニングは Optimizer と Executor の両方で行われる。</p>
-<h2 id="optimizer-でのプルーニング">Optimizer でのプルーニング</h2>
-<p>Binder は Parser が生成した AST を受け取り、テーブル関数の引数を解析する。この際、ファイルパスから Hive パーティション情報を抽出する。<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L95-L122">HivePartitioning::Parse()</a> がパス文字列から <code>key=value</code> のペアを解析し、<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/multi_file/multi_file_reader.cpp#L220-L284">MultiFileReader::BindOptions()</a> が <code>bind_data.hive_partitioning_indexes</code> に登録する。</p>
-<p>read_parquet() のような<a href="https://duckdb.org/docs/sql/functions/table_functions">テーブル関数</a>はフィルタ処理を行う <code>pushdown_complex_filter</code> というコールバックを実装していて、<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/pushdown/pushdown_get.cpp#L10-L86">FilterPushdown::PushdownGet()</a> がこれにフィルタ式を渡す。</p>
-<p><a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L152-L209">HivePartitioning::ApplyFiltersToFileList()</a> はファイルごとに次の処理を行って読むファイルを絞り込む。</p>
-<ol>
-<li>ファイルパスからパーティション値を取得: <code>data/month=2/...</code> → <code>month=2</code></li>
-<li><a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L51-L80">ConvertKnownColRefToConstants()</a> でフィルタ式内のカラム参照を定数に置換: <code>month</code> → <code>2</code></li>
-<li>式を評価: <code>WHERE month = 1</code> → <code>2 = 1</code> → false</li>
-<li>false ならファイルを除外</li>
-</ol>
+</span></span></code></pre></div><p>DuckDB の<a href="https://duckdb.org/docs/stable/internals/overview">クエリ実行</a>では、まず Parser が SQL 文字列をパースし、Binder がカタログを引いてテーブルやカラムの参照先と型を確定する。そこからスキャンやフィルタといった操作からなる Logical Plan が作られ、Optimizer がフィルタをプッシュダウンしてスキャン時に行うようにするなどの効率化を行い、Physical Plan に変換されて実行される。プルーニングは Optimizer で行われるが、Join Filter Pushdown のように実行時に動的に適用されるものもある。</p>
+<p>Binder は Parser が生成した AST を受け取りテーブル関数の引数を解析する。この際、<a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L95-L122">HivePartitioning::Parse()</a> がファイルパスから <code>key=value</code> のパーティション情報を抽出する。Optimizer のフィルタプッシュダウンではテーブル関数の <code>pushdown_complex_filter</code> コールバックが呼ばれ、その中で <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/common/hive_partitioning.cpp#L152-L209">HivePartitioning::ApplyFiltersToFileList()</a> がファイルごとにパスからパーティション値を取り出してフィルタ式のカラム参照を置換し、<code>WHERE month = 1</code> が <code>2 = 1</code> → false になればそのファイルを除外する。</p>
 <p>JOIN を含むクエリでは、JOIN 条件にパーティションカラムが含まれていれば片方のテーブルのカラムのみでフィルタした場合でも両テーブルにプルーニングが効く。
 これは <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/filter_combiner.cpp">FilterCombiner</a> が値の等しいカラムをグルーピングして同様に扱うため。<code>ON t1.month = t2.month</code> と <code>WHERE t1.month = 1</code> から、両テーブルに <code>month = 1</code> が適用される。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data1/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t1
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">JOIN</span> read_parquet(<span style="color:#f1fa8c">&#39;data2/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t2 <span style="color:#ff79c6">ON</span> t1.<span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> t2.<span style="color:#ff79c6">month</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WHERE</span> t1.<span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>;
-</span></span></code></pre></div><h2 id="executor-でのプルーニング">Executor でのプルーニング</h2>
-<p>サブクエリは HASH_JOIN に変換され、その結果の min/max 外のファイルをスキップする <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/join_filter_pushdown_optimizer.cpp">Join Filter Pushdown</a> が適用される。なお BigQuery ではサブクエリのような動的な式では全パーティションが<a href="https://cloud.google.com/bigquery/docs/querying-partitioned-tables">スキャンされる</a>。</p>
+</span></span></code></pre></div><p>サブクエリは Optimizer によって JOIN に変換され、実行時にサブクエリの結果から min/max を集計して範囲外のファイルをスキップする <a href="https://github.com/duckdb/duckdb/blob/v1.4.4/src/optimizer/join_filter_pushdown_optimizer.cpp">Join Filter Pushdown</a> が適用される。なお BigQuery ではサブクエリのような動的な式では全パーティションが<a href="https://cloud.google.com/bigquery/docs/querying-partitioned-tables">スキャンされる</a>。</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span>D <span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">*</span>
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">FROM</span> read_parquet(<span style="color:#f1fa8c">&#39;data/**/*.parquet&#39;</span>, hive_partitioning<span style="color:#ff79c6">=</span><span style="color:#ff79c6">true</span>) t1
 </span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">WHERE</span> t1.<span style="color:#ff79c6">month</span> <span style="color:#ff79c6">=</span> (<span style="color:#ff79c6">SELECT</span> <span style="color:#ff79c6">month</span> <span style="color:#ff79c6">FROM</span> other_table <span style="color:#ff79c6">WHERE</span> <span style="color:#ff79c6">key</span> <span style="color:#ff79c6">=</span> <span style="color:#bd93f9">1</span>);
