@@ -302,10 +302,13 @@
   <meta name="twitter:card" content="summary">
   <meta name="twitter:site" content="@sambaiz">
   
-  <title> - sambaiz-net</title>
-  <meta name="twitter:title" content=" - sambaiz-net">
-  <meta property='og:title' content=" - sambaiz-net">
+  <title>AgentCore の Gateway でオンライン評価に基づいたプロンプトの A/B テストを行う - sambaiz-net</title>
+  <meta name="twitter:title" content="AgentCore の Gateway でオンライン評価に基づいたプロンプトの A/B テストを行う - sambaiz-net">
+  <meta property='og:title' content="AgentCore の Gateway でオンライン評価に基づいたプロンプトの A/B テストを行う - sambaiz-net">
   <meta property="og:type" content="article">
+  
+  <meta name="description" content="AgentCore には Gateway の後ろに Runtime を置くことで A/B テストする仕組みがある。">
+  <meta name="twitter:description" content="AgentCore には Gateway の後ろに Runtime を置くことで A/B テストする仕組みがある。">
   
   
 
@@ -324,9 +327,9 @@
       "@type":"WebPage",
       "@id": "https://www.sambaiz.net/"
     },
-    "headline": "",
-    "datePublished": "0001-01-01T00:00:00JST",
-    "dateModified": "0001-01-01T00:00:00JST",
+    "headline": "AgentCore の Gateway でオンライン評価に基づいたプロンプトの A/B テストを行う",
+    "datePublished": "2026-09-22T02:16:00JST",
+    "dateModified": "2026-09-22T02:16:00JST",
     "author": {
       "@type": "Person",
       "name": "sambaiz",
@@ -349,7 +352,7 @@
       "height": 138,
       "width": 138
     },
-    "description": ""
+    "description": "AgentCore には Gateway の後ろに Runtime を置くことで A/B テストする仕組みがある。"
   }
 </script>
 </head>
@@ -431,47 +434,249 @@
   <article class="single">
     <div class="cell">
       <div class="single-header">
-        <h1></h1>
-        <time>0001-01-01</time>
-        
+        <h1>AgentCore の Gateway でオンライン評価に基づいたプロンプトの A/B テストを行う</h1>
+        <time>2026-09-22</time>
+        <a class="tag" href='/tags/aws/'>aws</a><a class="tag" href='/tags/llm/'>llm</a>
       </div>
-      <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> runtimeTargetGatewayRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;RuntimeTargetGatewayRole&#39;</span>, {
+      <p>AgentCore には Gateway の後ろに Runtime を置くことで A/B テストする仕組みがある。
+以前試した harness だと Runtime を直で呼ぶことができなかったのでまずは自前のコードで Runtime を立てる。
+オンライン評価を行う際に入力となるトレースを出力するため xray:PutSpans が必要。</p>
+<p><a href="https://www.sambaiz.net/article/582/">AgentCore harness でエージェントを動かし Code Interpreter によるサンドボックス環境でのコード実行や Gateway による外部ツールへの権限付与を試す - sambaiz-net</a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> runtimeRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;RuntimeRole&#39;</span>, {
 </span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.ServicePrincipal(<span style="color:#f1fa8c">&#39;bedrock-agentcore.amazonaws.com&#39;</span>),
 </span></span><span style="display:flex;"><span>  inlinePolicies<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>    invoke: <span style="color:#8be9fd">new</span> iam.PolicyDocument({
+</span></span><span style="display:flex;"><span>    agent: <span style="color:#8be9fd">new</span> iam.PolicyDocument({
 </span></span><span style="display:flex;"><span>      statements<span style="color:#ff79c6">:</span> [
 </span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
-</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;bedrock-agentcore:InvokeAgentRuntime&#39;</span>],
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;bedrock:InvokeModel&#39;</span>, <span style="color:#f1fa8c">&#39;bedrock:InvokeModelWithResponseStream&#39;</span>],
 </span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [
-</span></span><span style="display:flex;"><span>            harness.attrEnvironmentAgentCoreRuntimeEnvironmentAgentRuntimeArn,
-</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>harness.attrEnvironmentAgentCoreRuntimeEnvironmentAgentRuntimeArn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">/*`</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">`arn:aws:bedrock:*:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:inference-profile/*`</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;arn:aws:bedrock:*::foundation-model/*&#39;</span>,
 </span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;bedrock-agentcore:GetConfigurationBundleVersion&#39;</span>],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:bedrock-agentcore:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.region<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:configuration-bundle/*`</span>],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:CreateLogGroup&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:CreateLogStream&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:PutLogEvents&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:DescribeLogStreams&#39;</span>,
+</span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:logs:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.region<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:log-group:/aws/bedrock-agentcore/*`</span>],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;xray:PutTraceSegments&#39;</span>, <span style="color:#f1fa8c">&#39;xray:PutSpans&#39;</span>, <span style="color:#f1fa8c">&#39;xray:PutSpansForIndexing&#39;</span>],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;*&#39;</span>],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;cloudwatch:PutMetricData&#39;</span>],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;*&#39;</span>],
+</span></span><span style="display:flex;"><span>          conditions<span style="color:#ff79c6">:</span> { StringEquals<span style="color:#ff79c6">:</span> { <span style="color:#f1fa8c">&#39;cloudwatch:namespace&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;bedrock-agentcore&#39;</span> } },
 </span></span><span style="display:flex;"><span>        }),
 </span></span><span style="display:flex;"><span>      ],
 </span></span><span style="display:flex;"><span>    }),
 </span></span><span style="display:flex;"><span>  },
 </span></span><span style="display:flex;"><span>})
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> runtimeTargetGateway <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> agentcore.CfnGateway(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;RuntimeTargetGateway&#39;</span>, {
-</span></span><span style="display:flex;"><span>  name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;agentcore-demo-rt-gateway&#39;</span>,
-</span></span><span style="display:flex;"><span>  roleArn: <span style="color:#8be9fd">runtimeTargetGatewayRole.roleArn</span>,
-</span></span><span style="display:flex;"><span>  authorizerType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;AWS_IAM&#39;</span>,
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> runtime <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> agentcore.Runtime(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Runtime&#39;</span>, {
+</span></span><span style="display:flex;"><span>  runtimeName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;demo_ab_agent&#39;</span>,
+</span></span><span style="display:flex;"><span>  agentRuntimeArtifact: <span style="color:#8be9fd">agentcore.AgentRuntimeArtifact.fromAsset</span>(
+</span></span><span style="display:flex;"><span>    path.join(__dirname, <span style="color:#f1fa8c">&#39;..&#39;</span>, <span style="color:#f1fa8c">&#39;..&#39;</span>, <span style="color:#f1fa8c">&#39;agent&#39;</span>),
+</span></span><span style="display:flex;"><span>  ),
+</span></span><span style="display:flex;"><span>  executionRole: <span style="color:#8be9fd">runtimeRole</span>,
+</span></span><span style="display:flex;"><span>  environmentVariables<span style="color:#ff79c6">:</span> { MODEL_ID<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;jp.anthropic.claude-sonnet-4-6&#39;</span> },
+</span></span><span style="display:flex;"><span>  tracingEnabled: <span style="color:#8be9fd">true</span>,
 </span></span><span style="display:flex;"><span>})
+</span></span></code></pre></div><p>A/B テストの対象となる設定バンドルの内容は BedrockAgentCoreContext.get_config_bundle() で取得できる。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-py" data-lang="py"><span style="display:flex;"><span><span style="color:#ff79c6">import</span> logging
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">import</span> os
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span><span style="color:#ff79c6">new</span> agentcore.CfnGatewayTarget(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;HarnessRuntimeTarget&#39;</span>, {
-</span></span><span style="display:flex;"><span>  gatewayIdentifier: <span style="color:#8be9fd">runtimeTargetGateway.attrGatewayIdentifier</span>,
-</span></span><span style="display:flex;"><span>  name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;harnessrt&#39;</span>,
-</span></span><span style="display:flex;"><span>  credentialProviderConfigurations<span style="color:#ff79c6">:</span> [{ credentialProviderType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;GATEWAY_IAM_ROLE&#39;</span> }],
-</span></span><span style="display:flex;"><span>  targetConfiguration<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>    http<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>      agentcoreRuntime<span style="color:#ff79c6">:</span> {
-</span></span><span style="display:flex;"><span>        arn: <span style="color:#8be9fd">harness.attrEnvironmentAgentCoreRuntimeEnvironmentAgentRuntimeArn</span>,
-</span></span><span style="display:flex;"><span>        qualifier<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;DEFAULT&#39;</span>,
-</span></span><span style="display:flex;"><span>      },
-</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> bedrock_agentcore.runtime <span style="color:#ff79c6">import</span> BedrockAgentCoreApp, BedrockAgentCoreContext
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> strands <span style="color:#ff79c6">import</span> Agent
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">from</span> strands.models <span style="color:#ff79c6">import</span> BedrockModel
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>logging<span style="color:#ff79c6">.</span>basicConfig(level<span style="color:#ff79c6">=</span>logging<span style="color:#ff79c6">.</span>INFO)
+</span></span><span style="display:flex;"><span>log <span style="color:#ff79c6">=</span> logging<span style="color:#ff79c6">.</span>getLogger(<span style="color:#f1fa8c">&#34;agent&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>MODEL_ID <span style="color:#ff79c6">=</span> os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#34;MODEL_ID&#34;</span>)
+</span></span><span style="display:flex;"><span>REGION <span style="color:#ff79c6">=</span> os<span style="color:#ff79c6">.</span>environ<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#34;AWS_REGION&#34;</span>, <span style="color:#f1fa8c">&#34;ap-northeast-1&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>app <span style="color:#ff79c6">=</span> BedrockAgentCoreApp()
+</span></span><span style="display:flex;"><span>model <span style="color:#ff79c6">=</span> BedrockModel(model_id<span style="color:#ff79c6">=</span>MODEL_ID, region_name<span style="color:#ff79c6">=</span>REGION)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>@app.entrypoint
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">def</span> <span style="color:#50fa7b">invoke</span>(payload: <span style="color:#8be9fd;font-style:italic">dict</span>) <span style="color:#ff79c6">-&gt;</span> <span style="color:#8be9fd;font-style:italic">dict</span>:
+</span></span><span style="display:flex;"><span>    prompt <span style="color:#ff79c6">=</span> payload<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#34;prompt&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> <span style="color:#ff79c6">not</span> prompt:
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> {<span style="color:#f1fa8c">&#34;error&#34;</span>: <span style="color:#f1fa8c">&#34;payload に prompt がありません&#34;</span>}
+</span></span><span style="display:flex;"><span>    
+</span></span><span style="display:flex;"><span>    bundle <span style="color:#ff79c6">=</span> BedrockAgentCoreContext<span style="color:#ff79c6">.</span>get_config_bundle()
+</span></span><span style="display:flex;"><span>    system_prompt <span style="color:#ff79c6">=</span> bundle<span style="color:#ff79c6">.</span>get(<span style="color:#f1fa8c">&#34;systemPrompt&#34;</span>)
+</span></span><span style="display:flex;"><span>    agent <span style="color:#ff79c6">=</span> Agent(model<span style="color:#ff79c6">=</span>model, system_prompt<span style="color:#ff79c6">=</span>system_prompt)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> {<span style="color:#f1fa8c">&#34;output&#34;</span>: <span style="color:#8be9fd;font-style:italic">str</span>(agent(prompt))}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">if</span> <span style="color:#8be9fd;font-style:italic">__name__</span> <span style="color:#ff79c6">==</span> <span style="color:#f1fa8c">&#34;__main__&#34;</span>:
+</span></span><span style="display:flex;"><span>    app<span style="color:#ff79c6">.</span>run()
+</span></span></code></pre></div><p>Gateway を立てて Target に Runtime を指定する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> gatewayRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;GatewayRole&#39;</span>, {
+</span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.ServicePrincipal(<span style="color:#f1fa8c">&#39;bedrock-agentcore.amazonaws.com&#39;</span>),
+</span></span><span style="display:flex;"><span>  inlinePolicies<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    forward: <span style="color:#8be9fd">new</span> iam.PolicyDocument({
+</span></span><span style="display:flex;"><span>      statements<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;bedrock-agentcore:InvokeAgentRuntime&#39;</span>],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [runtime.agentRuntimeArn, <span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>runtime.agentRuntimeArn<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">/*`</span>],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;bedrock-agentcore:GetConfigurationBundleVersion&#39;</span>],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:bedrock-agentcore:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.region<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:configuration-bundle/*`</span>],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>    }),
 </span></span><span style="display:flex;"><span>  },
 </span></span><span style="display:flex;"><span>})
-</span></span></code></pre></div>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> gateway <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> agentcore.CfnGateway(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;Gateway&#39;</span>, {
+</span></span><span style="display:flex;"><span>  name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;agentcore-ab-gateway&#39;</span>,
+</span></span><span style="display:flex;"><span>  roleArn: <span style="color:#8be9fd">gatewayRole.roleArn</span>,
+</span></span><span style="display:flex;"><span>  authorizerType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;AWS_IAM&#39;</span>,
+</span></span><span style="display:flex;"><span>});
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> target <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> agentcore.CfnGatewayTarget(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;RuntimeTarget&#39;</span>, {
+</span></span><span style="display:flex;"><span>  gatewayIdentifier: <span style="color:#8be9fd">gateway.attrGatewayIdentifier</span>,
+</span></span><span style="display:flex;"><span>  name<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;agent&#39;</span>,
+</span></span><span style="display:flex;"><span>  credentialProviderConfigurations<span style="color:#ff79c6">:</span> [{ credentialProviderType<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;GATEWAY_IAM_ROLE&#39;</span> }],
+</span></span><span style="display:flex;"><span>  targetConfiguration<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    http<span style="color:#ff79c6">:</span> { agentcoreRuntime<span style="color:#ff79c6">:</span> { arn: <span style="color:#8be9fd">runtime.agentRuntimeArn</span>, qualifier<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;DEFAULT&#39;</span> } },
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>})
+</span></span></code></pre></div><p>A/B テスト実行用のロールを作成する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> abTestRole <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> iam.Role(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;AbTestRole&#39;</span>, {
+</span></span><span style="display:flex;"><span>  assumedBy: <span style="color:#8be9fd">new</span> iam.ServicePrincipal(<span style="color:#f1fa8c">&#39;bedrock-agentcore.amazonaws.com&#39;</span>, {
+</span></span><span style="display:flex;"><span>    conditions<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>      StringEquals<span style="color:#ff79c6">:</span> { <span style="color:#f1fa8c">&#39;aws:SourceAccount&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">this</span>.account },
+</span></span><span style="display:flex;"><span>      ArnLike<span style="color:#ff79c6">:</span> { <span style="color:#f1fa8c">&#39;aws:SourceArn&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">`arn:aws:bedrock-agentcore:*:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:ab-test/*`</span> },
+</span></span><span style="display:flex;"><span>    },
+</span></span><span style="display:flex;"><span>  }),
+</span></span><span style="display:flex;"><span>  inlinePolicies<span style="color:#ff79c6">:</span> {
+</span></span><span style="display:flex;"><span>    abtest: <span style="color:#8be9fd">new</span> iam.PolicyDocument({
+</span></span><span style="display:flex;"><span>      statements<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          sid<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;AgentCoreResources&#39;</span>,
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:GetGateway&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:GetGatewayTarget&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:ListGatewayTargets&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:CreateGatewayRule&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:UpdateGatewayRule&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:GetGatewayRule&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:DeleteGatewayRule&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:ListGatewayRules&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:GetOnlineEvaluationConfig&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:GetEvaluator&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:GetConfigurationBundle&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:GetConfigurationBundleVersion&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;bedrock-agentcore:ListConfigurationBundleVersions&#39;</span>,
+</span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">`arn:aws:bedrock-agentcore:*:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:*`</span>],
+</span></span><span style="display:flex;"><span>          conditions<span style="color:#ff79c6">:</span> { StringEquals<span style="color:#ff79c6">:</span> { <span style="color:#f1fa8c">&#39;aws:ResourceAccount&#39;</span><span style="color:#ff79c6">:</span> <span style="color:#ff79c6">this</span>.account } },
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          sid<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;CloudWatchLogsDescribe&#39;</span>,
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;logs:DescribeLogGroups&#39;</span>],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [<span style="color:#f1fa8c">&#39;*&#39;</span>],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">new</span> iam.PolicyStatement({
+</span></span><span style="display:flex;"><span>          sid<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;CloudWatchLogs&#39;</span>,
+</span></span><span style="display:flex;"><span>          actions<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:DescribeIndexPolicies&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:PutIndexPolicy&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:StartQuery&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:GetQueryResults&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:StopQuery&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:FilterLogEvents&#39;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">&#39;logs:GetLogEvents&#39;</span>,
+</span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>          resources<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">`arn:aws:logs:*:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:log-group:/aws/bedrock-agentcore/evaluations/*`</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">`arn:aws:logs:*:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:log-group:aws/spans`</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f1fa8c">`arn:aws:logs:*:</span><span style="color:#f1fa8c">${</span><span style="color:#ff79c6">this</span>.account<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">:log-group:aws/spans:*`</span>,
+</span></span><span style="display:flex;"><span>          ],
+</span></span><span style="display:flex;"><span>        }),
+</span></span><span style="display:flex;"><span>      ],
+</span></span><span style="display:flex;"><span>    }),
+</span></span><span style="display:flex;"><span>  },
+</span></span><span style="display:flex;"><span>})
+</span></span></code></pre></div><p>Runtime に来たリクエストをサンプリングし LLM に投げて<a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/ground-truth-evaluations.html">オンライン評価させる</a>。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> onlineEval <span style="color:#ff79c6">=</span> <span style="color:#ff79c6">new</span> agentcore.OnlineEvaluationConfig(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">&#39;OnlineEval&#39;</span>, {
+</span></span><span style="display:flex;"><span>  onlineEvaluationConfigName<span style="color:#ff79c6">:</span> <span style="color:#f1fa8c">&#39;demo_ab_online_eval&#39;</span>,
+</span></span><span style="display:flex;"><span>  executionStatus: <span style="color:#8be9fd">agentcore.ExecutionStatus.ENABLED</span>,
+</span></span><span style="display:flex;"><span>  evaluators<span style="color:#ff79c6">:</span> [
+</span></span><span style="display:flex;"><span>    agentcore.EvaluatorSelector.builtin(agentcore.BuiltinEvaluator.GOAL_SUCCESS_RATE),
+</span></span><span style="display:flex;"><span>    agentcore.EvaluatorSelector.builtin(agentcore.BuiltinEvaluator.HELPFULNESS),
+</span></span><span style="display:flex;"><span>  ],
+</span></span><span style="display:flex;"><span>  dataSource: <span style="color:#8be9fd">agentcore.DataSourceConfig.fromAgentRuntimeEndpoint</span>(runtime),
+</span></span><span style="display:flex;"><span>  samplingPercentage: <span style="color:#8be9fd">100</span>,
+</span></span><span style="display:flex;"><span>});
+</span></span></code></pre></div><p>設定バンドルを作る。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-ts" data-lang="ts"><span style="display:flex;"><span><span style="color:#ff79c6">const</span> bundleFor <span style="color:#ff79c6">=</span> (id2: <span style="color:#8be9fd">string</span>, name: <span style="color:#8be9fd">string</span>, prompt: <span style="color:#8be9fd">string</span>, message: <span style="color:#8be9fd">string</span>) <span style="color:#ff79c6">=&gt;</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#ff79c6">new</span> agentcore.CfnConfigurationBundle(<span style="color:#ff79c6">this</span>, id2, {
+</span></span><span style="display:flex;"><span>    bundleName: <span style="color:#8be9fd">name</span>,
+</span></span><span style="display:flex;"><span>    commitMessage: <span style="color:#8be9fd">message</span>,
+</span></span><span style="display:flex;"><span>    components: <span style="color:#8be9fd">new</span> CfnJson(<span style="color:#ff79c6">this</span>, <span style="color:#f1fa8c">`</span><span style="color:#f1fa8c">${</span>id2<span style="color:#f1fa8c">}</span><span style="color:#f1fa8c">Components`</span>, {
+</span></span><span style="display:flex;"><span>      value<span style="color:#ff79c6">:</span> { [runtime.agentRuntimeArn]<span style="color:#ff79c6">:</span> { Configuration<span style="color:#ff79c6">:</span> { systemPrompt: <span style="color:#8be9fd">prompt</span> } } },
+</span></span><span style="display:flex;"><span>    }),
+</span></span><span style="display:flex;"><span>  })
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> control <span style="color:#ff79c6">=</span> bundleFor(<span style="color:#f1fa8c">&#39;BundleControl&#39;</span>, <span style="color:#f1fa8c">&#39;abPromptC&#39;</span>, <span style="color:#f1fa8c">`
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">あなたは助手です。
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">回答は必ず 20 文字以内にしてください。
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">理由、背景、具体例は一切書かないでください。`</span>, <span style="color:#f1fa8c">&#39;control&#39;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">const</span> treatment <span style="color:#ff79c6">=</span> bundleFor(<span style="color:#f1fa8c">&#39;BundleTreatment&#39;</span>, <span style="color:#f1fa8c">&#39;abPromptT1&#39;</span>, <span style="color:#f1fa8c">`
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">あなたは助手です。質問に答えてください。
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">守ること:
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">- 結論を先に書く。
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">- 根拠を箇条書きで 2〜3 点添える。
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">- 分からないことは分からないと書く。推測で補わない。`</span>, <span style="color:#f1fa8c">&#39;treatment&#39;</span>)
+</span></span></code></pre></div><p>これらを指定して A/B テストを開始する。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-sh" data-lang="sh"><span style="display:flex;"><span>$ aws bedrock-agentcore create-ab-test <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span>    --name promptab <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span>    --gateway-arn <span style="color:#f1fa8c">&#34;arn:aws:bedrock-agentcore:ap-northeast-1:524580158183:gateway/agentcore-ab-gateway-itadkjkcbo&#34;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span>    --role-arn <span style="color:#f1fa8c">&#34;arn:aws:iam::524580158183:role/AgentCoreAb-AbTestRole2B002E73-M34OrWBzVTIG&#34;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span>    --evaluation-config <span style="color:#f1fa8c">&#39;{&#34;onlineEvaluationConfigArn&#34;:&#34;arn:aws:bedrock-agentcore:ap-northeast-1:524580158183:online-evaluation-config/demo_ab_online_eval-AhqMTH9AxJ&#34;}&#39;</span> <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span>    --enable-on-create <span style="color:#f1fa8c">\
+</span></span></span><span style="display:flex;"><span>    --variants <span style="color:#f1fa8c">&#39;[
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      {&#34;name&#34;:&#34;C&#34;,&#34;weight&#34;:50,&#34;variantConfiguration&#34;:{&#34;configurationBundle&#34;:{
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;bundleArn&#34;:&#34;arn:aws:bedrock-agentcore:ap-northeast-1:524580158183:configuration-bundle/abPromptC-6KBJZh7PP4&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;bundleVersion&#34;:&#34;53e53a6d-ca64-444d-b906-906aaeb12275&#34;}}},
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">      {&#34;name&#34;:&#34;T1&#34;,&#34;weight&#34;:50,&#34;variantConfiguration&#34;:{&#34;configurationBundle&#34;:{
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;bundleArn&#34;:&#34;arn:aws:bedrock-agentcore:ap-northeast-1:524580158183:configuration-bundle/abPromptT1-VakgiG2E4U&#34;,
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">        &#34;bundleVersion&#34;:&#34;ad3ecbe4-44bf-4b09-bf1d-43274c21cd32&#34;}}}
+</span></span></span><span style="display:flex;"><span><span style="color:#f1fa8c">    ]&#39;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">{</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;abTestId&#34;</span>: <span style="color:#f1fa8c">&#34;promptab-845058f909&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;abTestArn&#34;</span>: <span style="color:#f1fa8c">&#34;arn:aws:bedrock-agentcore:ap-northeast-1:524580158183:ab-test/promptab-845058f909&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;name&#34;</span>: <span style="color:#f1fa8c">&#34;promptab&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;status&#34;</span>: <span style="color:#f1fa8c">&#34;CREATING&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;executionStatus&#34;</span>: <span style="color:#f1fa8c">&#34;NOT_STARTED&#34;</span>,
+</span></span><span style="display:flex;"><span>    <span style="color:#f1fa8c">&#34;createdAt&#34;</span>: <span style="color:#f1fa8c">&#34;2026-09-22T01:24:03.134000+09:00&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#ff79c6">}</span>
+</span></span></code></pre></div><p>リクエストを送ると Control, Variant の評価値が表示される。</p>
+
+
+
+
+<div class="img_container"><a href="/article/583/images/abtest.png">
+    <img style="max-width: 100%; width: auto; height: auto;" src="/article/583/images/abtest_hu_96bd9cc1c98e48dc.png" width="600" height="321" alt="A/Bテスト">
+</a></div>
+
+
+
     </div>
   </article>
 </div>
